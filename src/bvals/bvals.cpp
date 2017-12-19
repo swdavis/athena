@@ -30,6 +30,7 @@
 #include "../gravity/mggravity.hpp"
 #include "../coordinates/coordinates.hpp"
 #include "../utils/buffer_utils.hpp"
+#include "../hybrid/hybrid.hpp"
 
 // MPI header
 #ifdef MPI_PARALLEL
@@ -221,9 +222,14 @@ BoundaryValues::BoundaryValues(MeshBlock *pmb, enum BoundaryFlag *input_bcs)
     num_south_polar_blocks_ = 0;
   }
 
-  InitBoundaryData(bd_hydro_, BNDRY_HYDRO);
-  if(pmy_mesh_->multilevel==true) // SMR or AMR
-    InitBoundaryData(bd_flcor_, BNDRY_FLCOR);
+  if (HYDRO) {
+    InitBoundaryData(bd_hydro_, BNDRY_HYDRO);
+    if(pmy_mesh_->multilevel==true) // SMR or AMR
+      InitBoundaryData(bd_flcor_, BNDRY_FLCOR);
+  }
+  if (HYBRID) {
+    InitBoundaryData(bd_mcoup_, BNDRY_MCOUP);
+  }
   if(MAGNETIC_FIELDS_ENABLED) {
     InitBoundaryData(bd_field_, BNDRY_FIELD);
     InitBoundaryData(bd_emfcor_, BNDRY_EMFCOR);
@@ -299,10 +305,14 @@ BoundaryValues::BoundaryValues(MeshBlock *pmb, enum BoundaryFlag *input_bcs)
 BoundaryValues::~BoundaryValues()
 {
   MeshBlock *pmb=pmy_block_;
-
-  DestroyBoundaryData(bd_hydro_);
-  if(pmy_mesh_->multilevel==true) // SMR or AMR
-    DestroyBoundaryData(bd_flcor_);
+  if (HYDRO) {
+    DestroyBoundaryData(bd_hydro_);
+    if(pmy_mesh_->multilevel==true) // SMR or AMR
+      DestroyBoundaryData(bd_flcor_);
+  }
+  if (HYBRID) {
+    DestroyBoundaryData(bd_mcoup_);
+  }
   if (MAGNETIC_FIELDS_ENABLED) {
     DestroyBoundaryData(bd_field_);
     DestroyBoundaryData(bd_emfcor_);
@@ -399,6 +409,23 @@ void BoundaryValues::InitBoundaryData(BoundaryData &bd, enum BoundaryType type)
           size=std::max(size,f2c);
         }
         size*=NHYDRO;
+      }
+      break;
+      case BNDRY_MCOUP: {
+        size=((BoundaryValues::ni[n].ox1==0)?pmb->block_size.nx1:NGHOST)
+            *((BoundaryValues::ni[n].ox2==0)?pmb->block_size.nx2:NGHOST)
+            *((BoundaryValues::ni[n].ox3==0)?pmb->block_size.nx3:NGHOST);
+        if(multilevel) {
+          int f2c=((BoundaryValues::ni[n].ox1==0)?((pmb->block_size.nx1+1)/2):NGHOST)
+                 *((BoundaryValues::ni[n].ox2==0)?((pmb->block_size.nx2+1)/2):NGHOST)
+                 *((BoundaryValues::ni[n].ox3==0)?((pmb->block_size.nx3+1)/2):NGHOST);
+          int c2f=((BoundaryValues::ni[n].ox1==0)?((pmb->block_size.nx1+1)/2+cng1):cng)
+                 *((BoundaryValues::ni[n].ox2==0)?((pmb->block_size.nx2+1)/2+cng2):cng)
+                 *((BoundaryValues::ni[n].ox3==0)?((pmb->block_size.nx3+1)/2+cng3):cng);
+          size=std::max(size,c2f);
+          size=std::max(size,f2c);
+        }
+        size*=NMCOUP;
       }
       break;
       case BNDRY_FIELD: {
@@ -637,14 +664,48 @@ void BoundaryValues::Initialize(void)
              *((nb.ox2==0)?((pmb->block_size.nx2+1)/2):NGHOST)
              *((nb.ox3==0)?((pmb->block_size.nx3+1)/2):NGHOST);
       }
-      ssize*=NHYDRO; rsize*=NHYDRO;
-      // specify the offsets in the view point of the target block: flip ox? signs
-      tag=CreateBvalsMPITag(nb.lid, TAG_HYDRO, nb.targetid);
-      MPI_Send_init(bd_hydro_.send[nb.bufid],ssize,MPI_ATHENA_REAL,
-                    nb.rank,tag,MPI_COMM_WORLD,&(bd_hydro_.req_send[nb.bufid]));
-      tag=CreateBvalsMPITag(pmb->lid, TAG_HYDRO, nb.bufid);
-      MPI_Recv_init(bd_hydro_.recv[nb.bufid],rsize,MPI_ATHENA_REAL,
-                    nb.rank,tag,MPI_COMM_WORLD,&(bd_hydro_.req_recv[nb.bufid]));
+      if (HYDRO) {
+        ssize*=NHYDRO; rsize*=NHYDRO;
+        // specify the offsets in the view point of the target block: flip ox? signs
+        tag=CreateBvalsMPITag(nb.lid, TAG_HYDRO, nb.targetid);
+        MPI_Send_init(bd_hydro_.send[nb.bufid],ssize,MPI_ATHENA_REAL,
+                      nb.rank,tag,MPI_COMM_WORLD,&(bd_hydro_.req_send[nb.bufid]));
+        tag=CreateBvalsMPITag(pmb->lid, TAG_HYDRO, nb.bufid);
+        MPI_Recv_init(bd_hydro_.recv[nb.bufid],rsize,MPI_ATHENA_REAL,
+                      nb.rank,tag,MPI_COMM_WORLD,&(bd_hydro_.req_recv[nb.bufid]));
+        // flux correction
+        if(pmy_mesh_->multilevel==true && nb.type==NEIGHBOR_FACE) {
+          int size;
+          if(nb.fid==0 || nb.fid==1)
+            size=((pmb->block_size.nx2+1)/2)*((pmb->block_size.nx3+1)/2);
+          else if(nb.fid==2 || nb.fid==3)
+            size=((pmb->block_size.nx1+1)/2)*((pmb->block_size.nx3+1)/2);
+          else if(nb.fid==4 || nb.fid==5)
+            size=((pmb->block_size.nx1+1)/2)*((pmb->block_size.nx2+1)/2);
+          size*=NHYDRO;
+          if(nb.level<mylevel) { // send to coarser
+            tag=CreateBvalsMPITag(nb.lid, TAG_HYDFLX, nb.targetid);
+            MPI_Send_init(bd_flcor_.send[nb.bufid],size,MPI_ATHENA_REAL,
+                nb.rank,tag,MPI_COMM_WORLD,&(bd_flcor_.req_send[nb.bufid]));
+          }
+          else if(nb.level>mylevel) { // receive from finer
+            tag=CreateBvalsMPITag(pmb->lid, TAG_HYDFLX, nb.bufid);
+            MPI_Recv_init(bd_flcor_.recv[nb.bufid],size,MPI_ATHENA_REAL,
+                nb.rank,tag,MPI_COMM_WORLD,&(bd_flcor_.req_recv[nb.bufid]));
+          }
+        }
+      }
+      if (HYBRID) {
+        ssize*=NMCOUP; rsize*=NMCOUP;
+        // specify the offsets in the view point of the target block: flip ox? signs
+        tag=CreateBvalsMPITag(nb.lid, TAG_MCOUPB, nb.targetid);
+        MPI_Send_init(bd_mcoup_.send[nb.bufid],ssize,MPI_ATHENA_REAL,
+                      nb.rank,tag,MPI_COMM_WORLD,&(bd_mcoup_.req_send[nb.bufid]));
+        tag=CreateBvalsMPITag(pmb->lid, TAG_MCOUPB, nb.bufid);
+        MPI_Recv_init(bd_mcoup_.recv[nb.bufid],rsize,MPI_ATHENA_REAL,
+                      nb.rank,tag,MPI_COMM_WORLD,&(bd_mcoup_.req_recv[nb.bufid]));
+      }
+
 
       if (SELF_GRAVITY_ENABLED == 1){
         if(nb.level==mylevel) { // same
@@ -658,28 +719,6 @@ void BoundaryValues::Initialize(void)
         tag=CreateBvalsMPITag(pmb->lid, TAG_GRAVITY, nb.bufid);
         MPI_Recv_init(bd_gravity_.recv[nb.bufid],rsize,MPI_ATHENA_REAL,
                       nb.rank,tag,MPI_COMM_WORLD,&(bd_gravity_.req_recv[nb.bufid]));
-      }
-
-      // flux correction
-      if(pmy_mesh_->multilevel==true && nb.type==NEIGHBOR_FACE) {
-        int size;
-        if(nb.fid==0 || nb.fid==1)
-          size=((pmb->block_size.nx2+1)/2)*((pmb->block_size.nx3+1)/2);
-        else if(nb.fid==2 || nb.fid==3)
-          size=((pmb->block_size.nx1+1)/2)*((pmb->block_size.nx3+1)/2);
-        else if(nb.fid==4 || nb.fid==5)
-          size=((pmb->block_size.nx1+1)/2)*((pmb->block_size.nx2+1)/2);
-        size*=NHYDRO;
-        if(nb.level<mylevel) { // send to coarser
-          tag=CreateBvalsMPITag(nb.lid, TAG_HYDFLX, nb.targetid);
-          MPI_Send_init(bd_flcor_.send[nb.bufid],size,MPI_ATHENA_REAL,
-              nb.rank,tag,MPI_COMM_WORLD,&(bd_flcor_.req_send[nb.bufid]));
-        }
-        else if(nb.level>mylevel) { // receive from finer
-          tag=CreateBvalsMPITag(pmb->lid, TAG_HYDFLX, nb.bufid);
-          MPI_Recv_init(bd_flcor_.recv[nb.bufid],size,MPI_ATHENA_REAL,
-              nb.rank,tag,MPI_COMM_WORLD,&(bd_flcor_.req_recv[nb.bufid]));
-        }
       }
 
       if (MAGNETIC_FIELDS_ENABLED) {
@@ -882,14 +921,18 @@ void BoundaryValues::StartReceivingForInit(bool cons_and_field)
     NeighborBlock& nb = neighbor[n];
     if(nb.rank!=Globals::my_rank) { 
       if (cons_and_field) {  // normal case
-        MPI_Start(&(bd_hydro_.req_recv[nb.bufid]));
+        if (HYDRO)
+          MPI_Start(&(bd_hydro_.req_recv[nb.bufid]));
+        if (HYBRID)
+          MPI_Start(&(bd_mcoup_.req_recv[nb.bufid]));
         if (MAGNETIC_FIELDS_ENABLED)
           MPI_Start(&(bd_field_.req_recv[nb.bufid]));
         if (SELF_GRAVITY_ENABLED == 1)
           MPI_Start(&(bd_gravity_.req_recv[nb.bufid]));
       }
       else  // must be primitive initialization
-        MPI_Start(&(bd_hydro_.req_recv[nb.bufid]));
+        if (HYDRO) 
+          MPI_Start(&(bd_hydro_.req_recv[nb.bufid]));
     }
   }
 #endif
@@ -909,12 +952,17 @@ void BoundaryValues::StartReceivingAll(void)
   for(int n=0;n<nneighbor;n++) {
     NeighborBlock& nb = neighbor[n];
     if(nb.rank!=Globals::my_rank) { 
-      MPI_Start(&(bd_hydro_.req_recv[nb.bufid]));
+      if (HYDRO) {
+        MPI_Start(&(bd_hydro_.req_recv[nb.bufid]));
+        if(nb.type==NEIGHBOR_FACE && nb.level>mylevel)
+          MPI_Start(&(bd_flcor_.req_recv[nb.bufid]));
+      }
+      if (HYBRID) {
+        MPI_Start(&(bd_mcoup_.req_recv[nb.bufid]));
+      }
       if (SELF_GRAVITY_ENABLED == 1)
         MPI_Start(&(bd_gravity_.req_recv[nb.bufid]));
-      if(nb.type==NEIGHBOR_FACE && nb.level>mylevel)
-        MPI_Start(&(bd_flcor_.req_recv[nb.bufid]));
-      if (MAGNETIC_FIELDS_ENABLED) {
+       if (MAGNETIC_FIELDS_ENABLED) {
         MPI_Start(&(bd_field_.req_recv[nb.bufid]));
         if(nb.type==NEIGHBOR_FACE || nb.type==NEIGHBOR_EDGE) {
           if((nb.level>mylevel) || ((nb.level==mylevel) && ((nb.type==NEIGHBOR_FACE)
@@ -954,25 +1002,31 @@ void BoundaryValues::ClearBoundaryForInit(bool cons_and_field)
   // corresponds to primitives sent only in the case of GR with refinement
   for(int n=0;n<nneighbor;n++) {
     NeighborBlock& nb = neighbor[n];
-    bd_hydro_.flag[nb.bufid] = BNDRY_WAITING;
+    if (HYDRO)
+      bd_hydro_.flag[nb.bufid] = BNDRY_WAITING;
+    if (HYBRID) 
+      bd_mcoup_.flag[nb.bufid] = BNDRY_WAITING;
     if (MAGNETIC_FIELDS_ENABLED)
       bd_field_.flag[nb.bufid] = BNDRY_WAITING;
     if (SELF_GRAVITY_ENABLED == 1)
       bd_gravity_.flag[nb.bufid] = BNDRY_WAITING;
-    if (GENERAL_RELATIVITY and pmy_mesh_->multilevel)
+    if (GENERAL_RELATIVITY and pmy_mesh_->multilevel and HYDRO)
       bd_hydro_.flag[nb.bufid] = BNDRY_WAITING;
 #ifdef MPI_PARALLEL
     if(nb.rank!=Globals::my_rank) {
+      if (HYBRID)
+        MPI_Wait(&(bd_mcoup_.req_send[nb.bufid]),MPI_STATUS_IGNORE); // Wait for Isend
       if (cons_and_field) {  // normal case
-        MPI_Wait(&(bd_hydro_.req_send[nb.bufid]),MPI_STATUS_IGNORE); // Wait for Isend
+        if (HYDRO)
+          MPI_Wait(&(bd_hydro_.req_send[nb.bufid]),MPI_STATUS_IGNORE); // Wait for Isend
         if (MAGNETIC_FIELDS_ENABLED)
           MPI_Wait(&(bd_field_.req_send[nb.bufid]),MPI_STATUS_IGNORE); // Wait for Isend
         if (SELF_GRAVITY_ENABLED == 1)
           MPI_Wait(&(bd_gravity_.req_send[nb.bufid]),MPI_STATUS_IGNORE); // Wait for Isend
       }
       else {  // must be primitive initialization
-        if (GENERAL_RELATIVITY and pmy_mesh_->multilevel)
-          MPI_Wait(&(bd_hydro_.req_send[nb.bufid]),MPI_STATUS_IGNORE); // Wait for Isend
+        if (GENERAL_RELATIVITY and pmy_mesh_->multilevel and HYDRO)
+           MPI_Wait(&(bd_hydro_.req_send[nb.bufid]),MPI_STATUS_IGNORE); // Wait for Isend
       }
     }
 #endif
@@ -992,9 +1046,14 @@ void BoundaryValues::ClearBoundaryAll(void)
   // Clear non-polar boundary communications
   for(int n=0;n<nneighbor;n++) {
     NeighborBlock& nb = neighbor[n];
-    bd_hydro_.flag[nb.bufid] = BNDRY_WAITING;
-    if(nb.type==NEIGHBOR_FACE)
-      bd_flcor_.flag[nb.bufid] = BNDRY_WAITING;
+    if (HYDRO) {
+      bd_hydro_.flag[nb.bufid] = BNDRY_WAITING;
+      if(nb.type==NEIGHBOR_FACE)
+        bd_flcor_.flag[nb.bufid] = BNDRY_WAITING;
+    }
+    if (HYBRID) {
+      bd_mcoup_.flag[nb.bufid] = BNDRY_WAITING;
+    }
     if (MAGNETIC_FIELDS_ENABLED) {
       bd_field_.flag[nb.bufid] = BNDRY_WAITING;
       if((nb.type==NEIGHBOR_FACE) || (nb.type==NEIGHBOR_EDGE))
@@ -1004,11 +1063,16 @@ void BoundaryValues::ClearBoundaryAll(void)
       bd_gravity_.flag[nb.bufid] = BNDRY_WAITING;
 #ifdef MPI_PARALLEL
     if(nb.rank!=Globals::my_rank) {
-      MPI_Wait(&(bd_hydro_.req_send[nb.bufid]),MPI_STATUS_IGNORE); // Wait for Isend
+      if (HYDRO) {
+        MPI_Wait(&(bd_hydro_.req_send[nb.bufid]),MPI_STATUS_IGNORE); // Wait for Isend
+        if(nb.type==NEIGHBOR_FACE && nb.level<pmb->loc.level)
+          MPI_Wait(&(bd_flcor_.req_send[nb.bufid]),MPI_STATUS_IGNORE); // Wait for Isend
+      }
+      if (HYBRID) {
+        MPI_Wait(&(bd_mcoup_.req_send[nb.bufid]),MPI_STATUS_IGNORE); // Wait for Isend
+      }
       if (SELF_GRAVITY_ENABLED == 1)
         MPI_Wait(&(bd_gravity_.req_send[nb.bufid]),MPI_STATUS_IGNORE); // Wait for Isend
-      if(nb.type==NEIGHBOR_FACE && nb.level<pmb->loc.level)
-        MPI_Wait(&(bd_flcor_.req_send[nb.bufid]),MPI_STATUS_IGNORE); // Wait for Isend
       if (MAGNETIC_FIELDS_ENABLED) {
         MPI_Wait(&(bd_field_.req_send[nb.bufid]),MPI_STATUS_IGNORE); // Wait for Isend
         if(nb.type==NEIGHBOR_FACE || nb.type==NEIGHBOR_EDGE) {
@@ -1141,6 +1205,111 @@ void BoundaryValues::ApplyPhysicalBoundaries(AthenaArray<Real> &pdst,
       }
       pmb->peos->PrimitiveToConserved(pdst, bcdst, cdst, pco,
         bis, bie, bjs, bje, pmb->ke+1, pmb->ke+NGHOST);
+    }
+  }
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void BoundaryValues::ApplyPhysicalBoundariesHybrid(AthenaArray<Real> &pdst,
+//           FaceField &bfdst, const Real time, const Real dt)
+//  \brief Apply all the physical boundary conditions for hybrid coupling array and field
+
+void BoundaryValues::ApplyPhysicalBoundariesHybrid(AthenaArray<Real> &pdst,
+     FaceField &bfdst, const Real time, const Real dt, enum CCBoundaryType type)
+{
+  MeshBlock *pmb=pmy_block_;
+  Coordinates *pco=pmb->pcoord;
+  int bis=pmb->is-NGHOST, bie=pmb->ie+NGHOST, bjs=pmb->js, bje=pmb->je,
+      bks=pmb->ks, bke=pmb->ke;
+  if(BoundaryFunction_[INNER_X2]==NULL && pmb->block_size.nx2>1) bjs=pmb->js-NGHOST;
+  if(BoundaryFunction_[OUTER_X2]==NULL && pmb->block_size.nx2>1) bje=pmb->je+NGHOST;
+  if(BoundaryFunction_[INNER_X3]==NULL && pmb->block_size.nx3>1) bks=pmb->ks-NGHOST;
+  if(BoundaryFunction_[OUTER_X3]==NULL && pmb->block_size.nx3>1) bke=pmb->ke+NGHOST;
+  // Apply boundary function on inner-x1
+  if (BoundaryFunction_[INNER_X1] != NULL) {
+    if (type==HYBRID_MCOUP) {
+      FaceField temp;
+      BoundaryFunction_[INNER_X1](pmb, pco, pdst, temp, time, dt,
+                                  pmb->is, pmb->ie, bjs, bje, bks, bke);
+    } else if (type==HYBRID_FIELD) {
+      AthenaArray<Real> temp;
+      BoundaryFunction_[INNER_X1](pmb, pco, temp, bfdst, time, dt,
+                                  pmb->is, pmb->ie, bjs, bje, bks, bke);
+    }
+  }
+
+  // Apply boundary function on outer-x1
+  if (BoundaryFunction_[OUTER_X1] != NULL) {
+    if (type==HYBRID_MCOUP) {
+     FaceField temp;
+     BoundaryFunction_[OUTER_X1](pmb, pco, pdst, temp, time, dt,
+                                  pmb->is, pmb->ie, bjs, bje, bks, bke);
+    } else if (type==HYBRID_FIELD) {
+     AthenaArray<Real> temp;
+     BoundaryFunction_[OUTER_X1](pmb, pco, temp, bfdst, time, dt,
+                                  pmb->is, pmb->ie, bjs, bje, bks, bke);
+    }
+  }
+
+  if(pmb->block_size.nx2>1) { // 2D or 3D
+
+    // Apply boundary function on inner-x2
+    if (BoundaryFunction_[INNER_X2] != NULL) {
+      if (type==HYBRID_MCOUP) {
+        FaceField temp;
+        BoundaryFunction_[INNER_X2](pmb, pco, pdst, temp, time, dt,
+                                  pmb->is, pmb->ie, bjs, bje, bks, bke);
+      } else if (type==HYBRID_FIELD) {
+        AthenaArray<Real> temp;
+        BoundaryFunction_[INNER_X2](pmb, pco, temp, bfdst, time, dt,
+                                  pmb->is, pmb->ie, bjs, bje, bks, bke);
+      }
+    }
+
+    // Apply boundary function on outer-x2
+    if (BoundaryFunction_[OUTER_X2] != NULL) {
+      if (type==HYBRID_MCOUP) {
+        FaceField temp;
+        BoundaryFunction_[OUTER_X2](pmb, pco, pdst, temp, time, dt,
+                                  pmb->is, pmb->ie, bjs, bje, bks, bke);
+      } else if (type==HYBRID_FIELD) {
+        AthenaArray<Real> temp;
+        BoundaryFunction_[OUTER_X2](pmb, pco, temp, bfdst, time, dt,
+                                  pmb->is, pmb->ie, bjs, bje, bks, bke);
+      }
+    }
+  }
+
+  if(pmb->block_size.nx3>1) { // 3D
+    bjs=pmb->js-NGHOST;
+    bje=pmb->je+NGHOST;
+
+    // Apply boundary function on inner-x3
+    if (BoundaryFunction_[INNER_X3] != NULL) {
+      if (type==HYBRID_MCOUP) {
+        FaceField temp;
+        BoundaryFunction_[INNER_X3](pmb, pco, pdst, temp, time, dt,
+                                  pmb->is, pmb->ie, bjs, bje, bks, bke);
+      } else if (type==HYBRID_FIELD) {
+        AthenaArray<Real> temp;
+        BoundaryFunction_[INNER_X3](pmb, pco, temp, bfdst, time, dt,
+                                  pmb->is, pmb->ie, bjs, bje, bks, bke);
+      }
+    }
+
+    // Apply boundary function on outer-x3
+    if (BoundaryFunction_[OUTER_X3] != NULL) {
+      if (type==HYBRID_MCOUP) {
+        FaceField temp;
+        BoundaryFunction_[OUTER_X3](pmb, pco, pdst, temp, time, dt,
+                                  pmb->is, pmb->ie, bjs, bje, bks, bke);
+      } else if (type==HYBRID_FIELD) {
+        AthenaArray<Real> temp;
+        BoundaryFunction_[OUTER_X3](pmb, pco, temp, bfdst, time, dt,
+                                  pmb->is, pmb->ie, bjs, bje, bks, bke);
+      }
     }
   }
 

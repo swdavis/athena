@@ -57,6 +57,12 @@
 // HDF5 output (HDF5OUTPUT or NO_HDF5OUTPUT)
 #define @HDF5_OPTION@
 
+// Particles
+#define PARTICLE @PARTICLE@
+
+// Hybrid-PIC
+#define HYBRID @PEGASUS@
+#define HYDRO 1-HYBRID
 // compiler options
 #define COMPILED_WITH "@COMPILER_CHOICE@"
 #define COMPILER_COMMAND "@COMPILER_COMMAND@"

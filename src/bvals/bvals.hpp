@@ -48,6 +48,7 @@ enum BoundaryStatus {BNDRY_WAITING, BNDRY_ARRIVED, BNDRY_COMPLETED};
 // flags to mark which variables are reversed across polar boundary
 static bool flip_across_pole_hydro[] = {false, false, true, true, false};
 static bool flip_across_pole_field[] = {false, true, true};
+static bool flip_across_pole_ptensor[] = {false, true, true, false, false, false};
 
 
 //----------------------------------------------------------------------------------------
@@ -195,28 +196,30 @@ public:
   void ClearBoundaryAll(void);
   void ApplyPhysicalBoundaries(AthenaArray<Real> &pdst, AthenaArray<Real> &cdst,
        FaceField &bfdst, AthenaArray<Real> &bcdst, const Real time, const Real dt);
+  void ApplyPhysicalBoundariesHybrid(AthenaArray<Real> &pdst, FaceField &bfdst, 
+                              const Real time, const Real dt, enum CCBoundaryType);
   void ProlongateBoundaries(AthenaArray<Real> &pdst, AthenaArray<Real> &cdst, 
        FaceField &bfdst, AthenaArray<Real> &bcdst, const Real time, const Real dt);
 
   int LoadCellCenteredBoundaryBufferSameLevel(AthenaArray<Real> &src,
-                      int ns, int ne, Real *buf, const NeighborBlock& nb);
+                      int ns, int ne, Real *buf, const NeighborBlock& nb, enum CCBoundaryType);
   int LoadCellCenteredBoundaryBufferToCoarser(AthenaArray<Real> &src,
-      int ns, int ne, Real *buf, AthenaArray<Real> &cbuf, const NeighborBlock& nb);
+      int ns, int ne, Real *buf, AthenaArray<Real> &cbuf, const NeighborBlock& nb, enum CCBoundaryType);
   int LoadCellCenteredBoundaryBufferToFiner(AthenaArray<Real> &src,
-                      int ns, int ne, Real *buf, const NeighborBlock& nb);
+                      int ns, int ne, Real *buf, const NeighborBlock& nb, enum CCBoundaryType);
   void SendCellCenteredBoundaryBuffers(AthenaArray<Real> &src,
                                        enum CCBoundaryType type);
   void SetCellCenteredBoundarySameLevel(AthenaArray<Real> &dst, int ns, int ne,
-                                  Real *buf, const NeighborBlock& nb, bool *flip);
+                                  Real *buf, const NeighborBlock& nb, bool *flip, enum CCBoundaryType);
   void SetCellCenteredBoundaryFromCoarser(int ns, int ne, Real *buf,
-                      AthenaArray<Real> &cbuf, const NeighborBlock& nb, bool *flip);
+                      AthenaArray<Real> &cbuf, const NeighborBlock& nb, bool *flip, enum CCBoundaryType);
   void SetCellCenteredBoundaryFromFiner(AthenaArray<Real> &dst, int ns, int ne,
-                                  Real *buf, const NeighborBlock& nb, bool *flip);
+                                  Real *buf, const NeighborBlock& nb, bool *flip, enum CCBoundaryType);
   bool ReceiveCellCenteredBoundaryBuffers(AthenaArray<Real> &dst,
                                           enum CCBoundaryType type);
   void ReceiveCellCenteredBoundaryBuffersWithWait(AthenaArray<Real> &dst,
                                            enum CCBoundaryType type);
-  void PolarSingleCellCentered(AthenaArray<Real> &dst, int ns, int ne);
+  void PolarSingleCellCentered(AthenaArray<Real> &dst, int ns, int ne, enum CCBoundaryType);
 
   int LoadFieldBoundaryBufferSameLevel(FaceField &src, Real *buf,
                                        const NeighborBlock& nb);
@@ -264,6 +267,7 @@ private:
   bool firsttime_;
 
   BoundaryData bd_hydro_, bd_field_, bd_gravity_, bd_flcor_, bd_emfcor_;
+  BoundaryData bd_mcoup_;
   enum BoundaryStatus *emf_north_flag_;
   enum BoundaryStatus *emf_south_flag_;
   Real **emf_north_send_, **emf_north_recv_;
@@ -277,6 +281,93 @@ private:
 #endif
 
   BValFunc_t BoundaryFunction_[6];
+
+  // temporary
+  friend class Mesh;
+};
+
+//---------------------- prototypes for all exchange functions ---------------------------------
+void ReflectInnerExchangeX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &mcoup,
+     Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+void ReflectInnerExchangeX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &mcoup,
+     Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+void ReflectInnerExchangeX3(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &mcoup,
+     Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+void ReflectOuterExchangeX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &mcoup,
+     Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+void ReflectOuterExchangeX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &mcoup,
+     Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+void ReflectOuterExchangeX3(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &mcoup,
+     Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+
+void OutflowInnerExchangeX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &mcoup,
+     Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+void OutflowInnerExchangeX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &mcoup,
+     Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+void OutflowInnerExchangeX3(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &mcoup,
+     Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+void OutflowOuterExchangeX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &mcoup,
+     Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+void OutflowOuterExchangeX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &mcoup,
+     Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+void OutflowOuterExchangeX3(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &mcoup,
+     Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+
+void PolarWedgeInnerExchangeX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &mcoup,
+     Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+void PolarWedgeOuterExchangeX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &mcoup,
+     Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+
+//----------------------------------------------------------------------------------------
+//! \class ExchangeValues
+//  \brief Exchange data and functions
+
+class ExchangeValues : public BoundaryBase {
+public:
+  ExchangeValues(MeshBlock *pmb, enum BoundaryFlag *input_bcs);
+  ~ExchangeValues();
+
+  void InitExchangeData(BoundaryData &bd, enum BoundaryType type);
+  void DestroyExchangeData(BoundaryData &bd);
+  void Initialize(void);
+  void CheckBoundary(void);
+  void StartReceivingForInit(bool flag);
+  void StartReceivingAll(void);
+  void ClearExchangeForInit(bool flag);
+  void ClearExchangeAll(void);
+  void ApplyExchangePhysicalBoundaries(AthenaArray<Real> &pdst, const Real time,
+                                                                    const Real dt);
+  int LoadExchangeBufferSameLevel(AthenaArray<Real> &src,
+                               int ns, int ne, Real *buf, const NeighborBlock& nb);
+  int LoadExchangeBufferToCoarser(AthenaArray<Real> &src,
+      int ns, int ne, Real *buf, AthenaArray<Real> &cbuf, const NeighborBlock& nb);
+  int LoadExchangeBufferToFiner(AthenaArray<Real> &src,
+                               int ns, int ne, Real *buf, const NeighborBlock& nb);
+  void SendExchangeBuffers(AthenaArray<Real> &src, enum CCBoundaryType type);
+  void AddExchangeSameLevel(AthenaArray<Real> &dst, int ns, int ne,
+                                   Real *buf, const NeighborBlock& nb, bool *flip);
+  void AddExchangeFromCoarser(int ns, int ne, Real *buf,
+                     AthenaArray<Real> &cbuf, const NeighborBlock& nb, bool *flip);
+  void AddExchangeFromFiner(AthenaArray<Real> &dst, int ns, int ne,
+                                   Real *buf, const NeighborBlock& nb, bool *flip);
+  bool ReceiveExchangeBuffers(AthenaArray<Real> &dst,
+                                          enum CCBoundaryType type);
+  void ReceiveExchangeBuffersWithWait(AthenaArray<Real> &dst,
+                                          enum CCBoundaryType type);
+  void PolarSingleExchange(AthenaArray<Real> &dst, int ns, int ne);
+  
+private:
+  MeshBlock *pmy_block_;  // ptr to MeshBlock containing this BVals
+  int nface_, nedge_;
+  bool edge_flag_[12];
+  int nedge_fine_[12];
+  bool firsttime_;
+
+  BoundaryData bd_mcoup_;
+  AthenaArray<Real> exc_;
+  int num_north_polar_blocks_, num_south_polar_blocks_;
+
+  ExchFunc_t ExchangeFunction_[6];
 
   // temporary
   friend class Mesh;

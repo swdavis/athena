@@ -24,6 +24,8 @@
 #   -fft              enable FFT (requires the FFTW library)
 #   --fftw_path=path  path to FFTW libraries (requires the FFTW library)
 #   --grav=choice     use choice as the self-gravity solver
+#   -p                enable particles
+#   -pegasus          disable hydro, enable hybrid-PIC
 #   --cxx=choice      use choice as the C++ compiler
 #   --ccmd=name       use name as the command to call the C++ compiler
 #   --include=path    use -Ipath when compiling
@@ -145,6 +147,18 @@ parser.add_argument('--hdf5_path',
     default='',
     help='path to HDF5 libraries')
 
+# -p argument
+parser.add_argument('-p',
+    action='store_true',
+    default=False,
+    help='enable particles')
+
+# -pegasus argument
+parser.add_argument('-pegasus',
+    action='store_true',
+    default=False,
+    help='disable hydro, enable hybrid-PIC')
+
 # --cxx=[name] argument
 parser.add_argument('--cxx',
     default='g++',
@@ -179,7 +193,7 @@ args = vars(parser.parse_args())
 if args['flux'] == 'default':
   if args['g']:
     args['flux'] = 'hlle'
-  elif args['b']:
+  elif args['b'] or args['pegasus']:
     args['flux'] = 'hlld'
   elif args['eos'] == 'isothermal':
     args['flux'] = 'hlle'
@@ -189,9 +203,9 @@ if args['flux'] == 'default':
 # Check Riemann solver compatibility
 if args['flux'] == 'hllc' and args['eos'] == 'isothermal':
   raise SystemExit('### CONFIGURE ERROR: HLLC flux cannot be used with isothermal EOS')
-if args['flux'] == 'hllc' and args['b']:
+if args['flux'] == 'hllc' and (args['b'] or args['pegasus']):
   raise SystemExit('### CONFIGURE ERROR: HLLC flux cannot be used with MHD')
-if args['flux'] == 'hlld' and not args['b']:
+if args['flux'] == 'hlld' and not (args['b'] or args['pegasus']):
   raise SystemExit('### CONFIGURE ERROR: HLLD flux can only be used with MHD')
 
 # Check relativity
@@ -237,6 +251,20 @@ if args['eos'] == 'isothermal':
 
 # --flux=[name] argument
 definitions['RSOLVER'] = makefile_options['RSOLVER_FILE'] = args['flux']
+
+# -pegasus argument
+if args['pegasus']:
+  definitions['PEGASUS'] = '1'
+  args['p'] = 1
+  args['b'] = 1
+else:
+  definitions['PEGASUS'] = '0'
+
+# -p argument
+if args['p']:
+  definitions['PARTICLE'] = '1'
+else:
+  definitions['PARTICLE'] = '0'
 
 # -b argument
 # set variety of macros based on whether MHD/hydro or adi/iso are defined
@@ -476,23 +504,42 @@ with open(makefile_output, 'w') as current_file:
   current_file.write(makefile_template)
 
 # Finish with diagnostic output
-print('Your Athena++ distribution has now been configured with the following options:')
-print('  Problem generator:       ' + args['prob'])
-print('  Coordinate system:       ' + args['coord'])
-print('  Equation of state:       ' + args['eos'])
-print('  Riemann solver:          ' + args['flux'])
-print('  Self Gravity:            ' + ('OFF' if args['grav'] == 'none' else args['grav']))
-print('  Magnetic fields:         ' + ('ON' if args['b'] else 'OFF'))
-print('  Special relativity:      ' + ('ON' if args['s'] else 'OFF'))
-print('  General relativity:      ' + ('ON' if args['g'] else 'OFF'))
-print('  Frame transformations:   ' + ('ON' if args['t'] else 'OFF'))
-print('  Debug flags:             ' + ('ON' if args['debug'] else 'OFF'))
-print('  Linker flags:            ' + makefile_options['LINKER_FLAGS'] + ' ' \
-    + makefile_options['LIBRARY_FLAGS'])
-print('  MPI parallelism:         ' + ('ON' if args['mpi'] else 'OFF'))
-print('  OpenMP parallelism:      ' + ('ON' if args['omp'] else 'OFF'))
-print('  FFT:                     ' + ('ON' if args['fft'] else 'OFF'))
-print('  HDF5 output:             ' + ('ON' if args['hdf5'] else 'OFF'))
-print('  Compiler:                ' + args['cxx'])
-print('  Compilation command:     ' + makefile_options['COMPILER_COMMAND'] + ' ' \
-    + makefile_options['PREPROCESSOR_FLAGS'] + ' ' + makefile_options['COMPILER_FLAGS'])
+if not args['pegasus']:
+  print('Your Athena++ distribution has now been configured with the following options:')
+  print('  Problem generator:       ' + args['prob'])
+  print('  Coordinate system:       ' + args['coord'])
+  print('  Equation of state:       ' + args['eos'])
+  print('  Riemann solver:          ' + args['flux'])
+  print('  Self Gravity:            ' + ('OFF' if args['grav'] == 'none' else args['grav']))
+  print('  Magnetic fields:         ' + ('ON' if args['b'] else 'OFF'))
+  print('  Special relativity:      ' + ('ON' if args['s'] else 'OFF'))
+  print('  General relativity:      ' + ('ON' if args['g'] else 'OFF'))
+  print('  Frame transformations:   ' + ('ON' if args['t'] else 'OFF'))
+  print('  Debug flags:             ' + ('ON' if args['debug'] else 'OFF'))
+  print('  Linker flags:            ' + makefile_options['LINKER_FLAGS'] + ' ' \
+      + makefile_options['LIBRARY_FLAGS'])
+  print('  MPI parallelism:         ' + ('ON' if args['mpi'] else 'OFF'))
+  print('  OpenMP parallelism:      ' + ('ON' if args['omp'] else 'OFF'))
+  print('  FFT:                     ' + ('ON' if args['fft'] else 'OFF'))
+  print('  HDF5 output:             ' + ('ON' if args['hdf5'] else 'OFF'))
+  print('  Particles:               ' + ('ON' if args['p'] else 'OFF'))
+  print('  Compiler:                ' + args['cxx'])
+  print('  Compilation command:     ' + makefile_options['COMPILER_COMMAND'] + ' ' \
+      + makefile_options['PREPROCESSOR_FLAGS'] + ' ' + makefile_options['COMPILER_FLAGS'])
+else:
+  print('Your Pegasus++ distribution has now been configured with the following options:')
+  print('  Problem generator:            ' + args['prob'])
+  print('  Coordinate system:            ' + args['coord'])
+  print('  Electron equation of state:   ' + args['eos'])
+  print('  MPI parallelism:              ' + ('ON' if args['mpi'] else 'OFF'))
+  print('  OpenMP parallelism:           ' + ('ON' if args['omp'] else 'OFF'))
+  print('  FFT:                          ' + ('ON' if args['fft'] else 'OFF'))
+  print('  HDF5 output:                  ' + ('ON' if args['hdf5'] else 'OFF'))
+  print('  Debug flags:                  ' + ('ON' if args['debug'] else 'OFF'))
+  print('  Linker flags:                 ' + makefile_options['LINKER_FLAGS'] + ' ' \
+      + makefile_options['LIBRARY_FLAGS'])
+  print('  Compiler:                     ' + args['cxx'])
+  print('  Compilation command:          ' + makefile_options['COMPILER_COMMAND'] + ' ' \
+      + makefile_options['PREPROCESSOR_FLAGS'] + ' ' + makefile_options['COMPILER_FLAGS'])
+
+

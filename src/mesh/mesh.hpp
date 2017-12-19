@@ -20,6 +20,7 @@
 #include "../parameter_input.hpp"
 #include "../outputs/io_wrapper.hpp"
 #include "../task_list/task_list.hpp"
+#include "../task_list/task_list_hybrid.hpp"
 #include "../bvals/bvals.hpp"
 #include "meshblock_tree.hpp"
 #include "mesh_refinement.hpp"
@@ -30,6 +31,7 @@ class Mesh;
 class MeshRefinement;
 class MeshBlockTree;
 class BoundaryValues;
+class ExchangeValues;
 class TaskList;
 class TaskState;
 class Coordinates;
@@ -40,7 +42,8 @@ class Gravity;
 class GravityDriver;
 class AthenaFFT;
 class EquationOfState;
-
+class Particle;
+class Hybrid;
 
 //----------------------------------------------------------------------------------------
 //! \class MeshBlock
@@ -49,6 +52,7 @@ class EquationOfState;
 class MeshBlock {
   friend class RestartOutput;
   friend class BoundaryValues;
+  friend class ExchangeValues;
   friend class Mesh;
   friend class Hydro;
   friend class TaskList;
@@ -86,6 +90,7 @@ public:
   // mesh-related objects
   Coordinates *pcoord;
   BoundaryValues *pbval;
+  ExchangeValues *peval;
   Reconstruction *precon;
   MeshRefinement *pmr;
 
@@ -94,6 +99,9 @@ public:
   Field *pfield;
   Gravity *pgrav;
   EquationOfState *peos;
+
+  Particle *particle;
+  Hybrid *phybrid;
 
   // fft object
   AthenaFFT *pfft;
@@ -132,6 +140,7 @@ class Mesh {
   friend class MeshBlock;
   friend class BoundaryBase;
   friend class BoundaryValues;
+  friend class ExchangeValues;
   friend class MGBoundaryValues;
   friend class Coordinates;
   friend class MeshRefinement;
@@ -210,6 +219,7 @@ private:
   HistoryOutputFunc_t *user_history_func_;
   MetricFunc_t UserMetric_;
   MGBoundaryFunc_t MGBoundaryFunction_[6];
+  ExchFunc_t ExchangeFunction_[6];
 
   void AllocateRealUserMeshDataField(int n);
   void AllocateIntUserMeshDataField(int n);

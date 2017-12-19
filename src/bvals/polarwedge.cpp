@@ -21,21 +21,25 @@
 void PolarWedgeInnerX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
      FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke)
 {
-  // copy hydro variables into ghost zones, reflecting v2
-  for (int n=0; n<(NHYDRO); ++n) {
-    Real sign = flip_across_pole_hydro[n] ? -1.0 : 1.0;
-    for (int k=ks; k<=ke; ++k) {
-      for (int j=1; j<=(NGHOST); ++j) {
+  if (prim.data()!=NULL) {
+    // copy hydro variables into ghost zones, reflecting v2
+    for (int n=0; n<(prim.GetDim4()); ++n) {
+      Real sign = flip_across_pole_hydro[n] ? -1.0 : 1.0;
+      if (prim.GetDim4()==6)
+        sign = flip_across_pole_ptensor[n] ? -1.0 : 1.0;
+      for (int k=ks; k<=ke; ++k) {
+        for (int j=1; j<=(NGHOST); ++j) {
 #pragma simd
-        for (int i=is; i<=ie; ++i) {
-          prim(n,k,js-j,i) = sign * prim(n,k,js+j-1,i);
+          for (int i=is; i<=ie; ++i) {
+            prim(n,k,js-j,i) = sign * prim(n,k,js+j-1,i);
+          }
         }
-      }
+      } 
     }
   }
 
   // copy face-centered magnetic fields into ghost zones, reflecting b2
-  if (MAGNETIC_FIELDS_ENABLED) {
+  if (MAGNETIC_FIELDS_ENABLED && b.x1f.data()!=NULL) {
     Real sign = flip_across_pole_field[IB1] ? -1.0 : 1.0;
     for (int k=ks; k<=ke; ++k) {
     for (int j=1; j<=(NGHOST); ++j) {
@@ -82,21 +86,25 @@ void PolarWedgeInnerX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim
 void PolarWedgeOuterX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
      FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke)
 {
-  // copy hydro variables into ghost zones, reflecting v2
-  for (int n=0; n<(NHYDRO); ++n) {
-    Real sign = flip_across_pole_hydro[n] ? -1.0 : 1.0;
-    for (int k=ks; k<=ke; ++k) {
-      for (int j=1; j<=(NGHOST); ++j) {
+  if (prim.data()!=NULL) {
+    // copy hydro variables into ghost zones, reflecting v2
+    for (int n=0; n<(prim.GetDim4()); ++n) {
+      Real sign = flip_across_pole_hydro[n] ? -1.0 : 1.0;
+      if (prim.GetDim4()==6)
+        sign = flip_across_pole_ptensor[n] ? -1.0 : 1.0;
+      for (int k=ks; k<=ke; ++k) {
+        for (int j=1; j<=(NGHOST); ++j) {
 #pragma simd
-        for (int i=is; i<=ie; ++i) {
-          prim(n,k,je+j,i) = sign * prim(n,k,je-j+1,i);
+          for (int i=is; i<=ie; ++i) {
+            prim(n,k,je+j,i) = sign * prim(n,k,je-j+1,i);
+          }
         }
       }
     }
   }
 
   // copy face-centered magnetic fields into ghost zones, reflecting b2
-  if (MAGNETIC_FIELDS_ENABLED) {
+  if (MAGNETIC_FIELDS_ENABLED && b.x1f.data()!=NULL) {
     Real sign = flip_across_pole_field[IB1] ? -1.0 : 1.0;
     for (int k=ks; k<=ke; ++k) {
     for (int j=1; j<=(NGHOST); ++j) {

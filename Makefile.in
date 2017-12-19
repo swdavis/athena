@@ -22,7 +22,11 @@ LDLIBS := @LIBRARY_FLAGS@
 # Preliminary definitions
 
 EXE_DIR := bin/
-EXECUTABLE := $(EXE_DIR)athena
+ifeq (@PEGASUS@,0)
+        EXECUTABLE := $(EXE_DIR)athena
+else
+        EXECUTABLE := $(EXE_DIR)pegasus
+endif
 SRC_FILES := $(wildcard src/*.cpp) \
 	     $(wildcard src/bvals/*.cpp) \
 	     $(wildcard src/coordinates/*.cpp) \
@@ -40,6 +44,8 @@ SRC_FILES := $(wildcard src/*.cpp) \
 	     $(wildcard src/gravity/*.cpp) \
 	     src/gravity/solvers/$(GRAVITY_FILE) \
 	     src/fft/athena_fft.cpp \
+             $(wildcard src/particle/*.cpp) \
+             $(wildcard src/hybrid/*.cpp) \
 	     $(MPIFFT_FILE) \
 	     src/pgen/$(PROBLEM_FILE) \
 	     src/pgen/default_pgen.cpp

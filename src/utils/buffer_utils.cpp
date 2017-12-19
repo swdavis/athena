@@ -88,4 +88,25 @@ void Unpack3DData(Real *buf, AthenaArray<Real> &dst,
   return;
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void Add4DData(Real *buf, AthenaArray<Real> &dst, int sn, int en,
+//                        int si, int ei, int sj, int ej, int sk, int ek, int &offset)
+//  \brief add a one-dimensional buffer to a 4D AthenaArray
+
+void Add4DData(Real *buf, AthenaArray<Real> &dst, int sn, int en,
+                  int si, int ei, int sj, int ej, int sk, int ek, int &offset)
+{
+  for (int n=sn; n<=en; n++) {
+    for (int k=sk; k<=ek; ++k) {
+      for (int j=sj; j<=ej; ++j) {
+#pragma simd
+        for (int i=si; i<=ei; ++i)
+          dst(n,k,j,i) += buf[offset++];
+      }
+    }
+  }
+  return;
+}
+
 } // end namespace BufferUtility
+

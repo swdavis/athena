@@ -27,7 +27,8 @@
 #include <new>        // bad_alloc
 #include <string>     // string
 #include <csignal>
-
+#include "time.h"
+#include <sys/time.h>
 // Athena++ headers
 #include "athena.hpp"
 #include "globals.hpp"
@@ -37,6 +38,7 @@
 #include "outputs/io_wrapper.hpp"
 #include "utils/utils.hpp"
 #include "gravity/mggravity.hpp"
+#include "particle/particle.hpp"
 
 // MPI/OpenMP headers
 #ifdef MPI_PARALLEL
@@ -222,7 +224,7 @@ int main(int argc, char *argv[])
 
 //--- Step 4. ----------------------------------------------------------------------------
 // Construct and initialize Mesh
-
+  
   Mesh *pmesh;
   try {
     if(res_flag==0)
@@ -237,6 +239,7 @@ int main(int argc, char *argv[])
               << "memory allocation failed initializing class Mesh: " 
               << ba.what() << std::endl;
     if(res_flag==1) restartfile.Close();
+  
 #ifdef MPI_PARALLEL
     MPI_Finalize();
 #endif
@@ -265,7 +268,8 @@ int main(int argc, char *argv[])
 
   TaskList *ptlist;
   try {
-    ptlist = new TimeIntegratorTaskList(pinput, pmesh);
+    if (HYDRO) ptlist = new TimeIntegratorTaskList(pinput, pmesh);
+    if (HYBRID) ptlist = new TimeIntegratorTaskListHybrid(pinput, pmesh);
   }
   catch(std::bad_alloc& ba) {
     std::cout << "### FATAL ERROR in main" << std::endl << "memory allocation failed "
@@ -330,33 +334,69 @@ int main(int argc, char *argv[])
   if(Globals::my_rank==0) {
     std::cout<<std::endl<<"Setup complete, entering main loop..."<<std::endl<<std::endl;
   }
-
+struct timeval tv_init_tot,tv_curr_tot;
+gettimeofday(&tv_init_tot,NULL);
   clock_t tstart = clock();
 #ifdef OPENMP_PARALLEL
   double omp_start_time = omp_get_wtime();
 #endif
-
+  if (HYBRID) pmesh->dt=0.02;
   while ((pmesh->time < pmesh->tlim) && 
          (pmesh->nlim < 0 || pmesh->ncycle < pmesh->nlim)){
+struct timeval tv_init_ts,tv_curr_ts;
+gettimeofday(&tv_init_ts,NULL);
 
     if(Globals::my_rank==0) {
       std::cout << "cycle=" << pmesh->ncycle << std::scientific <<std::setprecision(14)
                 << " time=" << pmesh->time << " dt=" << pmesh->dt <<std::endl;
     }
-
-    for (int step=1; step<=ptlist->nsub_steps; ++step) {
-      if(SELF_GRAVITY_ENABLED == 2) // multigrid
-        pmesh->pgrd->Solve(step);
-      ptlist->DoTaskListOneSubstep(pmesh, step);
+    // temporary
+    if (HYDRO){
+      for (int step=1; step<=ptlist->nsub_steps; ++step) {
+        if(SELF_GRAVITY_ENABLED == 2) // multigrid
+          pmesh->pgrd->Solve(step);
+        ptlist->DoTaskListOneSubstep(pmesh, step);
+      }
     }
-
+    if (HYBRID) {
+     //pmesh->pblock->particle->Test();
+      struct timeval tv_init,tv_curr;
+      gettimeofday(&tv_init,NULL);
+      
+      for (int step=1; step<=ptlist->nsub_steps; ++step) {
+        ptlist->DoTaskListOneSubstep(pmesh, step);
+      }
+      if (Globals::my_rank==0){
+        Real total_move=0.0, total_deposit=0.0, total_movedeposit=0.0,
+             total_exchange=0.0, total_wait=0.0;
+        MeshBlock *pmb = pmesh->pblock;
+        while (pmb != NULL)  {
+          total_move+=pmb->particle->timer_move;
+          total_deposit+=pmb->particle->timer_deposit;
+          total_movedeposit+=pmb->particle->timer_movedeposit;
+          total_exchange+=pmb->particle->timer_exchange;
+          total_wait+=pmb->particle->timer_wait;
+          pmb=pmb->next;
+        }
+        gettimeofday(&tv_curr,NULL);
+        Real step_time = (double)(tv_curr.tv_sec - tv_init.tv_sec)
+                     + 1.0e-6*(double)(tv_curr.tv_usec - tv_init.tv_usec);
+        std::cout << std::endl;
+        std::cout << "MoveDeposit                = " << total_movedeposit << " s" << std::endl;
+        std::cout << "Move                       = " << total_move << " s" << std::endl;
+        std::cout << "Deposit                    = " << total_deposit << " s" << std::endl;
+        std::cout << "Exchange                   = " << total_exchange << " s" << std::endl;
+        std::cout << "Wait                       = " << total_wait << " s" << std::endl;
+        std::cout << "Time for this timestep     = " << step_time << " s" << std::endl; 
+      }
+    }
     pmesh->ncycle++;
     pmesh->time += pmesh->dt;
 
     if(pmesh->adaptive==true)
       pmesh->AdaptiveMeshRefinement(pinput);
 
-    pmesh->NewTimeStep();
+    if (HYDRO) pmesh->NewTimeStep();
 
     try {
       pouts->MakeOutputs(pmesh,pinput);
@@ -377,11 +417,39 @@ int main(int argc, char *argv[])
       return(0);
     }
 
+      struct timeval tv_init,tv_curr;
+if(Globals::my_rank==0){
+    gettimeofday(&tv_init,NULL);
+}
     // check for signals
-    if (SignalHandler::CheckSignalFlags() != 0) break;
-
+       if (SignalHandler::CheckSignalFlags() != 0) break;
+if(Globals::my_rank==0){
+gettimeofday(&tv_curr,NULL);
+Real step_time = (double)(tv_curr.tv_sec - tv_init.tv_sec)
+                     + 1.0e-6*(double)(tv_curr.tv_usec - tv_init.tv_usec);
+        std::cout << "time for the handler = " << step_time << " s" << std::endl;
+}
+if (Globals::my_rank==0){
+gettimeofday(&tv_curr_ts,NULL);
+Real step_time = (double)(tv_curr_ts.tv_sec - tv_init_ts.tv_sec)
+                     + 1.0e-6*(double)(tv_curr_ts.tv_usec - tv_init_ts.tv_usec);
+        std::cout << "Total timestep time  = " << step_time << " s" << std::endl;
+}
   } // END OF MAIN INTEGRATION LOOP ======================================================
 // Make final outputs, print diagnostics, clean up and terminate
+  if(Globals::my_rank==0){
+gettimeofday(&tv_curr_tot,NULL);
+Real step_time = (double)(tv_curr_tot.tv_sec - tv_init_tot.tv_sec)
+                     + 1.0e-6*(double)(tv_curr_tot.tv_usec - tv_init_tot.tv_usec);
+        std::cout << "Total time for the simulation = " << step_time << " s" << std::endl;
+    clock_t tstop = clock();
+    float cpu_time = (tstop>tstart ? (float)(tstop-tstart) : 1.0)/(float)CLOCKS_PER_SEC;
+    int64_t zones = pmesh->GetTotalCells();
+    float zc_cpus = (float)(zones*(pmesh->ncycle-ncstart))/cpu_time;
+
+    std::cout << std::endl << "cpu time used  = " << cpu_time << std::endl;
+    std::cout << "zone-cycles/cpu_second = " << zc_cpus << std::endl;
+  }
 
   if(Globals::my_rank==0 && wtlim > 0)
     SignalHandler::CancelWallTimeAlarm();
@@ -438,13 +506,6 @@ int main(int argc, char *argv[])
 #ifdef OPENMP_PARALLEL
     double omp_time = omp_get_wtime() - omp_start_time;;
 #endif
-    clock_t tstop = clock();
-    float cpu_time = (tstop>tstart ? (float)(tstop-tstart) : 1.0)/(float)CLOCKS_PER_SEC;
-    int64_t zones = pmesh->GetTotalCells();
-    float zc_cpus = (float)(zones*(pmesh->ncycle-ncstart))/cpu_time;
-
-    std::cout << std::endl << "cpu time used  = " << cpu_time << std::endl;
-    std::cout << "zone-cycles/cpu_second = " << zc_cpus << std::endl;
 #ifdef OPENMP_PARALLEL
     float zc_omps = (float)(zones*(pmesh->ncycle-ncstart))/omp_time;
     std::cout << std::endl << "omp wtime used = " << omp_time << std::endl;
@@ -454,7 +515,7 @@ int main(int argc, char *argv[])
 
   delete pinput;
   delete pmesh;
-  delete ptlist;
+//  delete ptlist;
   delete pouts;
 
 #ifdef MPI_PARALLEL

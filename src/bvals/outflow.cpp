@@ -21,19 +21,21 @@
 void OutflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
      FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke)
 {
-  // copy hydro variables into ghost zones
-  for (int n=0; n<(NHYDRO); ++n) {
-    for (int k=ks; k<=ke; ++k) {
-    for (int j=js; j<=je; ++j) {
+  if (prim.data()!=NULL) {
+    // copy hydro variables into ghost zones
+    for (int n=0; n<(prim.GetDim4()); ++n) {
+      for (int k=ks; k<=ke; ++k) {
+      for (int j=js; j<=je; ++j) {
 #pragma simd
-      for (int i=1; i<=(NGHOST); ++i) {
-        prim(n,k,j,is-i) = prim(n,k,j,is);
-      }
-    }}
+        for (int i=1; i<=(NGHOST); ++i) {
+          prim(n,k,j,is-i) = prim(n,k,j,is);
+        }
+      }}
+    }
   }
 
   // copy face-centered magnetic fields into ghost zones
-  if (MAGNETIC_FIELDS_ENABLED) {
+  if (MAGNETIC_FIELDS_ENABLED && b.x1f.data()!=NULL) {
     for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je; ++j) {
 #pragma simd
@@ -71,19 +73,21 @@ void OutflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
 void OutflowOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
      FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke)
 {
-  // copy hydro variables into ghost zones
-  for (int n=0; n<(NHYDRO); ++n) {
-    for (int k=ks; k<=ke; ++k) {
-    for (int j=js; j<=je; ++j) {
+  if (prim.data()!=NULL) {
+    // copy hydro variables into ghost zones
+    for (int n=0; n<(prim.GetDim4()); ++n) {
+      for (int k=ks; k<=ke; ++k) {
+      for (int j=js; j<=je; ++j) {
 #pragma simd
-      for (int i=1; i<=(NGHOST); ++i) {
-        prim(n,k,j,ie+i) = prim(n,k,j,ie);
-      }
-    }}
+        for (int i=1; i<=(NGHOST); ++i) {
+          prim(n,k,j,ie+i) = prim(n,k,j,ie);
+        }
+      }}
+    }
   }
 
   // copy face-centered magnetic fields into ghost zones
-  if (MAGNETIC_FIELDS_ENABLED) {
+  if (MAGNETIC_FIELDS_ENABLED && b.x1f.data()!=NULL) {
     for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je; ++j) {
 #pragma simd
@@ -121,19 +125,21 @@ void OutflowOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
 void OutflowInnerX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
      FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke)
 {
-  // copy hydro variables into ghost zones
-  for (int n=0; n<(NHYDRO); ++n) {
-    for (int k=ks; k<=ke; ++k) {
-    for (int j=1; j<=(NGHOST); ++j) {
+  if (prim.data()!=NULL) {
+    // copy hydro variables into ghost zones
+    for (int n=0; n<(prim.GetDim4()); ++n) {
+      for (int k=ks; k<=ke; ++k) {
+      for (int j=1; j<=(NGHOST); ++j) {
 #pragma simd
-      for (int i=is; i<=ie; ++i) {
-        prim(n,k,js-j,i) = prim(n,k,js,i);
-      }
-    }}
+        for (int i=is; i<=ie; ++i) {
+          prim(n,k,js-j,i) = prim(n,k,js,i);
+        }
+      }}
+    }
   }
 
   // copy face-centered magnetic fields into ghost zones
-  if (MAGNETIC_FIELDS_ENABLED) {
+  if (MAGNETIC_FIELDS_ENABLED && b.x1f.data()!=NULL) {
     for (int k=ks; k<=ke; ++k) {
     for (int j=1; j<=(NGHOST); ++j) {
 #pragma simd
@@ -171,19 +177,21 @@ void OutflowInnerX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
 void OutflowOuterX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
      FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke)
 {
-  // copy hydro variables into ghost zones
-  for (int n=0; n<(NHYDRO); ++n) {
-    for (int k=ks; k<=ke; ++k) {
-    for (int j=1; j<=(NGHOST); ++j) {
+  if (prim.data()!=NULL) {
+    // copy hydro variables into ghost zones
+    for (int n=0; n<(prim.GetDim4()); ++n) {
+      for (int k=ks; k<=ke; ++k) {
+      for (int j=1; j<=(NGHOST); ++j) {
 #pragma simd
-      for (int i=is; i<=ie; ++i) {
-        prim(n,k,je+j,i) = prim(n,k,je,i);
-      }
-    }}
+        for (int i=is; i<=ie; ++i) {
+          prim(n,k,je+j,i) = prim(n,k,je,i);
+        }
+      }}
+    }
   }
 
   // copy face-centered magnetic fields into ghost zones
-  if (MAGNETIC_FIELDS_ENABLED) {
+  if (MAGNETIC_FIELDS_ENABLED && b.x1f.data()!=NULL) {
     for (int k=ks; k<=ke; ++k) {
     for (int j=1; j<=(NGHOST); ++j) {
 #pragma simd
@@ -221,19 +229,21 @@ void OutflowOuterX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
 void OutflowInnerX3(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
      FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke)
 {
-  // copy hydro variables into ghost zones
-  for (int n=0; n<(NHYDRO); ++n) {
-    for (int k=1; k<=(NGHOST); ++k) {
-    for (int j=js; j<=je; ++j) {
+  if (prim.data()!=NULL) {
+    // copy hydro variables into ghost zones
+    for (int n=0; n<(prim.GetDim4()); ++n) {
+      for (int k=1; k<=(NGHOST); ++k) {
+      for (int j=js; j<=je; ++j) {
 #pragma simd
-      for (int i=is; i<=ie; ++i) {
-        prim(n,ks-k,j,i) = prim(n,ks,j,i);
-      }
-    }}
+        for (int i=is; i<=ie; ++i) {
+          prim(n,ks-k,j,i) = prim(n,ks,j,i);
+        }
+      }}
+    }
   }
 
   // copy face-centered magnetic fields into ghost zones
-  if (MAGNETIC_FIELDS_ENABLED) {
+  if (MAGNETIC_FIELDS_ENABLED && b.x1f.data()!=NULL) {
     for (int k=1; k<=(NGHOST); ++k) {
     for (int j=js; j<=je; ++j) {
 #pragma simd
@@ -271,19 +281,21 @@ void OutflowInnerX3(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
 void OutflowOuterX3(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
      FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke)
 {
-  // copy hydro variables into ghost zones
-  for (int n=0; n<(NHYDRO); ++n) {
-    for (int k=1; k<=(NGHOST); ++k) {
-    for (int j=js; j<=je; ++j) {
+  if (prim.data()!=NULL) {
+    // copy hydro variables into ghost zones
+    for (int n=0; n<(prim.GetDim4()); ++n) {
+      for (int k=1; k<=(NGHOST); ++k) {
+      for (int j=js; j<=je; ++j) {
 #pragma simd
-      for (int i=is; i<=ie; ++i) {
-        prim(n,ke+k,j,i) = prim(n,ke,j,i);
-      }
-    }}
+        for (int i=is; i<=ie; ++i) {
+          prim(n,ke+k,j,i) = prim(n,ke,j,i);
+        }
+      }}
+    }
   }
 
   // copy face-centered magnetic fields into ghost zones
-  if (MAGNETIC_FIELDS_ENABLED) {
+  if (MAGNETIC_FIELDS_ENABLED && b.x1f.data()!=NULL) {
     for (int k=1; k<=(NGHOST); ++k) {
     for (int j=js; j<=je; ++j) {
 #pragma simd

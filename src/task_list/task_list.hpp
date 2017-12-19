@@ -63,6 +63,7 @@ class TaskState {
 
 class TaskList {
 friend class TimeIntegratorTaskList;
+friend class TimeIntegratorTaskListHybrid;
 public:
   TaskList(Mesh *pm);
   virtual ~TaskList();

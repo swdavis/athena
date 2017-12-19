@@ -21,5 +21,7 @@ void Pack3DData(AthenaArray<Real> &src, Real *buf,
                int si, int ei, int sj, int ej, int sk, int ek, int &offset);
 void Unpack3DData(Real *buf, AthenaArray<Real> &dst,
                   int si, int ei, int sj, int ej, int sk, int ek, int &offset);
+void Add4DData(Real *buf, AthenaArray<Real> &dst, int sn, int en,
+                  int si, int ei, int sj, int ej, int sk, int ek, int &offset);
 }
 #endif // BUFFER_UTILS_HPP

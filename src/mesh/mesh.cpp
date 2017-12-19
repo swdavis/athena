@@ -37,6 +37,8 @@
 #include "mesh_refinement.hpp"
 #include "meshblock_tree.hpp"
 #include "mesh.hpp"
+#include "../particle/particle.hpp"
+#include "../hybrid/hybrid.hpp"
 
 // MPI/OpenMP header
 #ifdef MPI_PARALLEL
@@ -1189,8 +1191,11 @@ void Mesh::Initialize(int res_flag, ParameterInput *pin)
   MeshBlock *pmb;
   Hydro *phydro;
   Field *pfield;
+  Particle *particle;
+  Hybrid *phybrid;
   Gravity *pgrav;
   BoundaryValues *pbval;
+  ExchangeValues *peval;
   std::stringstream msg;
   int inb=nbtotal;
 
@@ -1205,19 +1210,6 @@ void Mesh::Initialize(int res_flag, ParameterInput *pin)
       }
     }
 
-    // solve gravity for the first time
-    if(SELF_GRAVITY_ENABLED == 1){
-      pmb = pblock;
-      while (pmb != NULL) {
-        phydro=pmb->phydro;
-        pgrav=pmb->pgrav;
-        pgrav->Solver(phydro->u);
-        pmb=pmb->next;
-      }
-    }
-    if(SELF_GRAVITY_ENABLED == 2)
-      pgrd->Solve(1);
-
     // prepare to receive conserved variables
     pmb = pblock;
     while (pmb != NULL)  {
@@ -1226,100 +1218,208 @@ void Mesh::Initialize(int res_flag, ParameterInput *pin)
       pmb=pmb->next;
     }
 
-    // send conserved variables
-    pmb = pblock;
-    while (pmb != NULL)  {
-      phydro=pmb->phydro;
-      pmb->pbval->SendCellCenteredBoundaryBuffers(phydro->u, HYDRO_CONS);
-      if (MAGNETIC_FIELDS_ENABLED) {
-        pfield=pmb->pfield;
-        pmb->pbval->SendFieldBoundaryBuffers(pfield->b);
+//----------------------------------------------------------------------------------------
+    if (HYDRO) {
+      // solve gravity for the first time
+      if(SELF_GRAVITY_ENABLED == 1){
+        pmb = pblock;
+        while (pmb != NULL) {
+          phydro=pmb->phydro;
+          pgrav=pmb->pgrav;
+          pgrav->Solver(phydro->u);
+          pmb=pmb->next;
+        }
       }
-      if (SELF_GRAVITY_ENABLED==1) {
-        pgrav=pmb->pgrav;
-        pmb->pbval->SendGravityBoundaryBuffers(pgrav->phi);
-      }
-      pmb=pmb->next;
-    }
+      if(SELF_GRAVITY_ENABLED == 2)
+        pgrd->Solve(1);
 
-    // wait to receive conserved variables
-    pmb = pblock;
-    while (pmb != NULL)  {
-      phydro=pmb->phydro;
-      pbval=pmb->pbval;
-      pbval->ReceiveCellCenteredBoundaryBuffersWithWait(phydro->u, HYDRO_CONS);
-      if (MAGNETIC_FIELDS_ENABLED) {
-        pfield=pmb->pfield;
-        pbval->ReceiveFieldBoundaryBuffersWithWait(pfield->b);
-      }
-      if (SELF_GRAVITY_ENABLED==1) {
-        pgrav=pmb->pgrav;
-        pmb->pbval->ReceiveGravityBoundaryBuffersWithWait(pgrav->phi);
-      }
-      pmb->pbval->ClearBoundaryForInit(true);
-      pmb=pmb->next;
-    }
-
-    // With AMR/SMR GR send primitives to enable cons->prim before prolongation
-    if (GENERAL_RELATIVITY && multilevel) {
-
-      // prepare to receive primitives
+      // send conserved variables
       pmb = pblock;
-      while (pmb != NULL) {
-        pmb->pbval->StartReceivingForInit(false);
+      while (pmb != NULL)  {
+        phydro=pmb->phydro;
+        pmb->pbval->SendCellCenteredBoundaryBuffers(phydro->u, HYDRO_CONS);
+        if (MAGNETIC_FIELDS_ENABLED) {
+          pfield=pmb->pfield;
+          pmb->pbval->SendFieldBoundaryBuffers(pfield->b);
+        }
+        if (SELF_GRAVITY_ENABLED==1) {
+          pgrav=pmb->pgrav;
+          pmb->pbval->SendGravityBoundaryBuffers(pgrav->phi);
+        }
         pmb=pmb->next;
       }
 
-      // send primitives
+      // wait to receive conserved variables
       pmb = pblock;
-      while (pmb != NULL) {
+      while (pmb != NULL)  {
         phydro=pmb->phydro;
-        pmb->pbval->SendCellCenteredBoundaryBuffers(phydro->w, HYDRO_PRIM);
-        pmb=pmb->next;
-      }
-
-      // wait to receive AMR/SMR GR primitives
-      pmb = pblock;
-      while (pmb != NULL) {
-        phydro=pmb->phydro;
-        pfield=pmb->pfield;
         pbval=pmb->pbval;
-        pbval->ReceiveCellCenteredBoundaryBuffersWithWait(phydro->w, HYDRO_PRIM);
-        pmb->pbval->ClearBoundaryForInit(false);
+        pbval->ReceiveCellCenteredBoundaryBuffersWithWait(phydro->u, HYDRO_CONS);
+        if (MAGNETIC_FIELDS_ENABLED) {
+          pfield=pmb->pfield;
+          pbval->ReceiveFieldBoundaryBuffersWithWait(pfield->b);
+        }
+        if (SELF_GRAVITY_ENABLED==1) {
+          pgrav=pmb->pgrav;
+          pmb->pbval->ReceiveGravityBoundaryBuffersWithWait(pgrav->phi);
+        }
+        pmb->pbval->ClearBoundaryForInit(true);
         pmb=pmb->next;
       }
-    }
 
-    // Now do prolongation, compute primitives, apply BCs
-    pmb = pblock;
-    while (pmb != NULL)  {
-      phydro=pmb->phydro;
-      pfield=pmb->pfield;
-      pgrav=pmb->pgrav;
-      pbval=pmb->pbval;
-      if(multilevel==true)
-        pbval->ProlongateBoundaries(phydro->w, phydro->u, pfield->b, pfield->bcc,
-                                    time, 0.0);
+      // With AMR/SMR GR send primitives to enable cons->prim before prolongation
+      if (GENERAL_RELATIVITY && multilevel) {
+  
+        // prepare to receive primitives
+        pmb = pblock;
+        while (pmb != NULL) {
+          pmb->pbval->StartReceivingForInit(false);
+          pmb=pmb->next;
+        }
 
-      int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
-      if(pbval->nblevel[1][1][0]!=-1) is-=NGHOST;
-      if(pbval->nblevel[1][1][2]!=-1) ie+=NGHOST;
-      if(pmb->block_size.nx2 > 1) {
-        if(pbval->nblevel[1][0][1]!=-1) js-=NGHOST;
-        if(pbval->nblevel[1][2][1]!=-1) je+=NGHOST;
+        // send primitives
+        pmb = pblock;
+        while (pmb != NULL) {
+          phydro=pmb->phydro;
+          pmb->pbval->SendCellCenteredBoundaryBuffers(phydro->w, HYDRO_PRIM);
+          pmb=pmb->next;
+        }
+
+        // wait to receive AMR/SMR GR primitives
+        pmb = pblock;
+        while (pmb != NULL) {
+          phydro=pmb->phydro;
+          pfield=pmb->pfield;
+          pbval=pmb->pbval;
+          pbval->ReceiveCellCenteredBoundaryBuffersWithWait(phydro->w, HYDRO_PRIM);
+          pmb->pbval->ClearBoundaryForInit(false);
+          pmb=pmb->next;
+        }
       }
-      if(pmb->block_size.nx3 > 1) {
-        if(pbval->nblevel[0][1][1]!=-1) ks-=NGHOST;
-        if(pbval->nblevel[2][1][1]!=-1) ke+=NGHOST;
-      }
-      pmb->peos->ConservedToPrimitive(phydro->u, phydro->w1, pfield->b, 
-                                      phydro->w, pfield->bcc, pmb->pcoord,
-                                      is, ie, js, je, ks, ke);
+
+      // Now do prolongation, compute primitives, apply BCs
+      pmb = pblock;
+      while (pmb != NULL) {
+        phydro=pmb->phydro;
+        pfield=pmb->pfield;
+        pgrav=pmb->pgrav;
+        pbval=pmb->pbval;
+        if(multilevel==true)
+          pbval->ProlongateBoundaries(phydro->w, phydro->u, pfield->b, pfield->bcc,
+                                      time, 0.0);
+
+        int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
+        if(pbval->nblevel[1][1][0]!=-1) is-=NGHOST;
+        if(pbval->nblevel[1][1][2]!=-1) ie+=NGHOST;
+        if(pmb->block_size.nx2 > 1) {
+          if(pbval->nblevel[1][0][1]!=-1) js-=NGHOST;
+          if(pbval->nblevel[1][2][1]!=-1) je+=NGHOST;
+        }
+        if(pmb->block_size.nx3 > 1) {
+          if(pbval->nblevel[0][1][1]!=-1) ks-=NGHOST;
+          if(pbval->nblevel[2][1][1]!=-1) ke+=NGHOST;
+        }
+        pmb->peos->ConservedToPrimitive(phydro->u, phydro->w1, pfield->b, 
+                                        phydro->w, pfield->bcc, pmb->pcoord,
+                                        is, ie, js, je, ks, ke);
 // TODO: may need to pass phi
-      pbval->ApplyPhysicalBoundaries(phydro->w, phydro->u, pfield->b, pfield->bcc,
-                                     time, 0.0);
-      pmb=pmb->next;
-    }
+        pbval->ApplyPhysicalBoundaries(phydro->w, phydro->u, pfield->b, pfield->bcc,
+                                       time, 0.0);
+        pmb=pmb->next;
+      }
+    } // HYDRO
+//----------------------------------------------------------------------------------------
+    if (HYBRID) {
+      // initialize hybrid-PIC
+      pmb = pblock;
+      while (pmb != NULL) {
+        pmb->phybrid->Initialize();
+        pmb=pmb->next;
+      }
+      // prepare to receive coupling array
+      pmb = pblock;
+       while (pmb != NULL) {
+         peval = pmb->peval;
+         peval->CheckBoundary();
+         peval->Initialize();
+         peval->StartReceivingForInit(true);
+         pmb=pmb->next;
+      }
+
+      // send exchange buffers
+      pmb = pblock;
+      while (pmb != NULL) {
+        phybrid = pmb->phybrid;
+        peval = pmb->peval;
+        peval->SendExchangeBuffers(phybrid->mcoup_,HYBRID_MCOUP);
+        pmb=pmb->next;
+      } 
+
+      // receive exchange buffers
+      pmb = pblock;
+      while (pmb != NULL) {
+        phybrid = pmb->phybrid;
+        peval = pmb->peval;
+        peval->ReceiveExchangeBuffersWithWait(phybrid->mcoup_,HYBRID_MCOUP);
+        pmb=pmb->next;
+      } 
+      
+      // exchange and clear
+      pmb = pblock;
+      while (pmb != NULL) {
+        phybrid = pmb->phybrid;
+        peval = pmb->peval;
+        peval->ApplyExchangePhysicalBoundaries(phybrid->mcoup,time,0.0);
+        peval->ClearExchangeForInit(true);
+        pmb=pmb->next;
+      } 
+
+      // send coupling array and magnetic field
+      pmb = pblock;
+      while (pmb != NULL) {
+        phybrid = pmb->phybrid;
+        pfield = pmb->pfield;
+        pbval = pmb->pbval;
+        pbval->SendCellCenteredBoundaryBuffers(phybrid->mcoup_,HYBRID_MCOUP);
+        pbval->SendFieldBoundaryBuffers(pfield->b);
+        pmb=pmb->next;
+      } 
+ 
+      // receive coupling array and magnetic field
+      pmb = pblock;
+      while (pmb!=NULL) {
+        phybrid = pmb->phybrid;
+        pfield = pmb->pfield;
+        pbval = pmb->pbval;
+        pbval->ReceiveCellCenteredBoundaryBuffersWithWait(phybrid->mcoup_,HYBRID_MCOUP);
+        pbval->ReceiveFieldBoundaryBuffersWithWait(pfield->b);
+        pmb=pmb->next;
+      }     
+
+      // apply boundary conditions and clear
+      pmb = pblock;
+      while (pmb!=NULL) {
+        phybrid = pmb->phybrid;
+        pfield = pmb->pfield;
+        pbval = pmb->pbval;
+        pbval->ApplyPhysicalBoundariesHybrid(phybrid->mcoup_,pfield->b,time,0.0,HYBRID_MCOUP);
+        pbval->ClearBoundaryForInit(true); 
+        pmb=pmb->next;
+      }
+
+    } // HYBRID
+
+//----------------------------------------------------------------------------------------
+    // initialize particles
+    if (PARTICLE) {
+      pmb = pblock;
+      while (pmb != NULL) {
+        pmb->particle->Initialize();
+        pmb=pmb->next;
+      }
+    } // PARTICLES
+
+//----------------------------------------------------------------------------------------
 
     if((res_flag==0) && (adaptive==true)) {
       iflag=false;
@@ -1347,10 +1447,12 @@ void Mesh::Initialize(int res_flag, ParameterInput *pin)
   // calculate the first time step
   pmb = pblock;
   while (pmb != NULL)  {
-    pmb->phydro->NewBlockTimeStep();
+    if (HYDRO) pmb->phydro->NewBlockTimeStep();
+    if (HYBRID) pmb->phybrid->NewBlockTimeStep();
     pmb=pmb->next;
   }
   NewTimeStep();
+
   return;
 }
 

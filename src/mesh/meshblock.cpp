@@ -33,6 +33,8 @@
 #include "mesh_refinement.hpp"
 #include "meshblock_tree.hpp"
 #include "mesh.hpp"
+#include "../particle/particle.hpp"
+#include "../hybrid/hybrid.hpp"
 
 //----------------------------------------------------------------------------------------
 // MeshBlock constructor: constructs coordinate, boundary condition, hydro, field
@@ -95,19 +97,22 @@ MeshBlock::MeshBlock(int igid, int ilid, LogicalLocation iloc, RegionSize input_
 
   // Boundary
   pbval  = new BoundaryValues(this, input_bcs);
+  peval  = new ExchangeValues(this, input_bcs);
 
   // FFT object (need to be set before Gravity class)
   if (FFT_ENABLED) pfft = new AthenaFFT(this);
 
   // physics-related objects
-  phydro = new Hydro(this, pin);
+  if (HYDRO) phydro = new Hydro(this, pin);
+  if (HYDRO) peos = new EquationOfState(this, pin);
+  if (HYBRID) phybrid = new Hybrid(this, pin);
   if (MAGNETIC_FIELDS_ENABLED) pfield = new Field(this, pin);
-  peos = new EquationOfState(this, pin);
+  if (PARTICLE) particle = new Particle(this, pin);  
 
   if (SELF_GRAVITY_ENABLED) pgrav = new Gravity(this, pin);
 
   // Reconstruction
-  precon = new Reconstruction(this, pin);
+  if (HYDRO) precon = new Reconstruction(this, pin);
 
   // Coordinates
   if (COORDINATE_SYSTEM == "cartesian") {
@@ -188,18 +193,22 @@ MeshBlock::MeshBlock(int igid, int ilid, Mesh *pm, ParameterInput *pin,
 
   // Boundary
   pbval  = new BoundaryValues(this, input_bcs);
+  peval  = new ExchangeValues(this, input_bcs);
 
   // FFT object
   if (FFT_ENABLED) pfft = new AthenaFFT(this);
 
   // (re-)create physics-related objects in MeshBlock
-  phydro = new Hydro(this, pin);
+  if (HYDRO) phydro = new Hydro(this, pin);
+  if (HYDRO) peos = new EquationOfState(this, pin);
+  if (HYBRID) phybrid = new Hybrid(this, pin);
   if (MAGNETIC_FIELDS_ENABLED) pfield = new Field(this, pin);
-  peos = new EquationOfState(this, pin);
+  if (PARTICLE) particle = new Particle(this, pin);
 
   if (SELF_GRAVITY_ENABLED) pgrav = new Gravity(this, pin);
 
-  precon = new Reconstruction(this, pin);
+  // Reconstruction
+  if (HYDRO) precon = new Reconstruction(this, pin);
 
   // Coordinates
   if (COORDINATE_SYSTEM == "cartesian") {
@@ -224,16 +233,32 @@ MeshBlock::MeshBlock(int igid, int ilid, Mesh *pm, ParameterInput *pin,
 
   int os=0;
   // load hydro and field data
-  memcpy(phydro->u.data(), &(mbdata[os]), phydro->u.GetSizeInBytes());
+  if (HYDRO) memcpy(phydro->u.data(), &(mbdata[os]), phydro->u.GetSizeInBytes());
   // load it into the half-step arrays too
-  memcpy(phydro->u1.data(), &(mbdata[os]), phydro->u1.GetSizeInBytes());
-  os += phydro->u.GetSizeInBytes();
+  if (HYDRO) memcpy(phydro->u1.data(), &(mbdata[os]), phydro->u1.GetSizeInBytes());
+  if (HYDRO) os += phydro->u.GetSizeInBytes();
   if (GENERAL_RELATIVITY) {
     memcpy(phydro->w.data(), &(mbdata[os]), phydro->w.GetSizeInBytes());
     os += phydro->w.GetSizeInBytes();
     memcpy(phydro->w1.data(), &(mbdata[os]), phydro->w1.GetSizeInBytes());
     os += phydro->w1.GetSizeInBytes();
   }
+  /*if (PARTICLE) {
+    memcpy(&(particle->nparticle), &(mbdata[os]),sizeof(int));
+    os += sizeof(int);
+    memcpy(particle->x1.data(), &(mbdata[os]), particle->nparticle*sizeof(Real));
+    os += particle->nparticle*sizeof(Real);
+    memcpy(particle->x2.data(), &(mbdata[os]), particle->nparticle*sizeof(Real));
+    os += particle->nparticle*sizeof(Real);
+    memcpy(particle->x3.data(), &(mbdata[os]), particle->nparticle*sizeof(Real));
+    os += particle->nparticle*sizeof(Real);
+    memcpy(particle->v1.data(), &(mbdata[os]), particle->nparticle*sizeof(Real));
+    os += particle->nparticle*sizeof(Real);
+    memcpy(particle->v2.data(), &(mbdata[os]), particle->nparticle*sizeof(Real));
+    os += particle->nparticle*sizeof(Real);
+    memcpy(particle->v3.data(), &(mbdata[os]), particle->nparticle*sizeof(Real));
+    os += particle->nparticle*sizeof(Real);
+  }*/
   if (MAGNETIC_FIELDS_ENABLED) {
     memcpy(pfield->b.x1f.data(), &(mbdata[os]), pfield->b.x1f.GetSizeInBytes());
     memcpy(pfield->b1.x1f.data(), &(mbdata[os]), pfield->b1.x1f.GetSizeInBytes());
@@ -277,14 +302,17 @@ MeshBlock::~MeshBlock()
 
   delete pcoord;
   delete pbval;
-  delete precon;
+  delete peval;
+  if (HYDRO) delete precon;
   if (pmy_mesh->multilevel == true) delete pmr;
 
   if (FFT_ENABLED) delete pfft;
 
-  delete phydro;
+  if (HYDRO) delete phydro;
+  if (HYDRO) delete peos;
+  if (HYBRID) delete phybrid;
   if (MAGNETIC_FIELDS_ENABLED) delete pfield;
-  delete peos;
+  if (PARTICLE) delete particle;
   if (SELF_GRAVITY_ENABLED) delete pgrav;
 
   // delete user output variables array
@@ -384,9 +412,9 @@ void MeshBlock::SetUserOutputVariableName(int n, const char *name)
 
 size_t MeshBlock::GetBlockSizeInBytes(void)
 {
-  size_t size;
+  size_t size=0;
 
-  size=phydro->u.GetSizeInBytes();
+  if (HYDRO) size=phydro->u.GetSizeInBytes();
   if (GENERAL_RELATIVITY) {
     size+=phydro->w.GetSizeInBytes();
     size+=phydro->w1.GetSizeInBytes();
@@ -396,7 +424,8 @@ size_t MeshBlock::GetBlockSizeInBytes(void)
           +pfield->b.x3f.GetSizeInBytes());
   if (SELF_GRAVITY_ENABLED)
     size+=pgrav->phi.GetSizeInBytes();
-
+  //if (PARTICLE)
+  //  size+=sizeof(int)+6*particle->nparticle*sizeof(Real);
   // NEW_PHYSICS: modify the size counter here when new physics is introduced
 
   // calculate user MeshBlock data size

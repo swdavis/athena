@@ -24,6 +24,7 @@
 #include "../hydro/hydro.hpp"
 #include "../field/field.hpp"
 #include "outputs.hpp"
+#include "../particle/particle.hpp"
 
 //----------------------------------------------------------------------------------------
 // RestartOutput constructor
@@ -91,7 +92,6 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool force_wr
   int nbtotal=pm->nbtotal;
   int myns=pm->nslist[Globals::my_rank];
   int mynb=pm->nblist[Globals::my_rank];
-
   // write the header; this part is serial
   if(Globals::my_rank==0) {
     // output the input parameters
@@ -151,14 +151,30 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool force_wr
   pmb=pm->pblock;
   while (pmb != NULL) {
     char *pdata=&(data[pmb->lid*datasize]);
-    memcpy(pdata,pmb->phydro->u.data(), pmb->phydro->u.GetSizeInBytes());
-    pdata+=pmb->phydro->u.GetSizeInBytes();
+    if (HYDRO) memcpy(pdata,pmb->phydro->u.data(), pmb->phydro->u.GetSizeInBytes());
+    if (HYDRO) pdata+=pmb->phydro->u.GetSizeInBytes();
     if (GENERAL_RELATIVITY) {
       memcpy(pdata,pmb->phydro->w.data(), pmb->phydro->w.GetSizeInBytes());
       pdata+=pmb->phydro->w.GetSizeInBytes();
       memcpy(pdata,pmb->phydro->w1.data(), pmb->phydro->w1.GetSizeInBytes());
       pdata+=pmb->phydro->w1.GetSizeInBytes();
     }
+    /*if (PARTICLE) {
+      memcpy(pdata,&(pmb->particle->nparticle),sizeof(int));
+      pdata+=sizeof(int);
+      memcpy(pdata,pmb->particle->x1.data(),pmb->particle->nparticle * sizeof(Real));
+      pdata+=pmb->particle->nparticle * sizeof(Real);
+      memcpy(pdata,pmb->particle->x2.data(),pmb->particle->nparticle * sizeof(Real));
+      pdata+=pmb->particle->nparticle * sizeof(Real);
+      memcpy(pdata,pmb->particle->x3.data(),pmb->particle->nparticle * sizeof(Real));
+      pdata+=pmb->particle->nparticle * sizeof(Real);
+      memcpy(pdata,pmb->particle->v1.data(),pmb->particle->nparticle * sizeof(Real));
+      pdata+=pmb->particle->nparticle * sizeof(Real);
+      memcpy(pdata,pmb->particle->v2.data(),pmb->particle->nparticle * sizeof(Real));
+      pdata+=pmb->particle->nparticle * sizeof(Real);
+      memcpy(pdata,pmb->particle->v3.data(),pmb->particle->nparticle * sizeof(Real));
+      pdata+=pmb->particle->nparticle * sizeof(Real);
+    }*/
     if (MAGNETIC_FIELDS_ENABLED) {
       memcpy(pdata,pmb->pfield->b.x1f.data(),pmb->pfield->b.x1f.GetSizeInBytes());
       pdata+=pmb->pfield->b.x1f.GetSizeInBytes();

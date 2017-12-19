@@ -14,6 +14,9 @@
 
 // C++ headers
 #include <cstddef>  // size_t
+#include <assert.h>
+#include <cstdlib>
+#define CACHELINE_BYTES 64
 
 template<typename T>
 class AthenaArray {
@@ -111,7 +114,8 @@ AthenaArray<T>::AthenaArray(const AthenaArray<T>& src) {
   nx5_ = src.nx5_;
   if (src.pdata_) {
     std::size_t size = (src.nx1_)*(src.nx2_)*(src.nx3_)*(src.nx4_)*(src.nx5_);
-    pdata_ = new T[size]; // allocate memory for array data
+    //pdata_ = new T[size]; // allocate memory for array data
+    posix_memalign((void **)&pdata_, CACHELINE_BYTES, size*sizeof(T));
     for (std::size_t i=0; i<size; ++i) {
       pdata_[i] = src.pdata_[i]; // copy data (not just addresses!) into new memory
     } 
@@ -212,7 +216,8 @@ void AthenaArray<T>::NewAthenaArray(int nx1)
   nx3_ = 1;
   nx4_ = 1;
   nx5_ = 1;
-  pdata_ = new T[nx1](); // allocate memory and initialize to zero
+  //pdata_ = new T[nx1](); // allocate memory and initialize to zero
+  posix_memalign((void **)&pdata_, CACHELINE_BYTES, nx1*sizeof(T));
 }
  
 //----------------------------------------------------------------------------------------
@@ -228,7 +233,8 @@ void AthenaArray<T>::NewAthenaArray(int nx2, int nx1)
   nx3_ = 1;
   nx4_ = 1;
   nx5_ = 1;
-  pdata_ = new T[nx1*nx2](); // allocate memory and initialize to zero
+  //pdata_ = new T[nx1*nx2](); // allocate memory and initialize to zero
+  posix_memalign((void **)&pdata_, CACHELINE_BYTES, nx1*nx2*sizeof(T));
 }
  
 //----------------------------------------------------------------------------------------
@@ -244,7 +250,8 @@ void AthenaArray<T>::NewAthenaArray(int nx3, int nx2, int nx1)
   nx3_ = nx3;
   nx4_ = 1;
   nx5_ = 1;
-  pdata_ = new T[nx1*nx2*nx3](); // allocate memory and initialize to zero
+  //pdata_ = new T[nx1*nx2*nx3](); // allocate memory and initialize to zero
+  posix_memalign((void **)&pdata_, CACHELINE_BYTES, nx1*nx2*nx3*sizeof(T));
 }
  
 //----------------------------------------------------------------------------------------
@@ -260,7 +267,8 @@ void AthenaArray<T>::NewAthenaArray(int nx4, int nx3, int nx2, int nx1)
   nx3_ = nx3;
   nx4_ = nx4;
   nx5_ = 1;
-  pdata_ = new T[nx1*nx2*nx3*nx4](); // allocate memory and initialize to zero
+  //pdata_ = new T[nx1*nx2*nx3*nx4](); // allocate memory and initialize to zero
+  posix_memalign((void **)&pdata_, CACHELINE_BYTES, nx1*nx2*nx3*nx4*sizeof(T));
 }
 
 //----------------------------------------------------------------------------------------
@@ -276,7 +284,8 @@ void AthenaArray<T>::NewAthenaArray(int nx5, int nx4, int nx3, int nx2, int nx1)
   nx3_ = nx3;
   nx4_ = nx4;
   nx5_ = nx5;
-  pdata_ = new T[nx1*nx2*nx3*nx4*nx5](); // allocate memory and initialize to zero
+  //pdata_ = new T[nx1*nx2*nx3*nx4*nx5](); // allocate memory and initialize to zero
+  posix_memalign((void **)&pdata_, CACHELINE_BYTES, nx1*nx2*nx3*nx4*nx5*sizeof(T));
 }
 
 //----------------------------------------------------------------------------------------

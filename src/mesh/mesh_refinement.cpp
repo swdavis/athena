@@ -15,6 +15,7 @@
 #include "../athena_arrays.hpp"
 #include "../hydro/hydro.hpp"
 #include "../field/field.hpp"
+#include "../hybrid/hybrid.hpp"
 #include "../coordinates/coordinates.hpp"
 #include "../parameter_input.hpp"
 #include "mesh.hpp"
@@ -57,8 +58,12 @@ MeshRefinement::MeshRefinement(MeshBlock *pmb, ParameterInput *pin)
   if(pmb->block_size.nx2>1) ncc2=pmb->block_size.nx2/2+2*pmb->cnghost;
   int ncc3=1;
   if(pmb->block_size.nx3>1) ncc3=pmb->block_size.nx3/2+2*pmb->cnghost;
-  coarse_cons_.NewAthenaArray(NHYDRO,ncc3,ncc2,ncc1);
-  coarse_prim_.NewAthenaArray(NHYDRO,ncc3,ncc2,ncc1);
+  if (HYDRO) {
+    coarse_cons_.NewAthenaArray(NHYDRO,ncc3,ncc2,ncc1);
+    coarse_prim_.NewAthenaArray(NHYDRO,ncc3,ncc2,ncc1);
+  }
+  if (HYBRID) 
+    coarse_mcoup_.NewAthenaArray(NMCOUP,ncc3,ncc2,ncc1);
 
   int nc1=pmb->block_size.nx1+2*NGHOST;
   fvol_[0][0].NewAthenaArray(nc1);
@@ -97,8 +102,12 @@ MeshRefinement::MeshRefinement(MeshBlock *pmb, ParameterInput *pin)
 
 MeshRefinement::~MeshRefinement()
 {
-  coarse_cons_.DeleteAthenaArray();
-  coarse_prim_.DeleteAthenaArray();
+  if (HYDRO){
+    coarse_cons_.DeleteAthenaArray();
+    coarse_prim_.DeleteAthenaArray();
+  }
+  if (HYBRID)
+    coarse_mcoup_.DeleteAthenaArray();
   fvol_[0][0].DeleteAthenaArray();
   fvol_[0][1].DeleteAthenaArray();
   fvol_[1][0].DeleteAthenaArray();

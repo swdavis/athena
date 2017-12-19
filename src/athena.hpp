@@ -96,11 +96,11 @@ enum CoordinateDirection {X1DIR=0, X2DIR=1, X3DIR=2};
 // needed wherever MPI communications are used.  Must be < 32 and unique
 enum Athena_MPI_Tag {TAG_HYDRO=0, TAG_FIELD=1, TAG_RAD=2, TAG_CHEM=3, TAG_HYDFLX=4,
   TAG_FLDFLX=5, TAG_RADFLX=6, TAG_CHMFLX=7, TAG_AMR=8, TAG_FLDFLX_POLE=9, TAG_GRAVITY=11,
-  TAG_MGGRAV=12};
+  TAG_MGGRAV=12, TAG_MCOUP=13, TAG_MCOUPB=14, TAG_PARTICLE=15, TAG_PRTL_CNT=16};
 
 enum BoundaryType {BNDRY_HYDRO=0, BNDRY_FIELD=1, BNDRY_GRAVITY=2, BNDRY_MGGRAV=3,
-                   BNDRY_MGGRAVF=4, BNDRY_FLCOR=5, BNDRY_EMFCOR=6};
-enum CCBoundaryType {HYDRO_CONS=0, HYDRO_PRIM=1};
+                   BNDRY_MGGRAVF=4, BNDRY_FLCOR=5, BNDRY_EMFCOR=6, BNDRY_MCOUP=7};
+enum CCBoundaryType {HYDRO_CONS=0, HYDRO_PRIM=1, HYBRID_MCOUP=2, HYBRID_FIELD=3};
 enum FluxCorrectionType {FLUX_HYDRO=0};
 
 //----------------------------------------------------------------------------------------
@@ -120,6 +120,7 @@ typedef void (*MetricFunc_t)(Real x1, Real x2, Real x3, ParameterInput *pin,
 typedef void (*MGBoundaryFunc_t)(AthenaArray<Real> &dst,Real time, int nvar,
              int is, int ie, int js, int je, int ks, int ke, int ngh,
              Real x0, Real y0, Real z0, Real dx, Real dy, Real dz);
-
+typedef void (*ExchFunc_t)(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &mcoup,
+  Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
 
 #endif // ATHENA_HPP
