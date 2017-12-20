@@ -1,0 +1,46 @@
+<comment>
+problem   = Test outputs based on Orszag-Tang vortex
+reference = Orszag,S. & Tang,W., J. Fluid Mech., 90, 129 (1998)
+configure = -b --prob=orszag_tang
+
+<job>
+problem_id   = particles   # problem ID: basename of output filenames
+
+<time>
+cfl_number = 0.2       # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = 3000        # cycle limit
+tlim       = 100000       # time limit
+
+<mesh>
+nx1        = 24        # Number of zones in X1-direction
+x1min      = -20       # minimum value of X1
+x1max      = 7      # maximum value of X1
+ix1_bc     = periodic  # inner-X1 boundary flag
+ox1_bc     = periodic  # outer-X1 boundary flag
+
+nx2        = 24        # Number of zones in X2-direction
+x2min      = -2       # minimum value of X2
+x2max      = 7       # maximum value of X2
+ix2_bc     = periodic  # inner-X2 boundary flag
+ox2_bc     = periodic  # outer-X2 boundary flag
+
+nx3        = 24        # Number of zones in X3-direction
+x3min      = -8.9789       # minimum value of X3
+x3max      = 8.9       # maximum value of X3
+ix3_bc     = periodic  # inner-X3 boundary flag
+ox3_bc     = periodic  # outer-X3 boundary flag
+
+num_threads = 1        # maximum number of OMP threads
+
+<meshblock>
+nx1        = 24        # Number of zones in X1-direction
+nx2        = 12         # Number of zones in X2-direction
+nx3        = 12         # Number of zones in X3-direction
+
+<particle>
+ppc0 = 200
+max_prtl = 5242880
+buffer_size = 500000
+
+<problem>
+beta = 1.0
