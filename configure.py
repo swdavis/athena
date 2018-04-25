@@ -32,6 +32,7 @@
 #   --cflag=string    append string whenever invoking compiler/linker
 #   --include=path    use -Ipath when compiling
 #   --lib=path        use -Lpath when linking
+#   -mc               enable a monte carlo radiation tranfer calculation
 #-----------------------------------------------------------------------------------------
 
 # Modules
@@ -195,6 +196,12 @@ parser.add_argument('--lib',
     action='append',
     help='extra path for linked library files (-L<path>); can be specified multiple \
         times')
+
+# -mc argument
+parser.add_argument('-mc',
+    action='store_true',
+    default=False,
+    help='enable monte carlo')
 
 # Parse command-line inputs
 args = vars(parser.parse_args())
@@ -501,6 +508,14 @@ for include_path in args['include']:
 for library_path in args['lib']:
   makefile_options['LINKER_FLAGS'] += ' -L'+library_path
 
+# -mc argument
+if args['mc']:
+  definitions['MONTE_CARLO_ENABLED'] = '1'
+  makefile_options['LIBRARY_FLAGS'] += ' -lgsl -lgslcblas'
+else:
+  definitions['MONTE_CARLO_ENABLED'] = '0'
+
+
 # Assemble all flags of any sort given to compiler
 definitions['COMPILER_FLAGS'] = ' '.join([makefile_options[opt+'_FLAGS'] for opt in \
     ['PREPROCESSOR','COMPILER','LINKER','LIBRARY']])
@@ -543,6 +558,7 @@ print('  Special relativity:      ' + ('ON' if args['s'] else 'OFF'))
 print('  General relativity:      ' + ('ON' if args['g'] else 'OFF'))
 print('  Frame transformations:   ' + ('ON' if args['t'] else 'OFF'))
 print('  ShearingBox:             ' + ('ON' if args['shear'] else 'OFF'))
+print('  Monte Carlo:             ' + ('ON' if args['mc'] else 'OFF'))
 print('  Debug flags:             ' + ('ON' if args['debug'] else 'OFF'))
 print('  Linker flags:            ' + makefile_options['LINKER_FLAGS'] + ' ' \
     + makefile_options['LIBRARY_FLAGS'])

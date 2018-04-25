@@ -39,6 +39,7 @@
 #include "gravity/mggravity.hpp"
 #include "gravity/fftgravity.hpp"
 #include "fft/turbulence.hpp"
+#include "monte_carlo/monte_carlo_tasks.hpp"
 
 // MPI/OpenMP headers
 #ifdef MPI_PARALLEL
@@ -296,6 +297,21 @@ int main(int argc, char *argv[]) {
     return(0);
   }
 
+  MonteCarloTasks *pmctasks;
+  if (MONTE_CARLO_ENABLED) {
+    try {
+      pmctasks = new MonteCarloTasks(pmesh, pinput);
+    }
+    catch(std::bad_alloc& ba) {
+      std::cout << "### FATAL ERROR in main" << std::endl << "memory allocation failed "
+                << "in creating monte carlo task list " << ba.what() << std::endl;
+#ifdef MPI_PARALLEL
+      MPI_Finalize();
+#endif
+      return(0);
+    }
+  }
+
 //--- Step 6. ----------------------------------------------------------------------------
 // Set initial conditions by calling problem generator, or reading restart file
 
@@ -359,7 +375,7 @@ int main(int argc, char *argv[]) {
 #endif
 
   while ((pmesh->time < pmesh->tlim) &&
-         (pmesh->nlim < 0 || pmesh->ncycle < pmesh->nlim)) {
+         (pmesh->nlim < 0 || pmesh->ncycle < pmesh->nlim) && !(MONTE_CARLO_ENABLED)) {
 
     if (Globals::my_rank==0) {
       if (pmesh->ncycle_out != 0) {
@@ -412,6 +428,11 @@ int main(int argc, char *argv[]) {
 
   } // END OF MAIN INTEGRATION LOOP ======================================================
 // Make final outputs, print diagnostics, clean up and terminate
+
+  // Perform Monte Carlo radiation tranfer
+  if (MONTE_CARLO_ENABLED) {
+    pmctasks->LaunchPhotons(pmesh);
+  }
 
   if (Globals::my_rank==0 && wtlim > 0)
     SignalHandler::CancelWallTimeAlarm();
@@ -487,6 +508,7 @@ int main(int argc, char *argv[]) {
   delete pmesh;
   delete ptlist;
   delete pouts;
+  if (MONTE_CARLO_ENABLED) delete pmctasks;
 
 #ifdef MPI_PARALLEL
   MPI_Finalize();

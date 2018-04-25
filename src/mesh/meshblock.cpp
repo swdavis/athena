@@ -31,6 +31,7 @@
 #include "../parameter_input.hpp"
 #include "../utils/buffer_utils.hpp"
 #include "../reconstruct/reconstruction.hpp"
+#include "../monte_carlo/monte_carlo.hpp"
 #include "mesh_refinement.hpp"
 #include "meshblock_tree.hpp"
 #include "mesh.hpp"
@@ -105,6 +106,10 @@ MeshBlock::MeshBlock(int igid, int ilid, LogicalLocation iloc, RegionSize input_
   if (SELF_GRAVITY_ENABLED) pgrav = new Gravity(this, pin);
   if (SELF_GRAVITY_ENABLED == 1) {
     pgbval = new GravityBoundaryValues(this,input_bcs);
+  }
+
+  if (MONTE_CARLO_ENABLED) {
+    pmc = new MonteCarlo(this, pin);
   }
 
   // Coordinates
@@ -286,6 +291,8 @@ MeshBlock::~MeshBlock() {
   delete peos;
   if (SELF_GRAVITY_ENABLED) delete pgrav;
   if (SELF_GRAVITY_ENABLED==1) delete pgbval;
+
+  if (MONTE_CARLO_ENABLED==1) delete pmc;
 
   // delete user output variables array
   if (nuser_out_var > 0) {

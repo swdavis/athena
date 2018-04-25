@@ -42,6 +42,9 @@
 // include radiative transfer? default=0 (false)
 #define RADIATION_ENABLED 0
 
+// enable monte carlo? default=0 (false)
+#define MONTE_CARLO_ENABLED @MONTE_CARLO_ENABLED@
+
 // enable special or general relativity? default=0 (false)
 #define RELATIVISTIC_DYNAMICS @RELATIVISTIC_DYNAMICS@
 

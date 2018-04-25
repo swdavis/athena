@@ -38,6 +38,7 @@ class Reconstruction;
 class Hydro;
 class Field;
 class Gravity;
+class MonteCarlo;
 class MGGravityDriver;
 class EquationOfState;
 class FFTDriver;
@@ -101,6 +102,7 @@ public:
   Field *pfield;
   Gravity *pgrav;
   EquationOfState *peos;
+  MonteCarlo *pmc;
 
   MeshBlock *prev, *next;
 
