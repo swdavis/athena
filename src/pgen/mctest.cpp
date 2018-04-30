@@ -18,7 +18,7 @@
 #include "../eos/eos.hpp"
 #include "../hydro/hydro.hpp"
 #include "../mesh/mesh.hpp"
-#include "../monte_carlo/monte_carlo.hpp"
+#include "../monte_carlo/montecarlo.hpp"
 #include "../monte_carlo/photon.hpp"
 
 #if MAGNETIC_FIELDS_ENABLED
@@ -50,11 +50,17 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
 }
 
-void Photon::InitializePhoton(MeshBlock *pmb) {
+void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin){
+
+  //EnrollUserEmissionFunction();
+  
+}
+
+void MonteCarloBlock::InitializePhoton(MeshBlock *pmb, Photon *pphot) {
 
   // Set status flag
 
-  status = EVOLVING;
+  pphot->status = EVOLVING;
 
   // Choose random intial position, weights, energy, and direction
   // for photon emission.  In this version an equal number of photons
@@ -66,22 +72,20 @@ void Photon::InitializePhoton(MeshBlock *pmb) {
   int nx2 = pmb->block_size.nx2;
   int nx3 = pmb->block_size.nx3;
 
-  izone[0] = static_cast<int>(pmy_mc->pran->uniform()*static_cast<Real>(nx1));
-  izone[1] = static_cast<int>(pmy_mc->pran->uniform()*static_cast<Real>(nx2));
-  izone[2] = static_cast<int>(pmy_mc->pran->uniform()*static_cast<Real>(nx3));
-
-  //initialize_zone_prob(pmb,pPack);
+  pphot->i1 = static_cast<int>(pran->uniform()*static_cast<Real>(nx1));
+  pphot->i2 = static_cast<int>(pran->uniform()*static_cast<Real>(nx2));
+  pphot->i3 = static_cast<int>(pran->uniform()*static_cast<Real>(nx3));
 
   // cweight is a constant weighting factor which accounts for the
   // emissivity of the grid zone in which the photon was emitted
-  if (pmy_mc->zone_weight)
-    weight = pmy_mc->pran->uniform();
+  if (zone_weight_flag)
+    pphot->weight = emission(pphot->i3,pphot->i2,pphot->i1);
     //weight = pmb->etat[];
   else
-    weight = 1.0;
+    pphot->weight = 1.0;
   
-  std::cout << "test: " << weight << ' ' << izone[0] << ' ' 
-            << izone[1] << ' ' << izone[2] << std::endl;
+  std::cout << "test: " << pphot->weight << ' ' << pphot->i2 << ' ' 
+            << pphot->i2 << ' ' << pphot->i3 << std::endl;
 
   // Obtain initial position within zone
   //get_position_uniform(-1,pG,pPack);
@@ -94,7 +98,7 @@ void Photon::InitializePhoton(MeshBlock *pmb) {
   // all photons begin with an equivalent weight of unity, and therefore, all
   // packets are treated equivalently */
 
-  if (weight < 0.0) status = DESTROYED;
+  if (pphot->weight < 0.0) pphot->status = DESTROYED;
 
   // Initialize the absorption and scattering extinction coefficients
   // to the values appropriate in the emitted zone

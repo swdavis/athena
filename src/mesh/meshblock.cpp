@@ -31,7 +31,7 @@
 #include "../parameter_input.hpp"
 #include "../utils/buffer_utils.hpp"
 #include "../reconstruct/reconstruction.hpp"
-#include "../monte_carlo/monte_carlo.hpp"
+#include "../monte_carlo/montecarlo.hpp"
 #include "mesh_refinement.hpp"
 #include "meshblock_tree.hpp"
 #include "mesh.hpp"
@@ -108,10 +108,6 @@ MeshBlock::MeshBlock(int igid, int ilid, LogicalLocation iloc, RegionSize input_
     pgbval = new GravityBoundaryValues(this,input_bcs);
   }
 
-  if (MONTE_CARLO_ENABLED) {
-    pmc = new MonteCarlo(this, pin);
-  }
-
   // Coordinates
   if (COORDINATE_SYSTEM == "cartesian") {
     pcoord = new Cartesian(this, pin, false);
@@ -128,6 +124,10 @@ MeshBlock::MeshBlock(int igid, int ilid, LogicalLocation iloc, RegionSize input_
   } else if (COORDINATE_SYSTEM == "gr_user") {
     pcoord = new GRUser(this, pin, false);
   }
+
+  //if (MONTE_CARLO_ENABLED) {
+  //  pmcb = new MonteCarloBlock(this, pin);
+  //}
 
   // Reconstruction (constructor may implicitly depend on Coordinates, and PPM variable
   // floors depend on EOS)
@@ -292,7 +292,7 @@ MeshBlock::~MeshBlock() {
   if (SELF_GRAVITY_ENABLED) delete pgrav;
   if (SELF_GRAVITY_ENABLED==1) delete pgbval;
 
-  if (MONTE_CARLO_ENABLED==1) delete pmc;
+  //if (MONTE_CARLO_ENABLED==1) delete pmcb;
 
   // delete user output variables array
   if (nuser_out_var > 0) {

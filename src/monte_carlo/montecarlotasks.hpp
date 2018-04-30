@@ -20,22 +20,12 @@ class MonteCarlo;
 // implementation will evolve.
 
 //! \class MonteCarloTasks
-//  \brief monte carlo top level control
+//  \brief monte carlo task list
 
 class MonteCarloTasks {
 public:
   MonteCarloTasks(Mesh *pm, ParameterInput *pin);
   ~MonteCarloTasks();
-
-  // data
-  int ntot;         // total number of photons to integrate
-  bool zone_weight;
-
-  // functions
-  void LaunchPhotons(Mesh *pmesh);
-
-private:
-  Mesh* pmy_mesh_;
 
 };
 

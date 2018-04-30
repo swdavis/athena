@@ -10,8 +10,8 @@
 #include <vector>
 
 // Athena++ headers
-#include "monte_carlo_tasks.hpp"
-#include "monte_carlo.hpp"
+#include "montecarlotasks.hpp"
+#include "montecarlo.hpp"
 #include "../athena.hpp"
 #include "../globals.hpp"
 #include "../athena_arrays.hpp"
@@ -21,8 +21,6 @@
 
 MonteCarloTasks::MonteCarloTasks(Mesh *pm, ParameterInput *pin) {
   
-  pmy_mesh_ = pm;
-
 }
 
 // destructor
@@ -31,18 +29,4 @@ MonteCarloTasks::~MonteCarloTasks() {
 
 }
 
-void MonteCarloTasks::LaunchPhotons(Mesh *pmesh) {
-  MeshBlock *pmb = pmesh->pblock;
 
-  // Looop over all MeshBlocks
-  int nmb = pmesh->GetNumMeshBlocksThisRank(Globals::my_rank);
-
-  // Looop over all MeshBlocks
-  pmb = pmesh->pblock;
-  for (int i=0; i<nmb; ++i) {
-    pmb->pmc->TransferPhotons();
-    pmb=pmb->next;
-  }
-
-  return;
-}

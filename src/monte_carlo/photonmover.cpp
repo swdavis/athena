@@ -7,16 +7,15 @@
 //  \brief implementation for photon moving functions
 
 // Athena++ headers
-#include "monte_carlo.hpp"
 #include "photon.hpp"
 #include "photonmover.hpp"
 #include "../mesh/mesh.hpp"
 
 // Implementation of base class
 
-PhotonMover::PhotonMover(MonteCarlo *pmc) {
+PhotonMover::PhotonMover(MonteCarloBlock *pmcb) {
 
-  pmy_mc = pmc;
+  pmy_mcb = pmcb;
 }
 
 PhotonMover::~PhotonMover() {
@@ -30,8 +29,8 @@ void PhotonMover::Move(MeshBlock *pmb, Photon *pphot) {
 
 // Implementation of Cartesian Photon mover
 
-CartesianMover::CartesianMover(MonteCarlo *pmc) 
-  : PhotonMover(pmc) {
+CartesianMover::CartesianMover(MonteCarloBlock *pmcb) 
+  : PhotonMover(pmcb) {
 
 }
 

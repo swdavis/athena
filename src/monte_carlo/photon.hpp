@@ -10,9 +10,11 @@
 
 // Athena++ classes headers
 #include "../athena.hpp"
-#include "monte_carlo.hpp"
+#include "montecarlo.hpp"
 
-class MonteCarlo;
+//
+
+class MonteCarloBlock;
 
 // photon status identifiers
 enum PhotonStatus {EVOLVING = 0, ESCAPED = 1, DESTROYED = 2};
@@ -22,13 +24,13 @@ enum PhotonStatus {EVOLVING = 0, ESCAPED = 1, DESTROYED = 2};
 
 class Photon {
 public:
-  Photon(MonteCarlo *pmc);
+  Photon(MonteCarloBlock *pmcb);
   ~Photon();
 
   // data
-  MonteCarlo* pmy_mc; // ptr to MonteCarlo containing this Photon
+  MonteCarloBlock* pmy_mcb; // ptr to MonteCarlo containing this Photon
 
-  int izone[3]; // Zone currently containing photon
+  int i1,i2,i3; // zone indicies currently containing photon
   int status; // photon status (escaped, absorbed, evolving)
 
   Real x[3];  // current photon position
@@ -40,7 +42,7 @@ public:
   Real sct_coef, abs_coef;  //scattering and absoprtion coefficients
 
   // functions
-  void InitializePhoton(MeshBlock *pmb); // defined in problem gen.
+  
 
 };
 #endif // PHOTON_HPP

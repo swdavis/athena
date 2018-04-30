@@ -13,9 +13,9 @@
 
 // constructor, initializes data structures and parameters
 
-Photon::Photon(MonteCarlo *pmc) {
+Photon::Photon(MonteCarloBlock *pmcb) {
 
-  pmy_mc = pmc;
+  pmy_mcb = pmcb;
 
 }
 

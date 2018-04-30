@@ -12,11 +12,11 @@
 #include "../athena.hpp"
 #include "../mesh/mesh.hpp"
 #include "photon.hpp"
-#include "monte_carlo.hpp"
+#include "montecarlo.hpp"
 
 class MeshBlock;
 class ParameterInput;
-class MonteCarlo;
+class MonteCarloBlock;
 class Photon;
 
 //! \class PhotonMover
@@ -24,10 +24,10 @@ class Photon;
 
 class PhotonMover {
 public:
-  PhotonMover(MonteCarlo *pmc);
+  PhotonMover(MonteCarloBlock *pmcb);
   ~PhotonMover();
   // data
-  MonteCarlo *pmy_mc;
+  MonteCarloBlock *pmy_mcb;
 
   // functions
   virtual void Move(MeshBlock *pmb, Photon *pphot);
@@ -38,7 +38,7 @@ public:
 
 class CartesianMover : public PhotonMover {
 public:
-  CartesianMover(MonteCarlo *pmc);
+  CartesianMover(MonteCarloBlock *pmcb);
   ~CartesianMover();
 
   // functions

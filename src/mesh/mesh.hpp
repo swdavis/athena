@@ -39,6 +39,7 @@ class Hydro;
 class Field;
 class Gravity;
 class MonteCarlo;
+class MonteCarloBlock;
 class MGGravityDriver;
 class EquationOfState;
 class FFTDriver;
@@ -102,7 +103,7 @@ public:
   Field *pfield;
   Gravity *pgrav;
   EquationOfState *peos;
-  MonteCarlo *pmc;
+  //MonteCarloBlock *pmcb;
 
   MeshBlock *prev, *next;
 
@@ -195,6 +196,7 @@ public:
   MeshBlock* FindMeshBlock(int tgid);
   void ApplyUserWorkBeforeOutput(ParameterInput *pin);
   void UserWorkAfterLoop(ParameterInput *pin); // method in ../pgen
+  void SetMonteCarlo(MonteCarlo *pmc); // Connect monte carlo to blocks
 
 private:
   // data
