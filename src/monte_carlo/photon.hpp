@@ -36,7 +36,7 @@ public:
   Real x[3];  // current photon position
   Real k[3];  // photon direction (momentum vector)
   Real stokes[3];  // stokes vectors for linear polarization
-  Real weight, cweight; // photon weights
+  Real weight, eweight; // photon weights
   Real energy;  // photon energy
 
   Real sct_coef, abs_coef;  //scattering and absoprtion coefficients

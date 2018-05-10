@@ -17,7 +17,9 @@
 // Athena++ classes headers
 #include "../athena.hpp"
 //#include "../athena_arrays.hpp"
+#include "../coordinates/coordinates.hpp"
 #include "photon.hpp"
+#include "mcbvals.hpp"
 
 class Mesh;
 class MeshBlock;
@@ -25,23 +27,42 @@ class MonteCarloBlock;
 class ParameterInput;
 class Photon;
 class PhotonMover;
+class MCRandom;
+class MCBoundaryValues;
 
-// Flags for controlling monte carlo emission, scattering, and absorption
+// Flags for controlling monte carlo emission, scattering, absorption, bcs
 enum EmissionFlag {EMISUSER = 0, EMISFF = 1};
 enum AbsorptionFlag {ABSUSER = 0, ABSNONE = 1, ABSFF = 2};
 enum ScatteringFlag {SCATUSER = 0, SCATNONE =1, SCATISO = 2, SCATTHOM = 3, SCATCOMP =4};
+enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY = 2,
+                     MC_REFLECT_BNDRY = 3, MC_USER_BNDRY = 4};
+
+
 enum {TOEUL=0, TOCOM=1};
 
 //----------------------------------------------------------------------------------------
 // function pointer prototypes for user-defined modules set at runtime
 typedef void (*EmisFunc_t)(MonteCarloBlock *pmcb);
-//typedef void (*EmisFunc_t)(MonteCarloBlock *pmcb, MeshBlock *pmb);
-typedef Real (*OpacFunc_t)(MeshBlock *pmb);
-typedef void (*ScatFunc_t)(MeshBlock *pmb);
+typedef void (*TempFunc_t)(MonteCarloBlock *pmcb);
+//typedef void (MonteCarloBlock::*TempFunc2_t)(void);
+typedef Real (*OpacFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
+typedef void (*ScatFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
+typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, Coordinates *pco);
 
-//---------------------- prototypes for default functions --------------------------------
-//void InitializeEmissionFreeFree(MonteCarloBlock *pmcb, MeshBlock *pmb);
+//---------------------- prototypes for provided functions -------------------------------
 void InitializeEmissionFreeFree(MonteCarloBlock *pmcb);
+void DefaultGetTemperature(MonteCarloBlock *pmcb);
+void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot);
+Real NoOpacity(MonteCarloBlock *pmcb, Photon *pphot);
+Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot);
+Real ThomsonOpacity(MonteCarloBlock *pmcb, Photon *pphot);
+//---------------------- prototypes for setting flags ------------------------------------
+enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string);
+enum EmissionFlag GetEmissionFlag(std::string input_string);
+enum AbsorptionFlag GetAbsorptionFlag(std::string input_string);
+enum ScatteringFlag GetScatteringFlag(std::string input_string);
+//---------------------- prototypes for zone position functions --------------------------
+void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, Coordinates *pco);
 
 //! \class MCRandom
 //  \brief monte carlo random number generator
@@ -68,15 +89,29 @@ public:
   Mesh *pmy_mesh;  
   MonteCarloBlock *pblock;
   int ntot;         // total number of photons to integrate
+  int iseed;  // seed to initialized random number generator(s)
   enum EmissionFlag emission_meth;
+  enum AbsorptionFlag absorption_meth;
+  enum ScatteringFlag scattering_meth;
+  enum MCBoundaryFlag mc_bcs[6];
+  bool moments_flag; // Compute/output moments
+  bool lorentz_trans_flag;  // Compute lorentz transformations
+
   EmisFunc_t InitEmission;
+  TempFunc_t GetTemperature;
 
   // functions
   void LaunchPhotons();
+  void InitUserMonteCarloData(ParameterInput *pin);
   void EnrollUserEmissionInitialization(EmisFunc_t emissfunc);
+  void EnrollUserGetTemperature(TempFunc_t tempfunc);
 
 private:
-  enum EmissionFlag GetEmissionFlag(std::string input_string);
+
+  // functions
+  void GetDensity(MonteCarloBlock *pmcb);
+  void GetVelocity(MonteCarloBlock *pmcb);
+
 };
 
 //! \class MonteCarloBlock
@@ -94,23 +129,35 @@ public:
 
   Photon* pphoton; // ptr to photon packet
   PhotonMover* pmover; // ptr to photon mover
+  MCRandom *pran; // ptr to random number generator
+  MCBoundaryValues *pbval; // ptr to MC boundary values
 
   MonteCarloBlock *prev, *next;
 
   enum EmissionFlag emission_meth;
   enum AbsorptionFlag absorption_meth;
   enum ScatteringFlag scattering_meth;
+  enum MCBoundaryFlag mcb_bcs[6];
+
+  // function pointers
+  //TempFunc2_t GetTemperature2;
+  GetZonePos_t GetZonePosition;
+  OpacFunc_t AbsorptionOpacity;
+  OpacFunc_t ScatteringOpacity;
+  ScatFunc_t Scattering;
 
   int ntot;  // total number of photons for this block;
   int is,ie,js,je,ks,ke;
-
+  
   bool zone_weight_flag; // flag for zone weighting
+  bool weighted_absorption; // flag controling how absorption is handled
   bool moments_flag; // Compute/output moments
   bool emission_array_flag;  // Compute and save zone emissivities
   bool lorentz_trans_flag;  // Compute lorentz transformations
+  bool coherent_scattering; // photon does notchange energy after scattering
 
-  MCRandom *pran;
-
+  Real codetocgs_rho, codetoc_vel;
+  Real emin, emax, elog, eminlog;
   AthenaArray<Real> emission;
   AthenaArray<Real> moments;
   AthenaArray<Real> rho;
@@ -120,16 +167,11 @@ public:
   // functions
   void MonteCarloProblemGenerator(ParameterInput *pin);
   void TransferPhotons();  // Transfer photons on this block
-  void InitializePhoton(MeshBlock *pmb, Photon *pphot);
-  //void EnrollUserEmissionInitialization(EmisFunc_t emissfunc);
-  //void InitializeEmissionFreeFree();
-
+  void InitializePhoton(Photon *pphot);
+  void DefaultGetTemperature();
 private:
-
-  //enum EmissionFlag GetEmissionFlag(std::string input_string);
-  enum AbsorptionFlag GetAbsorptionFlag(std::string input_string);
-  enum ScatteringFlag GetScatteringFlag(std::string input_string);
-
+  
+ 
 };
 
 

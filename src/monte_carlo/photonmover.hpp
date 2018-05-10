@@ -11,6 +11,7 @@
 // Athena++ classes headers
 #include "../athena.hpp"
 #include "../mesh/mesh.hpp"
+#include "../coordinates/coordinates.hpp"
 #include "photon.hpp"
 #include "montecarlo.hpp"
 
@@ -18,6 +19,10 @@ class MeshBlock;
 class ParameterInput;
 class MonteCarloBlock;
 class Photon;
+class Coordinate;
+
+// Function prototypes
+Real GetOpticalDepth(MCRandom *pran);
 
 //! \class PhotonMover
 //  \brief abstract base class for all derived classes
@@ -30,7 +35,13 @@ public:
   MonteCarloBlock *pmy_mcb;
 
   // functions
-  virtual void Move(MeshBlock *pmb, Photon *pphot);
+  virtual void Move(Photon *pphot);
+  virtual Real GetOpticalDepth(MCRandom *pran);
+  virtual void NextFace(Real dx1, Real dx2, Real dx3, int &face, Real &dx);
+  virtual void UpdatePhotonPositionInZone(Photon *pphot, Real dl);
+  virtual void MovePhotonToNextZone(Photon *pphot, Coordinates *pco,
+                 MonteCarloBlock *pmcb, Real dl, int face, bool ascend[3]);
+
 };
 
 //! \class CartesianMover
@@ -42,7 +53,10 @@ public:
   ~CartesianMover();
 
   // functions
-  void Move(MeshBlock *pmb, Photon *pphot);
+  void Move(Photon *pphot);
+  void UpdatePhotonPositionInZone(Photon *pphot, Real dl);
+  void MovePhotonToNextZone(Photon *pphot, Coordinates *pco,
+         MonteCarloBlock *pmcb, Real dl, int face, bool ascend[3]);
 };
 
 #endif // PHOTONMOVER_HPP

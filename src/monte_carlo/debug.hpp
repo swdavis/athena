@@ -1,27 +1,18 @@
+#ifndef MCDEBUG_HPP
+#define MCDEBUG_HPP
 //========================================================================================
 // Athena++ astrophysical MHD code
 // Copyright(C) 2014 James M. Stone <jmstone@princeton.edu> and other code contributors
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
-//! \file monte_carlo.cpp
-//  \brief implementation of functions in class Photon
+//! \file debug.hpp
+//  \brief temporary functions for debugging and testing during initial development
 
-// Athena++ headers
-#include "photon.hpp"
+// Athena++ classes headers
 #include "../athena.hpp"
-#include "../athena_arrays.hpp"
+#include "montecarlo.hpp"
 
-// constructor, initializes data structures and parameters
+void FinalPositionCartesian(MonteCarloBlock *pmb, Coordinates *pco, Photon *pphot,
+                            Real &xf, Real &yf, Real &zf, Real &dl);
 
-Photon::Photon(MonteCarloBlock *pmcb) {
-
-  pmy_mcb = pmcb;
-  weight = 1.0;
-
-}
-
-// destructor
-
-Photon::~Photon() {
-
-}
+#endif

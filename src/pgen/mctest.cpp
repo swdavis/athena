@@ -32,8 +32,10 @@
 
 void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
+  Real rideal = 8.314e7;
   Real temp = pin->GetReal("problem","temp");
   Real rho = pin->GetReal("problem","rho");
+  Real gamma = peos->GetGamma();
 
   // Set initial conditions
   for (int k=ks; k<=ke; k++) {
@@ -43,20 +45,25 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         phydro->u(IM1,k,j,i) = 0.0;
         phydro->u(IM2,k,j,i) = 0.0;
         phydro->u(IM3,k,j,i) = 0.0;
-        phydro->u(IEN,k,j,i) = rho*temp;
+        phydro->u(IEN,k,j,i) = rideal*rho*temp/(gamma-1.0);
       }
     }
   }
 
 }
 
+void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
+
+}
+
 void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin){
 
+  // Set codetocgs here
   //EnrollUserEmissionFunction();
   
 }
 
-void MonteCarloBlock::InitializePhoton(MeshBlock *pmb, Photon *pphot) {
+void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
   // Set status flag
 
@@ -66,43 +73,41 @@ void MonteCarloBlock::InitializePhoton(MeshBlock *pmb, Photon *pphot) {
   // for photon emission.  In this version an equal number of photons
   // is emitted in  each grid zone.  The relative emission from each grid 
   // zone is then accounted for by a weighting factor cweight. 
-  //pmb->block_size.nx1;
 
-  int nx1 = pmb->block_size.nx1;
-  int nx2 = pmb->block_size.nx2;
-  int nx3 = pmb->block_size.nx3;
+  Real nx1 = static_cast<Real>(ie-is);
+  Real nx2 = static_cast<Real>(je-js);
+  Real nx3 = static_cast<Real>(ke-ks);
 
-  pphot->i1 = static_cast<int>(pran->uniform()*static_cast<Real>(nx1));
-  pphot->i2 = static_cast<int>(pran->uniform()*static_cast<Real>(nx2));
-  pphot->i3 = static_cast<int>(pran->uniform()*static_cast<Real>(nx3));
+  pphot->i1 = static_cast<int>(pran->uniform()*nx1)+is;
+  pphot->i2 = static_cast<int>(pran->uniform()*nx2)+js;
+  pphot->i3 = static_cast<int>(pran->uniform()*nx3)+ks;
 
   // cweight is a constant weighting factor which accounts for the
   // emissivity of the grid zone in which the photon was emitted
-  if (zone_weight_flag)
-    pphot->weight = emission(pphot->i3,pphot->i2,pphot->i1);
-    //weight = pmb->etat[];
-  else
-    pphot->weight = 1.0;
-  
-  std::cout << "test: " << pphot->weight << ' ' << pphot->i2 << ' ' 
-            << pphot->i2 << ' ' << pphot->i3 << std::endl;
+  if (zone_weight_flag) {
+    pphot->eweight = emission(pphot->i3,pphot->i2,pphot->i1);
+    pphot->weight = pphot->eweight;
+  }
+
+  //std::cout << "test: " << pphot->weight << ' ' << pphot->i1 << ' ' 
+  //          << pphot->i2 << ' ' << pphot->i3 << std::endl;
 
   // Obtain initial position within zone
-  //get_position_uniform(-1,pG,pPack);
-   
-  // Obtain intitial energy, polarization, direction and weight
-  //photon_emit_freefree(ind,pG,pPack);
+  GetZonePosition(pphot,pran,pmy_coord);
+  //std::cout << pphot->x[0] << ' ' << pphot->x[1] << ' ' << pphot->x[2]
+  //          << std::endl;
 
-  // All packet propogations ceases below a certain cutoff weight WMIN
-  // We rescale cweight to account for the differing initial weights so that
-  // all photons begin with an equivalent weight of unity, and therefore, all
-  // packets are treated equivalently */
+  // Obtain intitial energy, polarization, direction and weight
+  // Utilize free-free emission function in emission.cpp
+  PhotonEmitFreeFree(this,pphot);
+
 
   if (pphot->weight < 0.0) pphot->status = DESTROYED;
 
   // Initialize the absorption and scattering extinction coefficients
   // to the values appropriate in the emitted zone
-  //abs_coef = absopac(pG->temp[ind],pG->dens[ind],pPack->energy);
-  //sct_coef = sctopac(pG->temp[ind],pG->dens[ind],pPack->energy);
+  pphot->abs_coef = AbsorptionOpacity(this,pphot);
+  pphot->sct_coef = ScatteringOpacity(this,pphot);
+
 }
 

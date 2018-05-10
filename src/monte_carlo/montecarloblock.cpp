@@ -17,6 +17,10 @@
 #include "../athena_arrays.hpp"
 #include "../parameter_input.hpp"
 #include "../mesh/mesh.hpp"
+#include "../hydro/hydro.hpp"
+#include "../globals.hpp"
+
+#define MINWEIGHT 0.0
 
 // constructor, initializes data structures and parameters
 
@@ -29,7 +33,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
   pmy_coord = pmb->pcoord;
 
   // Construct pointer to photon 
-  pphoton  = new Photon(this);
+  pphoton  = new Photon(this); // Currently one photon per block (will change)
 
   // Set photon mover based on coordinate system
   if (COORDINATE_SYSTEM == "cartesian") {
@@ -39,26 +43,39 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
   // Initialize input parameters and flags
   ntot = pin->GetInteger("montecarlo","nphot");
   zone_weight_flag = pin->GetOrAddBoolean("montecarlo","zone_weight",true);
-  moments_flag = pin->GetOrAddBoolean("montecarlo","moments",true);
-  lorentz_trans_flag = pin->GetOrAddBoolean("montecarlo","lorentz_trans",true);
-
-  // Create and intitialize randon number generator
-  int iseed = pin->GetInteger("montecarlo","iseed");
+  weighted_absorption = pin->GetOrAddBoolean("montecarlo","abs_weight",true);
+  // get seed and intitialize randon number generator
+  int rank = Globals::my_rank;
+  int iseed = pmy_mc->iseed + rank *100;  // temporary solution
   pran = new MCRandom(iseed);
 
   prev=NULL;
   next=NULL;
 
-  // read emission, absorption and scattering flags
+  // Set energy range
+  emin = pin->GetReal("montecarlo","emin");
+  emax = pin->GetReal("montecarlo","emax");
+  elog = log10(emax/emin);
+  eminlog = log10(emin);
+
+  // Set flags (initialized in MonteCarlo class)
   emission_meth = pmy_mc->emission_meth;
-  //emission_meth = GetEmissionFlag(pin->GetOrAddString("montecarlo","emission","error"));
-  absorption_meth = GetAbsorptionFlag(pin->GetOrAddString("montecarlo","absorption","error"));
-  scattering_meth = GetScatteringFlag(pin->GetOrAddString("montecarlo","scattering","error"));
+  absorption_meth = pmy_mc->absorption_meth;
+  scattering_meth = pmy_mc->scattering_meth;
+
+  // *currently** assumes all block boundaries are physical
+  for (int i=0; i<6; ++i) {
+    mcb_bcs[i] = pmy_mc->mc_bcs[i];
+  }
+  // Initialize pbval after mcb_bcs is set
+  pbval = new MCBoundaryValues(this,pin);
 
   // set local mesh parameters to correspond to mesh block
   is = pmb->is; ie = pmb->ie;
   js = pmb->js; je = pmb->je;
   ks = pmb->ks; ke = pmb->ke;
+
+  codetocgs_rho = 1.0; codetoc_vel = 1.0;  // default cgs for code units
 
   // Allocate memory for emissivity (if used) and radiation moments
   int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
@@ -71,17 +88,43 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
   if (emission_meth == EMISUSER) {
     emission_array_flag = pin->GetBoolean("montecarlo","emiss_array");
   } else if (emission_meth ==  EMISFF) {
-    //InitEmission = InitializeEmissionFreeFree;
     emission_array_flag = true;
   }
   if (emission_array_flag) emission.NewAthenaArray(ncells3,ncells2,ncells1);
 
-  // Allocate variable arrays needed for evolution/output
+  // Allocate (/initialize) variable arrays needed for evolution/output
   rho.NewAthenaArray(ncells3,ncells2,ncells1);
+  //rho.InitWithShallowSlice(pmb->phydro->u,4,IDN,1);
   tgas.NewAthenaArray(ncells3,ncells2,ncells1);
-  if (lorentz_trans_flag) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
-  if (moments_flag) moments.NewAthenaArray(4,ncells3,ncells2,ncells1);
+  if (pmy_mc->lorentz_trans_flag) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
+  if (pmy_mc->moments_flag) moments.NewAthenaArray(4,ncells3,ncells2,ncells1);
 
+  //GetTemperature2 = &MonteCarloBlock::DefaultGetTemperature;
+
+  // Set function pointers
+  if (COORDINATE_SYSTEM == "cartesian") {
+      GetZonePosition = GetZonePositionCartesian;
+  }
+  if (absorption_meth == ABSUSER) {
+    AbsorptionOpacity = NULL;
+  } else if (absorption_meth == ABSNONE) {
+    AbsorptionOpacity = NoOpacity;
+  } else if (absorption_meth == ABSFF) {
+    AbsorptionOpacity = FreeFreeAbsorptionOpacity;
+  }
+ 
+  if (scattering_meth == SCATUSER) {
+    ScatteringOpacity = NULL;
+  } else if (scattering_meth == SCATNONE) {
+    ScatteringOpacity = NoOpacity;
+    coherent_scattering = false;
+  } else if (scattering_meth == SCATISO) {
+    ScatteringOpacity = ThomsonOpacity;
+    coherent_scattering = false;
+  } else if (scattering_meth == SCATTHOM) {
+    ScatteringOpacity = ThomsonOpacity;
+    coherent_scattering = false;
+  }
 
 }
 
@@ -100,100 +143,68 @@ MonteCarloBlock::~MonteCarloBlock() {
   if (moments_flag) moments.DeleteAthenaArray();
 }
 
+void MonteCarloBlock::DefaultGetTemperature() {
 
-enum AbsorptionFlag MonteCarloBlock::GetAbsorptionFlag(std::string input_string) {
-  if (input_string == "user") {
-    return ABSUSER;
-  } else if (input_string == "none") {
-    return ABSNONE;
-  } else if (input_string == "freefree") {
-    return ABSFF;
-  } else {
-    std::stringstream msg;
-    msg << "### FATAL ERROR in GetAbsorptionFlag" << std::endl
-        << "Input string=" << input_string << " not valid absorption type" << std::endl;
-    throw std::runtime_error(msg.str().c_str());
-  }
+  Real rideal = 8.314e7;
+  Hydro* phydro = pmy_block->phydro;
 
-}
+   // MonteCarloBlock ranges should always match MeshBlock ranges
+  int il = is; int iu = ie;
+  int jl = js; int ju = je;
+  int kl = ks; int ku = ke;
 
-enum ScatteringFlag MonteCarloBlock::GetScatteringFlag(std::string input_string) {
-  if (input_string == "user") {
-    return SCATUSER;
-  } else if (input_string == "none") {
-    return SCATNONE;
-  } else if (input_string == "isotropic") {
-    return SCATISO;
-  } else if (input_string == "thomson") {
-    return SCATTHOM;
-  } else if (input_string == "compton") {
-    return SCATCOMP;
-  } else {
-    std::stringstream msg;
-    msg << "### FATAL ERROR in GetAbsorptionFlag" << std::endl
-        << "Input string=" << input_string << " not valid scattering type" << std::endl;
-    throw std::runtime_error(msg.str().c_str());
-  }
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=il; i<=iu+1; ++i) {
+        tgas(k,j,i) = phydro->w(IEN,k,j,i)/phydro->w(IDN,k,j,i)/rideal;
+
+      }}}
 
 }
-
 
 void MonteCarloBlock::TransferPhotons() {
 
   for(int i=0; i<ntot; ++i) {
 
     // user definied photon initialization
-    InitializePhoton(pmy_block,pphoton);
+    InitializePhoton(pphoton);
 
     // Lorentz transform E, k to Eulerian frame and update opacities.
     //if (lorenz_transform)
     //  photon->lorentz_transform(pmy_bplo,TOEUL);
 
-    // Move photon to the first scattering/absorption event
-    if (pphoton->status != DESTROYED) {
-    //MovePhoton(pG,&Packet,pOut);
-    }
-    
-    // Propogate photon packet until it leaves calculation domain or
-    // it is absorbed.          
-    /*    while(!(Packet.escape) && !(Packet.absorb)) {
-#ifdef PHOTON_WEIGHT // Default method                    
-      Packet.weight *= (Packet.sigma/(Packet.alpha+Packet.sigma));
-#else
-      if (random_mcgrid() > (Packet.sigma/(Packet.alpha+Packet.sigma)))
-        Packet.weight = 0.0;
-#endif
-      pOut->nscat += 1;
-      if(Packet.weight>WMIN) {
-        // Scatter photon and reduce weight
-#ifdef VELOCITIES
-        // Lorentz transform to comoving frame for scattering
-        lorentz_transform(&Packet,pG,to_comv);
-#endif
-        // Scatter the photon packet
-        scatter(pG,&Packet);
+    while (pphoton->status == EVOLVING) {
+      // move photon to next scattering/absorption or to boundary
+      pmover->Move(pphoton);
 
-        // Update the absorption and scattering extinction coefficients
-        // with the new energy.
-        ind=indexi(Packet.ix1,Packet.ix2,Packet.ix3,pG);
-        Packet.alpha = absopac(pG->temp[ind],pG->dens[ind],Packet.energy);
-        Packet.sigma = sctopac(pG->temp[ind],pG->dens[ind],Packet.energy);
-        
-#ifdef VELOCITIES
-        // Lorentz transform to Eulerian frame and shift opacities
-        lorentz_transform(&Packet,pG,to_eulr);
-#endif
-
-        // Move photon to next scattering/absorption event
-        transfer(pG,&Packet,pOut);
-        //if (errflag) return;
-        
+      // Account for absorption
+      if (weighted_absorption) {
+        pphoton->weight *= pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef);
+        if(pphoton->weight < MINWEIGHT)
+          pphoton->status = DESTROYED;
       } else {
-        pOut->nabs++;
-        Packet.absorb=1;
+        if (pran->uniform() > pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef) )
+          pphoton->status = DESTROYED;
       }
-      }*/
+        
+      // Lorentz transform to comoving frame for scattering
+      //lorentz_transform(&Packet,pG,to_comv);
 
+      // Scatter the photon packet
+      //if (pphoton->status == EVOLVING)
+        //scatter(,&Packet);
+      
+      // Update the absorption and scattering extinction coefficients
+      // with the new energy.
+      if (!coherent_scattering) {
+        pphoton->abs_coef = AbsorptionOpacity(this,pphoton);
+        pphoton->sct_coef = ScatteringOpacity(this,pphoton);
+      }
+        
+        // Lorentz transform to Eulerian frame and shift opacities
+        //lorentz_transform(&Packet,pG,to_eulr);
+
+      }
   }
   std::cout  << ntot << std::endl;
 }
