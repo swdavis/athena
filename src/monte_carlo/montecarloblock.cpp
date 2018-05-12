@@ -41,9 +41,11 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
   }
 
   // Initialize input parameters and flags
-  ntot = pin->GetInteger("montecarlo","nphot");
+  nphot = pin->GetInteger("montecarlo","nphot");
   zone_weight_flag = pin->GetOrAddBoolean("montecarlo","zone_weight",true);
   weighted_absorption = pin->GetOrAddBoolean("montecarlo","abs_weight",true);
+  polarized = pin->GetOrAddBoolean("montecarlo","polarized",false);
+
   // get seed and intitialize randon number generator
   int rank = Globals::my_rank;
   int iseed = pmy_mc->iseed + rank *100;  // temporary solution
@@ -52,9 +54,10 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
   prev=NULL;
   next=NULL;
 
-  // Set energy range
-  emin = pin->GetReal("montecarlo","emin");
-  emax = pin->GetReal("montecarlo","emax");
+  // Set energy range in ergs (input assumed in eV)
+  Real everg = 1.6021772e-12;
+  emin = everg * pin->GetReal("montecarlo","emin");
+  emax = everg * pin->GetReal("montecarlo","emax");
   elog = log10(emax/emin);
   eminlog = log10(emin);
 
@@ -70,11 +73,17 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
   // Initialize pbval after mcb_bcs is set
   pbval = new MCBoundaryValues(this,pin);
 
+  // Setup output spectrum **currently* assumes single spectrum
+  int nfreq = pin->GetInteger("montecarlo","nfreq");
+  int nmu = pin->GetInteger("montecarlo","nmu");
+  int nphi = pin->GetInteger("montecarlo","nphi");
+  pspec = new Spectrum(emin,emax,nfreq,nmu,nphi,polarized);
+
   // set local mesh parameters to correspond to mesh block
   is = pmb->is; ie = pmb->ie;
   js = pmb->js; je = pmb->je;
   ks = pmb->ks; ke = pmb->ke;
-
+  ncells = (ie-is)*(je-js)*(ke-ks);
   codetocgs_rho = 1.0; codetoc_vel = 1.0;  // default cgs for code units
 
   // Allocate memory for emissivity (if used) and radiation moments
@@ -94,12 +103,9 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
 
   // Allocate (/initialize) variable arrays needed for evolution/output
   rho.NewAthenaArray(ncells3,ncells2,ncells1);
-  //rho.InitWithShallowSlice(pmb->phydro->u,4,IDN,1);
   tgas.NewAthenaArray(ncells3,ncells2,ncells1);
   if (pmy_mc->lorentz_trans_flag) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
   if (pmy_mc->moments_flag) moments.NewAthenaArray(4,ncells3,ncells2,ncells1);
-
-  //GetTemperature2 = &MonteCarloBlock::DefaultGetTemperature;
 
   // Set function pointers
   if (COORDINATE_SYSTEM == "cartesian") {
@@ -135,6 +141,7 @@ MonteCarloBlock::~MonteCarloBlock() {
   delete pphoton;
   delete pmover;
   delete pran;
+  delete pspec;
 
   rho.DeleteAthenaArray();
   tgas.DeleteAthenaArray();
@@ -164,19 +171,19 @@ void MonteCarloBlock::DefaultGetTemperature() {
 
 void MonteCarloBlock::TransferPhotons() {
 
-  for(int i=0; i<ntot; ++i) {
+  for(int i=0; i<nphot; ++i) {
 
     // user definied photon initialization
     InitializePhoton(pphoton);
-
+    //std::cout << pphoton->weight << std::endl;
     // Lorentz transform E, k to Eulerian frame and update opacities.
     //if (lorenz_transform)
     //  photon->lorentz_transform(pmy_bplo,TOEUL);
 
+    // move photon to next scattering/absorption or to boundary
+    pmover->Move(pphoton);
     while (pphoton->status == EVOLVING) {
-      // move photon to next scattering/absorption or to boundary
-      pmover->Move(pphoton);
-
+    
       // Account for absorption
       if (weighted_absorption) {
         pphoton->weight *= pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef);
@@ -204,8 +211,15 @@ void MonteCarloBlock::TransferPhotons() {
         // Lorentz transform to Eulerian frame and shift opacities
         //lorentz_transform(&Packet,pG,to_eulr);
 
-      }
+      // move photon to next scattering/absorption or to boundary
+      pmover->Move(pphoton);
+
+    }
+    if (pphoton->status == ESCAPED) {
+      pspec->UpdateSpectrum(pphoton);
+    }
+    
   }
-  std::cout  << ntot << std::endl;
+  std::cout  << nphot << std::endl;
 }
 

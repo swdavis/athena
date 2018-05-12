@@ -25,6 +25,8 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
  
   pmy_mesh = pmesh;
 
+  pmcout = new MCOutput(this,pin);
+
   InitEmission=NULL;
   GetTemperature=NULL;
 
@@ -69,6 +71,8 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
 // destructor
 
 MonteCarlo::~MonteCarlo() {
+
+  delete pmcout;
 
   while(pblock->next != NULL)
     delete pblock->next;

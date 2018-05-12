@@ -20,6 +20,7 @@
 #include "../coordinates/coordinates.hpp"
 #include "photon.hpp"
 #include "mcbvals.hpp"
+#include "mcoutput.hpp"
 
 class Mesh;
 class MeshBlock;
@@ -29,6 +30,7 @@ class Photon;
 class PhotonMover;
 class MCRandom;
 class MCBoundaryValues;
+class MCOutoupt;
 
 // Flags for controlling monte carlo emission, scattering, absorption, bcs
 enum EmissionFlag {EMISUSER = 0, EMISFF = 1};
@@ -86,9 +88,10 @@ public:
   ~MonteCarlo();
 
   // data
-  Mesh *pmy_mesh;  
+  Mesh *pmy_mesh;
+  MCOutput *pmcout;
   MonteCarloBlock *pblock;
-  int ntot;         // total number of photons to integrate
+  int nphot;         // total number of photons to integrate
   int iseed;  // seed to initialized random number generator(s)
   enum EmissionFlag emission_meth;
   enum AbsorptionFlag absorption_meth;
@@ -124,13 +127,14 @@ public:
 
   // data
   MonteCarlo* pmy_mc; // MonteCarlo
-  MeshBlock* pmy_block;    // ptr to MeshBlock containing this MonteCarlo
+  MeshBlock* pmy_block;    // MeshBlock corresponding to this MonteCarlo
   Coordinates *pmy_coord;
 
   Photon* pphoton; // ptr to photon packet
   PhotonMover* pmover; // ptr to photon mover
   MCRandom *pran; // ptr to random number generator
   MCBoundaryValues *pbval; // ptr to MC boundary values
+  Spectrum *pspec; // ptr to spectrum
 
   MonteCarloBlock *prev, *next;
 
@@ -146,23 +150,34 @@ public:
   OpacFunc_t ScatteringOpacity;
   ScatFunc_t Scattering;
 
-  int ntot;  // total number of photons for this block;
+  int nphot;  // total number of photons for this block;
+  int ncells;
   int is,ie,js,je,ks,ke;
-  
+  int nfreq, nmu, nphi, nsurf;
+
   bool zone_weight_flag; // flag for zone weighting
   bool weighted_absorption; // flag controling how absorption is handled
   bool moments_flag; // Compute/output moments
   bool emission_array_flag;  // Compute and save zone emissivities
   bool lorentz_trans_flag;  // Compute lorentz transformations
   bool coherent_scattering; // photon does notchange energy after scattering
+  bool polarized; // track photon polarization
 
   Real codetocgs_rho, codetoc_vel;
   Real emin, emax, elog, eminlog;
+
   AthenaArray<Real> emission;
   AthenaArray<Real> moments;
   AthenaArray<Real> rho;
   AthenaArray<Real> tgas;
   AthenaArray<Real> vel;
+  AthenaArray<Real> energies;
+  AthenaArray<Real> intensity;
+  AthenaArray<Real> intensity_sq;
+  AthenaArray<Real> stokesq;
+  AthenaArray<Real> stokesq_sq;
+  AthenaArray<Real> stokesu;
+  AthenaArray<Real> stokesu_sq;
 
   // functions
   void MonteCarloProblemGenerator(ParameterInput *pin);

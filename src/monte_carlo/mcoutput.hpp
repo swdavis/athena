@@ -12,7 +12,39 @@
 #include "../athena.hpp"
 #include "montecarlo.hpp"
 
+class Spectrum {
+public:
+  Spectrum(Real emin, Real emax, int nfreq, int nmu, int phi, bool polarized);
+  ~Spectrum();
 
+  int nfreq, nmu, nphi;
+  Real emin, emax;
+  bool polarized;
 
+  AthenaArray<Real> energies;
+  AthenaArray<Real> intensity;
+  AthenaArray<Real> intensity_sq;
+  AthenaArray<Real> stokesq;
+  AthenaArray<Real> stokesq_sq;
+  AthenaArray<Real> stokesu;
+  AthenaArray<Real> stokesu_sq;
+
+  //functions
+  void BuildFrequencyGrid(Real emin, Real emax, int nfreq);
+  void UpdateSpectrum(Photon *pphot);
+  int GetEbin(Real energy);
+
+};
+
+class MCOutput {
+public:
+  MCOutput(MonteCarlo *pmc, ParameterInput *pin);
+  ~MCOutput();
+
+  MonteCarlo *pmy_mc;
+  void OutputSpectra(MonteCarlo *pmc);
+  void OutputSpectrum(Spectrum *pspec, Real norm, std::string outfile);
+
+};
 
 #endif //MC_OUTPUT

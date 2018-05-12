@@ -434,6 +434,7 @@ int main(int argc, char *argv[]) {
   // Perform Monte Carlo radiation tranfer
   if (MONTE_CARLO_ENABLED) {
     pmc->LaunchPhotons();
+    pmc->pmcout->OutputSpectra(pmc);
   }
 
   if (Globals::my_rank==0 && wtlim > 0)

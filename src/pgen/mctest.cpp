@@ -35,10 +35,34 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   Real rideal = 8.314e7;
   Real temp = pin->GetReal("problem","temp");
   Real rho = pin->GetReal("problem","rho");
+  Real taumin = pin->GetReal("problem","taumin");
+  Real taumax = pin->GetReal("problem","taumax");
   Real gamma = peos->GetGamma();
+  Real zlow = pin->GetReal("mesh","x3min");
+  Real zhigh = pin->GetReal("mesh","x3max");
+  int nz = pin->GetInteger("mesh","nx3");
+
+  Real dz = (zhigh-zlow) / static_cast<Real>(nz);
+  Real step = log10(taumax/taumin) / static_cast<Real>(nz-1);
+       
+  AthenaArray<Real> tau1d,dens1d;
+  
+  // Chosen to match initialize.py in mcgrid
+  tau1d.NewAthenaArray(nz); 
+  dens1d.NewAthenaArray(nz);
+  for (int i=0; i<nz; ++i) {
+    tau1d(i) = log10(taumin) + step * static_cast<Real>(i);
+    tau1d(i) = pow(tau1d(i),10);
+  }
+  Real kapes = 0.33;
+  dens1d(0) = tau1d(0) / dz / kapes;
+  for (int i=1; i<nz; ++i) {
+    dens1d(i) = (tau1d(i)-tau1d(i-1) ) / (dz * kapes);
+  }
 
   // Set initial conditions
   for (int k=ks; k<=ke; k++) {
+    rho = dens1d(k);
     for (int j=js; j<=je; j++) {
       for (int i=is; i<=ie; i++) {
         phydro->u(IDN,k,j,i) = rho;
