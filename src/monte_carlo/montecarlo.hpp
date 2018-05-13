@@ -55,9 +55,22 @@ typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, Coordinates *pco);
 void InitializeEmissionFreeFree(MonteCarloBlock *pmcb);
 void DefaultGetTemperature(MonteCarloBlock *pmcb);
 void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot);
+//--------------------- prototypes for opacity.cpp functions -----------------------------
 Real NoOpacity(MonteCarloBlock *pmcb, Photon *pphot);
 Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot);
 Real ThomsonOpacity(MonteCarloBlock *pmcb, Photon *pphot);
+Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot);
+void GenerateComptonTable(void);
+Real ComptonCrossSection(Real energy, Real theta);
+Real Maxwell(Real theta, Real gamma);
+Real KleinNishina(Real x);
+//--------------------- prototypes for scatter.cpp functions -----------------------------
+void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot);
+void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot);
+void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot);
+Real Bigy(Real x, Real xp);
+Real SigmaHat(Real x);
+Real ElectronDist(Real tgas, MCRandom *pran);
 //---------------------- prototypes for setting flags ------------------------------------
 enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string);
 enum EmissionFlag GetEmissionFlag(std::string input_string);
@@ -148,7 +161,7 @@ public:
   GetZonePos_t GetZonePosition;
   OpacFunc_t AbsorptionOpacity;
   OpacFunc_t ScatteringOpacity;
-  ScatFunc_t Scattering;
+  ScatFunc_t Scatter;
 
   int nphot;  // total number of photons for this block;
   int ncells;
@@ -171,13 +184,7 @@ public:
   AthenaArray<Real> rho;
   AthenaArray<Real> tgas;
   AthenaArray<Real> vel;
-  AthenaArray<Real> energies;
-  AthenaArray<Real> intensity;
-  AthenaArray<Real> intensity_sq;
-  AthenaArray<Real> stokesq;
-  AthenaArray<Real> stokesq_sq;
-  AthenaArray<Real> stokesu;
-  AthenaArray<Real> stokesu_sq;
+
 
   // functions
   void MonteCarloProblemGenerator(ParameterInput *pin);

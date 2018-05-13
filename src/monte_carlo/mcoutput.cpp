@@ -16,13 +16,14 @@
 
 // constructor
 Spectrum::Spectrum(Real elow, Real ehigh, int n0, int n1, int n2, 
-                   bool polarized) {
+                   bool pol) {
 
   emin = elow;
   emax = ehigh;
   nfreq = n0;
   nmu = n1;
   nphi = n2;
+  polarized = pol;
   
   // Allocate and intialize energy bins
   energies.NewAthenaArray(nfreq+1);
@@ -71,6 +72,7 @@ void Spectrum::BuildFrequencyGrid(Real emin, Real emax, int nfreq) {
 //----------------------------------------------------------------------------------------
 //! \fn void Spectrum::UpdateSpectrum(Photon *pphot)
 //  \brief add photon contribution to spectrum
+//  *** should be more general to explitly account for non-cartesian possibilities
 
 void Spectrum::UpdateSpectrum(Photon *pphot) {
 
@@ -85,7 +87,7 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
   if (mu == 1.0) {
     phibin = 0;
   } else {
-    Real stheta = sqrt(SQR(pphot->k[0])+SQR(pphot->k[1]));//CARTESIAN ONLY
+    Real stheta = sqrt(SQR(pphot->k[0])+SQR(pphot->k[1]));
     phi = acos(pphot->k[0]/stheta);
     if(pphot->k[1] < 0.0)
       phi = 2 * PI - phi;
@@ -110,6 +112,7 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
   }
 
   Real& weight = pphot->weight;
+  weight *= pphot->eweight;
   if ((isinf(weight)) || (isnan(weight))) {
     std::cout << "Warning: weight is Nan or Inf: " << weight << std::endl;
   } else {

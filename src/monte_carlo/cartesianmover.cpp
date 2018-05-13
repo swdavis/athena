@@ -100,6 +100,7 @@ void CartesianMover::Move(Photon *pphot) {
     std::cout << "Warning: iter exceeded ITERMAX in photon mover." << std::endl;
     pphot->status = DESTROYED;
   }
+  /*
   Real delta = sqrt(SQR(xf-pphot->x[0])+SQR(yf-pphot->x[1])+SQR(zf-pphot->x[2]));
   if ((delta > 10.)&&(iter < MAXITER)) {
     std::cout << "-----------------------" << std::endl;
@@ -108,7 +109,7 @@ void CartesianMover::Move(Photon *pphot) {
     std::cout << "xi: " << xi << ' ' << yi << ' ' << zi << std::endl;
     std::cout << "xf: " << xf << ' ' << yf << ' ' << zf << ' ' << dl0 << std::endl;
     std::cout << "xp: " << pphot->x[0] << ' ' <<  pphot->x[1] << ' ' <<  pphot->x[2] << std::endl;
-  }
+  }*/
 }
 
 

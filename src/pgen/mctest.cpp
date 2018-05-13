@@ -34,7 +34,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
   Real rideal = 8.314e7;
   Real temp = pin->GetReal("problem","temp");
-  Real rho = pin->GetReal("problem","rho");
+  //Real rho = pin->GetReal("problem","rho");
   Real taumin = pin->GetReal("problem","taumin");
   Real taumax = pin->GetReal("problem","taumax");
   Real gamma = peos->GetGamma();
@@ -52,7 +52,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   dens1d.NewAthenaArray(nz);
   for (int i=0; i<nz; ++i) {
     tau1d(i) = log10(taumin) + step * static_cast<Real>(i);
-    tau1d(i) = pow(tau1d(i),10);
+    tau1d(i) = pow(10.,tau1d(i));
   }
   Real kapes = 0.33;
   dens1d(0) = tau1d(0) / dz / kapes;
@@ -60,9 +60,10 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     dens1d(i) = (tau1d(i)-tau1d(i-1) ) / (dz * kapes);
   }
 
+  Real rho;
   // Set initial conditions
   for (int k=ks; k<=ke; k++) {
-    rho = dens1d(k);
+    rho = dens1d(ke-k);
     for (int j=js; j<=je; j++) {
       for (int i=is; i<=ie; i++) {
         phydro->u(IDN,k,j,i) = rho;
@@ -105,12 +106,14 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   pphot->i1 = static_cast<int>(pran->uniform()*nx1)+is;
   pphot->i2 = static_cast<int>(pran->uniform()*nx2)+js;
   pphot->i3 = static_cast<int>(pran->uniform()*nx3)+ks;
-
+  //pphot->i3 = 32+ks;
+  
   // cweight is a constant weighting factor which accounts for the
   // emissivity of the grid zone in which the photon was emitted
   if (zone_weight_flag) {
     pphot->eweight = emission(pphot->i3,pphot->i2,pphot->i1);
-    pphot->weight = pphot->eweight;
+    //pphot->weight = pphot->eweight;
+    pphot->weight = 1.0;
   }
 
   //std::cout << "test: " << pphot->weight << ' ' << pphot->i1 << ' ' 
@@ -132,6 +135,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   // to the values appropriate in the emitted zone
   pphot->abs_coef = AbsorptionOpacity(this,pphot);
   pphot->sct_coef = ScatteringOpacity(this,pphot);
+  //std::cout << "Init: " << pphot->i3-ks << ' ' << pphot->abs_coef << ' ' <<  pphot->sct_coef << std::endl;
 
 }
 

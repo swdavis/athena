@@ -20,7 +20,7 @@ void InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
   //void InitializeEmissionFreeFree(MonteCarloBlock *pmcb, MeshBlock *pmb) {
 
 
-  Real heabund = 0.0; // Should have more general EOS functions
+  Real heabund = 0.09; // Should have more general EOS functions
   Real mp = 1.6726e-24;
   Real eta0 = 1.032521e-11;
   Real g = 1.0;
@@ -67,8 +67,9 @@ void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot)
   pphot->stokes[2] = 0.0;
 
   // Generate initial angle parameters
-  Real cphi = cos(2. * PI * pran->uniform());
-  Real sphi = sqrt(1. - SQR(cphi));
+  Real phi = 2. * PI * pran->uniform();
+  Real cphi = cos(phi);
+  Real sphi = sin(phi);
 
   Real cth = 2. * pran->uniform() - 1.;
   Real sth = sqrt(1. - SQR(cth));

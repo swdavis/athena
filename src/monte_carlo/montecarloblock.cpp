@@ -20,7 +20,7 @@
 #include "../hydro/hydro.hpp"
 #include "../globals.hpp"
 
-#define MINWEIGHT 0.0
+#define MINWEIGHT 1.0e-15
 
 // constructor, initializes data structures and parameters
 
@@ -121,15 +121,33 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
  
   if (scattering_meth == SCATUSER) {
     ScatteringOpacity = NULL;
+    Scatter = NULL;
   } else if (scattering_meth == SCATNONE) {
     ScatteringOpacity = NoOpacity;
-    coherent_scattering = false;
+    Scatter = NULL;  // should not be called
+    coherent_scattering = true;
   } else if (scattering_meth == SCATISO) {
-    ScatteringOpacity = ThomsonOpacity;
-    coherent_scattering = false;
+    if (polarized) {
+      std::stringstream msg;
+      msg << "### ERROR in MonteCarloBlock constructor" << std::endl
+          << "Istropic scattering but polarized = " << polarized << std::endl;
+    throw std::runtime_error(msg.str().c_str());
+    } else {
+      ScatteringOpacity = ThomsonOpacity;
+      Scatter = ScatterIsotropic;
+      coherent_scattering = true;
+    }
   } else if (scattering_meth == SCATTHOM) {
     ScatteringOpacity = ThomsonOpacity;
-    coherent_scattering = false;
+    if (polarized) {
+      Scatter = ScatterThomsonPolarized;
+    }
+    coherent_scattering = true;
+  } else if (scattering_meth == SCATCOMP) {
+    ScatteringOpacity = ComptonOpacity;
+    if (!polarized) {
+      Scatter = ScatterComptonUnpolarized;
+    } 
   }
 
 }
@@ -171,6 +189,7 @@ void MonteCarloBlock::DefaultGetTemperature() {
 
 void MonteCarloBlock::TransferPhotons() {
 
+  int nscat = 0, nesc = 0, nabs =0;
   for(int i=0; i<nphot; ++i) {
 
     // user definied photon initialization
@@ -186,11 +205,11 @@ void MonteCarloBlock::TransferPhotons() {
     
       // Account for absorption
       if (weighted_absorption) {
-        pphoton->weight *= pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef);
-        if(pphoton->weight < MINWEIGHT)
+        pphoton->weight *= (pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef));
+        if(pphoton->weight <= MINWEIGHT)
           pphoton->status = DESTROYED;
       } else {
-        if (pran->uniform() > pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef) )
+        if (pran->uniform() > (pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef)) )
           pphoton->status = DESTROYED;
       }
         
@@ -198,9 +217,10 @@ void MonteCarloBlock::TransferPhotons() {
       //lorentz_transform(&Packet,pG,to_comv);
 
       // Scatter the photon packet
-      //if (pphoton->status == EVOLVING)
-        //scatter(,&Packet);
-      
+      if (pphoton->status == EVOLVING) {
+        Scatter(this,pphoton);
+	nscat++;
+      }
       // Update the absorption and scattering extinction coefficients
       // with the new energy.
       if (!coherent_scattering) {
@@ -213,13 +233,15 @@ void MonteCarloBlock::TransferPhotons() {
 
       // move photon to next scattering/absorption or to boundary
       pmover->Move(pphoton);
-
     }
     if (pphoton->status == ESCAPED) {
       pspec->UpdateSpectrum(pphoton);
-    }
+      nesc++;
+    } else
+      nabs++;
     
   }
-  std::cout  << nphot << std::endl;
+  std::cout  << "nesc, nabs: " << nesc << ' ' << nabs << std::endl;
+  std::cout << "nscat: " << nscat << std::endl;
 }
 
