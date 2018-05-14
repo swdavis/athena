@@ -116,6 +116,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
   // Set function pointers
   if (COORDINATE_SYSTEM == "cartesian") {
       GetZonePosition = GetZonePositionCartesian;
+  } else if (COORDINATE_SYSTEM == "spherical_polar") {
+    GetZonePosition = GetZonePositionSphericalPolar;
   }
   if (absorption_meth == ABSUSER) {
     AbsorptionOpacity = NULL;

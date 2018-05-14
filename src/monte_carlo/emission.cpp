@@ -75,9 +75,9 @@ void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot)
   Real sth = sqrt(1. - SQR(cth));
 
   // Initialize wave vector with isotropic distribution
-  pphot->k[0] = sth*cphi;
-  pphot->k[1] = sth*sphi;
-  pphot->k[2] = cth;
+  pphot->kcart[0] = sth*cphi;
+  pphot->kcart[1] = sth*sphi;
+  pphot->kcart[2] = cth;
 }
 
 
@@ -94,5 +94,23 @@ void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, Coordinates *pcoord
   pphot->x[0] = xl+pran->uniform()*dx;
   pphot->x[1] = yl+pran->uniform()*dy;
   pphot->x[2] = zl+pran->uniform()*dz;
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void GetZonePositionSphericalPolar()
+//  \brief choose random position within spherical-polar gridzone
+
+void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, Coordinates *pcoord) {
+
+
+  Real rl = pcoord->x1f(pphot->i1), rh = pcoord->x1f(pphot->i1+1);
+  pphot->x[0]  = pow(pran->uniform()*(rh*rh*rh-rl*rl*rl)+rl*rl*rl,1./3.);
+  Real cthh = cos(pcoord->x2f(pphot->i2));
+  Real cthl = cos(pcoord->x2f(pphot->i2+1));
+  Real cth = cthl + pran->uniform() * (cthh-cthl);
+  pphot->x[1] = acos(cthl);
+  Real pl = pcoord->x3f(pphot->i3), dp = pcoord->dx3f(pphot->i3);
+  pphot->x[2] = pl+pran->uniform()*dp;
 
 }

@@ -75,6 +75,7 @@ Real SigmaHat(Real x);
 Real ElectronDist(Real tgas, MCRandom *pran);
 //--------------------- prototypes for emission.cpp functions ----------------------------
 void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, Coordinates *pco);
+void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, Coordinates *pco);
 //---------------------- prototypes for setting flags ------------------------------------
 enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string);
 enum EmissionFlag GetEmissionFlag(std::string input_string);

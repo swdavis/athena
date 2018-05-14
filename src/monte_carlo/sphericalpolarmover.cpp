@@ -12,6 +12,7 @@
 #include "../mesh/mesh.hpp"
 #include "debug.hpp"
 #define MAXITER 1000000
+#define DEBUG
 
 // Implementation of Sphericalpolar Photon mover
 
@@ -38,8 +39,19 @@ void SphericalPolarMover::Move(Photon *pphot) {
   // get number of mean free paths photon will travel
   Real TauRemaining = GetOpticalDepth(pran);
 
+  // References for momentum vectors
+  Real& kx = pphot->kcart[0];
+  Real& ky = pphot->kcart[1];
+  Real& kz = pphot->kcart[2];
+  Real& kr  = pphot->k[0];
+  Real& kth = pphot->k[1];
+  Real& kph = pphot->k[2];
+
+#ifdef DEBUG
   Real rf,thf,phf,dl0;
   FinalPositionSphericalPolar(pmcb,pco,pphot,rf,thf,phf,dl0);
+#endif
+
 
   Real cth = cos(pphot->x[1]);
   Real sth = sqrt(1. - SQR(cth));
@@ -53,13 +65,13 @@ void SphericalPolarMover::Move(Photon *pphot) {
   while( (TauRemaining > 0.) && (pphot->status == EVOLVING) && (iter < MAXITER)) {
     iter++;
 
-    Real& kx = pphot->kcart[0];
-    Real& ky = pphot->kcart[1];
-    Real& kz = pphot->kcart[2];
+    //Real& kx = pphot->kcart[0];
+    //Real& ky = pphot->kcart[1];
+    //Real& kz = pphot->kcart[2];
     // Update spherical polar momentum
-    Real& kr  = pphot->k[0] = kx * sth * cph + ky * sth * sph + kz * cth;
-    Real& kth = pphot->k[1] = kx * cth * cph + ky * cth * sph - kz * sth;
-    Real& kph = pphot->k[2] = -kx * sph + ky * cph;
+    kr  = kx * sth * cph + ky * sth * sph + kz * cth;
+    kth = kx * cth * cph + ky * cth * sph - kz * sth;
+    kph = -kx * sph + ky * cph;
     // Compute cartesian positions
     Real r0 = pphot->x[0];
     Real x0 = r0 * sth * cph;
@@ -79,7 +91,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
     } else if (kr < 0.0) { // Can intersect either sphere
       Real ri = pco->x1f(pphot->i1) / r0;
       Real det = 1.0 + (SQR(ri)-1)/SQR(kr);
-      if (det < 0.0) {
+      if (det < 0.) {
         // ray does not intersect inner sphere so must intersect outer
         ri = pco->x1f(pphot->i1+1) / r0;
         det = 1. + (SQR(ri) - 1.) / SQR(kr);
@@ -110,7 +122,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
       ascend[1] = true;
     } else if (kth < 0) {
       thi = pco->x2f(pphot->i2);
-      ascend[0] = false;
+      ascend[1] = false;
     } else {
       if (pphot->x[1] < 0.5*PI) {
         thi = pco->x2f(pphot->i2+1);
@@ -256,16 +268,19 @@ void SphericalPolarMover::Move(Photon *pphot) {
     std::cout << "Warning: iter exceeded ITERMAX in photon mover." << std::endl;
     pphot->status = DESTROYED;
   }
-  /*
-  Real delta = sqrt(SQR(xf-pphot->x[0])+SQR(yf-pphot->x[1])+SQR(zf-pphot->x[2]));
-  if ((delta > 10.)&&(iter < MAXITER)) {
+#ifdef DEBUG
+  /*Real delta = sqrt(SQR(xf-pphot->x[0])+SQR(yf-pphot->x[1])+SQR(zf-pphot->x[2]));
+  Real dmax = 1.e-6*(pco->x3f(pmcb->ke+1)-pco->x3f(pmcb->ks));
+  if ((delta > dmax)&&(iter < MAXITER)) {
     std::cout << "-----------------------" << std::endl;
     std::cout << delta <<  ' ' << iter << std::endl;
     std::cout << "k: " << pphot->k[0] << ' ' << pphot->k[1] << ' ' << pphot->k[2] << std::endl;
-    std::cout << "xi: " << xi << ' ' << yi << ' ' << zi << std::endl;
-    std::cout << "xf: " << xf << ' ' << yf << ' ' << zf << ' ' << dl0 << std::endl;
+    std::cout << "xi: " << xi << ' ' << yi << ' ' << zi << std::endl; */
+    std::cout << "xf: " << rf << ' ' << thf << ' ' << phf << ' ' << dl0 << std::endl;
     std::cout << "xp: " << pphot->x[0] << ' ' <<  pphot->x[1] << ' ' <<  pphot->x[2] << std::endl;
-  }*/
+    //}
+#endif
+
 }
 
 //----------------------------------------------------------------------------------------
