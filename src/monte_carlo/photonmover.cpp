@@ -96,13 +96,87 @@ void PhotonMover::NextFace(Real dx1, Real dx2, Real dx3, int &face, Real &dx)
   }
 }
 
-// virtual functions that must be provied in derived classes
-
-void PhotonMover::UpdatePhotonPositionInZone(Photon *pphot, Real dl) {
-
-}
+//----------------------------------------------------------------------------------------
+//! \fn void SphericalPolarMover::MovePhotonToNextZone()
+//  \brief updates photon zone
 
 void PhotonMover::MovePhotonToNextZone(Photon *pphot, Coordinates *pco,
-  MonteCarloBlock *pmcb, Real dl, int face, bool higher[3]) {
+  MonteCarloBlock *pmcb, int face, bool ascend[3]) {
+  
+  // Update face(s) and adjust positions to lie exactly on boundary
+  if ((face == 0) || (face == 3) || (face == 5) || (face == 6)) { //update x1 face
+    if (ascend[0]) {
+      pphot->i1++;
+      if(pphot->i1 <= pmcb->ie)
+        pphot->x[0] = pco->x1f(pphot->i1);
+      else
+        pmcb->pbval->BoundaryFunction_[OUTER_X1](pmcb,pco,pphot);
+    } else {
+      pphot->i1--;
+      if(pphot->i1 >= pmcb->is)
+        pphot->x[0] = pco->x1f(pphot->i1+1);
+      else
+        pmcb->pbval->BoundaryFunction_[INNER_X1](pmcb,pco,pphot);
+    }
+  }
+  if ((face == 1) || (face == 3) || (face == 4) || (face == 6)) { //update x2 face
+    if (ascend[1]) {
+      pphot->i2++;
+      if(pphot->i2 <= pmcb->je)
+        pphot->x[1] = pco->x2f(pphot->i2);
+      else
+        pmcb->pbval->BoundaryFunction_[OUTER_X2](pmcb,pco,pphot);
+    } else {
+      pphot->i2--;
+      if(pphot->i2 >= pmcb->js)
+        pphot->x[1] = pco->x2f(pphot->i2+1);
+      else
+        pmcb->pbval->BoundaryFunction_[INNER_X2](pmcb,pco,pphot);
+    } 
+  }
+  if ((face == 2) || (face == 4) || (face == 5) || (face == 6)) { //update x3 face
+    if (ascend[2]) {
+      pphot->i3++;
+      if(pphot->i3 <= pmcb->ke)
+        pphot->x[2] = pco->x3f(pphot->i3);
+      else
+        pmcb->pbval->BoundaryFunction_[OUTER_X3](pmcb,pco,pphot);
+    } else {
+      pphot->i3--;
+      if(pphot->i3 >= pmcb->ks)
+        pphot->x[2] = pco->x3f(pphot->i3+1);
+      else
+        pmcb->pbval->BoundaryFunction_[INNER_X3](pmcb,pco,pphot);
+    } 
+  }
 
+  // Update opacities
+  if (pphot->status == EVOLVING) {
+    pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot);
+    pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,pphot);
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void PhotonMover::CartesianToCurvalinear(Photon *pphot)
+//  \brief convert k vector from cartesian to curvalinear
+
+void PhotonMover::CartesianToCurvalinear(Photon *pphot) {
+
+  // Default corresponds to Cartesian so just copy
+  for (int i=0; i<3; ++i)
+    pphot->k[i] = pphot->kcart[i];
+  
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void PhotonMover::CurvalinearToCartesian(Photon *pphot)
+//  \brief convert k vector from curvalinear to cartesian
+
+void PhotonMover::CurvalinearToCartesian(Photon *pphot) {
+
+  // Default corresponds to Cartesian so just copy
+  for (int i=0; i<3; ++i)
+    pphot->kcart[i] = pphot->k[i];
+  
 }

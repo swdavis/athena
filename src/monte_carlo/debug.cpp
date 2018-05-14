@@ -83,3 +83,49 @@ void FinalPositionCartesian(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pph
   }
   //std::cout << xf << ' ' << xw << ' ' << yf << ' ' << yw << std::endl;
 }
+
+void FinalPositionSphericalPolar(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot,
+				 Real &rf, Real &thf, Real &phf, Real &dl) {
+
+  Real cth = cos(pphot->x[1]);
+  Real sth = sqrt(1. - SQR(cth));
+  Real cph = cos(pphot->x[2]);
+  Real sph = sin(pphot->x[2]);
+
+  // Convert to cartesian
+  Real kx = pphot->k[0] * sth*cph + pphot->k[1] * cth*cph - pphot->k[2] * sph;
+  Real ky = pphot->k[0] * sth*sph + pphot->k[1] * cth*sph + pphot->k[2] * cph;
+  Real kz = pphot->k[0] * cth - pphot->k[1] * sth;
+  
+
+  // Outer boundary is r = rf -- find dlr to this boundary
+  rf = pco->x1f(pmcb->ie+1);
+  Real ndr0 = rf * pphot->k[0];  
+  Real det = 1.0 + (SQR(rf) - SQR(pphot->x[0])) / SQR(ndr0);
+  Real dlr1 = ndr0 * (sqrt(det) - 1.0);
+  Real dlr2 = -ndr0 * (sqrt(det) + 1.0);
+
+  if (dlr1 > 0.0) {
+    if (dlr2 > 0.0) {
+      std::cout << "Warning: both roots positive in FinalPositionSphericalPolar: "
+		<< dlr1 << " " << dlr2 << std::endl;
+    } else {
+      dl = dlr1;
+    }
+  } else if (dlr2 > 0.0) {
+    dl = dlr2;
+  }
+
+  // Compute other boundary positions
+  //theta
+  Real zf = pphot->x[0] * cth + kz * dl;
+  thf = acos(zf / rf);
+
+  //phi
+  Real xf = pphot->x[0] * sth * cph + kx * dl;
+  Real yf = pphot->x[0] * sth * sph + ky * dl;
+  phf = atan2(yf,xf);
+  if (phf < 0.0)
+    phf += 2.*PI;
+
+}

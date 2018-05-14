@@ -230,4 +230,3 @@ void MCOutput::OutputSpectra(MonteCarlo *pmc) {
   } while (pmcb != NULL);
 
 }
-

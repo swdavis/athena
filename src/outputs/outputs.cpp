@@ -65,6 +65,7 @@
 #include "../field/field.hpp"
 #include "../gravity/gravity.hpp"
 #include "../coordinates/coordinates.hpp" // Coordinates
+#include "../monte_carlo/montecarlo.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -540,6 +541,41 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
 
   } // endif (MAGNETIC_FIELDS_ENABLED)
 
+  if (MONTE_CARLO_ENABLED) {
+    MonteCarloBlock *pmcb = pmb->pmy_mcb;
+    if (pmcb->moments_flag) { // ***Should be set automatically based on outputs***
+    // monte carlo radiation energy density
+    if (output_params.variable.compare("mcmom") == 0 || 
+        output_params.variable.compare("Ermc") == 0) {
+      pod = new OutputData;
+      pod->type = "SCALARS";
+      pod->name = "Ermc";
+      pod->data.InitWithShallowSlice(pmcb->moments,4,MCIER,1);
+      AppendOutputDataNode(pod);
+      num_vars_++;
+    }
+    // monte carlo radiation flux vector
+    if (output_params.variable.compare("mcmom") == 0 || 
+        output_params.variable.compare("Frmc") == 0) {      
+      pod = new OutputData;
+      pod->type = "VECTORS";
+      pod->name = "Frmc";
+      pod->data.InitWithShallowSlice(pmcb->moments,4,MCIFR1,3);
+      AppendOutputDataNode(pod);
+      num_vars_+=3;
+    }
+       // lab frame radiation pressure
+    if (output_params.variable.compare("mcmom") == 0 ||
+	output_params.variable.compare("Prmc") == 0) {
+        pod = new OutputData;
+        pod->type = "TENSORS";
+        pod->name = "Prmc";
+        pod->data.InitWithShallowSlice(pmcb->moments,4,MCIPR11,9);
+        AppendOutputDataNode(pod);
+        num_vars_ += 9;
+      }
+    }
+  }
   if (output_params.variable.compare(0, 3, "uov") == 0
    || output_params.variable.compare(0, 12, "user_out_var") == 0) {
     int iv, ns=0, ne=pmb->nuser_out_var-1;

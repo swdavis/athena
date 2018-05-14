@@ -45,13 +45,17 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot) {
   
   Real norm = pphot->stokes[0];
   Real stokes[3];
-  for(int i=0; i<3; ++i)
+  for(int i=0; i<3; ++i) {
     stokes[i] = pphot->stokes[i] / norm;
+  }
+  Real &kx = pphot->kcart[0];
+  Real &ky = pphot->kcart[1];
+  Real &kz = pphot->kcart[2];
   
-  Real mu = pphot->k[2];
+  Real mu = kz;
   Real stheta = sqrt(1. - SQR(mu));
-  Real phio = acos(pphot->k[0] / stheta);
-  if(pphot->k[1] < 0.0)
+  Real phio = acos(kx / stheta);
+  if(ky < 0.0)
       phio = 2.*PI - phio;
   
   Real smu, sstheta, s1, s2, s3, i1;
@@ -192,9 +196,9 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot) {
   //diag=sqrt(stokes[1]*stokes[1]+stokes[2]*stokes[2]);
 
   // Calculate new photon wave vector and phi value
-  pphot->k[0] = sthetap * cos(phip);
-  pphot->k[1] = sthetap * sin(phip);
-  pphot->k[2] = mup;
+  kx = sthetap * cos(phip);
+  ky = sthetap * sin(phip);
+  kz = mup;
   
   
 }
@@ -207,6 +211,10 @@ void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot) {
   MCRandom *pran = pmcb->pran;
   Real mec2 = 8.18711e-7;
 
+  Real &k1 = pphot->kcart[0];
+  Real &k2 = pphot->kcart[1];
+  Real &k3 = pphot->kcart[2];
+  
   Real v1,v2,v3,vdc,gamma,x,onemuvdc;
   do {
     // Pick random direction for velocity of scattering electron
@@ -217,7 +225,7 @@ void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot) {
     v2 = sinv * sin(phiv);
 
     // Calculate v . k
-    Real vdotk = pphot->k[0] * v1 + pphot->k[1] * v2 + pphot->k[2] * v3;
+    Real vdotk = k1 * v1 + k2 * v2 + k3 * v3;
 
     // Draw momentum from random distribution and calculate gamma,v/c,x
     // sigma^ and test for acceptance
@@ -251,7 +259,7 @@ void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot) {
       k3p = cthp;
     }
 
-    Real cths = pphot->k[0] * k1p + pphot->k[1] * k2p + pphot->k[2] * k3p;
+    Real cths = k1 * k1p + k2 * k2p + k3 * k3p;
     onecthpvdc = 1. - cthp * vdc;
     xp = x / (1. + pphot->energy / mec2 * (1.-cths) / (gamma*onecthpvdc));
 
@@ -259,9 +267,9 @@ void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot) {
 
   // Assign new energy and direction vector
   pphot->energy = xp * mec2 / (2. * gamma * onecthpvdc);
-  pphot->k[0] = k1p;
-  pphot->k[1] = k2p;
-  pphot->k[2] = k3p;
+  k1 = k1p;
+  k2 = k2p;
+  k3 = k3p;
 
 }
 

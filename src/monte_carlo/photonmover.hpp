@@ -38,10 +38,10 @@ public:
   virtual void Move(Photon *pphot);
   virtual Real GetOpticalDepth(MCRandom *pran);
   virtual void NextFace(Real dx1, Real dx2, Real dx3, int &face, Real &dx);
-  virtual void UpdatePhotonPositionInZone(Photon *pphot, Real dl);
   virtual void MovePhotonToNextZone(Photon *pphot, Coordinates *pco,
-                 MonteCarloBlock *pmcb, Real dl, int face, bool ascend[3]);
-
+    MonteCarloBlock *pmcb, int face, bool ascend[3]);
+  virtual void CartesianToCurvalinear(Photon *pphot);
+  virtual void CurvalinearToCartesian(Photon *pphot);
 };
 
 //! \class CartesianMover
@@ -54,9 +54,21 @@ public:
 
   // functions
   void Move(Photon *pphot);
-  void UpdatePhotonPositionInZone(Photon *pphot, Real dl);
-  void MovePhotonToNextZone(Photon *pphot, Coordinates *pco,
-         MonteCarloBlock *pmcb, Real dl, int face, bool ascend[3]);
+
+};
+
+//! \class SphericalPolarMover
+//  \brief derived class for spherical-polar coordinates
+
+class SphericalPolarMover : public PhotonMover {
+public:
+  SphericalPolarMover(MonteCarloBlock *pmcb);
+  ~SphericalPolarMover();
+
+  // functions
+  void Move(Photon *pphot);
+  void CartesianToCurvalinear(Photon *pphot);
+  void CurvalinearToCartesian(Photon *pphot);
 };
 
 #endif // PHOTONMOVER_HPP

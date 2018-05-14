@@ -34,7 +34,8 @@ public:
   int status; // photon status (escaped, absorbed, evolving)
 
   Real x[3];  // current photon position
-  Real k[3];  // photon direction (momentum vector)
+  Real k[3];  // photon direction (momentum vector) curvalinear
+  Real kcart[3]; // photon direction in cartesian coordinates
   Real stokes[3];  // stokes vectors for linear polarization
   Real weight, eweight; // photon weights
   Real energy;  // photon energy

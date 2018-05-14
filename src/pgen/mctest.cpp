@@ -20,6 +20,7 @@
 #include "../mesh/mesh.hpp"
 #include "../monte_carlo/montecarlo.hpp"
 #include "../monte_carlo/photon.hpp"
+#include "../monte_carlo/photonmover.hpp"
 
 #if MAGNETIC_FIELDS_ENABLED
 #error "This problem generator does not support magnetic fields"
@@ -34,43 +35,73 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
   Real rideal = 8.314e7;
   Real temp = pin->GetReal("problem","temp");
-  //Real rho = pin->GetReal("problem","rho");
   Real taumin = pin->GetReal("problem","taumin");
   Real taumax = pin->GetReal("problem","taumax");
   Real gamma = peos->GetGamma();
-  Real zlow = pin->GetReal("mesh","x3min");
-  Real zhigh = pin->GetReal("mesh","x3max");
-  int nz = pin->GetInteger("mesh","nx3");
 
-  Real dz = (zhigh-zlow) / static_cast<Real>(nz);
-  Real step = log10(taumax/taumin) / static_cast<Real>(nz-1);
-       
+
+  Real xlow, xhigh;
+  int nx;
+  if (COORDINATE_SYSTEM == "cartesian") {
+    xlow = pin->GetReal("mesh","x3min");
+    xhigh = pin->GetReal("mesh","x3max");
+    nx = pin->GetInteger("mesh","nx3");
+  } else {
+    bool radial = pin->GetOrAddBoolean("problem","radial","true");
+    if (radial) {
+      xlow = pin->GetReal("mesh","x1min");
+      xhigh = pin->GetReal("mesh","x2max");
+      nx = pin->GetInteger("mesh","nx1");
+    }
+  }
   AthenaArray<Real> tau1d,dens1d;
   
   // Chosen to match initialize.py in mcgrid
-  tau1d.NewAthenaArray(nz); 
-  dens1d.NewAthenaArray(nz);
-  for (int i=0; i<nz; ++i) {
+  tau1d.NewAthenaArray(nx); 
+  dens1d.NewAthenaArray(nx);
+  Real dx = (xhigh-xlow) / static_cast<Real>(nx);
+  Real step = log10(taumax/taumin) / static_cast<Real>(nx-1);
+  for (int i=0; i<nx; ++i) {
     tau1d(i) = log10(taumin) + step * static_cast<Real>(i);
     tau1d(i) = pow(10.,tau1d(i));
   }
   Real kapes = 0.33;
-  dens1d(0) = tau1d(0) / dz / kapes;
-  for (int i=1; i<nz; ++i) {
-    dens1d(i) = (tau1d(i)-tau1d(i-1) ) / (dz * kapes);
+  dens1d(0) = tau1d(0) / dx / kapes;
+  for (int i=1; i<nx; ++i) {
+    dens1d(i) = (tau1d(i)-tau1d(i-1) ) / (dx * kapes);
   }
 
-  Real rho;
   // Set initial conditions
-  for (int k=ks; k<=ke; k++) {
-    rho = dens1d(ke-k);
-    for (int j=js; j<=je; j++) {
-      for (int i=is; i<=ie; i++) {
-        phydro->u(IDN,k,j,i) = rho;
-        phydro->u(IM1,k,j,i) = 0.0;
-        phydro->u(IM2,k,j,i) = 0.0;
-        phydro->u(IM3,k,j,i) = 0.0;
-        phydro->u(IEN,k,j,i) = rideal*rho*temp/(gamma-1.0);
+  if (COORDINATE_SYSTEM == "cartesian") {
+    // density varies in the z direction
+    for (int k=ks; k<=ke; k++) {
+      Real rho = dens1d(ke-k);
+      for (int j=js; j<=je; j++) {
+	for (int i=is; i<=ie; i++) {
+	  phydro->u(IDN,k,j,i) = rho;
+	  phydro->u(IM1,k,j,i) = 0.0;
+	  phydro->u(IM2,k,j,i) = 0.0;
+	  phydro->u(IM3,k,j,i) = 0.0;
+	  phydro->u(IEN,k,j,i) = rideal*rho*temp/(gamma-1.0);
+	}
+      }
+    }
+  } else if  (COORDINATE_SYSTEM == "spherical_polar") {
+    bool radial = pin->GetOrAddBoolean("problem","radial","true");
+
+    if (radial) {
+      // density varies in the r direction
+      for (int k=ks; k<=ke; k++) {
+	for (int j=js; j<=je; j++) {
+	  for (int i=is; i<=ie; i++) {
+	    Real rho = dens1d(ie-i);
+	    phydro->u(IDN,k,j,i) = rho;
+	    phydro->u(IM1,k,j,i) = 0.0;
+	    phydro->u(IM2,k,j,i) = 0.0;
+	    phydro->u(IM3,k,j,i) = 0.0;
+	    phydro->u(IEN,k,j,i) = rideal*rho*temp/(gamma-1.0);
+	  }
+	}
       }
     }
   }
@@ -99,14 +130,13 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   // is emitted in  each grid zone.  The relative emission from each grid 
   // zone is then accounted for by a weighting factor cweight. 
 
-  Real nx1 = static_cast<Real>(ie-is);
-  Real nx2 = static_cast<Real>(je-js);
-  Real nx3 = static_cast<Real>(ke-ks);
+  Real nx1 = static_cast<Real>(ie-is+1);
+  Real nx2 = static_cast<Real>(je-js+1);
+  Real nx3 = static_cast<Real>(ke-ks+1);
 
   pphot->i1 = static_cast<int>(pran->uniform()*nx1)+is;
   pphot->i2 = static_cast<int>(pran->uniform()*nx2)+js;
   pphot->i3 = static_cast<int>(pran->uniform()*nx3)+ks;
-  //pphot->i3 = 32+ks;
   
   // cweight is a constant weighting factor which accounts for the
   // emissivity of the grid zone in which the photon was emitted
@@ -127,7 +157,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   // Obtain intitial energy, polarization, direction and weight
   // Utilize free-free emission function in emission.cpp
   PhotonEmitFreeFree(this,pphot);
-
+  // initialize kcart
+  //pmover->CurvalinearToCartesian(pphot);
 
   if (pphot->weight < 0.0) pphot->status = DESTROYED;
 
@@ -135,7 +166,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   // to the values appropriate in the emitted zone
   pphot->abs_coef = AbsorptionOpacity(this,pphot);
   pphot->sct_coef = ScatteringOpacity(this,pphot);
-  //std::cout << "Init: " << pphot->i3-ks << ' ' << pphot->abs_coef << ' ' <<  pphot->sct_coef << std::endl;
+
 
 }
 

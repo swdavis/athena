@@ -15,4 +15,7 @@
 void FinalPositionCartesian(MonteCarloBlock *pmb, Coordinates *pco, Photon *pphot,
                             Real &xf, Real &yf, Real &zf, Real &dl);
 
+void FinalPositionSphericalPolar(MonteCarloBlock *pmb, Coordinates *pco, Photon *pphot,
+                            Real &rf, Real &thf, Real &phf, Real &dl);
+
 #endif

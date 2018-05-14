@@ -37,8 +37,10 @@ enum EmissionFlag {EMISUSER = 0, EMISFF = 1};
 enum AbsorptionFlag {ABSUSER = 0, ABSNONE = 1, ABSFF = 2};
 enum ScatteringFlag {SCATUSER = 0, SCATNONE =1, SCATISO = 2, SCATTHOM = 3, SCATCOMP =4};
 enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY = 2,
-                     MC_REFLECT_BNDRY = 3, MC_USER_BNDRY = 4};
-
+                     MC_POLAR_BNDRY = 3, MC_REFLECT_BNDRY = 4, MC_USER_BNDRY = 5};
+// Array indices for monte carlo radiation moments
+enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
+      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCIPR21=10, MCIPR31=11, MCIPR32=12};
 
 enum {TOEUL=0, TOCOM=1};
 
@@ -71,13 +73,14 @@ void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot);
 Real Bigy(Real x, Real xp);
 Real SigmaHat(Real x);
 Real ElectronDist(Real tgas, MCRandom *pran);
+//--------------------- prototypes for emission.cpp functions ----------------------------
+void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, Coordinates *pco);
 //---------------------- prototypes for setting flags ------------------------------------
 enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string);
 enum EmissionFlag GetEmissionFlag(std::string input_string);
 enum AbsorptionFlag GetAbsorptionFlag(std::string input_string);
 enum ScatteringFlag GetScatteringFlag(std::string input_string);
-//---------------------- prototypes for zone position functions --------------------------
-void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, Coordinates *pco);
+
 
 //! \class MCRandom
 //  \brief monte carlo random number generator
@@ -191,6 +194,9 @@ public:
   void TransferPhotons();  // Transfer photons on this block
   void InitializePhoton(Photon *pphot);
   void DefaultGetTemperature();
+  void UpdateMoments(Photon *pphot, Real dl);
+  void NormalizeMoments(bool normalize);
+  
 private:
   
  

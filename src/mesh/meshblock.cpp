@@ -125,10 +125,6 @@ MeshBlock::MeshBlock(int igid, int ilid, LogicalLocation iloc, RegionSize input_
     pcoord = new GRUser(this, pin, false);
   }
 
-  //if (MONTE_CARLO_ENABLED) {
-  //  pmcb = new MonteCarloBlock(this, pin);
-  //}
-
   // Reconstruction (constructor may implicitly depend on Coordinates, and PPM variable
   // floors depend on EOS)
   precon = new Reconstruction(this, pin);
@@ -222,6 +218,9 @@ MeshBlock::MeshBlock(int igid, int ilid, Mesh *pm, ParameterInput *pin,
     pcoord = new GRUser(this, pin, false);
   }
 
+  // Monte carlo block
+  pmy_mcb = NULL;
+  
   // Reconstruction (constructor may implicitly depend on Coordinates)
   precon = new Reconstruction(this, pin);
 
@@ -291,8 +290,6 @@ MeshBlock::~MeshBlock() {
   delete peos;
   if (SELF_GRAVITY_ENABLED) delete pgrav;
   if (SELF_GRAVITY_ENABLED==1) delete pgbval;
-
-  //if (MONTE_CARLO_ENABLED==1) delete pmcb;
 
   // delete user output variables array
   if (nuser_out_var > 0) {

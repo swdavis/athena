@@ -29,6 +29,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
     case MC_ABSORB_BNDRY:
       BoundaryFunction_[INNER_X1] = Absorb;
       break;
+    case MC_POLAR_BNDRY:
+      BoundaryFunction_[INNER_X1] = Polar;
+      break; 
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
@@ -46,6 +49,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
     case MC_ABSORB_BNDRY:
       BoundaryFunction_[OUTER_X1] = Absorb;
       break;
+    case MC_POLAR_BNDRY:
+      BoundaryFunction_[OUTER_X1] = Polar;
+      break; 
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
@@ -63,6 +69,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
     case MC_ABSORB_BNDRY:
       BoundaryFunction_[INNER_X2] = Absorb;
       break;
+    case MC_POLAR_BNDRY:
+      BoundaryFunction_[INNER_X2] = Polar;
+      break; 
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
@@ -80,6 +89,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
     case MC_ABSORB_BNDRY:
       BoundaryFunction_[OUTER_X2] = Absorb;
       break;
+    case MC_POLAR_BNDRY:
+      BoundaryFunction_[OUTER_X2] = Polar;
+      break; 
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
@@ -97,6 +109,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
     case MC_ABSORB_BNDRY:
       BoundaryFunction_[INNER_X3] = Absorb;
       break;
+    case MC_POLAR_BNDRY:
+      BoundaryFunction_[INNER_X3] = Polar;
+      break; 
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
@@ -114,6 +129,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
     case MC_ABSORB_BNDRY:
       BoundaryFunction_[OUTER_X3] = Absorb;
       break;
+    case MC_POLAR_BNDRY:
+      BoundaryFunction_[OUTER_X3] = Polar;
+      break; 
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
@@ -199,6 +217,39 @@ void PeriodicOuterX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
 
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void PeriodicWedgeInnerX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot)
+//  \brief periodic wedge boundary conditions, inner x3 boundary
+
+/*void PeriodicWedgeInnerX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
+
+  pphot->i3 = pmcb->ke;
+  pphot->x[2] = pco->x3f(pphot->i3+1);
+
+  // Flip kx,ky when domain is not full 2*pi
+  Real phib = pco->x3f(pmcb->ks); 
+  Real cphib = cos(phib);
+  Real sphib = sin(phib);
+  Real kphib = pphot->ky * cphib - pphot->kx * sphib;
+  Real krb = pphot->kx * cphib + pphot->ky * sphib;
+  cphib = cos(pphot->x3);
+  sphib = sin(pphot->x3);            
+  pphot->kc[0] = cphib * krb - sphib * kphib;
+  pphot->kc[1] = sphib * krb + cphib * kphib;
+  }*/
+
+//----------------------------------------------------------------------------------------
+//! \fn void PeriodicWedgeOuterX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot)
+//  \brief periodic wedgeboundary conditions, outer x3 boundary
+
+/*void PeriodicWedgeOuterX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
+
+  pphot->i3 = pmcb->ks;
+  pphot->x[2] = pco->x3f(pphot->i3);
+
+  
+  }*/
+
 
 //----------------------------------------------------------------------------------------
 //! \fn void Escape(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot)
@@ -212,10 +263,25 @@ void Escape(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Absorb(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot)
-//  \brief mark photon as escaped
+//  \brief mark photon as destroyed
 
 void Absorb(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
 
+  pphot->status = DESTROYED;
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Polar(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot)
+//  \brief mark photon as destroyed and print error message
+
+void Polar(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
+
+  std::cout << "Warning: photon moving through polar boundary: " << std::endl
+    << "i: " << pphot->i1 << " " << pphot->i2 << " " << pphot->i3 << std::endl
+    << "x: " << pphot->x[0] << " " << pphot->x[1] << " " << pphot->x[2] << std::endl
+    << "k: " << pphot->k[0] << " " << pphot->k[1] << " " << pphot->k[2] << std::endl
+    << "Destroying photon." << std::endl;
   pphot->status = DESTROYED;
 
 }

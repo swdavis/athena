@@ -29,9 +29,11 @@ void PeriodicInnerX2(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
 void PeriodicOuterX2(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
 void PeriodicInnerX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
 void PeriodicOuterX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
+//void PeriodicWedgeInnerX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
+//void PeriodicWedgeOuterX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
 void Escape(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
 void Absorb(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
-
+void Polar(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
 //----------------------------------------------------------------------------------------
 //! \class MCBoundaryValues
 //  \brief BVals data and functions for monte carlo

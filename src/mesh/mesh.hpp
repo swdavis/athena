@@ -103,7 +103,7 @@ public:
   Field *pfield;
   Gravity *pgrav;
   EquationOfState *peos;
-  //MonteCarloBlock *pmcb;
+  MonteCarloBlock *pmy_mcb;
 
   MeshBlock *prev, *next;
 

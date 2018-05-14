@@ -30,6 +30,9 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
 
   // Set related meshblock, coordinate
   pmy_block = pmb;
+  // Set pointer to this monte carlo block in pmb (***temporary***)
+  pmb->pmy_mcb = this;
+  
   pmy_coord = pmb->pcoord;
 
   // Construct pointer to photon 
@@ -38,6 +41,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
   // Set photon mover based on coordinate system
   if (COORDINATE_SYSTEM == "cartesian") {
     pmover = new CartesianMover(this);
+  } else if (COORDINATE_SYSTEM == "spherical_polar") {
+    pmover = new SphericalPolarMover(this);
   }
 
   // Initialize input parameters and flags
@@ -65,7 +70,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
   emission_meth = pmy_mc->emission_meth;
   absorption_meth = pmy_mc->absorption_meth;
   scattering_meth = pmy_mc->scattering_meth;
-
+  moments_flag = pmy_mc->moments_flag;
+  
   // *currently** assumes all block boundaries are physical
   for (int i=0; i<6; ++i) {
     mcb_bcs[i] = pmy_mc->mc_bcs[i];
@@ -83,7 +89,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
   is = pmb->is; ie = pmb->ie;
   js = pmb->js; je = pmb->je;
   ks = pmb->ks; ke = pmb->ke;
-  ncells = (ie-is)*(je-js)*(ke-ks);
+  ncells = (ie-is+1)*(je-js+1)*(ke-ks+1);
   codetocgs_rho = 1.0; codetoc_vel = 1.0;  // default cgs for code units
 
   // Allocate memory for emissivity (if used) and radiation moments
@@ -105,7 +111,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
   rho.NewAthenaArray(ncells3,ncells2,ncells1);
   tgas.NewAthenaArray(ncells3,ncells2,ncells1);
   if (pmy_mc->lorentz_trans_flag) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
-  if (pmy_mc->moments_flag) moments.NewAthenaArray(4,ncells3,ncells2,ncells1);
+  if (moments_flag) moments.NewAthenaArray(13,ncells3,ncells2,ncells1);
 
   // Set function pointers
   if (COORDINATE_SYSTEM == "cartesian") {
@@ -144,6 +150,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
     }
     coherent_scattering = true;
   } else if (scattering_meth == SCATCOMP) {
+    GenerateComptonTable();
     ScatteringOpacity = ComptonOpacity;
     if (!polarized) {
       Scatter = ScatterComptonUnpolarized;
@@ -180,12 +187,16 @@ void MonteCarloBlock::DefaultGetTemperature() {
 
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
-      for (int i=il; i<=iu+1; ++i) {
+      for (int i=il; i<=iu; ++i) {
         tgas(k,j,i) = phydro->w(IEN,k,j,i)/phydro->w(IDN,k,j,i)/rideal;
 
       }}}
 
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::TransferPhotons()
+//  \brief perform radiation transfer of all photons on block
 
 void MonteCarloBlock::TransferPhotons() {
 
@@ -194,6 +205,7 @@ void MonteCarloBlock::TransferPhotons() {
 
     // user definied photon initialization
     InitializePhoton(pphoton);
+    
     //std::cout << pphoton->weight << std::endl;
     // Lorentz transform E, k to Eulerian frame and update opacities.
     //if (lorenz_transform)
@@ -219,6 +231,7 @@ void MonteCarloBlock::TransferPhotons() {
       // Scatter the photon packet
       if (pphoton->status == EVOLVING) {
         Scatter(this,pphoton);
+	//pmover->CartesianToCurvalinear(pphoton);
 	nscat++;
       }
       // Update the absorption and scattering extinction coefficients
@@ -241,7 +254,90 @@ void MonteCarloBlock::TransferPhotons() {
       nabs++;
     
   }
+  // Normalize moments for output
+  if (moments_flag)
+    NormalizeMoments(true);
+  
   std::cout  << "nesc, nabs: " << nesc << ' ' << nabs << std::endl;
   std::cout << "nscat: " << nscat << std::endl;
 }
 
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::UpdateMoments(MonteCarloBlock *pmcb, Photon *pphot, Real dl)
+//  \brief add contribution to radiation moments in current zone
+
+void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
+
+  int& i = pphot->i1;
+  int& j = pphot->i2;
+  int& k = pphot->i3;
+  
+  Real wght = pphot->eweight * pphot->weight * pphot->energy * dl;
+  Real wght1 = wght * pphot->k[0]; // curvalinear coorindates k
+  Real wght2 = wght * pphot->k[1];
+  Real wght3 = wght * pphot->k[2];
+
+  moments(MCIER,k,j,i) += wght;
+  moments(MCIFR1,k,j,i) += wght1;
+  moments(MCIFR2,k,j,i) += wght2;
+  moments(MCIFR3,k,j,i) += wght3;
+
+  wght = wght1 * pphot->k[0];
+  moments(MCIPR11,k,j,i) += wght;
+  wght = wght2 * pphot->k[1];
+  moments(MCIPR22,k,j,i) += wght;
+  wght = wght3 * pphot->k[2];
+  moments(MCIPR33,k,j,i) += wght;
+  wght = wght1 * pphot->k[1];
+  moments(MCIPR12,k,j,i) += wght;
+  wght = wght1 * pphot->k[2];
+  moments(MCIPR13,k,j,i)  += wght;
+  wght = wght2 * pphot->k[2];
+  moments(MCIPR23,k,j,i) += wght;
+  
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::NormalizeMoments(bool normalize)
+//  \brief (un)normalized moments for output and copy symmetric elements
+
+void MonteCarloBlock::NormalizeMoments(bool normalize) {
+
+  Coordinates *pco = pmy_coord;
+
+  if (normalize) {
+    // Normalize moments
+    for (int n=0; n<10; ++n) {
+      Real norm = static_cast<Real>(nphot)/static_cast<Real>(ncells);
+      if ((n == 0) || (n >= 4))
+	norm *= 2.9979e10;
+      for (int k=ks; k<=ke; ++k) {
+	for (int j=js; j<=je; ++j) {
+	  for (int i=is; i<=ie; ++i) {
+	    Real vol = pco->GetCellVolume(k,j,i);
+	    moments(n,k,j,i) /= (vol * norm);
+	  }}}}
+    // Copy noramilzed moments to symmetric elements
+    for (int k=ks; k<=ke; ++k) {
+      for (int j=js; j<=je; ++j) {
+	for (int i=is; i<=ie; ++i) {
+	  moments(MCIPR21,k,j,i) = moments(MCIPR12,k,j,i);
+	  moments(MCIPR31,k,j,i) = moments(MCIPR13,k,j,i);
+	  moments(MCIPR32,k,j,i) = moments(MCIPR23,k,j,i);
+	}}}
+  } else {
+    // Undo normalization for continuing evolution
+    for (int n=0; n<10; ++n) {
+      Real norm = static_cast<Real>(nphot)/static_cast<Real>(ncells);
+      if ((n == 0) || (n >= 4))
+	norm *= 2.9979e10;
+      for (int k=ks; k<=ke; ++k) {
+	for (int j=js; j<=je; ++j) {
+	  for (int i=is; i<=ie; ++i) {
+	    Real vol = pco->GetCellVolume(k,j,i);
+	    moments(n,k,j,i) *= (vol * norm);
+	  }}}}
+  }
+}
