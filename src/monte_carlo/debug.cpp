@@ -93,14 +93,16 @@ void FinalPositionSphericalPolar(MonteCarloBlock *pmcb, Coordinates *pco, Photon
   Real sph = sin(pphot->x[2]);
 
   // Convert to cartesian
-  Real kx = pphot->k[0] * sth*cph + pphot->k[1] * cth*cph - pphot->k[2] * sph;
-  Real ky = pphot->k[0] * sth*sph + pphot->k[1] * cth*sph + pphot->k[2] * cph;
-  Real kz = pphot->k[0] * cth - pphot->k[1] * sth;
-  
+  //Real kx = pphot->k[0] * sth*cph + pphot->k[1] * cth*cph - pphot->k[2] * sph;
+  //Real ky = pphot->k[0] * sth*sph + pphot->k[1] * cth*sph + pphot->k[2] * cph;
+  //Real kz = pphot->k[0] * cth - pphot->k[1] * sth;
+  Real kx = pphot->kcart[0];
+  Real ky = pphot->kcart[1];
+  Real kz = pphot->kcart[2];
 
   // Outer boundary is r = rf -- find dlr to this boundary
   rf = pco->x1f(pmcb->ie+1);
-  Real ndr0 = rf * pphot->k[0];  
+  Real ndr0 = pphot->x[0] * (sth * (kx * cph + ky * sph) + kz * cth);
   Real det = 1.0 + (SQR(rf) - SQR(pphot->x[0])) / SQR(ndr0);
   Real dlr1 = ndr0 * (sqrt(det) - 1.0);
   Real dlr2 = -ndr0 * (sqrt(det) + 1.0);
@@ -128,4 +130,7 @@ void FinalPositionSphericalPolar(MonteCarloBlock *pmcb, Coordinates *pco, Photon
   if (phf < 0.0)
     phf += 2.*PI;
 
+  //std::cout << "x: " << pphot->x[0] << " " << pphot->x[1] << " " << pphot->x[2] << std::endl;
+  //std::cout << "k: " << kx << " " << ky << " " << kz << std::endl;
+  //std::cout << "dl: " << dl << " " << dlr1 << " " << dlr2 << " " << det << std::endl;
 }

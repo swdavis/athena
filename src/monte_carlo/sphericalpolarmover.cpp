@@ -12,7 +12,8 @@
 #include "../mesh/mesh.hpp"
 #include "debug.hpp"
 #define MAXITER 1000000
-#define DEBUG
+//#define DEBUG
+#define NBUFFER 1000
 
 // Implementation of Sphericalpolar Photon mover
 
@@ -48,6 +49,16 @@ void SphericalPolarMover::Move(Photon *pphot) {
   Real& kph = pphot->k[2];
 
 #ifdef DEBUG
+  typedef struct {
+    Real dl, dlr, dlt, dlp;
+    Real cth, sth, cph, sph;
+    Real kr, kth, kph;
+    Real kx, ky, kz;
+    Real x,y,z;
+    int i,j,k;
+    bool ascend[3];
+  } debug_t;
+  debug_t db[NBUFFER];
   Real rf,thf,phf,dl0;
   FinalPositionSphericalPolar(pmcb,pco,pphot,rf,thf,phf,dl0);
 #endif
@@ -65,10 +76,6 @@ void SphericalPolarMover::Move(Photon *pphot) {
   while( (TauRemaining > 0.) && (pphot->status == EVOLVING) && (iter < MAXITER)) {
     iter++;
 
-    //Real& kx = pphot->kcart[0];
-    //Real& ky = pphot->kcart[1];
-    //Real& kz = pphot->kcart[2];
-    // Update spherical polar momentum
     kr  = kx * sth * cph + ky * sth * sph + kz * cth;
     kth = kx * cth * cph + ky * cth * sph - kz * sth;
     kph = -kx * sph + ky * cph;
@@ -90,7 +97,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
       ascend[0] = true;
     } else if (kr < 0.0) { // Can intersect either sphere
       Real ri = pco->x1f(pphot->i1) / r0;
-      Real det = 1.0 + (SQR(ri)-1)/SQR(kr);
+      Real det = 1.0 + (SQR(ri)-1.)/SQR(kr);
       if (det < 0.) {
         // ray does not intersect inner sphere so must intersect outer
         ri = pco->x1f(pphot->i1+1) / r0;
@@ -178,17 +185,20 @@ void SphericalPolarMover::Move(Photon *pphot) {
       phii = pco->x3f(pphot->i3);
       ascend[2] = false;
     }
-    
+    Real tphii;
     if (kph != 0.) {
-      Real tphii = tan(phii);
+      tphii = tan(phii);
       if (fabs(kx * tphii - ky) < TINY_NUMBER) {
         dlp = HUGE_NUMBER;
       } else {
-        dlp = r0 * sth * (sph-tphii*cth) / (kx*tphii-ky);
+        dlp = r0 * sth * (sph-tphii*cph) / (kx*tphii-ky);
         if (dlp < 0.) dlp = HUGE_NUMBER;
       }
-    }
-
+    } else
+      dlp = HUGE_NUMBER;
+    //if (fabs(dlp) < 1.e-8)
+    //if (dlp == 0.0)
+    // printf("dlp=0: %g %g %g %g %g %g %g %d\n",phii,tphii,kph,(sph-tphii*cph),(kx*tphii-ky),sth,r0,pphot->i2);
 
     if ((dlr <= dlt) && (dlr <= dlp)) {
       dl = dlr;
@@ -228,6 +238,18 @@ void SphericalPolarMover::Move(Photon *pphot) {
 
     int face;
     NextFace(dlr,dlt,dlp,face,dl);
+#ifdef DEBUG
+    if (iter < NBUFFER) {
+      db[iter-1].dl = dl; db[iter-1].dlr = dlr; db[iter-1].dlt = dlt; db[iter-1].dlp = dlp;
+      db[iter-1].cth = cth; db[iter-1].sth = sth; db[iter-1].cph = cph; db[iter-1].sph = sph;
+      db[iter-1].kr = kr; db[iter-1].kth = kth; db[iter-1].kph = kph;
+      db[iter-1].kx = kx; db[iter-1].ky = ky; db[iter-1].kz = kz;
+      db[iter-1].x = pphot->x[0]; db[iter-1].y = pphot->x[1]; db[iter-1].z = pphot->x[2];
+      db[iter-1].i = pphot->i1; db[iter-1].j = pphot->i2; db[iter-1].k = pphot->i3;
+      db[iter-1].ascend[0] = ascend[0]; db[iter-1].ascend[1] = ascend[1]; db[iter-1].ascend[2] = ascend[2];
+    }
+#endif
+    
 
     Real chi = pphot->sct_coef + pphot->abs_coef;
     chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER;
@@ -237,7 +259,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
       if (pmcb->moments_flag)
 	pmcb->UpdateMoments(pphot,dl);
       // Update postions
-      pphot->x[0] = sqrt(SQR(r0) + 2. * dl * pphot->k[0] * r0 + SQR(dl));
+      pphot->x[0] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
       pphot->x[1] = acos((z0 + kz * dl) / pphot->x[0]);
       pphot->x[2] = atan2(y0 + ky * dl,x0 + kx * dl);
       if (pphot->x[2] < 0.)
@@ -248,7 +270,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
       if (pmcb->moments_flag)
 	pmcb->UpdateMoments(pphot,dl);
       // Update postions
-      pphot->x[0] = sqrt(SQR(r0) + 2. * dl * pphot->k[0] * r0 + SQR(dl));
+      pphot->x[0] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
       pphot->x[1] = acos((z0 + kz * dl) / pphot->x[0]);
       pphot->x[2] = atan2(y0 + ky * dl,x0 + kx * dl);
       if (pphot->x[2] < 0.)
@@ -266,19 +288,47 @@ void SphericalPolarMover::Move(Photon *pphot) {
   }
   if (iter >= MAXITER) {
     std::cout << "Warning: iter exceeded ITERMAX in photon mover." << std::endl;
+#ifdef DEBUG
+    int nmax = (NBUFFER > iter) ? iter : NBUFFER;
+    for (int i=0; i < nmax; ++i) {
+      // printf("dl: %16.12e %16.12e %16.12e %16.12e\n");
+      printf("--------------------------------\n %d\n",i);
+      printf("dl: %16.12e %16.12e %16.12e %16.12e\n",db[i].dl,db[i].dlr,db[i].dlt,db[i].dlp);
+      printf("ang: %16.12e %16.12e %16.12e %16.12e\n", db[i].cth,db[i].sth,db[i].cph,db[i].sph);
+      printf("k: %16.12e %16.12e %16.12e\n",db[i].kr,db[i].kth,db[i].kph);
+      printf("k: %16.12e %16.12e %16.12e\n",db[i].kx,db[i].ky,db[i].kz);
+      printf("x: %16.12e %16.12e %16.12e\n",db[i].x,db[i].y,db[i].z);
+      printf("i: %d %d %d\n",db[i].i,db[i].j,db[i].k);
+      printf("xf: ");
+      if ((db[i].i >= pmcb->is) && (db[i].i <= pmcb->ie))
+	printf("%16.12e %16.12e ",pco->x1f(db[i].i),pco->x1f(db[i].i+1));
+      if ((db[i].j >= pmcb->js) && (db[i].j <= pmcb->je))
+	printf("%16.12e %16.12e ",pco->x2f(db[i].j),pco->x2f(db[i].j+1));
+      if ((db[i].k >= pmcb->ks) && (db[i].k <= pmcb->ke))
+	printf("%16.12e %16.12e ",pco->x3f(db[i].k),pco->x3f(db[i].k+1));
+      printf("\n");
+    }
+#endif
     pphot->status = DESTROYED;
   }
+
 #ifdef DEBUG
-  /*Real delta = sqrt(SQR(xf-pphot->x[0])+SQR(yf-pphot->x[1])+SQR(zf-pphot->x[2]));
-  Real dmax = 1.e-6*(pco->x3f(pmcb->ke+1)-pco->x3f(pmcb->ks));
+  Real xf = rf*sin(thf)*cos(phf);
+  Real yf = rf*sin(thf)*sin(phf);
+  Real zf = rf*cos(thf);
+  Real xp =  pphot->x[0]*sin(pphot->x[1])*cos(pphot->x[2]);
+  Real yp =  pphot->x[0]*sin(pphot->x[1])*sin(pphot->x[2]);
+  Real zp =  pphot->x[0]*cos(pphot->x[1]);
+  Real delta = sqrt(SQR(xf-xp)+SQR(yf-yp)+SQR(zf-zp));
+  Real dmax = 1.e-8*rf;
+  //std::cout << delta << " " << xf << " " << xp << std::endl;
   if ((delta > dmax)&&(iter < MAXITER)) {
     std::cout << "-----------------------" << std::endl;
     std::cout << delta <<  ' ' << iter << std::endl;
     std::cout << "k: " << pphot->k[0] << ' ' << pphot->k[1] << ' ' << pphot->k[2] << std::endl;
-    std::cout << "xi: " << xi << ' ' << yi << ' ' << zi << std::endl; */
     std::cout << "xf: " << rf << ' ' << thf << ' ' << phf << ' ' << dl0 << std::endl;
     std::cout << "xp: " << pphot->x[0] << ' ' <<  pphot->x[1] << ' ' <<  pphot->x[2] << std::endl;
-    //}
+  }
 #endif
 
 }

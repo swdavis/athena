@@ -109,7 +109,7 @@ void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, Coordinates *p
   Real cthh = cos(pcoord->x2f(pphot->i2));
   Real cthl = cos(pcoord->x2f(pphot->i2+1));
   Real cth = cthl + pran->uniform() * (cthh-cthl);
-  pphot->x[1] = acos(cthl);
+  pphot->x[1] = acos(cth);
   Real pl = pcoord->x3f(pphot->i3), dp = pcoord->dx3f(pphot->i3);
   pphot->x[2] = pl+pran->uniform()*dp;
 

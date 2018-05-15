@@ -236,7 +236,7 @@ void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot) {
     x = 2. * gamma * pphot->energy * onemuvdc / mec2;
   } while(pran->uniform() >= 0.375*SigmaHat(x)*onemuvdc);
 
-  // Calculate rho,mup,phip,mus (cos scattering angle) etc.
+  // Calculate rho,mup,phip,cths (cos scattering angle) etc.
   // and test for acceptance
   Real rho = sqrt(SQR(v1) + SQR(v2));
   Real onecthpvdc,k1p,k2p,k3p,xp;

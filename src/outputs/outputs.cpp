@@ -544,6 +544,24 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
   if (MONTE_CARLO_ENABLED) {
     MonteCarloBlock *pmcb = pmb->pmy_mcb;
     if (pmcb->moments_flag) { // ***Should be set automatically based on outputs***
+      // monte carlo temperature
+      if (output_params.variable.compare("mcmom") == 0) {
+      pod = new OutputData;
+      pod->type = "SCALARS";
+      pod->name = "tgas";
+      pod->data.InitWithShallowSlice(pmcb->tgas,4,0,1);
+      AppendOutputDataNode(pod);
+      num_vars_++;
+    }
+          // monte carlo temperature
+    if (output_params.variable.compare("mcmom") == 0) {
+      pod = new OutputData;
+      pod->type = "SCALARS";
+      pod->name = "rho";
+      pod->data.InitWithShallowSlice(pmcb->rho,4,0,1);
+      AppendOutputDataNode(pod);
+      num_vars_++;
+    }
     // monte carlo radiation energy density
     if (output_params.variable.compare("mcmom") == 0 || 
         output_params.variable.compare("Ermc") == 0) {

@@ -43,7 +43,8 @@ public:
   Real sct_coef, abs_coef;  //scattering and absoprtion coefficients
 
   // functions
-  
+  void CopyPhoton(Photon *pphot);
+  void PrintPhoton();
 
 };
 #endif // PHOTON_HPP

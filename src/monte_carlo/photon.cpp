@@ -25,3 +25,40 @@ Photon::Photon(MonteCarloBlock *pmcb) {
 Photon::~Photon() {
 
 }
+
+
+void Photon::CopyPhoton(Photon *pphot) {
+
+  i1 = pphot->i1;
+  i2 = pphot->i2;
+  i3 = pphot->i3;
+  status = pphot->status;
+  for(int i=0; i<3; ++i) {
+    x[i] = pphot->x[i];
+    k[i] = pphot->k[i];
+    stokes[i] = pphot->stokes[i];
+  }
+
+  weight = pphot->weight;
+  eweight = pphot->eweight;
+  energy = pphot->energy;
+  sct_coef = pphot->sct_coef;
+  abs_coef = pphot->abs_coef;
+    
+}
+
+
+// for debugging purposes
+void Photon::PrintPhoton() {
+
+  std::cout << "----------------------------" << std::endl
+            << "Energy, weights: " << energy << " " << weight
+	    << " " << eweight << std::endl
+	    << "i: " << i1 << " " << i2 << " " << i3 <<std::endl
+	    << "x: " << x[0] << " " << x[1] << " " << x[2] <<std::endl
+	    << "k: " << k[0] << " " << k[1] << " " << k[2] <<std::endl
+	    << "kcart: " << kcart[0] << " " << kcart[1] << " "
+	    << kcart[2] <<std::endl
+	    << "stokes: " << stokes[0] << " " << stokes[1] << " "
+	    << stokes[2] <<std::endl;
+}

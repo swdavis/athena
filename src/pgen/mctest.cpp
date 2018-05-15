@@ -50,7 +50,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     bool radial = pin->GetOrAddBoolean("problem","radial","true");
     if (radial) {
       xlow = pin->GetReal("mesh","x1min");
-      xhigh = pin->GetReal("mesh","x2max");
+      xhigh = pin->GetReal("mesh","x1max");
       nx = pin->GetInteger("mesh","nx1");
     }
   }
@@ -160,6 +160,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   // initialize kcart
   //pmover->CurvalinearToCartesian(pphot);
 
+  
   if (pphot->weight < 0.0) pphot->status = DESTROYED;
 
   // Initialize the absorption and scattering extinction coefficients
