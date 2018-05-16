@@ -42,7 +42,7 @@ enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
       MCIPR12=7, MCIPR13=8, MCIPR23=9, MCIPR21=10, MCIPR31=11, MCIPR32=12};
 
-enum {TOEUL=0, TOCOM=1};
+enum TransformFlag {TOEUL=0, TOCOM=1};
 
 //----------------------------------------------------------------------------------------
 // function pointer prototypes for user-defined modules set at runtime
@@ -69,6 +69,7 @@ Real KleinNishina(Real x);
 //--------------------- prototypes for scatter.cpp functions -----------------------------
 void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot);
 void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot);
+void ScatterThomsonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot);
 void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot);
 Real Bigy(Real x, Real xp);
 Real SigmaHat(Real x);
@@ -115,7 +116,7 @@ public:
   enum ScatteringFlag scattering_meth;
   enum MCBoundaryFlag mc_bcs[6];
   bool moments_flag; // Compute/output moments
-  bool lorentz_trans_flag;  // Compute lorentz transformations
+  bool lorentz_transform;  // Compute lorentz transformations
 
   EmisFunc_t InitEmission;
   TempFunc_t GetTemperature;
@@ -176,7 +177,7 @@ public:
   bool weighted_absorption; // flag controling how absorption is handled
   bool moments_flag; // Compute/output moments
   bool emission_array_flag;  // Compute and save zone emissivities
-  bool lorentz_trans_flag;  // Compute lorentz transformations
+  bool lorentz_transform;  // Compute lorentz transformations
   bool coherent_scattering; // photon does notchange energy after scattering
   bool polarized; // track photon polarization
 
@@ -193,6 +194,7 @@ public:
   // functions
   void MonteCarloProblemGenerator(ParameterInput *pin);
   void TransferPhotons();  // Transfer photons on this block
+  void LorentzTransform(Photon *pphot, const Real sign);
   void InitializePhoton(Photon *pphot);
   void DefaultGetTemperature();
   void UpdateMoments(Photon *pphot, Real dl);

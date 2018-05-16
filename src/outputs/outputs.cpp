@@ -546,45 +546,45 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     if (pmcb->moments_flag) { // ***Should be set automatically based on outputs***
       // monte carlo temperature
       if (output_params.variable.compare("mcmom") == 0) {
-      pod = new OutputData;
-      pod->type = "SCALARS";
-      pod->name = "tgas";
-      pod->data.InitWithShallowSlice(pmcb->tgas,4,0,1);
-      AppendOutputDataNode(pod);
-      num_vars_++;
-    }
-          // monte carlo temperature
-    if (output_params.variable.compare("mcmom") == 0) {
-      pod = new OutputData;
-      pod->type = "SCALARS";
-      pod->name = "rho";
-      pod->data.InitWithShallowSlice(pmcb->rho,4,0,1);
-      AppendOutputDataNode(pod);
-      num_vars_++;
-    }
-    // monte carlo radiation energy density
-    if (output_params.variable.compare("mcmom") == 0 || 
-        output_params.variable.compare("Ermc") == 0) {
-      pod = new OutputData;
-      pod->type = "SCALARS";
-      pod->name = "Ermc";
-      pod->data.InitWithShallowSlice(pmcb->moments,4,MCIER,1);
-      AppendOutputDataNode(pod);
-      num_vars_++;
-    }
-    // monte carlo radiation flux vector
-    if (output_params.variable.compare("mcmom") == 0 || 
-        output_params.variable.compare("Frmc") == 0) {      
-      pod = new OutputData;
-      pod->type = "VECTORS";
-      pod->name = "Frmc";
-      pod->data.InitWithShallowSlice(pmcb->moments,4,MCIFR1,3);
-      AppendOutputDataNode(pod);
-      num_vars_+=3;
-    }
-       // lab frame radiation pressure
-    if (output_params.variable.compare("mcmom") == 0 ||
-	output_params.variable.compare("Prmc") == 0) {
+	pod = new OutputData;
+	pod->type = "SCALARS";
+	pod->name = "tgas";
+	pod->data.InitWithShallowSlice(pmcb->tgas,4,0,1);
+	AppendOutputDataNode(pod);
+	num_vars_++;
+      }
+      // monte carlo temperature
+      if (output_params.variable.compare("mcmom") == 0) {
+	pod = new OutputData;
+	pod->type = "SCALARS";
+	pod->name = "rho";
+	pod->data.InitWithShallowSlice(pmcb->rho,4,0,1);
+	AppendOutputDataNode(pod);
+	num_vars_++;
+      }
+      // monte carlo radiation energy density
+      if (output_params.variable.compare("mcmom") == 0 || 
+	  output_params.variable.compare("Ermc") == 0) {
+	pod = new OutputData;
+	pod->type = "SCALARS";
+	pod->name = "Ermc";
+	pod->data.InitWithShallowSlice(pmcb->moments,4,MCIER,1);
+	AppendOutputDataNode(pod);
+	num_vars_++;
+      }
+      // monte carlo radiation flux vector
+      if (output_params.variable.compare("mcmom") == 0 || 
+	  output_params.variable.compare("Frmc") == 0) {      
+	pod = new OutputData;
+	pod->type = "VECTORS";
+	pod->name = "Frmc";
+	pod->data.InitWithShallowSlice(pmcb->moments,4,MCIFR1,3);
+	AppendOutputDataNode(pod);
+	num_vars_+=3;
+      }
+      // lab frame radiation pressure
+      if (output_params.variable.compare("mcmom") == 0 ||
+	  output_params.variable.compare("Prmc") == 0) {
         pod = new OutputData;
         pod->type = "TENSORS";
         pod->name = "Prmc";

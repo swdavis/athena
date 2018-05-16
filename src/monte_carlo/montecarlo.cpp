@@ -48,7 +48,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   mc_bcs[OUTER_X3] = GetMCBoundaryFlag(pin->GetOrAddString("mesh","ox3_mc_bc","escape"));
 
   moments_flag = pin->GetOrAddBoolean("montecarlo","moments",true);
-  lorentz_trans_flag = pin->GetOrAddBoolean("montecarlo","lorentz_trans",true);
+  lorentz_transform = pin->GetOrAddBoolean("montecarlo","lorentz_transform",true);
 
   // Create and intitialize randon number generator
   iseed = pin->GetInteger("montecarlo","iseed");
@@ -277,13 +277,13 @@ void MonteCarlo::LaunchPhotons() {
   GetDensity(pmcb);
   GetTemperature(pmcb);
   //(pmcb->*(pmcb->GetTemperature2))();
-  if (lorentz_trans_flag) GetVelocity(pmcb);
+  if (lorentz_transform) GetVelocity(pmcb);
   InitEmission(pmcb);
   pmcb = pmcb->next;
   while (pmcb != NULL) {
     GetDensity(pmcb);
     GetTemperature(pmcb);
-    if (lorentz_trans_flag) GetVelocity(pmcb);
+    if (lorentz_transform) GetVelocity(pmcb);
     InitEmission(pmcb);
     pmcb = pmcb->next;
   }
