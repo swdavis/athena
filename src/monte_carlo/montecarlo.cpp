@@ -48,7 +48,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   mc_bcs[OUTER_X3] = GetMCBoundaryFlag(pin->GetOrAddString("mesh","ox3_mc_bc","escape"));
 
   moments_flag = pin->GetOrAddBoolean("montecarlo","moments",true);
-  lorentz_transform = pin->GetOrAddBoolean("montecarlo","lorentz_transform",true);
+  lorentz_transform = pin->GetOrAddBoolean("montecarlo","lorentz_transform",false);
 
   // Create and intitialize randon number generator
   iseed = pin->GetInteger("montecarlo","iseed");

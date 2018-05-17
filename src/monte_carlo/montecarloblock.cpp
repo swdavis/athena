@@ -236,7 +236,7 @@ void MonteCarloBlock::TransferPhotons() {
       if (pphoton->status == EVOLVING) {
 	// Lorentz transform to comoving frame for scattering
 	if (lorentz_transform)
-	LorentzTransform(pphoton,to_comv);
+          LorentzTransform(pphoton,to_comv);
 	
         Scatter(this,pphoton);
 	//pmover->CartesianToCurvalinear(pphoton);
