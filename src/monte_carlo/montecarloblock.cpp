@@ -71,6 +71,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
   absorption_meth = pmy_mc->absorption_meth;
   scattering_meth = pmy_mc->scattering_meth;
   moments_flag = pmy_mc->moments_flag;
+  lorentz_transform = pmy_mc->lorentz_transform;
   
   // *currently** assumes all block boundaries are physical
   for (int i=0; i<6; ++i) {
@@ -110,7 +111,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
   // Allocate (/initialize) variable arrays needed for evolution/output
   rho.NewAthenaArray(ncells3,ncells2,ncells1);
   tgas.NewAthenaArray(ncells3,ncells2,ncells1);
-  if (pmy_mc->lorentz_trans_flag) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
+  if (lorentz_transform) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
   if (moments_flag) moments.NewAthenaArray(13,ncells3,ncells2,ncells1);
 
   // Set function pointers
@@ -149,7 +150,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
     ScatteringOpacity = ThomsonOpacity;
     if (polarized) {
       Scatter = ScatterThomsonPolarized;
-    }
+    } else
+      Scatter = ScatterThomsonUnpolarized;
     coherent_scattering = true;
   } else if (scattering_meth == SCATCOMP) {
     GenerateComptonTable();
@@ -172,7 +174,7 @@ MonteCarloBlock::~MonteCarloBlock() {
 
   rho.DeleteAthenaArray();
   tgas.DeleteAthenaArray();
-  if (lorentz_trans_flag) vel.DeleteAthenaArray();
+  if (lorentz_transform) vel.DeleteAthenaArray();
   if (emission_array_flag) emission.DeleteAthenaArray();
   if (moments_flag) moments.DeleteAthenaArray();
 }
@@ -202,16 +204,17 @@ void MonteCarloBlock::DefaultGetTemperature() {
 
 void MonteCarloBlock::TransferPhotons() {
 
+  Real const to_comv = 1.0;
+  Real const to_eulr = -1.0; 
   int nscat = 0, nesc = 0, nabs =0;
   for(int i=0; i<nphot; ++i) {
 
     // user definied photon initialization
     InitializePhoton(pphoton);
     
-    //std::cout << pphoton->weight << std::endl;
     // Lorentz transform E, k to Eulerian frame and update opacities.
-    //if (lorenz_transform)
-    //  photon->lorentz_transform(pmy_bplo,TOEUL);
+    if (lorentz_transform)
+      LorentzTransform(pphoton,to_eulr);
 
     // move photon to next scattering/absorption or to boundary
     pmover->Move(pphoton);
@@ -227,24 +230,28 @@ void MonteCarloBlock::TransferPhotons() {
           pphoton->status = DESTROYED;
       }
         
-      // Lorentz transform to comoving frame for scattering
-      //lorentz_transform(&Packet,pG,to_comv);
+
 
       // Scatter the photon packet
       if (pphoton->status == EVOLVING) {
+	// Lorentz transform to comoving frame for scattering
+	if (lorentz_transform)
+	LorentzTransform(pphoton,to_comv);
+	
         Scatter(this,pphoton);
 	//pmover->CartesianToCurvalinear(pphoton);
 	nscat++;
+	// Update the absorption and scattering extinction coefficients
+	// with the new energy.
+	if (!coherent_scattering) {
+	  pphoton->abs_coef = AbsorptionOpacity(this,pphoton);
+	  pphoton->sct_coef = ScatteringOpacity(this,pphoton);
+	}
+	// Lorentz transform to Eulerian frame and shift opacities
+	if (lorentz_transform)
+	  LorentzTransform(pphoton,to_eulr);
+	
       }
-      // Update the absorption and scattering extinction coefficients
-      // with the new energy.
-      if (!coherent_scattering) {
-        pphoton->abs_coef = AbsorptionOpacity(this,pphoton);
-        pphoton->sct_coef = ScatteringOpacity(this,pphoton);
-      }
-        
-        // Lorentz transform to Eulerian frame and shift opacities
-        //lorentz_transform(&Packet,pG,to_eulr);
 
       // move photon to next scattering/absorption or to boundary
       pmover->Move(pphoton);
@@ -264,7 +271,50 @@ void MonteCarloBlock::TransferPhotons() {
   std::cout << "nscat: " << nscat << std::endl;
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::LorentzTransform(Photon *pphot)
+//  \brief Lorentz transform photon packet
+//
+// Does not transform stokes vectors but this seems
+// to be correct -- the plane of polarization is invariant under lorentz
+// transformation as discussed in Cocke & Holm (1972) Nature letter.
+// weight is not transformed either as weight represents number of photons
+// in the packet which is invariant.
 
+void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign) {
+
+  Real &k1 = pphot->k[0];
+  Real &k2 = pphot->k[1];
+  Real &k3 = pphot->k[2];
+  int i1 = pphot->i1, i2 = pphot->i2, i3 = pphot->i3;
+  
+  Real beta[3];
+  for (int i=0; i<3; ++i) {
+    beta[i] = sign * vel(i,i3,i2,i1) / 2.9979e10;
+  }
+  Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
+
+  if(beta2 >= 0.) {
+    Real gamma = 1. / sqrt(1. - beta2); // assumes v^2 < c^2 checked elsewhere
+    Real bdk = k1 * beta[0] + k2 * beta[1] + k3 * beta[2];
+    Real gonembdk = gamma * (1. - bdk);
+    Real aber = (gamma-1.) * bdk / beta2 - gamma;
+
+    pphot->energy *= gonembdk;
+    k1 = (k1 + aber * beta[0]) / gonembdk;
+    k2 = (k2 + aber * beta[1]) / gonembdk;
+    k3 = (k3 + aber * beta[2]) / gonembdk;
+
+    // If transforming to Eulerian frame, shift extinction values.  Currently
+    // we don't need to do anything for shifts to comoving frame because this
+    // is only done for scattering which doesn't depend on alpha or sigma
+    if (sign == -1.) {
+        pphot->abs_coef /= gonembdk;
+        pphot->sct_coef /= gonembdk;
+    }
+  }
+  
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::UpdateMoments(MonteCarloBlock *pmcb, Photon *pphot, Real dl)

@@ -26,9 +26,9 @@ void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot) {
   Real sth = sqrt(1. - SQR(cth));
 
   // calculate new wave vector
-  pphot->k[0] = sth * cphi;
-  pphot->k[1] = sth * sphi;
-  pphot->k[2] = cth;
+  pphot->kcart[0] = sth * cphi;
+  pphot->kcart[1] = sth * sphi;
+  pphot->kcart[2] = cth;
 
 }
 
@@ -202,6 +202,43 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot) {
   
   
 }
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot)
+//  \brief Thomson scattering of unpolarized radiation
+
+void ScatterThomsonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot) {
+
+  MCRandom *pran = pmcb->pran;
+  
+  Real &k1 = pphot->kcart[0];
+  Real &k2 = pphot->kcart[1];
+  Real &k3 = pphot->kcart[2];
+
+  Real k1p,k2p,k3p,cths;
+  do {
+     
+    Real cthp = 2.0 * pran->uniform() - 1.;
+    Real phip = 2.*PI * pran->uniform();
+    Real cphip = cos(phip);
+    Real sphip = sin(phip);
+    Real sthp = sqrt(1. - SQR(cthp));
+    
+    k1p = sthp * cphip;
+    k2p = sthp * sphip;
+    k3p = cthp;
+    
+    cths = k1 * k1p + k2 * k2p + k3 * k3p;
+    
+  } while(pran->uniform() > SQR(cths));
+
+  k1 = k1p;
+  k2 = k2p;
+  k3 = k3p;
+  
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot)
 //  \brief Unpolarized Compton scattering
@@ -279,7 +316,7 @@ void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot) {
 
 Real Bigy(Real x, Real xp)
 {
-// As defined by Pozdynakov et al. page 324
+// As defined by Pozdynakov et al. page 324 (see also 201)
 
   Real r = xp / x;
   Real diff = (1. / x -1. / xp);
