@@ -479,7 +479,7 @@ if args['hdf5']:
     makefile_options['LINKER_FLAGS'] += ' -L{0}/lib'.format(args['hdf5_path'])
   if args['cxx'] == 'g++' or args['cxx'] == 'icc' or args['cxx'] == 'cray' \
       or args['cxx'] == 'icc-phi' or args['cxx'] == 'clang++':
-    makefile_options['LIBRARY_FLAGS'] += ' -lhdf5'
+    makefile_options['LIBRARY_FLAGS'] += ' -lhdf5 -lz -ldl'
   if args['cxx'] == 'bgxl':
     makefile_options['PREPROCESSOR_FLAGS'] += \
         ' -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_BSD_SOURCE' \
@@ -511,10 +511,11 @@ for library_path in args['lib']:
 # -mc argument
 if args['mc']:
   definitions['MONTE_CARLO_ENABLED'] = '1'
+  definitions['MONTE_CARLO_STATIC'] = '1'
   makefile_options['LIBRARY_FLAGS'] += ' -lgsl -lgslcblas'
 else:
   definitions['MONTE_CARLO_ENABLED'] = '0'
-
+  definitions['MONTE_CARLO_STATIC'] = '0'
 
 # Assemble all flags of any sort given to compiler
 definitions['COMPILER_FLAGS'] = ' '.join([makefile_options[opt+'_FLAGS'] for opt in \

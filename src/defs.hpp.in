@@ -44,6 +44,7 @@
 
 // enable monte carlo? default=0 (false)
 #define MONTE_CARLO_ENABLED @MONTE_CARLO_ENABLED@
+#define MONTE_CARLO_STATIC @MONTE_CARLO_STATIC@
 
 // enable special or general relativity? default=0 (false)
 #define RELATIVISTIC_DYNAMICS @RELATIVISTIC_DYNAMICS@

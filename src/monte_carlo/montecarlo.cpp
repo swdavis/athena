@@ -254,15 +254,16 @@ void MonteCarlo::EnrollUserGetTemperature(TempFunc_t tempfunc) {
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarlo::LaunchPhotons()
+//! \fn void MonteCarlo::RunStaticMonteCarlo()
 //  \brief start evolving photons in each monte carlo block
 //
 //  Temporary implementation
 
-void MonteCarlo::LaunchPhotons() {
+void MonteCarlo::RunStaticMonteCarlo() {
  
   MonteCarloBlock *pmcb = pblock;
 
+  // Check/set function pointers
   if (InitEmission == NULL) {
     std::stringstream msg;
     msg << "### FATAL ERROR in LaunchPhotons()" << std::endl

@@ -377,7 +377,7 @@ int main(int argc, char *argv[]) {
 #endif
 
   while ((pmesh->time < pmesh->tlim) &&
-         (pmesh->nlim < 0 || pmesh->ncycle < pmesh->nlim) && !(MONTE_CARLO_ENABLED)) {
+         (pmesh->nlim < 0 || pmesh->ncycle < pmesh->nlim) && !(MONTE_CARLO_STATIC)) {
 
     if (Globals::my_rank==0) {
       if (pmesh->ncycle_out != 0) {
@@ -432,8 +432,8 @@ int main(int argc, char *argv[]) {
 // Make final outputs, print diagnostics, clean up and terminate
 
   // Perform Monte Carlo radiation tranfer
-  if (MONTE_CARLO_ENABLED) {
-    pmc->LaunchPhotons();
+  if (MONTE_CARLO_STATIC) {
+    pmc->RunStaticMonteCarlo();
     pmc->pmcout->OutputSpectra(pmc);
   }
 

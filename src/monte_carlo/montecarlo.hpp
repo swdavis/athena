@@ -121,7 +121,7 @@ public:
   TempFunc_t GetTemperature;
 
   // functions
-  void LaunchPhotons();
+  void RunStaticMonteCarlo();
   void InitUserMonteCarloData(ParameterInput *pin);
   void EnrollUserEmissionInitialization(EmisFunc_t emissfunc);
   void EnrollUserGetTemperature(TempFunc_t tempfunc);
@@ -131,6 +131,7 @@ private:
   // functions
   void GetDensity(MonteCarloBlock *pmcb);
   void GetVelocity(MonteCarloBlock *pmcb);
+  void CountCellsOnBlocks(void);
 
 };
 
@@ -197,7 +198,9 @@ public:
   void DefaultGetTemperature();
   void UpdateMoments(Photon *pphot, Real dl);
   void NormalizeMoments(bool normalize);
-  
+  //void GetPhotonsFromNeighbors();
+  //void SendPhotonsToNeighbors();
+
 private:
   
  
