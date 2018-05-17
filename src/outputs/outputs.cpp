@@ -553,7 +553,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
 	AppendOutputDataNode(pod);
 	num_vars_++;
       }
-      // monte carlo temperature
+      // monte carlo density
       if (output_params.variable.compare("mcmom") == 0) {
 	pod = new OutputData;
 	pod->type = "SCALARS";

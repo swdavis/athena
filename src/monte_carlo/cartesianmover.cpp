@@ -46,6 +46,13 @@ void CartesianMover::Move(Photon *pphot) {
   FinalPositionCartesian(pmcb,pco,pphot,xf,yf,zf,dl0);
 #endif
 
+  Real& kx = pphot->kcart[0];
+  Real& ky = pphot->kcart[1];
+  Real& kz = pphot->kcart[2];
+  pphot->k[0] = kx;
+  pphot->k[1] = ky;
+  pphot->k[2] = kz;
+
   int iter = 0;
   // calculate distances to nearest faces
   while( (TauRemaining > 0.) && (pphot->status == EVOLVING) && (iter < MAXITER)) {
@@ -53,33 +60,33 @@ void CartesianMover::Move(Photon *pphot) {
     // Compute distance to all faces
     Real dl, dlx, dly, dlz;
     bool ascend[3];
-    if(pphot->k[0] > 0.0) {
-      dlx = (pco->x1f(pphot->i1+1) - pphot->x[0]) / pphot->k[0];
+    if(kx > 0.0) {
+      dlx = (pco->x1f(pphot->i1+1) - pphot->x[0]) / kx;
       ascend[0] = true;
-    } else if(pphot->k[0] < 0.0) {
-      dlx = (pco->x1f(pphot->i1) - pphot->x[0]) / pphot->k[0];
+    } else if(kx < 0.0) {
+      dlx = (pco->x1f(pphot->i1) - pphot->x[0]) / kx;
       ascend[0] = false;
     } else {
       dlx = HUGE_NUMBER;
       ascend[0] = false;
     }
 
-    if(pphot->k[1] > 0.0) {
-      dly = (pco->x2f(pphot->i2+1)  - pphot->x[1]) / pphot->k[1];
+    if(ky > 0.0) {
+      dly = (pco->x2f(pphot->i2+1)  - pphot->x[1]) / ky;
       ascend[1] = true;
-    } else if(pphot->k[1] < 0.0) {
-      dly = (pco->x2f(pphot->i2) - pphot->x[1]) / pphot->k[1];
+    } else if(ky < 0.0) {
+      dly = (pco->x2f(pphot->i2) - pphot->x[1]) / ky;
       ascend[1] = false;
     } else {
       dly = HUGE_NUMBER;
       ascend[1] = false;
     }
     
-    if(pphot->k[2] > 0.0) {
-      dlz = (pco->x3f(pphot->i3+1) - pphot->x[2])/pphot->k[2];
+    if(kz > 0.0) {
+      dlz = (pco->x3f(pphot->i3+1) - pphot->x[2]) / kz;
       ascend[2] = true;
-    } else if(pphot->k[2] < 0.0) {
-      dlz = (pco->x3f(pphot->i3) - pphot->x[2])/pphot->k[2];
+    } else if(kz < 0.0) {
+      dlz = (pco->x3f(pphot->i3) - pphot->x[2]) / kz;
       ascend[2] = false;
     } else {
       dlz = HUGE_NUMBER;
@@ -98,7 +105,7 @@ void CartesianMover::Move(Photon *pphot) {
       }
       // update position
       for (int i=0; i<3; ++i)
-	pphot->x[i] += pphot->k[i] * dl;
+	pphot->x[i] += pphot->kcart[i] * dl;
       return;
     } else { // Photon moves to next zone and reduce TauRemaining
       if (pmcb->moments_flag) {
@@ -106,7 +113,7 @@ void CartesianMover::Move(Photon *pphot) {
       }
       // update position
       for (int i=0; i<3; ++i)
-	pphot->x[i] += pphot->k[i] * dl;
+	pphot->x[i] += pphot->kcart[i] * dl;
       TauRemaining -= chi * dl;
       MovePhotonToNextZone(pphot,pco,pmcb,face,ascend);
     }
