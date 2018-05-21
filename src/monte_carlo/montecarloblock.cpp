@@ -32,7 +32,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
   pmy_block = pmb;
   // Set pointer to this monte carlo block in pmb (***temporary***)
   pmb->pmy_mcb = this;
-  
+
   pmy_coord = pmb->pcoord;
 
   // Construct pointer to photon 
@@ -46,7 +46,6 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
   }
 
   // Initialize input parameters and flags
-  nphot = pin->GetInteger("montecarlo","nphot");
   zone_weight_flag = pin->GetOrAddBoolean("montecarlo","zone_weight",true);
   weighted_absorption = pin->GetOrAddBoolean("montecarlo","abs_weight",true);
   polarized = pin->GetOrAddBoolean("montecarlo","polarized",false);
@@ -70,34 +69,44 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
   emission_meth = pmy_mc->emission_meth;
   absorption_meth = pmy_mc->absorption_meth;
   scattering_meth = pmy_mc->scattering_meth;
-  moments_flag = pmy_mc->moments_flag;
   lorentz_transform = pmy_mc->lorentz_transform;
-  
+  moments_flag = pmy_mc->pmcout->moments; // in mcoutput
+
   // *currently** assumes all block boundaries are physical
-  for (int i=0; i<6; ++i) {
-    mcb_bcs[i] = pmy_mc->mc_bcs[i];
-  }
+  SetBoundaryValues(pmy_mc->mc_bcs);
+
   // Initialize pbval after mcb_bcs is set
   pbval = new MCBoundaryValues(this,pin);
 
-  // Setup output spectrum **currently* assumes single spectrum
-  int nfreq = pin->GetInteger("montecarlo","nfreq");
-  int nmu = pin->GetInteger("montecarlo","nmu");
-  int nphi = pin->GetInteger("montecarlo","nphi");
-  pspec = new Spectrum(emin,emax,nfreq,nmu,nphi,polarized);
+  // Setup output spectra
+  Spectrum *pfirst = NULL, *plast;
+  Spectrum *psmcout = pmy_mc->pmcout->pspec;
+  // Loop over output spectra and make local equivalent for each
+  while (psmcout != NULL) {
+    pspec = new Spectrum(pmy_mc->pmcout->pspec);
+    if (pfirst == NULL)
+      pfirst = pspec;
+    else
+      plast->next = pspec;
+    plast = pspec;
+    psmcout = psmcout->next;
+  }
+  pspec = pfirst;
 
   // set local mesh parameters to correspond to mesh block
   is = pmb->is; ie = pmb->ie;
   js = pmb->js; je = pmb->je;
   ks = pmb->ks; ke = pmb->ke;
-  ncells = (ie-is+1)*(je-js+1)*(ke-ks+1);
+  nx1 = pmb->block_size.nx1;
+  nx2 = pmb->block_size.nx2;
+  nx3 = pmb->block_size.nx3;
   codetocgs_rho = 1.0; codetoc_vel = 1.0;  // default cgs for code units
 
   // Allocate memory for emissivity (if used) and radiation moments
-  int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
+  int ncells1 = nx1 + 2*(NGHOST);
   int ncells2 = 1, ncells3 = 1;
-  if (pmb->block_size.nx2 > 1) ncells2 = pmb->block_size.nx2 + 2*(NGHOST);
-  if (pmb->block_size.nx3 > 1) ncells3 = pmb->block_size.nx3 + 2*(NGHOST);
+  if (nx2 > 1) ncells2 = nx2 + 2*(NGHOST);
+  if (nx3 > 1) ncells3 = nx3 + 2*(NGHOST);
 
   // allocate emission array for user function only if requested in input block
   // all current non-user methods require emission array
@@ -200,14 +209,15 @@ void MonteCarloBlock::DefaultGetTemperature() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::TransferPhotons()
-//  \brief perform radiation transfer of all photons on block
+//  \brief perform radiation transfer nphot photons
 
-void MonteCarloBlock::TransferPhotons() {
+void MonteCarloBlock::TransferPhotons(int nphot) {
 
   Real const to_comv = 1.0;
   Real const to_eulr = -1.0; 
   int nscat = 0, nesc = 0, nabs =0;
-  for(int i=0; i<nphot; ++i) {
+  int nprop = (nphot > nphremain) ? nphremain : nphot;
+  for(int i=0; i<nprop; ++i) {
 
     // user definied photon initialization
     InitializePhoton(pphoton);
@@ -257,12 +267,14 @@ void MonteCarloBlock::TransferPhotons() {
       pmover->Move(pphoton);
     }
     if (pphoton->status == ESCAPED) {
-      pspec->UpdateSpectrum(pphoton);
+      if (pspec != NULL)
+        pspec->UpdateSpectrum(pphoton);
       nesc++;
     } else
       nabs++;
     
   }
+  nphtot += nprop;
   // Normalize moments for output
   if (moments_flag)
     NormalizeMoments(true);
@@ -317,7 +329,7 @@ void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::UpdateMoments(MonteCarloBlock *pmcb, Photon *pphot, Real dl)
+//! \fn void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl)
 //  \brief add contribution to radiation moments in current zone
 
 void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
@@ -331,6 +343,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
   Real wght2 = wght * pphot->k[1];
   Real wght3 = wght * pphot->k[2];
 
+  // make this more efficient?
   moments(MCIER,k,j,i) += wght;
   moments(MCIFR1,k,j,i) += wght1;
   moments(MCIFR2,k,j,i) += wght2;
@@ -348,7 +361,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
   moments(MCIPR13,k,j,i)  += wght;
   wght = wght2 * pphot->k[2];
   moments(MCIPR23,k,j,i) += wght;
-  
+
 }
 
 //----------------------------------------------------------------------------------------
@@ -362,7 +375,7 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
   if (normalize) {
     // Normalize moments
     for (int n=0; n<10; ++n) {
-      Real norm = static_cast<Real>(nphot)/static_cast<Real>(ncells);
+      Real norm = static_cast<Real>(nphtot)/static_cast<Real>(nx1*nx2*nx3);
       if ((n == 0) || (n >= 4))
 	norm *= 2.9979e10;
       for (int k=ks; k<=ke; ++k) {
@@ -382,7 +395,7 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
   } else {
     // Undo normalization for continuing evolution
     for (int n=0; n<10; ++n) {
-      Real norm = static_cast<Real>(nphot)/static_cast<Real>(ncells);
+      Real norm = static_cast<Real>(nphtot)/static_cast<Real>(nx1*nx2*nx3);
       if ((n == 0) || (n >= 4))
 	norm *= 2.9979e10;
       for (int k=ks; k<=ke; ++k) {
@@ -391,5 +404,49 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
 	    Real vol = pco->GetCellVolume(k,j,i);
 	    moments(n,k,j,i) *= (vol * norm);
 	  }}}}
+  }
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs)
+//  \brief set boundary values on monte carlo block
+
+void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
+
+  // set x1 boundaries
+  if (pmy_block->pbval->block_bcs[INNER_X1] == BLOCK_BNDRY) {
+    mcb_bcs[INNER_X1] = MC_BLOCK_BNDRY;
+  } else {
+    mcb_bcs[INNER_X1] = input_bcs[INNER_X1];
+  }
+  if (pmy_block->pbval->block_bcs[OUTER_X1] == BLOCK_BNDRY) {
+    mcb_bcs[OUTER_X1] = MC_BLOCK_BNDRY;
+  } else {
+    mcb_bcs[OUTER_X1] = input_bcs[OUTER_X1];
+  }
+
+  // set x2 boundaries
+  if (pmy_block->pbval->block_bcs[INNER_X2] == BLOCK_BNDRY) {
+    mcb_bcs[INNER_X2] = MC_BLOCK_BNDRY;
+  } else {
+    mcb_bcs[INNER_X2] = input_bcs[INNER_X2];
+  }
+  if (pmy_block->pbval->block_bcs[OUTER_X2] == BLOCK_BNDRY) {
+    mcb_bcs[OUTER_X2] = MC_BLOCK_BNDRY;
+  } else {
+    mcb_bcs[OUTER_X2] = input_bcs[OUTER_X2];
+  }
+
+  // set x3 boundaries
+  if (pmy_block->pbval->block_bcs[INNER_X3] == BLOCK_BNDRY) {
+    mcb_bcs[INNER_X3] = MC_BLOCK_BNDRY;
+  } else {
+    mcb_bcs[INNER_X3] = input_bcs[INNER_X3];
+  }
+  if (pmy_block->pbval->block_bcs[OUTER_X3] == BLOCK_BNDRY) {
+    mcb_bcs[OUTER_X3] = MC_BLOCK_BNDRY;
+  } else {
+    mcb_bcs[OUTER_X3] = input_bcs[OUTER_X3];
   }
 }

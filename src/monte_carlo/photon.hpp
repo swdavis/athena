@@ -32,6 +32,7 @@ public:
 
   int i1,i2,i3; // zone indicies currently containing photon
   int status; // photon status (escaped, absorbed, evolving)
+  enum BoundaryFace face;
 
   Real x[3];  // current photon position
   Real k[3];  // photon direction (momentum vector) curvalinear

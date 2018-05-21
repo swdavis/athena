@@ -399,19 +399,24 @@ Mesh::Mesh(ParameterInput *pin, int mesh_test) {
   tree.CountMeshBlock(nbtotal);
   loclist=new LogicalLocation[nbtotal];
   tree.GetMeshBlockList(loclist,NULL,nbtotal);
-
+  if (MONTE_CARLO_STATIC) {
+    int mcranks = pin->GetOrAddInteger("montecarlo","mcranks",0);
+    nrankmx = (Globals::nranks)-mcranks;
+  } else {
+    nrankmx = Globals::nranks;
+  }
 #ifdef MPI_PARALLEL
   // check if there are sufficient blocks
-  if (nbtotal < Globals::nranks) {
+  if (nbtotal < nrankmx) {
     if (mesh_test==0) {
       msg << "### FATAL ERROR in Mesh constructor" << std::endl
           << "Too few mesh blocks: nbtotal ("<< nbtotal <<") < nranks ("
-          << Globals::nranks << ")" << std::endl;
+          << nrankmx << ")" << std::endl;
       throw std::runtime_error(msg.str().c_str());
     } else { // test
       std::cout << "### Warning in Mesh constructor" << std::endl
-          << "Too few mesh blocks: nbtotal ("<< nbtotal <<") < nranks ("
-          << Globals::nranks << ")" << std::endl;
+                << "Too few mesh blocks: nbtotal ("<< nbtotal <<") < nranks ("
+                << nrankmx << ")" << std::endl;
     }
   }
 #endif
@@ -450,34 +455,37 @@ Mesh::Mesh(ParameterInput *pin, int mesh_test) {
 //  if (SELF_GRAVITY_ENABLED==2 && ...) // independent allocation
 //    gflag=2;
 
-  // create MeshBlock list for this process
-  int nbs=nslist[Globals::my_rank];
-  int nbe=nbs+nblist[Globals::my_rank]-1;
-  // create MeshBlock list for this process
-  for (int i=nbs;i<=nbe;i++) {
-    SetBlockSizeAndBoundaries(loclist[i], block_size, block_bcs);
-    // create a block and add into the link list
-    if (i==nbs) {
-      pblock = new MeshBlock(i, i-nbs, loclist[i], block_size, block_bcs, this,
-                             pin, gflag);
-      pfirst = pblock;
-    } else {
-      pblock->next = new MeshBlock(i, i-nbs, loclist[i], block_size, block_bcs,
-                                   this, pin, gflag);
-      pblock->next->prev = pblock;
-      pblock = pblock->next;
+  if (Globals::my_rank < nrankmx) {
+    // create MeshBlock list for this process
+    int nbs=nslist[Globals::my_rank];
+    int nbe=nbs+nblist[Globals::my_rank]-1;
+    // create MeshBlock list for this process
+    for (int i=nbs;i<=nbe;i++) {
+      SetBlockSizeAndBoundaries(loclist[i], block_size, block_bcs);
+      // create a block and add into the link list
+      if (i==nbs) {
+        pblock = new MeshBlock(i, i-nbs, loclist[i], block_size, block_bcs, this,
+                               pin, gflag);
+        pfirst = pblock;
+      } else {
+        pblock->next = new MeshBlock(i, i-nbs, loclist[i], block_size, block_bcs,
+                                     this, pin, gflag);
+        pblock->next->prev = pblock;
+        pblock = pblock->next;
+      }
+      pblock->pbval->SearchAndSetNeighbors(tree, ranklist, nslist);
     }
-    pblock->pbval->SearchAndSetNeighbors(tree, ranklist, nslist);
+    pblock=pfirst;
+    
+    if (SELF_GRAVITY_ENABLED==1)
+      pfgrd = new FFTGravityDriver(this, pin);
+    else if (SELF_GRAVITY_ENABLED==2)
+      pmgrd = new MGGravityDriver(this, MGBoundaryFunction_, pin);
+    
+    if (turb_flag > 0)
+      ptrbd = new TurbulenceDriver(this, pin);
   }
-  pblock=pfirst;
-
-  if (SELF_GRAVITY_ENABLED==1)
-    pfgrd = new FFTGravityDriver(this, pin);
-  else if (SELF_GRAVITY_ENABLED==2)
-    pmgrd = new MGGravityDriver(this, MGBoundaryFunction_, pin);
-
-  if (turb_flag > 0)
-    ptrbd = new TurbulenceDriver(this, pin);
+  
 }
 
 //----------------------------------------------------------------------------------------
@@ -807,11 +815,14 @@ Mesh::Mesh(ParameterInput *pin, IOWrapper& resfile, int mesh_test) {
 // destructor
 
 Mesh::~Mesh() {
-  while(pblock->prev != NULL) // should not be true
-    delete pblock->prev;
-  while(pblock->next != NULL)
-    delete pblock->next;
-  delete pblock;
+  
+  if (Globals::my_rank < nrankmx) {
+    while(pblock->prev != NULL) // should not be true
+      delete pblock->prev;
+    while(pblock->next != NULL)
+      delete pblock->next;
+    delete pblock;
+  }
   delete [] nslist;
   delete [] nblist;
   delete [] ranklist;
@@ -975,21 +986,28 @@ void Mesh::OutputMeshStructure(int dim) {
 //        this assumes that phydro->NewBlockTimeStep is already called
 
 void Mesh::NewTimeStep(void) {
-  MeshBlock *pmb = pblock;
-  Real min_dt=pmb->new_block_dt;
-  pmb=pmb->next;
-  while (pmb != NULL)  {
-    min_dt=std::min(min_dt,pmb->new_block_dt);
-    pmb=pmb->next;
-  }
+  if (Globals::my_rank >= nrankmx) {
 #ifdef MPI_PARALLEL
-  MPI_Allreduce(MPI_IN_PLACE,&min_dt,1,MPI_ATHENA_REAL,MPI_MIN,MPI_COMM_WORLD);
+    Real min_dt = HUGE_NUMBER;
+    MPI_Allreduce(MPI_IN_PLACE,&min_dt,1,MPI_ATHENA_REAL,MPI_MIN,MPI_COMM_WORLD);
 #endif
-  // set it
-  dt=std::min(min_dt,static_cast<Real>(2.0)*dt);
-  if (time < tlim && tlim-time < dt)  // timestep would take us past desired endpoint
-    dt = tlim-time;
-  return;
+  } else {
+    MeshBlock *pmb = pblock;
+    Real min_dt=pmb->new_block_dt;
+    pmb=pmb->next;
+    while (pmb != NULL)  {
+      min_dt=std::min(min_dt,pmb->new_block_dt);
+      pmb=pmb->next;
+    }
+#ifdef MPI_PARALLEL
+    MPI_Allreduce(MPI_IN_PLACE,&min_dt,1,MPI_ATHENA_REAL,MPI_MIN,MPI_COMM_WORLD);
+#endif
+    // set it
+    dt=std::min(min_dt,static_cast<Real>(2.0)*dt);
+    if (time < tlim && tlim-time < dt)  // timestep would take us past desired endpoint
+      dt = tlim-time;
+    return;
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -1195,6 +1213,11 @@ void Mesh::ApplyUserWorkBeforeOutput(ParameterInput *pin) {
 // \brief  initialization before the main loop
 
 void Mesh::Initialize(int res_flag, ParameterInput *pin) {
+
+  if (Globals::my_rank >= nrankmx) {
+    NewTimeStep();
+    return;
+  }
   bool iflag=true;
   int inb=nbtotal;
   int nthreads=GetNumMeshThreads();
@@ -1351,8 +1374,9 @@ void Mesh::Initialize(int res_flag, ParameterInput *pin) {
   for (int i=0; i<nmb; ++i) {
     pmb_array[i]->phydro->NewBlockTimeStep();
   }
-
+std::cout << "testG: " << Globals::my_rank << std::endl;
   NewTimeStep();
+std::cout << "testH: " << Globals::my_rank << std::endl;
   return;
 }
 
@@ -1384,8 +1408,8 @@ void Mesh::LoadBalance(Real *clist, int *rlist, int *slist, int *nlist, int nb) 
     mincost=std::min(mincost,clist[i]);
     maxcost=std::max(maxcost,clist[i]);
   }
-  int j=(Globals::nranks)-1;
-  Real targetcost=totalcost/Globals::nranks;
+  int j=nrankmx-1;
+  Real targetcost=totalcost/nrankmx;
   Real mycost=0.0;
   // create rank list from the end: the master node should have less load
   for (int i=nb-1;i>=0;i--) {
@@ -1415,14 +1439,15 @@ void Mesh::LoadBalance(Real *clist, int *rlist, int *slist, int *nlist, int nb) 
   nlist[j]=nb-slist[j];
 
 #ifdef MPI_PARALLEL
-  if (nb % Globals::nranks != 0 && adaptive == false
+  if (nb % nrankmx != 0 && adaptive == false
   && maxcost == mincost && Globals::my_rank==0) {
     std::cout << "### Warning in LoadBalance" << std::endl
               << "The number of MeshBlocks cannot be divided evenly. "
               << "This will cause a poor load balance." << std::endl;
   }
 #endif
-  if ((Globals::nranks)*(num_mesh_threads_) > nb) {
+
+  if (nrankmx*(num_mesh_threads_) > nb) {
     msg << "### FATAL ERROR in LoadBalance" << std::endl
         << "There are fewer MeshBlocks than OpenMP threads on each MPI rank" << std::endl
         << "Decrease the number of threads or use more MeshBlocks." << std::endl;

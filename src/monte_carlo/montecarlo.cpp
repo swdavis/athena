@@ -25,11 +25,9 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
  
   pmy_mesh = pmesh;
 
-  pmcout = new MCOutput(this,pin);
-
   InitEmission=NULL;
   GetTemperature=NULL;
-
+ 
   // Set flags that control emission, absorption and scattering
   emission_meth = GetEmissionFlag(pin->GetOrAddString("montecarlo","emission","error"));
   if (emission_meth ==  EMISFF) {
@@ -39,7 +37,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
                                                           "error"));
   scattering_meth = GetScatteringFlag(pin->GetOrAddString("montecarlo","scattering",
                                                           "error"));
-   // read bc flags for each of the 6 boundaries.
+  // read bc flags for each of the 6 boundaries.
   mc_bcs[INNER_X1] = GetMCBoundaryFlag(pin->GetOrAddString("mesh","ix1_mc_bc","escape"));
   mc_bcs[OUTER_X1] = GetMCBoundaryFlag(pin->GetOrAddString("mesh","ox1_mc_bc","escape"));
   mc_bcs[INNER_X2] = GetMCBoundaryFlag(pin->GetOrAddString("mesh","ix2_mc_bc","escape"));
@@ -47,24 +45,70 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   mc_bcs[INNER_X3] = GetMCBoundaryFlag(pin->GetOrAddString("mesh","ix3_mc_bc","escape"));
   mc_bcs[OUTER_X3] = GetMCBoundaryFlag(pin->GetOrAddString("mesh","ox3_mc_bc","escape"));
 
-  moments_flag = pin->GetOrAddBoolean("montecarlo","moments",true);
+  // Initialize output
+  pmcout = new MCOutput(this,pin);
+  //pmcout->CheckFace(mc_bcs);
+
   lorentz_transform = pin->GetOrAddBoolean("montecarlo","lorentz_transform",false);
+  polarized = pin->GetOrAddBoolean("montecarlo","polarized",false);
 
   // Create and intitialize randon number generator
   iseed = pin->GetInteger("montecarlo","iseed");
 
-  // initialize monte carlo block structure to match mesh
-  MeshBlock *pmb = pmesh->pblock;
-  pblock = new MonteCarloBlock(pmb, this, pin);
-  pfirst = pblock;
-  pmb=pmb->next;
-  while (pmb != NULL)  {
-    pblock->next = new MonteCarloBlock(pmb, this, pin);
-    pblock->next->prev = pblock;
-    pblock = pblock->next;
-    pmb=pmb->next;
+  std::stringstream msg;
+
+  // set number of photons for each block
+  nphot = pin->GetInteger("montecarlo","nphot");
+  int nbtotal = pmesh->nbtotal;
+  nphlist = new int[nbtotal];
+  int nperb = nphot / nbtotal;
+  for (int i=0; i<nbtotal; ++i)
+    nphlist[i] = nperb;
+  // ensure equal number of photons per mesh block
+  nphot = 0;
+  for (int i=0; i<nbtotal; ++i)
+    nphot += nphlist[i];
+  if(nphot < nbtotal) {
+    msg << "### FATAL ERROR Monte Carlo Constructor" << std::endl
+        << "Number of photons < number of mesh blocks= " << nphot << " "
+        << nbtotal << std::endl;
+    throw std::runtime_error(msg.str().c_str());
   }
-  pblock = pfirst;
+
+  // Initialize ncells and broadcast
+  if (Globals::my_rank == 0) {
+    ncells = pmesh->GetTotalCells();
+#ifdef MPI_PARALLEL
+    // then broadcasts it
+    MPI_Bcast(&ncells, sizeof(int64_t), MPI_BYTE, 0, MPI_COMM_WORLD);
+#endif
+  }
+  // Initialize all montecarlo blocks to correspond to mesh blocks
+  mcranks = pin->GetOrAddInteger("montecarlo","mcranks",0);
+  int nmesh = (Globals::nranks)-mcranks;
+  if(Globals::my_rank < nmesh) {
+    // use mesh blocks initialized on my process
+    int myblockid = pmesh->nslist[Globals::my_rank];
+    MeshBlock *pmb = pmesh->pblock;
+    pblock = new MonteCarloBlock(pmb, this, pin);
+    pblock->myblockid = myblockid;
+    pblock->nphremain = nphlist[myblockid++]; 
+    pfirst = pblock;
+    pmb=pmb->next;
+    while (pmb != NULL)  {
+      pblock->next = new MonteCarloBlock(pmb, this, pin);
+      pblock->myblockid = myblockid;
+      pblock->nphremain = nphlist[myblockid++]; 
+      pblock->next->prev = pblock;
+      pblock = pblock->next;
+      pmb=pmb->next;
+    }
+    pblock = pfirst;
+  } else {
+    // no mesh blocks on my process, copy from another process
+    int imesh = Globals::my_rank % nmesh;
+    pblock = NULL; //teporary
+  }
 
 }
 
@@ -73,10 +117,12 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
 MonteCarlo::~MonteCarlo() {
 
   delete pmcout;
-
-  while(pblock->next != NULL)
-    delete pblock->next;
-  delete pblock;
+  if (pblock != NULL) {
+    while(pblock->next != NULL)
+      delete pblock->next;
+    delete pblock;
+  }
+  delete nphlist;
 
 }
 
@@ -262,11 +308,12 @@ void MonteCarlo::EnrollUserGetTemperature(TempFunc_t tempfunc) {
 void MonteCarlo::RunStaticMonteCarlo() {
  
   MonteCarloBlock *pmcb = pblock;
-
+  if (pmcb==NULL)
+    return;
   // Check/set function pointers
   if (InitEmission == NULL) {
     std::stringstream msg;
-    msg << "### FATAL ERROR in LaunchPhotons()" << std::endl
+    msg << "### FATAL ERROR in RunStaticMonteCarlo()" << std::endl
         << "InitEmission function pointer not set." << std::endl;
     throw std::runtime_error(msg.str().c_str());
   }
@@ -289,17 +336,18 @@ void MonteCarlo::RunStaticMonteCarlo() {
     pmcb = pmcb->next;
   }
 
-  // transfer photons overall blocks
+  // transfer photons over all blocks
   pmcb = pblock;
-  pmcb->TransferPhotons();
+  pmcb->TransferPhotons(pmcb->nphremain);
   pmcb = pmcb->next;
   while (pmcb != NULL) {
-    pmcb->TransferPhotons();
+    pmcb->TransferPhotons(pmcb->nphremain);
     pmcb = pmcb->next;
   }
 
   return;
 }
+
 
 
 // constructor

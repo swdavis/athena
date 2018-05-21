@@ -37,7 +37,8 @@ enum EmissionFlag {EMISUSER = 0, EMISFF = 1};
 enum AbsorptionFlag {ABSUSER = 0, ABSNONE = 1, ABSFF = 2};
 enum ScatteringFlag {SCATUSER = 0, SCATNONE =1, SCATISO = 2, SCATTHOM = 3, SCATCOMP =4};
 enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY = 2,
-                     MC_POLAR_BNDRY = 3, MC_REFLECT_BNDRY = 4, MC_USER_BNDRY = 5};
+                     MC_POLAR_BNDRY = 3, MC_REFLECT_BNDRY = 4, MC_USER_BNDRY = 5,
+                     MC_BLOCK_BNDRY = 6};
 // Array indices for monte carlo radiation moments
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
       MCIPR12=7, MCIPR13=8, MCIPR23=9, MCIPR21=10, MCIPR31=11, MCIPR32=12};
@@ -83,7 +84,7 @@ enum EmissionFlag GetEmissionFlag(std::string input_string);
 enum AbsorptionFlag GetAbsorptionFlag(std::string input_string);
 enum ScatteringFlag GetScatteringFlag(std::string input_string);
 
-
+//----------------------------------------------------------------------------------------
 //! \class MCRandom
 //  \brief monte carlo random number generator
 
@@ -97,6 +98,7 @@ public:
   Real uniform();
 };
 
+//----------------------------------------------------------------------------------------
 //! \class MonteCarlo
 //  \brief monte carlo functions and data
 
@@ -109,14 +111,20 @@ public:
   Mesh *pmy_mesh;
   MCOutput *pmcout;
   MonteCarloBlock *pblock;
-  int nphot;         // total number of photons to integrate
+  int nphot;  // total number of photons to integrate
+  int *nphlist; // number of photons per block
+  int64_t ncells; // total number of cells in mesh
   int iseed;  // seed to initialized random number generator(s)
+  int mcranks; // number of monte carlo only ranks
+ 
+
   enum EmissionFlag emission_meth;
   enum AbsorptionFlag absorption_meth;
   enum ScatteringFlag scattering_meth;
   enum MCBoundaryFlag mc_bcs[6];
-  bool moments_flag; // Compute/output moments
+
   bool lorentz_transform;  // Compute lorentz transformations
+  bool polarized;
 
   EmisFunc_t InitEmission;
   TempFunc_t GetTemperature;
@@ -132,10 +140,11 @@ private:
   // functions
   void GetDensity(MonteCarloBlock *pmcb);
   void GetVelocity(MonteCarloBlock *pmcb);
-  void CountCellsOnBlocks(void);
-
+  void DistributePhotonsToBlocks(void);
+ 
 };
 
+//----------------------------------------------------------------------------------------
 //! \class MonteCarloBlock
 //  \brief monte carlo functions and data contained on each mesh block
 
@@ -169,8 +178,10 @@ public:
   OpacFunc_t ScatteringOpacity;
   ScatFunc_t Scatter;
 
-  int nphot;  // total number of photons for this block;
-  int ncells;
+  int nphtot; // Photons integrated thus far
+  int nphremain; // total number of photons to integrate
+  int myblockid;
+  int nx1,nx2,nx3;
   int is,ie,js,je,ks,ke;
   int nfreq, nmu, nphi, nsurf;
 
@@ -194,17 +205,18 @@ public:
 
   // functions
   void MonteCarloProblemGenerator(ParameterInput *pin);
-  void TransferPhotons();  // Transfer photons on this block
+  void TransferPhotons(int nphot);  // Transfer photons on this block
   void LorentzTransform(Photon *pphot, const Real sign);
   void InitializePhoton(Photon *pphot);
   void DefaultGetTemperature();
   void UpdateMoments(Photon *pphot, Real dl);
   void NormalizeMoments(bool normalize);
+
   //void GetPhotonsFromNeighbors();
   //void SendPhotonsToNeighbors();
 
 private:
-  
+   void SetBoundaryValues(enum MCBoundaryFlag *input_bcs);
  
 };
 

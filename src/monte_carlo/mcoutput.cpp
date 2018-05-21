@@ -15,28 +15,49 @@
 #include "mcoutput.hpp"
 
 // constructor
-Spectrum::Spectrum(Real elow, Real ehigh, int n0, int n1, int n2, 
-                   bool pol) {
+Spectrum::Spectrum(MomentumRange input_range, bool pol) {
 
-  emin = elow;
-  emax = ehigh;
-  nfreq = n0;
-  nmu = n1;
-  nphi = n2;
+  next = NULL;
+  face = FACE_UNDEF;
+  range = input_range;
   polarized = pol;
   
+ 
   // Allocate and intialize energy bins
-  energies.NewAthenaArray(nfreq+1);
-  BuildFrequencyGrid(emin,emax,nfreq);
+  energies.NewAthenaArray(range.ne+1);
+  BuildFrequencyGrid(range.emin,range.emax,range.ne);
 
   // Allocate arrays for intensities
-  intensity.NewAthenaArray(nphi,nmu,nfreq);
-  intensity_sq.NewAthenaArray(nphi,nmu,nfreq);
+  intensity.NewAthenaArray(range.nphi,range.ncth,range.ne);
+  intensity_sq.NewAthenaArray(range.nphi,range.ncth,range.ne);
   if (polarized) {
-    stokesq.NewAthenaArray(nphi,nmu,nfreq);
-    stokesq_sq.NewAthenaArray(nphi,nmu,nfreq);
-    stokesu.NewAthenaArray(nphi,nmu,nfreq);
-    stokesu_sq.NewAthenaArray(nphi,nmu,nfreq);
+    stokesq.NewAthenaArray(range.nphi,range.ncth,range.ne);
+    stokesq_sq.NewAthenaArray(range.nphi,range.ncth,range.ne);
+    stokesu.NewAthenaArray(range.nphi,range.ncth,range.ne);
+    stokesu_sq.NewAthenaArray(range.nphi,range.ncth,range.ne);
+  }
+}
+
+// constructor
+Spectrum::Spectrum(Spectrum *pspec) {
+
+  next = NULL;
+  range = pspec->range;
+  polarized = pspec->polarized;
+  face = pspec->face;
+ 
+  // Allocate and intialize energy bins
+  energies.NewAthenaArray(range.ne+1);
+  BuildFrequencyGrid(range.emin,range.emax,range.ne);
+
+  // Allocate arrays for intensities
+  intensity.NewAthenaArray(range.nphi,range.ncth,range.ne);
+  intensity_sq.NewAthenaArray(range.nphi,range.ncth,range.ne);
+  if (polarized) {
+    stokesq.NewAthenaArray(range.nphi,range.ncth,range.ne);
+    stokesq_sq.NewAthenaArray(range.nphi,range.ncth,range.ne);
+    stokesu.NewAthenaArray(range.nphi,range.ncth,range.ne);
+    stokesu_sq.NewAthenaArray(range.nphi,range.ncth,range.ne);
   }
 }
 // destructor
@@ -70,6 +91,31 @@ void Spectrum::BuildFrequencyGrid(Real emin, Real emax, int nfreq) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void Spectrum::SetSurface(std::string input_face)
+//  \brief set corresponding surface
+
+void Spectrum::SetSurface(std::string input_face) {
+
+  if (input_face == "inner_x1") {
+    face = INNER_X1;
+  } else if (input_face == "outer_x1") {
+    face = OUTER_X1;
+  } else if (input_face == "inner_x2") {
+    face = INNER_X2;
+  } else if (input_face == "outer_x2") {
+    face = OUTER_X2;
+  } else if (input_face == "inner_x3") {
+    face = INNER_X3;
+  } else if (input_face == "outer_x3") {
+    face = OUTER_X3;
+  } else {
+    std::cout << "Warning: face not set correctly in output spectrum: " << input_face
+              << ", leaving undefined." << std::endl;
+  }
+}
+
+
+//----------------------------------------------------------------------------------------
 //! \fn void Spectrum::UpdateSpectrum(Photon *pphot)
 //  \brief add photon contribution to spectrum
 //  *** should be more general to explitly account for non-cartesian possibilities
@@ -79,6 +125,8 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
   Real mu = fabs(pphot->k[2]); //CARTESIAN ONLY
   int ebin,mubin,phibin;
   Real phi;
+  int nphi = range.nphi;
+  int nmu = range.ncth;
 
   // Get ebin
   ebin = GetEbin(pphot->energy);
@@ -135,12 +183,12 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
 int Spectrum::GetEbin(Real energy)
 {
 
-  if ( (energy < energies(0)) || (energy > energies(nfreq)) )
+  if ( (energy < energies(0)) || (energy > energies(range.ne)) )
     return -1;
 
   // Perform binary search
   int low = 0;
-  int high = nfreq+1;
+  int high = range.ne+1;
   int mid;
   while(low <= high) {
     mid = (low + high) / 2;
@@ -166,7 +214,57 @@ int Spectrum::GetEbin(Real energy)
 MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
 
   pmy_mc = pmc;
+  std::stringstream msg;
+  InputBlock *pib = pin->pfirst_block;
 
+  moments = false;
+  pspec = NULL;
+  // loop over input block names.  Find those that start with "output", read parameters,
+  // and construct linked list of spectra if present, set moments flag if moments output
+  // present
+  Spectrum *pfirst = NULL, *plast;
+  while (pib != NULL) {
+    if (pib->block_name.compare(0,6,"output") == 0) {
+      // Look for spectra
+      std::string type = pin->GetString(pib->block_name,"file_type");
+      if (type.compare("spec") == 0) {
+        MomentumRange range;
+        range.ne = pin->GetInteger(pib->block_name,"ne");
+        Real emin = pin->GetReal("montecarlo","emin");
+        Real emax = pin->GetReal("montecarlo","emax");
+        Real everg = 1.6021772e-12;
+        range.emin = everg * pin->GetOrAddReal(pib->block_name,"emin",emin);
+        range.emax = everg * pin->GetOrAddReal(pib->block_name,"emax",emax);
+        range.nphi = pin->GetOrAddInteger(pib->block_name,"nphi",8);
+        range.phimin = pin->GetOrAddReal(pib->block_name,"phimin",0.);
+        range.phimax = pin->GetOrAddReal(pib->block_name,"phimax",2.*PI);
+        range.ncth = pin->GetOrAddInteger(pib->block_name,"ncth",8);
+        range.cthmin = pin->GetOrAddReal(pib->block_name,"cthmin",0.);
+        range.cthmax = pin->GetOrAddReal(pib->block_name,"cthmax",1.); 
+        bool polarized = pin->GetOrAddBoolean(pib->block_name,"polarized",pmc->polarized);
+        pspec = new Spectrum(range,polarized);
+        std::string face = pin->GetOrAddString(pib->block_name,"face","absent");
+        if (face.compare("absent") != 0) {
+          pspec->SetSurface(face);
+        }
+        if (pfirst == NULL)
+          pfirst = pspec;
+        else
+          plast->next = pspec;
+        plast = pspec;
+      } else {
+        // Look for moments
+        std::string var = pin->GetOrAddString(pib->block_name,"variable","absent");
+        if (var.compare("mcmom") == 0 || var.compare("Ermc") == 0 ||
+            var.compare("Frmc") == 0 || var.compare("Prmc") == 0) {
+          moments = true;
+        }
+      }
+    }
+    pib = pib->pnext;  // move to next input block name
+  }
+  // set pspec to head node of specrum list
+  pspec = pfirst;
  
 }
 
@@ -184,16 +282,16 @@ void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string outfile) {
   FILE *of_ptr;
   
   Real everg = 1.6021772e-12;  
-  Real emin = pspec->emin / everg; // output in eV
-  Real emax = pspec->emax / everg; // output in eV
+  Real emin = pspec->range.emin / everg; // output in eV
+  Real emax = pspec->range.emax / everg; // output in eV
   if ((of_ptr=fopen("intens_sums.out","w")) != NULL) {
-    fprintf(of_ptr,"%d %d %d %g\n",pspec->nfreq,pspec->nmu,pspec->nphi,norm);
+    fprintf(of_ptr,"%d %d %d %g\n",pspec->range.ne,pspec->range.ncth,pspec->range.nphi,norm);
     fprintf(of_ptr,"%lG %lG %lG\n",everg,emin,emax);
 
     // Output intensity data at top of domain
-    for(int k=0; k<pspec->nfreq; ++k) {
-      for(int j=0; j<pspec->nmu; ++j) {
-        for(int i=0; i<pspec->nphi; ++i) {
+    for(int k=0; k<pspec->range.ne; ++k) {
+      for(int j=0; j<pspec->range.ncth; ++j) {
+        for(int i=0; i<pspec->range.nphi; ++i) {
           fprintf(of_ptr,"%G %G ",pspec->intensity(i,j,k),
                   pspec->intensity_sq(i,j,k));
           if (pspec->polarized) {
@@ -216,16 +314,20 @@ void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string outfile) {
 
 void MCOutput::OutputSpectra(MonteCarlo *pmc) {
   
-  std::string outfile;
+  if (pspec == NULL)
+    return;
 
+  std::string outfile;
+  
   MonteCarloBlock *pmcb = pmc->pblock;
+  if (pmcb == NULL)
+    return;
   do {
-    Real ntot = static_cast<Real>(pmcb->ncells);
-    Real nphot = static_cast<Real>(pmcb->nphot);
+    Real norm = static_cast<Real>(pmc->nphot)/ static_cast<Real>(pmc->ncells);    
     //for (int i=0; i<pmcb->nspec; ++i) {
     //  OutputSpectrum(pmcb->pspec[i],nphot/ntot,outfile);
     //}
-    OutputSpectrum(pmcb->pspec,nphot/ntot,outfile);
+    OutputSpectrum(pmcb->pspec,norm,outfile);
     pmcb = pmcb->next;
   } while (pmcb != NULL);
 

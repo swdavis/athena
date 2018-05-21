@@ -152,6 +152,7 @@ class Mesh {
   friend class MultigridDriver;
   friend class MGGravityDriver;
   friend class Gravity;
+  friend class MonteCarlo;
 #ifdef HDF5OUTPUT
   friend class ATHDF5Output;
 #endif
@@ -176,6 +177,7 @@ public:
   bool adaptive, multilevel;
   int gflag;
   int turb_flag; // turbulence flag
+  int nrankmx; // maximum non-monte-carlo rank
 
   MeshBlock *pblock;
 

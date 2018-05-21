@@ -12,14 +12,33 @@
 #include "../athena.hpp"
 #include "montecarlo.hpp"
 
+
+//----------------------------------------------------------------------------------------
+//! \struct MomentumRange
+//  \brief physical ranges of photon momentum grid
+
+typedef struct MomentumRange {
+  int ne, ncth, nphi;
+  Real emin, emax;
+  Real phimin, phimax;
+  Real cthmin, cthmax;
+
+} MomentumRange;
+
+//----------------------------------------------------------------------------------------
+//! \class Spectrum
+//  \brief spectral bins for outputs
+
 class Spectrum {
 public:
-  Spectrum(Real emin, Real emax, int nfreq, int nmu, int phi, bool polarized);
+  Spectrum(MomentumRange input_range, bool polarized);
+  Spectrum(Spectrum *pspec);
   ~Spectrum();
 
-  int nfreq, nmu, nphi;
-  Real emin, emax;
+  MomentumRange range;
   bool polarized;
+  Spectrum *next;  // next spectrum
+  enum BoundaryFace face;
 
   AthenaArray<Real> energies;
   AthenaArray<Real> intensity;
@@ -33,8 +52,13 @@ public:
   void BuildFrequencyGrid(Real emin, Real emax, int nfreq);
   void UpdateSpectrum(Photon *pphot);
   int GetEbin(Real energy);
+  void SetSurface(std::string input_face);
 
 };
+
+//----------------------------------------------------------------------------------------
+//! \class MCOutput
+//  \brief class for handling monte carlo specific spectral outputs
 
 class MCOutput {
 public:
@@ -42,6 +66,10 @@ public:
   ~MCOutput();
 
   MonteCarlo *pmy_mc;
+  Spectrum *pspec;
+  bool moments;
+
+  //functions
   void OutputSpectra(MonteCarlo *pmc);
   void OutputSpectrum(Spectrum *pspec, Real norm, std::string outfile);
 

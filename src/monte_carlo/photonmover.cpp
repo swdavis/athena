@@ -109,14 +109,22 @@ void PhotonMover::MovePhotonToNextZone(Photon *pphot, Coordinates *pco,
       pphot->i1++;
       if(pphot->i1 <= pmcb->ie)
         pphot->x[0] = pco->x1f(pphot->i1);
-      else
+      else {
         pmcb->pbval->BoundaryFunction_[OUTER_X1](pmcb,pco,pphot);
+        if (pphot->status == ESCAPED) {
+          pphot->face = OUTER_X1;
+        }
+      }
     } else {
       pphot->i1--;
       if(pphot->i1 >= pmcb->is)
         pphot->x[0] = pco->x1f(pphot->i1+1);
-      else
+      else {
         pmcb->pbval->BoundaryFunction_[INNER_X1](pmcb,pco,pphot);
+        if (pphot->status == ESCAPED) {
+          pphot->face = INNER_X1;
+        }
+      }
     }
   }
   if ((face == 1) || (face == 3) || (face == 4) || (face == 6)) { //update x2 face
@@ -124,14 +132,22 @@ void PhotonMover::MovePhotonToNextZone(Photon *pphot, Coordinates *pco,
       pphot->i2++;
       if(pphot->i2 <= pmcb->je)
         pphot->x[1] = pco->x2f(pphot->i2);
-      else
+      else {
         pmcb->pbval->BoundaryFunction_[OUTER_X2](pmcb,pco,pphot);
+        if (pphot->status == ESCAPED) {
+          pphot->face = OUTER_X2;
+        }
+      }
     } else {
       pphot->i2--;
       if(pphot->i2 >= pmcb->js)
         pphot->x[1] = pco->x2f(pphot->i2+1);
-      else
+      else {
         pmcb->pbval->BoundaryFunction_[INNER_X2](pmcb,pco,pphot);
+        if (pphot->status == ESCAPED) {
+          pphot->face = INNER_X2;
+        }
+      }
     } 
   }
   if ((face == 2) || (face == 4) || (face == 5) || (face == 6)) { //update x3 face
@@ -139,14 +155,22 @@ void PhotonMover::MovePhotonToNextZone(Photon *pphot, Coordinates *pco,
       pphot->i3++;
       if(pphot->i3 <= pmcb->ke)
         pphot->x[2] = pco->x3f(pphot->i3);
-      else
+      else {
         pmcb->pbval->BoundaryFunction_[OUTER_X3](pmcb,pco,pphot);
+        if (pphot->status == ESCAPED) {
+          pphot->face = OUTER_X2;
+        }
+      }
     } else {
       pphot->i3--;
       if(pphot->i3 >= pmcb->ks)
         pphot->x[2] = pco->x3f(pphot->i3+1);
-      else
+      else {
         pmcb->pbval->BoundaryFunction_[INNER_X3](pmcb,pco,pphot);
+        if (pphot->status == ESCAPED) {
+          pphot->face = INNER_X3;
+        }
+      }
     } 
   }
 

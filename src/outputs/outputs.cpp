@@ -100,6 +100,14 @@ Outputs::Outputs(Mesh *pm, ParameterInput *pin) {
   // and construct linked list of OutputTypes.
   while (pib != NULL) {
     if (pib->block_name.compare(0,6,"output") == 0) {
+      if (MONTE_CARLO_ENABLED) {
+        // Skip spectrum outputs which are handled by MCOutput class
+        std::string type = pin->GetString(pib->block_name,"file_type");
+        if (type.compare("spec") == 0) {
+          pib = pib->pnext;  // move to next input block name
+          break;
+        }
+      }
       OutputParameters op;  // define temporary OutputParameters struct
 
       // extract integer number of output block.  Save name and number

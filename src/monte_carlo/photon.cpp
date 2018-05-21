@@ -17,7 +17,7 @@ Photon::Photon(MonteCarloBlock *pmcb) {
 
   pmy_mcb = pmcb;
   weight = 1.0;
-
+  face = FACE_UNDEF;
 }
 
 // destructor
@@ -26,7 +26,7 @@ Photon::~Photon() {
 
 }
 
-
+// rewrite this as a constructor
 void Photon::CopyPhoton(Photon *pphot) {
 
   i1 = pphot->i1;
