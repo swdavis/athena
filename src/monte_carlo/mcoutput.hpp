@@ -39,6 +39,7 @@ public:
   bool polarized;
   Spectrum *next;  // next spectrum
   enum BoundaryFace face;
+  int id;
 
   AthenaArray<Real> energies;
   AthenaArray<Real> intensity;
@@ -53,7 +54,7 @@ public:
   void UpdateSpectrum(Photon *pphot);
   int GetEbin(Real energy);
   void SetSurface(std::string input_face);
-
+  void AddSpectrum(Spectrum *pspec);
 };
 
 //----------------------------------------------------------------------------------------
@@ -70,6 +71,7 @@ public:
   bool moments;
 
   //functions
+  void CollectSpectra(MonteCarlo *pmc);
   void OutputSpectra(MonteCarlo *pmc);
   void OutputSpectrum(Spectrum *pspec, Real norm, std::string outfile);
 

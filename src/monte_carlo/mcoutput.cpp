@@ -9,10 +9,12 @@
 // C++ headers
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdexcept>  // runtime_error
 
 // Athena++ headers
 #include "montecarlo.hpp"
 #include "mcoutput.hpp"
+#include "../globals.hpp"
 
 // constructor
 Spectrum::Spectrum(MomentumRange input_range, bool pol) {
@@ -21,7 +23,6 @@ Spectrum::Spectrum(MomentumRange input_range, bool pol) {
   face = FACE_UNDEF;
   range = input_range;
   polarized = pol;
-  
  
   // Allocate and intialize energy bins
   energies.NewAthenaArray(range.ne+1);
@@ -45,7 +46,8 @@ Spectrum::Spectrum(Spectrum *pspec) {
   range = pspec->range;
   polarized = pspec->polarized;
   face = pspec->face;
- 
+  id = pspec->id;
+
   // Allocate and intialize energy bins
   energies.NewAthenaArray(range.ne+1);
   BuildFrequencyGrid(range.emin,range.emax,range.ne);
@@ -210,6 +212,36 @@ int Spectrum::GetEbin(Real energy)
 
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void Spectrum::AddSpectrum(Spectrum *pspec)
+//  \brief return add contents of another spectrum
+
+void Spectrum::AddSpectrum(Spectrum *pspec) {
+
+  if (pspec->id != id) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in AddSpectrum" << std::endl
+        << "Input spectrum id ="  << pspec->id << " but this spectrum id = " 
+        << id << std::endl;
+    throw std::runtime_error(msg.str().c_str());
+  } else {
+    for(int i=0; i<range.nphi; ++i) {
+      for(int j=0; j<range.ncth; ++j) {
+        for(int k=0; k<range.ne; ++k) {
+          intensity(i,j,k) += pspec->intensity(i,j,k);
+          intensity_sq(i,j,k) += pspec->intensity_sq(i,j,k);
+          if (pspec->polarized) {
+            stokesq(i,j,k) += pspec->stokesq(i,j,k);
+            stokesq_sq(i,j,k) += pspec->stokesq_sq(i,j,k);
+            stokesu(i,j,k) += pspec->stokesu(i,j,k);
+            stokesu_sq(i,j,k) += pspec->stokesu_sq(i,j,k);
+          }
+        }}}
+  }
+
+}
+
+
 // constructor
 MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
 
@@ -222,6 +254,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
   // loop over input block names.  Find those that start with "output", read parameters,
   // and construct linked list of spectra if present, set moments flag if moments output
   // present
+  int id =0;
   Spectrum *pfirst = NULL, *plast;
   while (pib != NULL) {
     if (pib->block_name.compare(0,6,"output") == 0) {
@@ -243,8 +276,9 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         range.cthmax = pin->GetOrAddReal(pib->block_name,"cthmax",1.); 
         bool polarized = pin->GetOrAddBoolean(pib->block_name,"polarized",pmc->polarized);
         pspec = new Spectrum(range,polarized);
-        std::string face = pin->GetOrAddString(pib->block_name,"face","absent");
-        if (face.compare("absent") != 0) {
+        pspec->id = id++;
+        std::string face = pin->GetOrAddString(pib->block_name,"face","none");
+        if (face.compare("none") != 0) {
           pspec->SetSurface(face);
         }
         if (pfirst == NULL)
@@ -254,7 +288,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         plast = pspec;
       } else {
         // Look for moments
-        std::string var = pin->GetOrAddString(pib->block_name,"variable","absent");
+        std::string var = pin->GetOrAddString(pib->block_name,"variable","none");
         if (var.compare("mcmom") == 0 || var.compare("Ermc") == 0 ||
             var.compare("Frmc") == 0 || var.compare("Prmc") == 0) {
           moments = true;
@@ -280,7 +314,6 @@ MCOutput::~MCOutput() {
 void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string outfile) {
 
   FILE *of_ptr;
-  
   Real everg = 1.6021772e-12;  
   Real emin = pspec->range.emin / everg; // output in eV
   Real emax = pspec->range.emax / everg; // output in eV
@@ -309,26 +342,49 @@ void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string outfile) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void MCOutput::CollectSpectra(MonteCarlo *pmc)
+//  \brief 
+
+void MCOutput::CollectSpectra(MonteCarlo *pmc) {
+
+  if (Globals::my_rank == 0) {
+    Spectrum *poutspec=pspec, *pblockspec;
+    while (poutspec != NULL) {
+      int id = poutspec->id;
+      // loop over monte carl blocks
+      MonteCarloBlock *pmcb = pmc->pblock;
+      if (pmcb == NULL)
+        return;
+      pblockspec = pmcb->pspec;
+      while (pblockspec->id != id) {
+        pblockspec = pblockspec->next;
+      }
+      poutspec->AddSpectrum(pblockspec);
+      poutspec = poutspec->next;
+    }
+  }
+
+
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void MCOutput::OutputSpectra(MonteCarlo *pmc)
-//  \brief output all intensity spectra over all blocks
+//  \brief output all intensity spectra
 
 void MCOutput::OutputSpectra(MonteCarlo *pmc) {
-  
-  if (pspec == NULL)
-    return;
 
-  std::string outfile;
-  
-  MonteCarloBlock *pmcb = pmc->pblock;
-  if (pmcb == NULL)
-    return;
-  do {
+  if (Globals::my_rank == 0) {
+    if (pspec == NULL)
+      return;
+    CollectSpectra(pmc);
+
+    Spectrum *pspect = pspec;
+    std::string outfile;  
     Real norm = static_cast<Real>(pmc->nphot)/ static_cast<Real>(pmc->ncells);    
-    //for (int i=0; i<pmcb->nspec; ++i) {
-    //  OutputSpectrum(pmcb->pspec[i],nphot/ntot,outfile);
-    //}
-    OutputSpectrum(pmcb->pspec,norm,outfile);
-    pmcb = pmcb->next;
-  } while (pmcb != NULL);
+    while (pspect != NULL) {
+      OutputSpectrum(pspec,norm,outfile);
+      pspect = pspect->next;
+    }
+  }
 
 }

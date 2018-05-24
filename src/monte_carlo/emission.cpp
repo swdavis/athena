@@ -13,12 +13,10 @@
 #include "../hydro/hydro.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn void InitializeEmissionFreefree(MonteCarloBlock *pmbc, MeshBlock *pmb)
+//! \fn void InitializeEmissionFreefree(MonteCarloBlock *pmcb)
 //  \brief Initialize emission array for static monte carlo calculation
 
 void InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
-  //void InitializeEmissionFreeFree(MonteCarloBlock *pmcb, MeshBlock *pmb) {
-
 
   Real heabund = 0.09; // Should have more general EOS functions
   Real mp = 1.6726e-24;
@@ -35,7 +33,7 @@ void InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
         Real temp = pmcb->tgas(k,j,i);
         Real nhii = pmcb->rho(k,j,i)/mp/(1.0+4.0*heabund);
         Real ne = (1.0+2.0*heabund) * nhii;
-        Real vol = pmcb->pmy_coord->GetCellVolume(k,j,i);
+        Real vol = pmcb->pcoord->vol(k,j,i);
         //std::cout << vol << std::endl;
         pmcb->emission(k,j,i) = eta0/sqrt(temp)*ne*nhii*g*vol;
       }}}
@@ -82,14 +80,14 @@ void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot)
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, Coordinates *pcoord)
+//! \fn void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pcoord)
 //  \brief choose random position within cartesian gridzone
 
-void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, Coordinates *pcoord) {
+void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pcoord) {
 
-  Real xl = pcoord->x1f(pphot->i1), dx = pcoord->dx1f(pphot->i1);
-  Real yl = pcoord->x2f(pphot->i2), dy = pcoord->dx2f(pphot->i2);
-  Real zl = pcoord->x3f(pphot->i3), dz = pcoord->dx3f(pphot->i3);
+  Real xl = pcoord->x1f(pphot->i1); Real dx = pcoord->x1f(pphot->i1+1)-xl;
+  Real yl = pcoord->x2f(pphot->i2); Real dy = pcoord->x2f(pphot->i2+1)-yl;
+  Real zl = pcoord->x3f(pphot->i3); Real dz = pcoord->x3f(pphot->i3+1)-zl;
 
   pphot->x[0] = xl+pran->uniform()*dx;
   pphot->x[1] = yl+pran->uniform()*dy;
@@ -98,10 +96,10 @@ void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, Coordinates *pcoord
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void GetZonePositionSphericalPolar()
+//! \fn void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pcoord)
 //  \brief choose random position within spherical-polar gridzone
 
-void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, Coordinates *pcoord) {
+void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pcoord) {
 
 
   Real rl = pcoord->x1f(pphot->i1), rh = pcoord->x1f(pphot->i1+1);
@@ -110,7 +108,7 @@ void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, Coordinates *p
   Real cthl = cos(pcoord->x2f(pphot->i2+1));
   Real cth = cthl + pran->uniform() * (cthh-cthl);
   pphot->x[1] = acos(cth);
-  Real pl = pcoord->x3f(pphot->i3), dp = pcoord->dx3f(pphot->i3);
+  Real pl = pcoord->x3f(pphot->i3); Real dp = pcoord->x3f(pphot->i3+1)-pl;
   pphot->x[2] = pl+pran->uniform()*dp;
 
 }

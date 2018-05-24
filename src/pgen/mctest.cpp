@@ -150,7 +150,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   //          << pphot->i2 << ' ' << pphot->i3 << std::endl;
 
   // Obtain initial position within zone
-  GetZonePosition(pphot,pran,pmy_coord);
+  GetZonePosition(pphot,pran,pcoord);
   //std::cout << pphot->x[0] << ' ' << pphot->x[1] << ' ' << pphot->x[2]
   //          << std::endl;
 

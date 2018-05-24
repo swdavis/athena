@@ -24,26 +24,26 @@
 
 // constructor, initializes data structures and parameters
 
-MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput *pin) {
+MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCarlo *pmc, 
+                                 ParameterInput *pin) {
   
   pmy_mc = pmc;
+  pmy_mesh = pmc->pmy_mesh;
 
   // Set related meshblock, coordinate
   pmy_block = pmb;
-  // Set pointer to this monte carlo block in pmb (***temporary***)
-  pmb->pmy_mcb = this;
 
-  pmy_coord = pmb->pcoord;
+  // Set pointer to this monte carlo block in pmb if not NULL
+  if (pmb != NULL) {
+    pmb->pmy_mcb = this;
+  }
 
   // Construct pointer to photon 
   pphoton  = new Photon(this); // Currently one photon per block (will change)
 
-  // Set photon mover based on coordinate system
-  if (COORDINATE_SYSTEM == "cartesian") {
-    pmover = new CartesianMover(this);
-  } else if (COORDINATE_SYSTEM == "spherical_polar") {
-    pmover = new SphericalPolarMover(this);
-  }
+  // Initialize to NULL and set below
+  pmover = NULL;
+  pcoord = NULL;
 
   // Initialize input parameters and flags
   zone_weight_flag = pin->GetOrAddBoolean("montecarlo","zone_weight",true);
@@ -55,7 +55,6 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
   int iseed = pmy_mc->iseed + rank *100;  // temporary solution
   pran = new MCRandom(iseed);
 
-  prev=NULL;
   next=NULL;
 
   // Set energy range in ergs (input assumed in eV)
@@ -94,41 +93,51 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
   pspec = pfirst;
 
   // set local mesh parameters to correspond to mesh block
-  is = pmb->is; ie = pmb->ie;
-  js = pmb->js; je = pmb->je;
-  ks = pmb->ks; ke = pmb->ke;
-  nx1 = pmb->block_size.nx1;
-  nx2 = pmb->block_size.nx2;
-  nx3 = pmb->block_size.nx3;
+  if (pmb != NULL) {
+    is = pmb->is; ie = pmb->ie;
+    js = pmb->js; je = pmb->je;
+    ks = pmb->ks; ke = pmb->ke;
+    nx1 = pmb->block_size.nx1;
+    nx2 = pmb->block_size.nx2;
+    nx3 = pmb->block_size.nx3;
+    pcoord = new MCCoord(pmb->pcoord,this);
+  } else {
+    if (pblsize == NULL) {
+      std::stringstream msg;
+      msg << "### FATAL ERROR Monte Carlo Block Constructor" << std::endl
+          << "Both input Mesh Block and Block Size are NULL." << std::endl;
+      throw std::runtime_error(msg.str().c_str());
+    } else {
+      is = pblsize->is; ie = pblsize->ie;
+      js = pblsize->js; je = pblsize->je;
+      ks = pblsize->ks; ke = pblsize->ke;
+      nx1 = pblsize->nx1;
+      nx2 = pblsize->nx2;
+      nx3 = pblsize->nx3;
+      pcoord = new MCCoord(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST));
+    }
+  }
+
   codetocgs_rho = 1.0; codetoc_vel = 1.0;  // default cgs for code units
 
-  // Allocate memory for emissivity (if used) and radiation moments
-  int ncells1 = nx1 + 2*(NGHOST);
-  int ncells2 = 1, ncells3 = 1;
-  if (nx2 > 1) ncells2 = nx2 + 2*(NGHOST);
-  if (nx3 > 1) ncells3 = nx3 + 2*(NGHOST);
 
-  // allocate emission array for user function only if requested in input block
-  // all current non-user methods require emission array
+  // Set up photon movement and initialization methods
+  if (COORDINATE_SYSTEM == "cartesian") {
+    pmover = new CartesianMover(this);
+    GetZonePosition = GetZonePositionCartesian;
+  } else if (COORDINATE_SYSTEM == "spherical_polar") {
+    pmover = new SphericalPolarMover(this);
+    GetZonePosition = GetZonePositionSphericalPolar;
+  }
+
+  // Set emission method
   if (emission_meth == EMISUSER) {
     emission_array_flag = pin->GetBoolean("montecarlo","emiss_array");
   } else if (emission_meth ==  EMISFF) {
     emission_array_flag = true;
   }
-  if (emission_array_flag) emission.NewAthenaArray(ncells3,ncells2,ncells1);
 
-  // Allocate (/initialize) variable arrays needed for evolution/output
-  rho.NewAthenaArray(ncells3,ncells2,ncells1);
-  tgas.NewAthenaArray(ncells3,ncells2,ncells1);
-  if (lorentz_transform) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
-  if (moments_flag) moments.NewAthenaArray(13,ncells3,ncells2,ncells1);
-
-  // Set function pointers
-  if (COORDINATE_SYSTEM == "cartesian") {
-      GetZonePosition = GetZonePositionCartesian;
-  } else if (COORDINATE_SYSTEM == "spherical_polar") {
-    GetZonePosition = GetZonePositionSphericalPolar;
-  }
+  // Set absorption opacity
   if (absorption_meth == ABSUSER) {
     AbsorptionOpacity = NULL;
   } else if (absorption_meth == ABSNONE) {
@@ -137,6 +146,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
     AbsorptionOpacity = FreeFreeAbsorptionOpacity;
   }
  
+  // Set scattering opacity and method
   if (scattering_meth == SCATUSER) {
     ScatteringOpacity = NULL;
     Scatter = NULL;
@@ -169,6 +179,18 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput
       Scatter = ScatterComptonUnpolarized;
     } 
   }
+
+
+  // Allocate (/initialize) variable arrays needed for evolution/output
+  int ncells1 = nx1 + 2*(NGHOST);
+  int ncells2 = 1, ncells3 = 1;
+  if (nx2 > 1) ncells2 = nx2 + 2*(NGHOST);
+  if (nx3 > 1) ncells3 = nx3 + 2*(NGHOST);
+  rho.NewAthenaArray(ncells3,ncells2,ncells1);
+  tgas.NewAthenaArray(ncells3,ncells2,ncells1);
+  if (lorentz_transform) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
+  if (moments_flag) moments.NewAthenaArray(13,ncells3,ncells2,ncells1);
+  if (emission_array_flag) emission.NewAthenaArray(ncells3,ncells2,ncells1);
 
 }
 
@@ -370,8 +392,6 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
 
 void MonteCarloBlock::NormalizeMoments(bool normalize) {
 
-  Coordinates *pco = pmy_coord;
-
   if (normalize) {
     // Normalize moments
     for (int n=0; n<10; ++n) {
@@ -381,8 +401,7 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
       for (int k=ks; k<=ke; ++k) {
 	for (int j=js; j<=je; ++j) {
 	  for (int i=is; i<=ie; ++i) {
-	    Real vol = pco->GetCellVolume(k,j,i);
-	    moments(n,k,j,i) /= (vol * norm);
+	    moments(n,k,j,i) /= (pcoord->vol(k,j,i) * norm);
 	  }}}}
     // Copy noramilzed moments to symmetric elements
     for (int k=ks; k<=ke; ++k) {
@@ -401,8 +420,7 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
       for (int k=ks; k<=ke; ++k) {
 	for (int j=js; j<=je; ++j) {
 	  for (int i=is; i<=ie; ++i) {
-	    Real vol = pco->GetCellVolume(k,j,i);
-	    moments(n,k,j,i) *= (vol * norm);
+	    moments(n,k,j,i) *= (pcoord->vol(k,j,i) * norm);
 	  }}}}
   }
 }
@@ -413,6 +431,26 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
 //  \brief set boundary values on monte carlo block
 
 void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
+
+  // set x1 boundaries
+  mcb_bcs[INNER_X1] = input_bcs[INNER_X1];
+  mcb_bcs[OUTER_X1] = input_bcs[OUTER_X1];
+
+  // set x2 boundaries
+  mcb_bcs[INNER_X2] = input_bcs[INNER_X2];
+  mcb_bcs[OUTER_X2] = input_bcs[OUTER_X2];
+
+  // set x3 boundaries
+  mcb_bcs[INNER_X3] = input_bcs[INNER_X3];
+  mcb_bcs[OUTER_X3] = input_bcs[OUTER_X3];
+  
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs)
+//  \brief set boundary values on monte carlo block
+
+/*void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
 
   // set x1 boundaries
   if (pmy_block->pbval->block_bcs[INNER_X1] == BLOCK_BNDRY) {
@@ -449,4 +487,4 @@ void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
   } else {
     mcb_bcs[OUTER_X3] = input_bcs[OUTER_X3];
   }
-}
+  }*/

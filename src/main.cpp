@@ -333,7 +333,6 @@ int main(int argc, char *argv[]) {
     return(0);
   }
 
-  std::cout << "here: 3 " << Globals::my_rank <<std::endl;
 //--- Step 7. ----------------------------------------------------------------------------
 // Change to run directory, initialize outputs object, and make output of ICs
 
@@ -359,7 +358,6 @@ int main(int argc, char *argv[]) {
 #endif
     return(0);
   }
-std::cout << "here: 4 " << Globals::my_rank <<std::endl;
 
 //=== Step 9. === START OF MAIN INTEGRATION LOOP =========================================
 // For performance, there is no error handler protecting this step (except outputs)
@@ -428,13 +426,13 @@ std::cout << "here: 4 " << Globals::my_rank <<std::endl;
 
   } // END OF MAIN INTEGRATION LOOP ======================================================
 // Make final outputs, print diagnostics, clean up and terminate
-std::cout << "here: 5 " << Globals::my_rank <<std::endl;
+
   // Perform Monte Carlo radiation tranfer
   if (MONTE_CARLO_STATIC) {
     pmc->RunStaticMonteCarlo();
     pmc->pmcout->OutputSpectra(pmc);
   }
-std::cout << "here: 6 " << Globals::my_rank <<std::endl;
+
   if (Globals::my_rank==0 && wtlim > 0)
     SignalHandler::CancelWallTimeAlarm();
 
@@ -457,9 +455,9 @@ std::cout << "here: 6 " << Globals::my_rank <<std::endl;
 #endif
     return(0);
   }
-  std::cout << "here: 7 " << Globals::my_rank <<std::endl;
+
   pmesh->UserWorkAfterLoop(pinput);
-  std::cout << "here: 8 " << Globals::my_rank <<std::endl;
+
   // print diagnostic messages
   if (Globals::my_rank==0) {
     std::cout << "cycle=" << pmesh->ncycle << " time=" << pmesh->time
@@ -504,16 +502,16 @@ std::cout << "here: 6 " << Globals::my_rank <<std::endl;
     std::cout << "zone-cycles/omp_wsecond = " << zc_omps << std::endl;
 #endif
   }
-  std::cout << "here: 9 " << Globals::my_rank <<std::endl;
+
   delete pinput;
   delete pmesh;
   delete ptlist;
   delete pouts;
   if (MONTE_CARLO_ENABLED) delete pmc;
-  std::cout << "here: 10 " << Globals::my_rank <<std::endl;
+
 #ifdef MPI_PARALLEL
   MPI_Finalize();
 #endif
-  std::cout << "here: 11 " << Globals::my_rank <<std::endl;
+
   return(0);
 }

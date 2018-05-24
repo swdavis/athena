@@ -12,10 +12,10 @@
 #include "../athena.hpp"
 #include "montecarlo.hpp"
 
-void FinalPositionCartesian(MonteCarloBlock *pmb, Coordinates *pco, Photon *pphot,
+void FinalPositionCartesian(MonteCarloBlock *pmb, MCCoord *pco, Photon *pphot,
                             Real &xf, Real &yf, Real &zf, Real &dl);
 
-void FinalPositionSphericalPolar(MonteCarloBlock *pmb, Coordinates *pco, Photon *pphot,
+void FinalPositionSphericalPolar(MonteCarloBlock *pmb, MCCoord *pco, Photon *pphot,
                             Real &rf, Real &thf, Real &phf, Real &dl);
 
 #endif

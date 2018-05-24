@@ -100,7 +100,7 @@ void PhotonMover::NextFace(Real dx1, Real dx2, Real dx3, int &face, Real &dx)
 //! \fn void SphericalPolarMover::MovePhotonToNextZone()
 //  \brief updates photon zone
 
-void PhotonMover::MovePhotonToNextZone(Photon *pphot, Coordinates *pco,
+void PhotonMover::MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
   MonteCarloBlock *pmcb, int face, bool ascend[3]) {
   
   // Update face(s) and adjust positions to lie exactly on boundary

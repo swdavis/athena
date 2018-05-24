@@ -31,6 +31,7 @@ class PhotonMover;
 class MCRandom;
 class MCBoundaryValues;
 class MCOutoupt;
+class MCCoord;
 
 // Flags for controlling monte carlo emission, scattering, absorption, bcs
 enum EmissionFlag {EMISUSER = 0, EMISFF = 1};
@@ -43,8 +44,6 @@ enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
       MCIPR12=7, MCIPR13=8, MCIPR23=9, MCIPR21=10, MCIPR31=11, MCIPR32=12};
 
-enum TransformFlag {TOEUL=0, TOCOM=1};
-
 //----------------------------------------------------------------------------------------
 // function pointer prototypes for user-defined modules set at runtime
 typedef void (*EmisFunc_t)(MonteCarloBlock *pmcb);
@@ -52,7 +51,7 @@ typedef void (*TempFunc_t)(MonteCarloBlock *pmcb);
 //typedef void (MonteCarloBlock::*TempFunc2_t)(void);
 typedef Real (*OpacFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
 typedef void (*ScatFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
-typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, Coordinates *pco);
+typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, MCCoord *pco);
 
 //---------------------- prototypes for provided functions -------------------------------
 void InitializeEmissionFreeFree(MonteCarloBlock *pmcb);
@@ -76,13 +75,23 @@ Real Bigy(Real x, Real xp);
 Real SigmaHat(Real x);
 Real ElectronDist(Real tgas, MCRandom *pran);
 //--------------------- prototypes for emission.cpp functions ----------------------------
-void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, Coordinates *pco);
-void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, Coordinates *pco);
+void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pco);
+void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pco);
 //---------------------- prototypes for setting flags ------------------------------------
 enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string);
 enum EmissionFlag GetEmissionFlag(std::string input_string);
 enum AbsorptionFlag GetAbsorptionFlag(std::string input_string);
 enum ScatteringFlag GetScatteringFlag(std::string input_string);
+
+//----------------------------------------------------------------------------------------
+//! \struct MCBlockSize
+//  \brief physical size of monte carlo block
+
+typedef struct MCBlockSize {
+  int nx1,nx2,nx3;
+  int is,ie,js,je,ks,ke;
+
+} MCBlockSize;
 
 //----------------------------------------------------------------------------------------
 //! \class MCRandom
@@ -96,6 +105,21 @@ public:
   gsl_rng *dev;
   
   Real uniform();
+};
+
+
+//----------------------------------------------------------------------------------------
+//! \class MCCoord
+//  \brief monte carlo specific coordinate values
+class MCCoord {
+public:
+  MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb);
+  MCCoord(int ncells1, int ncells2, int ncells3);
+  ~MCCoord();
+
+  AthenaArray<Real> x1f, x2f, x3f; // face  positions
+  AthenaArray<Real> vol;
+
 };
 
 //----------------------------------------------------------------------------------------
@@ -116,7 +140,9 @@ public:
   int64_t ncells; // total number of cells in mesh
   int iseed;  // seed to initialized random number generator(s)
   int mcranks; // number of monte carlo only ranks
- 
+  int ndest; // number of destination processes
+  int *dest; // pointer to array of destination processes
+  int source; // source processes
 
   enum EmissionFlag emission_meth;
   enum AbsorptionFlag absorption_meth;
@@ -130,7 +156,7 @@ public:
   TempFunc_t GetTemperature;
 
   // functions
-  void RunStaticMonteCarlo();
+  void RunStaticMonteCarlo(void);
   void InitUserMonteCarloData(ParameterInput *pin);
   void EnrollUserEmissionInitialization(EmisFunc_t emissfunc);
   void EnrollUserGetTemperature(TempFunc_t tempfunc);
@@ -141,7 +167,13 @@ private:
   void GetDensity(MonteCarloBlock *pmcb);
   void GetVelocity(MonteCarloBlock *pmcb);
   void DistributePhotonsToBlocks(void);
- 
+  void SendMonteCarloBlocks(int dest);
+  void ReceiveMonteCarloBlocks(ParameterInput *pin, int source);
+  void SendMonteCarloData(int dest);
+  void ReceiveMonteCarloData(int source);
+  unsigned int CreateMCMPITag(int bid);
+  void InitializeMonteCarloBlocks(void);
+
 };
 
 //----------------------------------------------------------------------------------------
@@ -150,13 +182,15 @@ private:
 
 class MonteCarloBlock {
 public:
-  MonteCarloBlock(MeshBlock *pmb, MonteCarlo *pmc, ParameterInput *pin);
+  MonteCarloBlock(MeshBlock *pmb, MCBlockSize *pblsize, MonteCarlo *pmc, 
+                  ParameterInput *pin);
   ~MonteCarloBlock();
 
   // data
   MonteCarlo* pmy_mc; // MonteCarlo
+  Mesh* pmy_mesh; // Mesh
   MeshBlock* pmy_block;    // MeshBlock corresponding to this MonteCarlo
-  Coordinates *pmy_coord;
+  MCCoord *pcoord;
 
   Photon* pphoton; // ptr to photon packet
   PhotonMover* pmover; // ptr to photon mover
@@ -164,7 +198,7 @@ public:
   MCBoundaryValues *pbval; // ptr to MC boundary values
   Spectrum *pspec; // ptr to spectrum
 
-  MonteCarloBlock *prev, *next;
+  MonteCarloBlock *next;
 
   enum EmissionFlag emission_meth;
   enum AbsorptionFlag absorption_meth;
@@ -211,7 +245,6 @@ public:
   void DefaultGetTemperature();
   void UpdateMoments(Photon *pphot, Real dl);
   void NormalizeMoments(bool normalize);
-
   //void GetPhotonsFromNeighbors();
   //void SendPhotonsToNeighbors();
 

@@ -9,7 +9,7 @@
 // Athena++ headers
 #include "debug.hpp"
 
-void FinalPositionCartesian(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot,
+void FinalPositionCartesian(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot,
                             Real &xf, Real &yf, Real &zf, Real &dl) {
 
   Real dlx, dly, dlz;
@@ -84,7 +84,7 @@ void FinalPositionCartesian(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pph
   //std::cout << xf << ' ' << xw << ' ' << yf << ' ' << yw << std::endl;
 }
 
-void FinalPositionSphericalPolar(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot,
+void FinalPositionSphericalPolar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot,
 				 Real &rf, Real &thf, Real &phf, Real &dl) {
 
   Real cth = cos(pphot->x[1]);

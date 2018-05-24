@@ -38,7 +38,7 @@ public:
   virtual void Move(Photon *pphot);
   virtual Real GetOpticalDepth(MCRandom *pran);
   virtual void NextFace(Real dx1, Real dx2, Real dx3, int &face, Real &dx);
-  virtual void MovePhotonToNextZone(Photon *pphot, Coordinates *pco,
+  virtual void MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
     MonteCarloBlock *pmcb, int face, bool ascend[3]);
   virtual void CartesianToCurvalinear(Photon *pphot);
   virtual void CurvalinearToCartesian(Photon *pphot);

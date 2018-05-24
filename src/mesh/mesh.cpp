@@ -1374,9 +1374,9 @@ void Mesh::Initialize(int res_flag, ParameterInput *pin) {
   for (int i=0; i<nmb; ++i) {
     pmb_array[i]->phydro->NewBlockTimeStep();
   }
-std::cout << "testG: " << Globals::my_rank << std::endl;
+
   NewTimeStep();
-std::cout << "testH: " << Globals::my_rank << std::endl;
+
   return;
 }
 

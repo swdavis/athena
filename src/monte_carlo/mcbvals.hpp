@@ -16,24 +16,24 @@
 #include "montecarlo.hpp"
 
 class Photon;
-
+class MCCoord;
 
 //----------------------------------------------------------------------------------------
 // function pointer prototypes for boundary conditions set at runtime
-typedef void (*MCBValFunc_t)(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
+typedef void (*MCBValFunc_t)(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
 
 //---------------------- prototypes for boundary functions -------------------------------
-void PeriodicInnerX1(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
-void PeriodicOuterX1(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
-void PeriodicInnerX2(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
-void PeriodicOuterX2(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
-void PeriodicInnerX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
-void PeriodicOuterX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
-//void PeriodicWedgeInnerX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
-//void PeriodicWedgeOuterX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
-void Escape(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
-void Absorb(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
-void Polar(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot);
+void PeriodicInnerX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
+void PeriodicOuterX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
+void PeriodicInnerX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
+void PeriodicOuterX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
+void PeriodicInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
+void PeriodicOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
+//void PeriodicWedgeInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
+//void PeriodicWedgeOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
+void Escape(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
+void Absorb(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
+void Polar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
 //----------------------------------------------------------------------------------------
 //! \class MCBoundaryValues
 //  \brief BVals data and functions for monte carlo

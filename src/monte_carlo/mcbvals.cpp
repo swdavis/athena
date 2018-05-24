@@ -152,10 +152,10 @@ MCBoundaryValues::~MCBoundaryValues() {
 // Currently assumes single block -- ***will need to be changed***
 
 //----------------------------------------------------------------------------------------
-//! \fn void PeriodicInnerX1(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot)
+//! \fn void PeriodicInnerX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
 //  \brief periodic boundary conditions, inner x1 boundary
 
-void PeriodicInnerX1(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
+void PeriodicInnerX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
   pphot->i1 = pmcb->ie;
   pphot->x[0] = pco->x1f(pphot->i1+1);
@@ -163,10 +163,10 @@ void PeriodicInnerX1(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PeriodicOuterX1(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot)
+//! \fn void PeriodicOuterX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
 //  \brief periodic boundary conditions, outer x1 boundary
 
-void PeriodicOuterX1(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
+void PeriodicOuterX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
   pphot->i1 = pmcb->is;
   pphot->x[0] = pco->x1f(pphot->i1);
@@ -174,10 +174,10 @@ void PeriodicOuterX1(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PeriodicInnerX2(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot)
+//! \fn void PeriodicInnerX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
 //  \brief periodic boundary conditions, inner x2 boundary
 
-void PeriodicInnerX2(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
+void PeriodicInnerX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
   pphot->i2 = pmcb->je;
   pphot->x[1] = pco->x2f(pphot->i2+1);
@@ -185,10 +185,10 @@ void PeriodicInnerX2(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PeriodicOuterX2(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot)
+//! \fn void PeriodicOuterX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
 //  \brief periodic boundary conditions, outer x2 boundary
 
-void PeriodicOuterX2(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
+void PeriodicOuterX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
   pphot->i2 = pmcb->js;
   pphot->x[1] = pco->x2f(pphot->i2);
@@ -196,10 +196,10 @@ void PeriodicOuterX2(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PeriodicInnerX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot)
+//! \fn void PeriodicInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
 //  \brief periodic boundary conditions, inner x3 boundary
 
-void PeriodicInnerX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
+void PeriodicInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
   pphot->i3 = pmcb->ke;
   pphot->x[2] = pco->x3f(pphot->i3+1);
@@ -207,10 +207,10 @@ void PeriodicInnerX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PeriodicOuterX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot)
+//! \fn void PeriodicOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
 //  \brief periodic boundary conditions, outer x3 boundary
 
-void PeriodicOuterX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
+void PeriodicOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
   pphot->i3 = pmcb->ks;
   pphot->x[2] = pco->x3f(pphot->i3);
@@ -218,10 +218,10 @@ void PeriodicOuterX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PeriodicWedgeInnerX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot)
+//! \fn void PeriodicWedgeInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
 //  \brief periodic wedge boundary conditions, inner x3 boundary
 
-/*void PeriodicWedgeInnerX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
+/*void PeriodicWedgeInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
   pphot->i3 = pmcb->ke;
   pphot->x[2] = pco->x3f(pphot->i3+1);
@@ -239,10 +239,10 @@ void PeriodicOuterX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
   }*/
 
 //----------------------------------------------------------------------------------------
-//! \fn void PeriodicWedgeOuterX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot)
+//! \fn void PeriodicWedgeOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
 //  \brief periodic wedgeboundary conditions, outer x3 boundary
 
-/*void PeriodicWedgeOuterX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
+/*void PeriodicWedgeOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
   pphot->i3 = pmcb->ks;
   pphot->x[2] = pco->x3f(pphot->i3);
@@ -252,30 +252,30 @@ void PeriodicOuterX3(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void Escape(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot)
+//! \fn void Escape(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
 //  \brief mark photon as escaped
 
-void Escape(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
+void Escape(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
   pphot->status = ESCAPED;
 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void Absorb(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot)
+//! \fn void Absorb(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
 //  \brief mark photon as destroyed
 
-void Absorb(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
+void Absorb(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
   pphot->status = DESTROYED;
 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void Polar(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot)
+//! \fn void Polar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
 //  \brief mark photon as destroyed and print error message
 
-void Polar(MonteCarloBlock *pmcb, Coordinates *pco, Photon *pphot) {
+void Polar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
   std::cout << "Warning: photon moving through polar boundary: " << std::endl
     << "i: " << pphot->i1 << " " << pphot->i2 << " " << pphot->i3 << std::endl

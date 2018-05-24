@@ -34,7 +34,7 @@ void CartesianMover::Move(Photon *pphot) {
 
   MonteCarloBlock *pmcb = pmy_mcb;
   MCRandom *pran = pmy_mcb->pran;
-  Coordinates *pco = pmy_mcb->pmy_coord;
+  MCCoord *pco = pmy_mcb->pcoord;
 
   // get number of mean free paths photon will travel
   Real TauRemaining = GetOpticalDepth(pran);
