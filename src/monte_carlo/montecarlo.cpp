@@ -484,6 +484,112 @@ void MonteCarlo::ReceiveMonteCarloData(int source) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::SendMonteCarloSpectra(int dest)
+//  \brief send all monte carlo spectra to another process
+
+void MonteCarlo::SendMonteCarloSpectra(int dest) {
+
+  Spectrum *pspec = pmcout->pspec;
+  
+  int maxsize = 0;
+  while (pspec != NULL) {
+    int ne = pspec->range.ne;
+    int ncth = pspec->range.ncth;
+    int nphi = pspec->range.nphi;
+    int size = 2;
+    if (pspec->polarized)
+      size += 4;
+    size *= (ne*ncth*nphi);
+    maxsize = (size > maxsize) ? size : maxsize;
+    pspec = pspec->next;
+  }
+  Real *send_buf;
+  send_buf = new Real[maxsize];
+  MPI_Request send_rq;
+  unsigned int tag = 100;
+  
+  pspec = pmcout->pspec;
+  while (pspec != NULL) {
+    int p=0;
+    int ne = pspec->range.ne;
+    int ncth = pspec->range.ncth;
+    int nphi = pspec->range.nphi;
+    int size = 2;
+    if (pspec->polarized)
+      size += 4;
+    size *= (ne*ncth*nphi);
+    ne--; ncth--; nphi--;
+    BufferUtility::Pack3DData(pspec->intensity,send_buf,0,ne,0,ncth,0,nphi,p);
+    BufferUtility::Pack3DData(pspec->intensity_sq,send_buf,0,ne,0,ncth,0,nphi,p);
+    if (pspec->polarized) {
+      BufferUtility::Pack3DData(pspec->stokesq,send_buf,0,ne,0,ncth,0,nphi,p);
+      BufferUtility::Pack3DData(pspec->stokesq_sq,send_buf,0,ne,0,ncth,0,nphi,p);
+      BufferUtility::Pack3DData(pspec->stokesu,send_buf,0,ne,0,ncth,0,nphi,p);
+      BufferUtility::Pack3DData(pspec->stokesu_sq,send_buf,0,ne,0,ncth,0,nphi,p);
+    }
+    MPI_Isend(send_buf,size,MPI_ATHENA_REAL,dest,tag++,MPI_COMM_WORLD,&send_rq);
+    MPI_Wait(&send_rq, MPI_STATUS_IGNORE);
+    pspec = pspec->next;
+  }
+
+
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::ReceiveMonteCarloSpectra(int dest)
+//  \brief receive monte carlo spectra from another process
+
+void MonteCarlo::ReceiveMonteCarloSpectra(int source) {
+  Spectrum *pspec = pmcout->pspec;
+  
+  int maxsize = 0;
+  while (pspec != NULL) {
+    int ne = pspec->range.ne;
+    int ncth = pspec->range.ncth;
+    int nphi = pspec->range.nphi;
+    int size = 2;
+    if (pspec->polarized)
+      size += 4;
+    size *= (ne*ncth*nphi);
+    maxsize = (size > maxsize) ? size : maxsize;
+    pspec = pspec->next;
+  }
+  Real *recv_buf;
+  recv_buf = new Real[maxsize];
+  MPI_Request recv_rq;
+  unsigned int tag = 100;
+
+  
+  pspec = pmcout->pspec;
+  while (pspec != NULL) {
+    int ne = pspec->range.ne;
+    int ncth = pspec->range.ncth;
+    int nphi = pspec->range.nphi;
+    int size = 2;
+    if (pspec->polarized)
+      size += 4;
+    size *= (ne*ncth*nphi);
+    ne--; ncth--; nphi--;
+    MPI_Irecv(recv_buf,size,MPI_ATHENA_REAL,source,tag++,MPI_COMM_WORLD,&recv_rq);
+    MPI_Wait(&recv_rq, MPI_STATUS_IGNORE);
+    Spectrum *ptemp = new Spectrum(pspec);
+    int p=0;
+    BufferUtility::Unpack3DData(recv_buf,ptemp->intensity,0,ne,0,ncth,0,nphi,p);
+    BufferUtility::Unpack3DData(recv_buf,ptemp->intensity_sq,0,ne,0,ncth,0,nphi,p);
+    if (pspec->polarized) {
+      BufferUtility::Unpack3DData(recv_buf,ptemp->stokesq,0,ne,0,ncth,0,nphi,p);
+      BufferUtility::Unpack3DData(recv_buf,ptemp->stokesq_sq,0,ne,0,ncth,0,nphi,p);
+      BufferUtility::Unpack3DData(recv_buf,ptemp->stokesu,0,ne,0,ncth,0,nphi,p);
+      BufferUtility::Unpack3DData(recv_buf,ptemp->stokesu_sq,0,ne,0,ncth,0,nphi,p);
+    }
+    pspec->AddSpectrum(ptemp);
+    pspec = pspec->next;
+    delete ptemp;
+  }
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn unsigned int MonteCarlo::CreateMCMPITag(int bid)
 //  \brief calculate an MPI tag for monte carlo communications
 

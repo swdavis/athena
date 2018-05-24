@@ -160,6 +160,8 @@ public:
   void InitUserMonteCarloData(ParameterInput *pin);
   void EnrollUserEmissionInitialization(EmisFunc_t emissfunc);
   void EnrollUserGetTemperature(TempFunc_t tempfunc);
+  void SendMonteCarloSpectra(int dest);
+  void ReceiveMonteCarloSpectra(int source);
 
 private:
 

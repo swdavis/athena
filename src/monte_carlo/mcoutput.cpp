@@ -343,27 +343,22 @@ void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string outfile) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MCOutput::CollectSpectra(MonteCarlo *pmc)
-//  \brief 
+//  \brief collect all spectra on this process
 
 void MCOutput::CollectSpectra(MonteCarlo *pmc) {
 
-  if (Globals::my_rank == 0) {
-    Spectrum *poutspec=pspec, *pblockspec;
-    while (poutspec != NULL) {
-      int id = poutspec->id;
-      // loop over monte carl blocks
-      MonteCarloBlock *pmcb = pmc->pblock;
-      if (pmcb == NULL)
-        return;
-      pblockspec = pmcb->pspec;
-      while (pblockspec->id != id) {
-        pblockspec = pblockspec->next;
-      }
-      poutspec->AddSpectrum(pblockspec);
-      poutspec = poutspec->next;
+  Spectrum *poutspec=pspec, *pblockspec;
+  while (poutspec != NULL) {
+    int id = poutspec->id;
+    // loop over monte carlo blocks
+    MonteCarloBlock *pmcb = pmc->pblock;
+    pblockspec = pmcb->pspec;
+    while (pblockspec->id != id) {
+      pblockspec = pblockspec->next;
     }
+    poutspec->AddSpectrum(pblockspec);
+    poutspec = poutspec->next;
   }
-
 
 }
 
@@ -373,11 +368,17 @@ void MCOutput::CollectSpectra(MonteCarlo *pmc) {
 
 void MCOutput::OutputSpectra(MonteCarlo *pmc) {
 
+  if (pspec == NULL)
+    return;
+  CollectSpectra(pmc);
   if (Globals::my_rank == 0) {
-    if (pspec == NULL)
-      return;
-    CollectSpectra(pmc);
+    for(int i=1; i<Globals::nranks; ++i) // temporary: assumes spectra on all processes
+      pmc->ReceiveMonteCarloSpectra(i);
+  } else {
+    pmc->SendMonteCarloSpectra(0);
+  }
 
+  if (Globals::my_rank == 0) {
     Spectrum *pspect = pspec;
     std::string outfile;  
     Real norm = static_cast<Real>(pmc->nphot)/ static_cast<Real>(pmc->ncells);    
