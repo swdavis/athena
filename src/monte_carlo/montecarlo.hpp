@@ -140,9 +140,9 @@ public:
   int64_t ncells; // total number of cells in mesh
   int iseed;  // seed to initialized random number generator(s)
   int mcranks; // number of monte carlo only ranks
-  int ndest; // number of destination processes
-  int *dest; // pointer to array of destination processes
-  int source; // source processes
+  int nderv; // number of derivative processes
+  int *derv; // pointer to array of derivative processes
+  int origin; // process with origin mesh block
 
   enum EmissionFlag emission_meth;
   enum AbsorptionFlag absorption_meth;
@@ -162,6 +162,7 @@ public:
   void EnrollUserGetTemperature(TempFunc_t tempfunc);
   void SendMonteCarloSpectra(int dest);
   void ReceiveMonteCarloSpectra(int source);
+  void CollectMoments(void);
 
 private:
 
@@ -175,6 +176,8 @@ private:
   void ReceiveMonteCarloData(int source);
   unsigned int CreateMCMPITag(int bid);
   void InitializeMonteCarloBlocks(void);
+  void SendMoments(int dest);
+  void ReceiveMoments(int source, bool sum);
 
 };
 

@@ -69,7 +69,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   absorption_meth = pmy_mc->absorption_meth;
   scattering_meth = pmy_mc->scattering_meth;
   lorentz_transform = pmy_mc->lorentz_transform;
-  moments_flag = pmy_mc->pmcout->moments; // in mcoutput
+  moments_flag = pmy_mc->pmcout->moments; // set in mcoutput
 
   // *currently** assumes all block boundaries are physical
   SetBoundaryValues(pmy_mc->mc_bcs);

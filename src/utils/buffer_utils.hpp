@@ -17,6 +17,8 @@ void Pack4DData(AthenaArray<Real> &src, Real *buf, int sn, int en,
                int si, int ei, int sj, int ej, int sk, int ek, int &offset);
 void Unpack4DData(Real *buf, AthenaArray<Real> &dst, int sn, int en,
                   int si, int ei, int sj, int ej, int sk, int ek, int &offset);
+void Unpack4DDataSum(Real *buf, AthenaArray<Real> &dst, int sn, int en,
+                     int si, int ei, int sj, int ej, int sk, int ek, int &offset);
 void Pack3DData(AthenaArray<Real> &src, Real *buf,
                int si, int ei, int sj, int ej, int sk, int ek, int &offset);
 void Unpack3DData(Real *buf, AthenaArray<Real> &dst,

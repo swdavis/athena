@@ -51,6 +51,25 @@ void Unpack4DData(Real *buf, AthenaArray<Real> &dst, int sn, int en,
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void Unpack4DDataSum(Real *buf, AthenaArray<Real> &dst, int sn, int en,
+//                        int si, int ei, int sj, int ej, int sk, int ek, int &offset)
+//  \brief unpack a one-dimensional buffer into a 4D AthenaArray
+
+void Unpack4DDataSum(Real *buf, AthenaArray<Real> &dst, int sn, int en,
+                  int si, int ei, int sj, int ej, int sk, int ek, int &offset) {
+  for (int n=sn; n<=en; ++n) {
+    for (int k=sk; k<=ek; ++k) {
+      for (int j=sj; j<=ej; ++j) {
+#pragma omp simd
+        for (int i=si; i<=ei; ++i)
+          dst(n,k,j,i) += buf[offset++];
+      }
+    }
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void Pack3DData(AthenaArray<Real> &src, Real *buf,
 //                      int si, int ei, int sj, int ej, int sk, int ek, int &offset)
 //  \brief pack a 3D AthenaArray into a one-dimensional buffer

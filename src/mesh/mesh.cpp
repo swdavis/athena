@@ -484,7 +484,8 @@ Mesh::Mesh(ParameterInput *pin, int mesh_test) {
     
     if (turb_flag > 0)
       ptrbd = new TurbulenceDriver(this, pin);
-  }
+  } else
+    pblock = NULL;
   
 }
 
