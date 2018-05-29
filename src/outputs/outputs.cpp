@@ -304,9 +304,16 @@ Outputs::~Outputs() {
 //  \brief Create linked list of OutputData's containing requested variables
 
 void OutputType::LoadOutputData(MeshBlock *pmb) {
-  Hydro *phyd = pmb->phydro;
-  Field *pfld = pmb->pfield;
-  Gravity *pgrav = pmb->pgrav;
+
+  Hydro *phyd;
+  Field *pfld;
+  Gravity *pgrav;
+  if (pmb != NULL) {
+    phyd = pmb->phydro;
+    pfld = pmb->pfield;
+    pgrav = pmb->pgrav;
+  }
+    
   num_vars_ = 0;
   OutputData *pod;
 
@@ -316,7 +323,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     pod = new OutputData;
     pod->type = "SCALARS";
     pod->name = "dens";
-    pod->data.InitWithShallowSlice(phyd->u,4,IDN,1);
+    if (pmb != NULL) pod->data.InitWithShallowSlice(phyd->u,4,IDN,1);
     AppendOutputDataNode(pod);
     num_vars_++;
   }
@@ -327,7 +334,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     pod = new OutputData;
     pod->type = "SCALARS";
     pod->name = "rho";
-    pod->data.InitWithShallowSlice(phyd->w,4,IDN,1);
+    if (pmb != NULL) pod->data.InitWithShallowSlice(phyd->w,4,IDN,1);
     AppendOutputDataNode(pod);
     num_vars_++;
   }
@@ -339,7 +346,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "Etot";
-      pod->data.InitWithShallowSlice(phyd->u,4,IEN,1);
+      if (pmb != NULL) pod->data.InitWithShallowSlice(phyd->u,4,IEN,1);
       AppendOutputDataNode(pod);
       num_vars_++;
     }
@@ -352,7 +359,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "press";
-      pod->data.InitWithShallowSlice(phyd->w,4,IPR,1);
+      if (pmb != NULL) pod->data.InitWithShallowSlice(phyd->w,4,IPR,1);
       AppendOutputDataNode(pod);
       num_vars_++;
     }
@@ -364,7 +371,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     pod = new OutputData;
     pod->type = "VECTORS";
     pod->name = "mom";
-    pod->data.InitWithShallowSlice(phyd->u,4,IM1,3);
+    if (pmb != NULL) pod->data.InitWithShallowSlice(phyd->u,4,IM1,3);
     AppendOutputDataNode(pod);
     num_vars_+=3;
     if (output_params.cartesian_vector) {
@@ -373,7 +380,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       pod = new OutputData;
       pod->type = "VECTORS";
       pod->name = "mom_xyz";
-      pod->data.NewAthenaArray(3,phyd->u.GetDim3(),phyd->u.GetDim2(),phyd->u.GetDim1());
+      if (pmb != NULL) pod->data.NewAthenaArray(3,phyd->u.GetDim3(),phyd->u.GetDim2(),phyd->u.GetDim1());
       CalculateCartesianVector(src, pod->data, pmb->pcoord);
       AppendOutputDataNode(pod);
       num_vars_+=3;
@@ -385,7 +392,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     pod = new OutputData;
     pod->type = "SCALARS";
     pod->name = "mom1";
-    pod->data.InitWithShallowSlice(phyd->u,4,IM1,1);
+    if (pmb != NULL) pod->data.InitWithShallowSlice(phyd->u,4,IM1,1);
     AppendOutputDataNode(pod);
     num_vars_++;
   }
@@ -393,7 +400,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     pod = new OutputData;
     pod->type = "SCALARS";
     pod->name = "mom2";
-    pod->data.InitWithShallowSlice(phyd->u,4,IM2,1);
+    if (pmb != NULL) pod->data.InitWithShallowSlice(phyd->u,4,IM2,1);
     AppendOutputDataNode(pod);
     num_vars_++;
   }
@@ -401,7 +408,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     pod = new OutputData;
     pod->type = "SCALARS";
     pod->name = "mom3";
-    pod->data.InitWithShallowSlice(phyd->u,4,IM3,1);
+    if (pmb != NULL) pod->data.InitWithShallowSlice(phyd->u,4,IM3,1);
     AppendOutputDataNode(pod);
     num_vars_++;
   }
@@ -412,7 +419,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     pod = new OutputData;
     pod->type = "VECTORS";
     pod->name = "vel";
-    pod->data.InitWithShallowSlice(phyd->w,4,IVX,3);
+    if (pmb != NULL) pod->data.InitWithShallowSlice(phyd->w,4,IVX,3);
     AppendOutputDataNode(pod);
     num_vars_+=3;
     if (output_params.cartesian_vector) {
@@ -421,7 +428,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       pod = new OutputData;
       pod->type = "VECTORS";
       pod->name = "vel_xyz";
-      pod->data.NewAthenaArray(3,phyd->w.GetDim3(),phyd->w.GetDim2(),phyd->w.GetDim1());
+      if (pmb != NULL) pod->data.NewAthenaArray(3,phyd->w.GetDim3(),phyd->w.GetDim2(),phyd->w.GetDim1());
       CalculateCartesianVector(src, pod->data, pmb->pcoord);
       AppendOutputDataNode(pod);
       num_vars_+=3;
@@ -434,7 +441,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     pod = new OutputData;
     pod->type = "SCALARS";
     pod->name = "vel1";
-    pod->data.InitWithShallowSlice(phyd->w,4,IVX,1);
+    if (pmb != NULL) pod->data.InitWithShallowSlice(phyd->w,4,IVX,1);
     AppendOutputDataNode(pod);
     num_vars_++;
   }
@@ -443,7 +450,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     pod = new OutputData;
     pod->type = "SCALARS";
     pod->name = "vel2";
-    pod->data.InitWithShallowSlice(phyd->w,4,IVY,1);
+    if (pmb != NULL) pod->data.InitWithShallowSlice(phyd->w,4,IVY,1);
     AppendOutputDataNode(pod);
     num_vars_++;
   }
@@ -452,7 +459,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     pod = new OutputData;
     pod->type = "SCALARS";
     pod->name = "vel3";
-    pod->data.InitWithShallowSlice(phyd->w,4,IVZ,1);
+    if (pmb != NULL) pod->data.InitWithShallowSlice(phyd->w,4,IVZ,1);
     AppendOutputDataNode(pod);
     num_vars_++;
   }
@@ -464,7 +471,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "Phi";
-      pod->data.InitWithShallowSlice(pgrav->phi,4,0,1);
+      if (pmb != NULL) pod->data.InitWithShallowSlice(pgrav->phi,4,0,1);
       AppendOutputDataNode(pod);
       num_vars_++;
     }
@@ -479,7 +486,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       pod = new OutputData;
       pod->type = "VECTORS";
       pod->name = "Bcc";
-      pod->data.InitWithShallowSlice(pfld->bcc,4,IB1,3);
+      if (pmb != NULL) pod->data.InitWithShallowSlice(pfld->bcc,4,IB1,3);
       AppendOutputDataNode(pod);
       num_vars_+=3;
       if (output_params.cartesian_vector) {
@@ -488,7 +495,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
         pod = new OutputData;
         pod->type = "VECTORS";
         pod->name = "Bcc_xyz";
-        pod->data.NewAthenaArray(3,pfld->bcc.GetDim3(),pfld->bcc.GetDim2(),pfld->bcc.GetDim1());
+        if (pmb != NULL) pod->data.NewAthenaArray(3,pfld->bcc.GetDim3(),pfld->bcc.GetDim2(),pfld->bcc.GetDim1());
         CalculateCartesianVector(src, pod->data, pmb->pcoord);
         AppendOutputDataNode(pod);
         num_vars_+=3;
@@ -500,7 +507,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "Bcc1";
-      pod->data.InitWithShallowSlice(pfld->bcc,4,IB1,1);
+      if (pmb != NULL) pod->data.InitWithShallowSlice(pfld->bcc,4,IB1,1);
       AppendOutputDataNode(pod);
       num_vars_++;
     }
@@ -508,7 +515,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "Bcc2";
-      pod->data.InitWithShallowSlice(pfld->bcc,4,IB2,1);
+      if (pmb != NULL) pod->data.InitWithShallowSlice(pfld->bcc,4,IB2,1);
       AppendOutputDataNode(pod);
       num_vars_++;
     }
@@ -516,7 +523,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "Bcc3";
-      pod->data.InitWithShallowSlice(pfld->bcc,4,IB3,1);
+      if (pmb != NULL) pod->data.InitWithShallowSlice(pfld->bcc,4,IB3,1);
       AppendOutputDataNode(pod);
       num_vars_++;
     }
@@ -526,7 +533,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "B1";
-      pod->data.InitWithShallowSlice(pfld->b.x1f,4,0,1);
+      if (pmb != NULL) pod->data.InitWithShallowSlice(pfld->b.x1f,4,0,1);
       AppendOutputDataNode(pod);
       num_vars_++;
     }
@@ -534,7 +541,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "B2";
-      pod->data.InitWithShallowSlice(pfld->b.x2f,4,0,1);
+      if (pmb != NULL) pod->data.InitWithShallowSlice(pfld->b.x2f,4,0,1);
       AppendOutputDataNode(pod);
       num_vars_++;
     }
@@ -542,7 +549,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "B3";
-      pod->data.InitWithShallowSlice(pfld->b.x3f,4,0,1);
+      if (pmb != NULL) pod->data.InitWithShallowSlice(pfld->b.x3f,4,0,1);
       AppendOutputDataNode(pod);
       num_vars_++;
     }
@@ -550,93 +557,96 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
   } // endif (MAGNETIC_FIELDS_ENABLED)
 
   if (MONTE_CARLO_ENABLED) {
-    MonteCarloBlock *pmcb = pmb->pmy_mcb;
-    if (pmcb->moments_flag) { // ***Should be set automatically based on outputs***
-      // monte carlo temperature
-      if (output_params.variable.compare("mcmom") == 0) {
-	pod = new OutputData;
-	pod->type = "SCALARS";
-	pod->name = "tgas";
-	pod->data.InitWithShallowSlice(pmcb->tgas,4,0,1);
-	AppendOutputDataNode(pod);
-	num_vars_++;
-      }
-      // monte carlo density
-      if (output_params.variable.compare("mcmom") == 0) {
-	pod = new OutputData;
-	pod->type = "SCALARS";
-	pod->name = "rho";
-	pod->data.InitWithShallowSlice(pmcb->rho,4,0,1);
-	AppendOutputDataNode(pod);
-	num_vars_++;
-      }
-      // monte carlo radiation energy density
-      if (output_params.variable.compare("mcmom") == 0 || 
-	  output_params.variable.compare("Ermc") == 0) {
-	pod = new OutputData;
-	pod->type = "SCALARS";
-	pod->name = "Ermc";
-	pod->data.InitWithShallowSlice(pmcb->moments,4,MCIER,1);
-	AppendOutputDataNode(pod);
-	num_vars_++;
-      }
-      // monte carlo radiation flux vector
-      if (output_params.variable.compare("mcmom") == 0 || 
-	  output_params.variable.compare("Frmc") == 0) {      
-	pod = new OutputData;
-	pod->type = "VECTORS";
-	pod->name = "Frmc";
-	pod->data.InitWithShallowSlice(pmcb->moments,4,MCIFR1,3);
-	AppendOutputDataNode(pod);
-	num_vars_+=3;
-      }
-      // lab frame radiation pressure
-      if (output_params.variable.compare("mcmom") == 0 ||
-	  output_params.variable.compare("Prmc") == 0) {
-        pod = new OutputData;
-        pod->type = "TENSORS";
-        pod->name = "Prmc";
-        pod->data.InitWithShallowSlice(pmcb->moments,4,MCIPR11,9);
-        AppendOutputDataNode(pod);
-        num_vars_ += 9;
-      }
-    }
-  }
-  if (output_params.variable.compare(0, 3, "uov") == 0
-   || output_params.variable.compare(0, 12, "user_out_var") == 0) {
-    int iv, ns=0, ne=pmb->nuser_out_var-1;
-    if (sscanf(output_params.variable.c_str(), "uov%d", &iv)>0) {
-      if (iv>=0 && iv<pmb->nuser_out_var)
-        ns=iv, ne=iv;
-    } else if (sscanf(output_params.variable.c_str(), "user_out_var%d", &iv)>0) {
-      if (iv>=0 && iv<pmb->nuser_out_var)
-        ns=iv, ne=iv;
-    }
-    for (int n = ns; n <= ne; ++n) {
+    MonteCarloBlock *pmcb;
+    if (pmb != NULL) pmcb = pmb->pmy_mcb;
+
+    // monte carlo temperature
+    if (output_params.variable.compare("mcmom") == 0) {
       pod = new OutputData;
       pod->type = "SCALARS";
-      if (pmb->user_out_var_names_[n].length()!=0)
-        pod->name=pmb->user_out_var_names_[n];
-      else {
-        char vn[16];
-        sprintf(vn, "user_out_var%d", n);
-        pod->name = vn;
-      }
-      pod->data.InitWithShallowSlice(pmb->user_out_var,4,n,1);
+      pod->name = "tgas";
+      if (pmb != NULL) pod->data.InitWithShallowSlice(pmcb->tgas,4,0,1);
       AppendOutputDataNode(pod);
       num_vars_++;
     }
+    // monte carlo density
+    if (output_params.variable.compare("mcmom") == 0) {
+      pod = new OutputData;
+      pod->type = "SCALARS";
+      pod->name = "rho";
+      if (pmb != NULL) pod->data.InitWithShallowSlice(pmcb->rho,4,0,1);
+      AppendOutputDataNode(pod);
+      num_vars_++;
+    }
+    // monte carlo radiation energy density
+    if (output_params.variable.compare("mcmom") == 0 || 
+        output_params.variable.compare("Ermc") == 0) {
+      pod = new OutputData;
+      pod->type = "SCALARS";
+      pod->name = "Ermc";
+      if (pmb != NULL) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIER,1);
+      AppendOutputDataNode(pod);
+      num_vars_++;
+    }
+    // monte carlo radiation flux vector
+    if (output_params.variable.compare("mcmom") == 0 || 
+        output_params.variable.compare("Frmc") == 0) {      
+      pod = new OutputData;
+      pod->type = "VECTORS";
+      pod->name = "Frmc";
+      if (pmb != NULL) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIFR1,3);
+      AppendOutputDataNode(pod);
+      num_vars_+=3;
+    }
+    // lab frame radiation pressure
+    if (output_params.variable.compare("mcmom") == 0 ||
+        output_params.variable.compare("Prmc") == 0) {
+      pod = new OutputData;
+      pod->type = "TENSORS";
+      pod->name = "Prmc";
+      if (pmb != NULL) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIPR11,9);
+      AppendOutputDataNode(pod);
+      num_vars_ += 9;
+    }
   }
 
-  for (int n = 0; n < pmb->nuser_out_var; ++n) {
-    if (pmb->user_out_var_names_[n].length()!=0) {
-      if (output_params.variable.compare(pmb->user_out_var_names_[n]) == 0) {
+  if (pmb != NULL) {
+    if (output_params.variable.compare(0, 3, "uov") == 0
+        || output_params.variable.compare(0, 12, "user_out_var") == 0) {
+      int iv, ns=0, ne=pmb->nuser_out_var-1;
+      if (sscanf(output_params.variable.c_str(), "uov%d", &iv)>0) {
+        if (iv>=0 && iv<pmb->nuser_out_var)
+          ns=iv, ne=iv;
+      } else if (sscanf(output_params.variable.c_str(), "user_out_var%d", &iv)>0) {
+        if (iv>=0 && iv<pmb->nuser_out_var)
+          ns=iv, ne=iv;
+      }
+      for (int n = ns; n <= ne; ++n) {
         pod = new OutputData;
         pod->type = "SCALARS";
-        pod->name=pmb->user_out_var_names_[n];
-        pod->data.InitWithShallowSlice(pmb->user_out_var,4,n,1);
+        if (pmb->user_out_var_names_[n].length()!=0)
+          pod->name=pmb->user_out_var_names_[n];
+        else {
+          char vn[16];
+          sprintf(vn, "user_out_var%d", n);
+          pod->name = vn;
+        }
+        if (pmb != NULL) pod->data.InitWithShallowSlice(pmb->user_out_var,4,n,1);
         AppendOutputDataNode(pod);
         num_vars_++;
+      }
+    }
+
+    for (int n = 0; n < pmb->nuser_out_var; ++n) {
+      if (pmb->user_out_var_names_[n].length()!=0) {
+        if (output_params.variable.compare(pmb->user_out_var_names_[n]) == 0) {
+          pod = new OutputData;
+          pod->type = "SCALARS";
+          pod->name=pmb->user_out_var_names_[n];
+          if (pmb != NULL) pod->data.InitWithShallowSlice(pmb->user_out_var,4,n,1);
+          AppendOutputDataNode(pod);
+          num_vars_++;
+        }
       }
     }
   }
@@ -652,6 +662,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
 
   return;
 }
+
 
 //----------------------------------------------------------------------------------------
 //! \fn void OutputData::AppendOutputDataNode(OutputData *pod)

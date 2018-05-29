@@ -86,19 +86,27 @@ void ATHDF5Output::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
   bool *active_flags = new bool [max_blocks_local];
   std::string variable = output_params.variable;
 
-  for (int i=0; i<max_blocks_local; i++)
-    active_flags[i]=true;
+  // if (pmb != NULL) {
+    for (int i=0; i<max_blocks_local; i++)
+      active_flags[i]=true;
+    //} else {
+    //for (int i=0; i<max_blocks_local; i++)
+    //  active_flags[i]=false;
+    //}
 
-  // shooting a blank just for getting the variable names
-  out_is=pmb->is; out_ie=pmb->ie;
-  out_js=pmb->js; out_je=pmb->je;
-  out_ks=pmb->ks; out_ke=pmb->ke;
-  if (output_params.include_ghost_zones) {
-    out_is -= NGHOST; out_ie += NGHOST;
-    if (out_js != out_je) {out_js -= NGHOST; out_je += NGHOST;}
-    if (out_ks != out_ke) {out_ks -= NGHOST; out_ke += NGHOST;}
+  if (pmb != NULL) {
+    // shooting a blank just for getting the variable names
+    out_is=pmb->is; out_ie=pmb->ie;
+    out_js=pmb->js; out_je=pmb->je;
+    out_ks=pmb->ks; out_ke=pmb->ke;
+    if (output_params.include_ghost_zones) {
+      out_is -= NGHOST; out_ie += NGHOST;
+      if (out_js != out_je) {out_js -= NGHOST; out_je += NGHOST;}
+      if (out_ks != out_ke) {out_ks -= NGHOST; out_ke += NGHOST;}
+    }
   }
   LoadOutputData(pmb);
+
   // set num_datasets and num_variables
   // this must be expanded when new variables are introduced
   if (variable.compare("prim") == 0 or variable.compare("cons") == 0) {
@@ -117,6 +125,11 @@ void ATHDF5Output::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
       if (output_params.cartesian_vector)
         num_variables[n_dataset-1] += 3;
     }
+  } else if (variable.compare("mcmom") == 0) {
+    num_datasets = 1;
+    num_variables = new int[num_datasets];
+    int n_dataset = 0;
+    num_variables[n_dataset++] = 15;
   } else {
     num_datasets = 1;
     num_variables = new int[num_datasets];
@@ -124,7 +137,7 @@ void ATHDF5Output::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
   }
   dataset_names = new char[num_datasets][max_name_length+1];
   variable_names = new char[num_vars_][max_name_length+1];
-
+  
   // set dataset names
   int n_dataset = 0;
   if (variable.compare("prim") == 0 || variable.compare("cons") == 0) {
@@ -134,11 +147,13 @@ void ATHDF5Output::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
       std::strncpy(dataset_names[n_dataset++], "cons", max_name_length+1);
     if (MAGNETIC_FIELDS_ENABLED)
       std::strncpy(dataset_names[n_dataset++], "B", max_name_length+1);
+  } else if (variable.compare("mcmom") == 0) {
+    std::strncpy(dataset_names[n_dataset++], "mc", max_name_length+1);
   } else { // single data
     if (variable.compare(0,1,"B") == 0 && MAGNETIC_FIELDS_ENABLED)
       std::strncpy(dataset_names[n_dataset++], "B", max_name_length+1);
     else if (variable.compare(0,1,"uov") == 0
-         || variable.compare(0,1,"user_out_var") == 0)
+             || variable.compare(0,1,"user_out_var") == 0)
       std::strncpy(dataset_names[n_dataset++], "user_out_var", max_name_length+1);
     else
       std::strncpy(dataset_names[n_dataset++], "hydro", max_name_length+1);
@@ -152,6 +167,31 @@ void ATHDF5Output::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
       for (int i=1; i<=3; i++) {
         char sn[3];
         std::sprintf(sn,"%d", i);
+        std::string vname = pod->name + sn;
+        std::strncpy(variable_names[n_variable++], vname.c_str(), max_name_length+1);
+      }
+    } else if(pod->type=="TENSORS") {
+      for(int i=1; i<=3; i++) {
+        char sn[3];
+        std::sprintf(sn,"%d%d", i,i);
+        std::string vname = pod->name + sn;
+        std::strncpy(variable_names[n_variable++], vname.c_str(), max_name_length+1);
+      }
+      for(int i=2; i<=3; i++) {
+        char sn[3];
+        std::sprintf(sn,"%d%d", 1,i);
+        std::string vname = pod->name + sn;
+        std::strncpy(variable_names[n_variable++], vname.c_str(), max_name_length+1);
+      }
+      for(int i=3; i>=1; i-=2) {
+        char sn[3];
+        std::sprintf(sn,"%d%d", 2,i);
+        std::string vname = pod->name + sn;
+        std::strncpy(variable_names[n_variable++], vname.c_str(), max_name_length+1);
+      }
+      for(int i=1; i<=2; i++) {
+        char sn[3];
+        std::sprintf(sn,"%d%d", 3,i);
         std::string vname = pod->name + sn;
         std::strncpy(variable_names[n_variable++], vname.c_str(), max_name_length+1);
       }
@@ -209,26 +249,38 @@ void ATHDF5Output::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
     first_block=0;
 #endif
   } else {
-    num_blocks_global=max_blocks_global;
-    num_blocks_local=max_blocks_local;
+    if (pm->pblock == NULL) {
+      num_blocks_global=max_blocks_global;
+      num_blocks_local=0;
+      first_block = Globals::my_rank;
+    } else {
+      num_blocks_global=max_blocks_global;
+      num_blocks_local=max_blocks_local;
+    }
   }
 
   pmb=pm->pblock;
-  // set output size
-  nx1=pmb->block_size.nx1;
-  nx2=pmb->block_size.nx2;
-  nx3=pmb->block_size.nx3;
-  if (output_params.include_ghost_zones) {
-    nx1+=2*NGHOST;
-    if (nx2 > 1) nx2+=2*NGHOST;
-    if (nx3 > 1) nx3+=2*NGHOST;
+  if (pmb != NULL) {
+    // set output size
+    nx1=pmb->block_size.nx1;
+    nx2=pmb->block_size.nx2;
+    nx3=pmb->block_size.nx3;
+    if (output_params.include_ghost_zones) {
+      nx1+=2*NGHOST;
+      if (nx2 > 1) nx2+=2*NGHOST;
+      if (nx3 > 1) nx3+=2*NGHOST;
+    }
+    if (output_params.output_slicex1) nx1=1;
+    if (output_params.output_slicex2) nx2=1;
+    if (output_params.output_slicex3) nx3=1;
+    if (output_params.output_sumx1) nx1=1;
+    if (output_params.output_sumx2) nx2=1;
+    if (output_params.output_sumx3) nx3=1;
+  } else {
+    nx1 = pm->mesh_size.nx1;
+    nx2 = pm->mesh_size.nx2;
+    nx3 = pm->mesh_size.nx3;
   }
-  if (output_params.output_slicex1) nx1=1;
-  if (output_params.output_slicex2) nx2=1;
-  if (output_params.output_slicex3) nx3=1;
-  if (output_params.output_sumx1) nx1=1;
-  if (output_params.output_sumx2) nx2=1;
-  if (output_params.output_sumx3) nx3=1;
 
   // Allocate contiguous buffers for data in memory
   levels_mesh = new int[num_blocks_local];

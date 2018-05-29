@@ -51,7 +51,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   pmcout = new MCOutput(this,pin);
   //pmcout->CheckFace(mc_bcs);
 
-  lorentz_transform = pin->GetOrAddBoolean("montecarlo","lorentz_transform",false);
+  lorentz_transform = pin->GetOrAddBoolean("montecarlo","boosts",false);
   polarized = pin->GetOrAddBoolean("montecarlo","polarized",false);
 
   // Create and intitialize randon number generator
@@ -491,7 +491,7 @@ void MonteCarlo::ReceiveMonteCarloData(int source) {
 //  \brief send all monte carlo spectra to another process
 
 void MonteCarlo::SendMonteCarloSpectra(int dest) {
-
+#ifdef MPI_PARALLEL
   Spectrum *pspec = pmcout->pspec;
   
   int maxsize = 0;
@@ -534,8 +534,7 @@ void MonteCarlo::SendMonteCarloSpectra(int dest) {
     MPI_Wait(&send_rq, MPI_STATUS_IGNORE);
     pspec = pspec->next;
   }
-
-
+#endif
 }
 
 
@@ -544,6 +543,7 @@ void MonteCarlo::SendMonteCarloSpectra(int dest) {
 //  \brief receive monte carlo spectra from another process
 
 void MonteCarlo::ReceiveMonteCarloSpectra(int source) {
+#ifdef MPI_PARALLEL
   Spectrum *pspec = pmcout->pspec;
   
   int maxsize = 0;
@@ -590,6 +590,7 @@ void MonteCarlo::ReceiveMonteCarloSpectra(int source) {
     pspec = pspec->next;
     delete ptemp;
   }
+#endif
 }
 
 //----------------------------------------------------------------------------------------
@@ -779,17 +780,18 @@ MCCoord::~MCCoord() {
 // constructor
 
 MCRandom::MCRandom(int iseed) {
-  dev = gsl_rng_alloc(gsl_rng_mt19937);
-  gsl_rng_set(dev, iseed);
+  if (MONTE_CARLO_ENABLED) {
+    dev = gsl_rng_alloc(gsl_rng_mt19937);
+    gsl_rng_set(dev, iseed);
+  }
 }
 
 // destructor
-
 MCRandom::~MCRandom() {
 
 }
 
 Real MCRandom::uniform() {
-
-  return static_cast<Real>(gsl_rng_uniform(dev));
+  if (MONTE_CARLO_ENABLED)
+    return static_cast<Real>(gsl_rng_uniform(dev));
 }

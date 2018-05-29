@@ -15,6 +15,7 @@
 #include "../athena_arrays.hpp"
 #include "../parameter_input.hpp"
 #include "../mesh/mesh.hpp"
+#include "../monte_carlo/montecarlo.hpp"
 
 //========================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
@@ -79,4 +80,22 @@ void __attribute__((weak)) MeshBlock::UserWorkBeforeOutput(ParameterInput *pin) 
 void __attribute__((weak)) Mesh::UserWorkAfterLoop(ParameterInput *pin) {
   // do nothing
   return;
+}
+
+//========================================================================================
+//! \fn MONTECARLO
+//  \brief
+//========================================================================================
+
+void __attribute__((weak)) MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
+
+}
+
+void __attribute__((weak)) MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin){
+
+  
+}
+
+void __attribute__((weak)) MonteCarloBlock::InitializePhoton(Photon *pphot) {
+
 }
