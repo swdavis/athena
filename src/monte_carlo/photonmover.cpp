@@ -11,15 +11,29 @@
 #include "photonmover.hpp"
 #include "../mesh/mesh.hpp"
 
+// Array size for MRW dist computation
+int nmax = 1000;
+
 // Implementation of base class
 
 PhotonMover::PhotonMover(MonteCarloBlock *pmcb) {
 
   pmy_mcb = pmcb;
+
+  // MRW acceleration
+  acceleration = pmcb->acceleration;
+  if (acceleration)
+    InitializeMRWDist();
+
 }
 
 PhotonMover::~PhotonMover() {
 
+  if (acceleration) {
+    mrwprob.DeleteAthenaArray();
+    mrwdev.DeleteAthenaArray();
+  }
+    
 }
 
 void PhotonMover::Move(Photon *pphot) {
@@ -97,7 +111,7 @@ void PhotonMover::NextFace(Real dx1, Real dx2, Real dx3, int &face, Real &dx)
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void SphericalPolarMover::MovePhotonToNextZone()
+//! \fn void PolarMover::MovePhotonToNextZone()
 //  \brief updates photon zone
 
 void PhotonMover::MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
@@ -204,3 +218,76 @@ void PhotonMover::CurvalinearToCartesian(Photon *pphot) {
     pphot->kcart[i] = pphot->k[i];
   
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void InitializeMWDist(void)
+//  \brief initialize modified randon walk path length distribution
+
+void PhotonMover::InitializeMRWDist(void)
+{
+
+  mrwprob.NewAthenaArray(nmax);
+  mrwdev.NewAthenaArray(nmax);
+
+  for(int i=0; i<nmax; ++i) {
+    mrwdev(i) = static_cast<Real>(i)/static_cast<Real>(nmax-1);
+    mrwprob(i) = 0.0;
+  }
+  for(int i=0; i<nmax-1; ++i) {
+    int n = 1;
+    Real sign = 1.0;
+    Real yn2 = pow(mrwdev(i),n*n);
+    // Compute the sum to the limit of Real precision
+    while (yn2 > 1.e-17 ) {
+      mrwprob(i) += sign * yn2;
+      sign *= -1.0;
+      n += 1;
+      yn2 = pow(mrwdev(i),n*n);
+    }
+    mrwprob(i) *= 2.;
+    if (mrwprob(i) > 1.0) mrwprob(i)=1.0;
+  }
+  mrwprob(nmax-1) = 1.0;
+
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Real MRWDist(MCRandom *pran)
+//  \brief get modified randon walk path length
+
+Real PhotonMover::MRWDist(MCRandom *pran)
+{
+
+  Real x0 = pran->uniform();
+ 
+  // Perform a binary search
+  int low =0, high = nmax-1, mid;
+  while(low<=high) {
+    mid=(low+high)/2;
+    if(mrwprob(mid-1) <= x0) {
+      if(mrwprob(mid) > x0)
+        break;
+      else
+        low=mid+1;
+    }
+    else
+      high=mid-1;
+  }
+
+  // Replace binary search with initial guess ?
+  //int i = static_cast<int>(x0*static_cast<Real>(nmax));
+
+  // use linear interpolation to find location
+  if (mid == 0)
+    return mrwdev(0);
+  else if (low == nmax) {
+    return mrwdev(nmax-1);
+  } else {
+    Real slope = (x0 - mrwprob(mid-1)) / (mrwprob(mid) - mrwprob(mid-1));
+    return mrwdev(mid-1)+(mrwdev(mid)-mrwdev(mid-1)) * slope;
+  }
+
+
+}
+

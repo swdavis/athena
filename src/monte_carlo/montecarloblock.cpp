@@ -20,7 +20,8 @@
 #include "../hydro/hydro.hpp"
 #include "../globals.hpp"
 
-#define MINWEIGHT 1.0e-15
+//#define MINWEIGHT 1.0e-15
+#define MINWEIGHT 1.0e-30
 
 // constructor, initializes data structures and parameters
 
@@ -70,6 +71,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   scattering_meth = pmy_mc->scattering_meth;
   lorentz_transform = pmy_mc->lorentz_transform;
   moments_flag = pmy_mc->pmcout->moments; // set in mcoutput
+  acceleration = pmy_mc->acceleration;
 
   // *currently** assumes all block boundaries are physical
   SetBoundaryValues(pmy_mc->mc_bcs);
@@ -132,7 +134,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 
   // Set emission method
   if (emission_meth == EMISUSER) {
-    emission_array_flag = pin->GetBoolean("montecarlo","emiss_array");
+    emission_array_flag = pin->GetOrAddBoolean("montecarlo","emiss_array",false);
   } else if (emission_meth ==  EMISFF) {
     emission_array_flag = true;
   }
@@ -298,8 +300,8 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
   }
   nphtot += nprop;
   // Normalize moments for output
-  if (moments_flag)
-    NormalizeMoments(true);
+  //if (moments_flag)
+  //  NormalizeMoments(true);
   
   std::cout  << "nesc, nabs: " << nesc << ' ' << nabs << std::endl;
   std::cout << "nscat: " << nscat << std::endl;

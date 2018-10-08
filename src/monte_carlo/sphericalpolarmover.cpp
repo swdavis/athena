@@ -13,7 +13,9 @@
 #include "debug.hpp"
 #define MAXITER 1000000
 //#define DEBUG
-#define NBUFFER 1000
+//#define OUTTEST
+#define NBUFFER 100
+#define TAU_TOL_COH  5.
 
 // Implementation of Sphericalpolar Photon mover
 
@@ -47,6 +49,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
   Real& kr  = pphot->k[0];
   Real& kth = pphot->k[1];
   Real& kph = pphot->k[2];
+  bool thface = false;
 
 #ifdef DEBUG
   typedef struct {
@@ -57,8 +60,11 @@ void SphericalPolarMover::Move(Photon *pphot) {
     Real x,y,z;
     int i,j,k;
     bool ascend[3];
+    Real l_ext,det,lm,lp;
   } debug_t;
   debug_t db[NBUFFER];
+#endif
+#ifdef OUTTEST
   Real rf,thf,phf,dl0;
   FinalPositionSphericalPolar(pmcb,pco,pphot,rf,thf,phf,dl0);
 #endif
@@ -219,9 +225,16 @@ void SphericalPolarMover::Move(Photon *pphot) {
       bz = r0 * (cth - kr * kz);
       Real det = b2 * SQR(cthi) * (cth_ext2 - SQR(cthi)); //det should be positive
       Real lm = (-bz*kz - sqrt(det)) / (SQR(kz) - SQR(cthi)) - kr*r0;
-      Real lp = (-bz*kz + sqrt(det)) / (SQR(kz) - SQR(cthi)) - kr*r0;    
+      Real lp = (-bz*kz + sqrt(det)) / (SQR(kz) - SQR(cthi)) - kr*r0; 
+#ifdef DEBUG
+      if (iter < NBUFFER) {
+        db[iter-1].lm = lm;
+        db[iter-1].lp = lp;
+        db[iter-1].det = det;
+      }
+#endif
       if (lm <= 0) {
-        if (lp > 0)
+        if ( (lp > 0) && !(thface) )
           dlt = lp;
         else
           dlt = HUGE_NUMBER;
@@ -247,24 +260,54 @@ void SphericalPolarMover::Move(Photon *pphot) {
       db[iter-1].x = pphot->x[0]; db[iter-1].y = pphot->x[1]; db[iter-1].z = pphot->x[2];
       db[iter-1].i = pphot->i1; db[iter-1].j = pphot->i2; db[iter-1].k = pphot->i3;
       db[iter-1].ascend[0] = ascend[0]; db[iter-1].ascend[1] = ascend[1]; db[iter-1].ascend[2] = ascend[2];
+      db[iter-1].l_ext = l_ext;
     }
 #endif
     
 
     Real chi = pphot->sct_coef + pphot->abs_coef;
-    chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER;
+    chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max
     if (dl > TauRemaining / chi) { // Photon remains in zone
-      dl = TauRemaining/chi;
-      // Update moments
-      if (pmcb->moments_flag)
-	pmcb->UpdateMoments(pphot,dl);
-      // Update postions
-      pphot->x[0] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
-      pphot->x[1] = acos((z0 + kz * dl) / pphot->x[0]);
-      pphot->x[2] = atan2(y0 + ky * dl,x0 + kx * dl);
-      if (pphot->x[2] < 0.)
-	pphot->x[2] += 2.*PI;
-      return;
+      if ((acceleration) && ((pphot->abs_coef+pphot->sct_coef) * dl > TAU_TOL_COH)) {
+        printf("a ");
+        // position packet on sphere of radius dl
+        Real mu = 2.*pran->uniform()-1.0;
+        Real stheta = sqrt(1.0-mu*mu);
+        Real phi = 2.*PI*pran->uniform();
+        
+        
+        x0 += stheta*cos(phi) * dl;
+        y0 += stheta*sin(phi) * dl;
+        z0 += mu * dl;
+        pphot->x[0] = sqrt(SQR(x0)+SQR(y0)+SQR(z0)); 
+        pphot->x[1] = acos((z0) / pphot->x[0]);
+        pphot->x[2] = atan2(y0,x0);
+        
+        // current assume photon k parallel to rhat
+        kr = 1.0;
+        kth = 0.;
+        kph = 0.;
+        
+        // draw from path length distribution and reduce weight accordingly
+        Real mrw = MRWDist(pran);          
+        while (mrw <= 0.)
+          mrw = MRWDist(pran);          
+        Real ct = -log(mrw)*SQR(dl)/SQR(PI)*(pphot->abs_coef+pphot->sct_coef)*3.;
+        pphot->weight *= exp(-ct*pphot->abs_coef);
+      } else {
+        dl = TauRemaining/chi;
+        // Update moments
+        if (pmcb->moments_flag)
+          pmcb->UpdateMoments(pphot,dl);
+        // Update postions
+        pphot->x[0] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
+        pphot->x[1] = acos((z0 + kz * dl) / pphot->x[0]);
+        pphot->x[2] = atan2(y0 + ky * dl,x0 + kx * dl);
+        
+        if (pphot->x[2] < 0.)
+          pphot->x[2] += 2.*PI;
+        return;
+      }
     } else { // Photon moves to next zone and reduce TauRemaining
       // Update moments
       if (pmcb->moments_flag)
@@ -279,6 +322,8 @@ void SphericalPolarMover::Move(Photon *pphot) {
       TauRemaining -= chi * dl;
       // move photon to next zone and pdate angular positions
       MovePhotonToNextZone(pphot,pco,pmcb,face,ascend);
+      if ((face == 1) || (face == 3) || (face == 4) || (face == 6))
+        thface = true;
       cth = cos(pphot->x[1]);
       sth = sqrt(1. - SQR(cth));
       cph = cos(pphot->x[2]);
@@ -296,9 +341,11 @@ void SphericalPolarMover::Move(Photon *pphot) {
       printf("dl: %16.12e %16.12e %16.12e %16.12e\n",db[i].dl,db[i].dlr,db[i].dlt,db[i].dlp);
       printf("ang: %16.12e %16.12e %16.12e %16.12e\n", db[i].cth,db[i].sth,db[i].cph,db[i].sph);
       printf("k: %16.12e %16.12e %16.12e\n",db[i].kr,db[i].kth,db[i].kph);
-      printf("k: %16.12e %16.12e %16.12e\n",db[i].kx,db[i].ky,db[i].kz);
+      printf("kc: %16.12e %16.12e %16.12e\n",db[i].kx,db[i].ky,db[i].kz);
       printf("x: %16.12e %16.12e %16.12e\n",db[i].x,db[i].y,db[i].z);
       printf("i: %d %d %d\n",db[i].i,db[i].j,db[i].k);
+      printf("ascend: %d %d %d\n",db[i].ascend[0],db[i].ascend[1],db[i].ascend[2]);
+      printf("l_ext: %g %g %g %g\n",db[i].l_ext,db[i].lm,db[i].lp,db[i].det);
       printf("xf: ");
       if ((db[i].i >= pmcb->is) && (db[i].i <= pmcb->ie))
 	printf("%16.12e %16.12e ",pco->x1f(db[i].i),pco->x1f(db[i].i+1));
@@ -312,7 +359,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
     pphot->status = DESTROYED;
   }
 
-#ifdef DEBUG
+#ifdef OUTTEST
   Real xf = rf*sin(thf)*cos(phf);
   Real yf = rf*sin(thf)*sin(phf);
   Real zf = rf*cos(thf);

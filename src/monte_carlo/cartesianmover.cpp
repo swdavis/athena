@@ -13,6 +13,7 @@
 #include "debug.hpp"
 #define MAXITER 1000000
 //#define DEBUG
+#define TAU_TOL_COH  10.
 
 // Implementation of Sphericalpolar Photon mover
 
@@ -99,14 +100,41 @@ void CartesianMover::Move(Photon *pphot) {
     Real chi = pphot->sct_coef + pphot->abs_coef;
     chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER;
     if (dl > TauRemaining / chi) { // Photon remains in zone
-      dl = TauRemaining/chi;
-      if (pmcb->moments_flag) {
-	pmcb->UpdateMoments(pphot,dl);
+     
+      if ((acceleration) && ((pphot->abs_coef+pphot->sct_coef) * dl > TAU_TOL_COH)) {
+        //printf("a ");
+        // position packet on sphere of radius dl
+        Real mu = 2.*pran->uniform()-1.0;
+        Real stheta = sqrt(1.0-mu*mu);
+        Real phi = 2.*PI*pran->uniform();
+        
+        
+        pphot->x[0] += stheta*cos(phi) * dl;
+        pphot->x[1] += stheta*sin(phi) * dl;
+        pphot->x[2] += mu * dl;
+        
+        // current assume photon k parallel to rhat
+        kx = stheta*cos(phi);
+        ky = stheta*sin(phi);
+        kz = mu;
+        
+        // draw from path length distribution and reduce weight accordingly
+        Real mrw = MRWDist(pran);          
+        while (mrw <= 0.)
+          mrw = MRWDist(pran);          
+        Real ct = -log(mrw)*SQR(dl)/SQR(PI)*(pphot->abs_coef+pphot->sct_coef)*3.;
+        pphot->weight *= exp(-ct*pphot->abs_coef);
+
+      } else {
+        dl = TauRemaining/chi;
+        if (pmcb->moments_flag) {
+          pmcb->UpdateMoments(pphot,dl);
+        }
+        // update position
+        for (int i=0; i<3; ++i)
+          pphot->x[i] += pphot->kcart[i] * dl;
+        return;
       }
-      // update position
-      for (int i=0; i<3; ++i)
-	pphot->x[i] += pphot->kcart[i] * dl;
-      return;
     } else { // Photon moves to next zone and reduce TauRemaining
       if (pmcb->moments_flag) {
 	pmcb->UpdateMoments(pphot,dl);

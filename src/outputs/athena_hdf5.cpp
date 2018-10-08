@@ -81,18 +81,19 @@ void ATHDF5Output::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
   MeshBlock *pmb=pm->pblock;
   OutputData* pod;
   int max_blocks_global = pm->nbtotal;
-  int max_blocks_local=pm->nblist[Globals::my_rank];
-  int first_block = pm->nslist[Globals::my_rank];
+  int mesh_rank = Globals::my_rank % pm->nrankmx;
+  int max_blocks_local=pm->nblist[mesh_rank];
+  int first_block = pm->nslist[mesh_rank];
   bool *active_flags = new bool [max_blocks_local];
   std::string variable = output_params.variable;
 
-  // if (pmb != NULL) {
+  if (pmb != NULL) {
     for (int i=0; i<max_blocks_local; i++)
       active_flags[i]=true;
-    //} else {
-    //for (int i=0; i<max_blocks_local; i++)
-    //  active_flags[i]=false;
-    //}
+  } else {
+    for (int i=0; i<max_blocks_local; i++)
+      active_flags[i]=false;
+  }
 
   if (pmb != NULL) {
     // shooting a blank just for getting the variable names

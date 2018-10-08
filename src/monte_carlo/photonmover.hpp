@@ -21,8 +21,9 @@ class MonteCarloBlock;
 class Photon;
 class Coordinate;
 
-// Function prototypes
+//---------------------- prototypes for photon moving ------------------------------------
 Real GetOpticalDepth(MCRandom *pran);
+//---------------------- prototypes for accleration via mrw ------------------------------
 
 //! \class PhotonMover
 //  \brief abstract base class for all derived classes
@@ -33,6 +34,10 @@ public:
   ~PhotonMover();
   // data
   MonteCarloBlock *pmy_mcb;
+  // Arrays for MRW acceleration
+  AthenaArray<Real> mrwprob;
+  AthenaArray<Real> mrwdev;
+  bool acceleration;
 
   // functions
   virtual void Move(Photon *pphot);
@@ -42,6 +47,8 @@ public:
     MonteCarloBlock *pmcb, int face, bool ascend[3]);
   virtual void CartesianToCurvalinear(Photon *pphot);
   virtual void CurvalinearToCartesian(Photon *pphot);
+  virtual void InitializeMRWDist(void);
+  virtual Real MRWDist(MCRandom *pran);
 };
 
 //! \class CartesianMover
@@ -70,5 +77,6 @@ public:
   void CartesianToCurvalinear(Photon *pphot);
   void CurvalinearToCartesian(Photon *pphot);
 };
+
 
 #endif // PHOTONMOVER_HPP

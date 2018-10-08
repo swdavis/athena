@@ -340,7 +340,8 @@ int main(int argc, char *argv[]) {
   try {
     ChangeRunDir(prundir);
     pouts = new Outputs(pmesh, pinput);
-    if (res_flag==0) pouts->MakeOutputs(pmesh,pinput);
+    if ((res_flag==0) && (!MONTE_CARLO_STATIC)) 
+      pouts->MakeOutputs(pmesh,pinput);
   }
   catch(std::bad_alloc& ba) {
     std::cout << "### FATAL ERROR in main" << std::endl
@@ -444,7 +445,7 @@ int main(int argc, char *argv[]) {
   }
   catch(std::bad_alloc& ba) {
     std::cout << "### FATAL ERROR in main" << std::endl
-              << "memory allocation failed during output: " << ba.what() <<std::endl;
+            << "memory allocation failed during output: " << ba.what() <<std::endl;
 #ifdef MPI_PARALLEL
     MPI_Finalize();
 #endif
@@ -456,7 +457,7 @@ int main(int argc, char *argv[]) {
     MPI_Finalize();
 #endif
     return(0);
-  }
+    }
 
   pmesh->UserWorkAfterLoop(pinput);
 

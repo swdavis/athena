@@ -34,11 +34,14 @@
 void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
   Real rideal = 8.314e7;
+  Real c = 2.9979e10;
   Real temp = pin->GetReal("problem","temp");
   Real taumin = pin->GetReal("problem","taumin");
   Real taumax = pin->GetReal("problem","taumax");
+  Real vel = pin->GetOrAddReal("problem","velocity",0.);
   Real gamma = peos->GetGamma();
 
+  vel *= c;
 
   Real xlow, xhigh;
   int nx;
@@ -81,7 +84,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 	  phydro->u(IDN,k,j,i) = rho;
 	  phydro->u(IM1,k,j,i) = 0.0;
 	  phydro->u(IM2,k,j,i) = 0.0;
-	  phydro->u(IM3,k,j,i) = 0.0;
+	  phydro->u(IM3,k,j,i) = rho*vel;
 	  phydro->u(IEN,k,j,i) = rideal*rho*temp/(gamma-1.0);
 	}
       }
@@ -96,7 +99,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 	  for (int i=is; i<=ie; i++) {
 	    Real rho = dens1d(ie-i);
 	    phydro->u(IDN,k,j,i) = rho;
-	    phydro->u(IM1,k,j,i) = 0.0;
+	    phydro->u(IM1,k,j,i) = rho*vel;
 	    phydro->u(IM2,k,j,i) = 0.0;
 	    phydro->u(IM3,k,j,i) = 0.0;
 	    phydro->u(IEN,k,j,i) = rideal*rho*temp/(gamma-1.0);
@@ -105,7 +108,14 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
       }
     }
   }
-
+  // add kinetic energy
+  for (int k=ks; k<=ke; k++) {
+    for (int j=js; j<=je; j++) {
+      for (int i=is; i<=ie; i++) {
+        phydro->u(IEN,k,j,i) += 0.5*SQR(phydro->u(IM1,k,j,i))/phydro->u(IDN,k,j,i);
+        phydro->u(IEN,k,j,i) += 0.5*SQR(phydro->u(IM2,k,j,i))/phydro->u(IDN,k,j,i);
+        phydro->u(IEN,k,j,i) += 0.5*SQR(phydro->u(IM3,k,j,i))/phydro->u(IDN,k,j,i);
+      }}}
 }
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){

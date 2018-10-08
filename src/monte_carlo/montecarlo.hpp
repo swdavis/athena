@@ -151,6 +151,7 @@ public:
 
   bool lorentz_transform;  // Compute lorentz transformations
   bool polarized;
+  bool acceleration;
 
   EmisFunc_t InitEmission;
   TempFunc_t GetTemperature;
@@ -231,6 +232,7 @@ public:
   bool lorentz_transform;  // Compute lorentz transformations
   bool coherent_scattering; // photon does notchange energy after scattering
   bool polarized; // track photon polarization
+  bool acceleration;  // use MRW acceleration
 
   Real codetocgs_rho, codetoc_vel;
   Real emin, emax, elog, eminlog;

@@ -53,6 +53,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
 
   lorentz_transform = pin->GetOrAddBoolean("montecarlo","boosts",false);
   polarized = pin->GetOrAddBoolean("montecarlo","polarized",false);
+  acceleration = pin->GetOrAddBoolean("montecarlo","acceleration",false);
 
   // Create and intitialize randon number generator
   iseed = pin->GetInteger("montecarlo","iseed");
@@ -76,13 +77,15 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
     //pblock->myblockid = myblockid;
     //pblock->nphremain = nphlist[myblockid++]; 
     pfirst = pblock;
-    pmb=pmb->next;
+    pblock->MonteCarloProblemGenerator(pin);
+    pmb = pmb->next;
     while (pmb != NULL)  {
       pblock->next = new MonteCarloBlock(pmb, NULL, this, pin);
       //pblock->myblockid = myblockid;
       //pblock->nphremain = nphlist[myblockid++]; 
       pblock = pblock->next;
       pmb=pmb->next;
+      pblock->MonteCarloProblemGenerator(pin);
     }
     pblock = pfirst;
     // set list of destination processes
@@ -479,7 +482,7 @@ void MonteCarlo::ReceiveMonteCarloData(int source) {
     for (int i=pmcb->ks; i<=pmcb->ke+1; ++i) 
       pmcb->pcoord->x3f(i) = recv_buf[p++];
     // initialize emission array
-    InitEmission(pmcb);
+    if (InitEmission != NULL) InitEmission(pmcb);
     pmcb=pmcb->next;
   }
   delete recv_buf;
@@ -595,14 +598,20 @@ void MonteCarlo::ReceiveMonteCarloSpectra(int source) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::CollectMoments(void)
-//  \brief collect moments from other processes
+//  \brief collect moments from other processes for output
 
 void MonteCarlo::CollectMoments(void) {
   
   if (origin < 0) {
     // Retrieve moments from destination processes
     for(int i=0; i<nderv; ++i) {
-      ReceiveMoments(derv[i],false);
+      ReceiveMoments(derv[i],true);
+    }
+    MonteCarloBlock *pmcb=pblock;
+    while (pmcb != NULL) {
+      pmcb->nphtot = nphlist[pmcb->myblockid];
+      pmcb->NormalizeMoments(true);
+      pmcb=pmcb->next;
     }
   } else {
     // Return moments to origin
@@ -679,12 +688,12 @@ unsigned int MonteCarlo::CreateMCMPITag(int bid) {
 void MonteCarlo::InitializeMonteCarloBlocks(void) {
 
   // Check/set function pointers
-  if (InitEmission == NULL) {
-    std::stringstream msg;
-    msg << "### FATAL ERROR in RunStaticMonteCarlo()" << std::endl
-        << "InitEmission function pointer not set." << std::endl;
-    throw std::runtime_error(msg.str().c_str());
-  }
+  //if (InitEmission == NULL) {
+  //  std::stringstream msg;
+  //  msg << "### FATAL ERROR in RunStaticMonteCarlo()" << std::endl
+  //      << "InitEmission function pointer not set." << std::endl;
+  //  throw std::runtime_error(msg.str().c_str());
+  //}
   if (GetTemperature == NULL)
     GetTemperature = DefaultGetTemperature;
 
@@ -695,13 +704,13 @@ void MonteCarlo::InitializeMonteCarloBlocks(void) {
     GetTemperature(pmcb);
     //(pmcb->*(pmcb->GetTemperature2))();
     if (lorentz_transform) GetVelocity(pmcb);
-    InitEmission(pmcb);
+    if (InitEmission != NULL) InitEmission(pmcb);
     pmcb = pmcb->next;
     while (pmcb != NULL) {
       GetDensity(pmcb);
       GetTemperature(pmcb);
       if (lorentz_transform) GetVelocity(pmcb);
-      InitEmission(pmcb);
+      if (InitEmission != NULL) InitEmission(pmcb);
       pmcb = pmcb->next;
     }
     for(int i=0; i<nderv; ++i) {
