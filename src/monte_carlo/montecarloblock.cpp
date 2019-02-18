@@ -20,8 +20,9 @@
 #include "../hydro/hydro.hpp"
 #include "../globals.hpp"
 
-//#define MINWEIGHT 1.0e-15
-#define MINWEIGHT 1.0e-30
+#define MINWEIGHT 1.0e-15
+#define MAXSCAT 10000
+//#define MINWEIGHT 1.0e-30
 
 // constructor, initializes data structures and parameters
 
@@ -70,6 +71,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   absorption_meth = pmy_mc->absorption_meth;
   scattering_meth = pmy_mc->scattering_meth;
   lorentz_transform = pmy_mc->lorentz_transform;
+  emission_array_flag = pmy_mc->emission_array_flag;
   moments_flag = pmy_mc->pmcout->moments; // set in mcoutput
   acceleration = pmy_mc->acceleration;
 
@@ -84,7 +86,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   Spectrum *psmcout = pmy_mc->pmcout->pspec;
   // Loop over output spectra and make local equivalent for each
   while (psmcout != NULL) {
-    pspec = new Spectrum(pmy_mc->pmcout->pspec);
+    pspec = new Spectrum(psmcout);
+    //pspec = new Spectrum(pmy_mc->pmcout->pspec);
     if (pfirst == NULL)
       pfirst = pspec;
     else
@@ -132,13 +135,6 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     GetZonePosition = GetZonePositionSphericalPolar;
   }
 
-  // Set emission method
-  if (emission_meth == EMISUSER) {
-    emission_array_flag = pin->GetOrAddBoolean("montecarlo","emiss_array",false);
-  } else if (emission_meth ==  EMISFF) {
-    emission_array_flag = true;
-  }
-
   // Set absorption opacity
   if (absorption_meth == ABSUSER) {
     AbsorptionOpacity = NULL;
@@ -154,7 +150,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     Scatter = NULL;
   } else if (scattering_meth == SCATNONE) {
     ScatteringOpacity = NoOpacity;
-    Scatter = NULL;  // should not be called
+    Scatter = NoScatter;  // should not be called
     coherent_scattering = true;
   } else if (scattering_meth == SCATISO) {
     if (polarized) {
@@ -177,7 +173,9 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   } else if (scattering_meth == SCATCOMP) {
     GenerateComptonTable();
     ScatteringOpacity = ComptonOpacity;
-    if (!polarized) {
+    if (polarized) {
+      Scatter = ScatterComptonPolarized;
+    } else {
       Scatter = ScatterComptonUnpolarized;
     } 
   }
@@ -212,7 +210,7 @@ MonteCarloBlock::~MonteCarloBlock() {
   if (moments_flag) moments.DeleteAthenaArray();
 }
 
-void MonteCarloBlock::DefaultGetTemperature() {
+/*void MonteCarloBlock::DefaultGetTemperature() {
 
   Real rideal = 8.314e7;
   Hydro* phydro = pmy_block->phydro;
@@ -229,7 +227,7 @@ void MonteCarloBlock::DefaultGetTemperature() {
 
       }}}
 
-}
+      }*/
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::TransferPhotons()
@@ -242,18 +240,21 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
   int nscat = 0, nesc = 0, nabs =0;
   int nprop = (nphot > nphremain) ? nphremain : nphot;
   for(int i=0; i<nprop; ++i) {
-
+    //printf("%d ",i);
     // user definied photon initialization
     InitializePhoton(pphoton);
     
     // Lorentz transform E, k to Eulerian frame and update opacities.
-    if (lorentz_transform)
+    if (lorentz_transform) {
+      //LorentzTransformEmission(pphoton);
       LorentzTransform(pphoton,to_eulr);
+    }
 
     // move photon to next scattering/absorption or to boundary
     pmover->Move(pphoton);
+    int iscat = 0;
     while (pphoton->status == EVOLVING) {
-    
+      
       // Account for absorption
       if (weighted_absorption) {
         pphoton->weight *= (pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef));
@@ -263,9 +264,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
         if (pran->uniform() > (pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef)) )
           pphoton->status = DESTROYED;
       }
-        
-
-
+      
       // Scatter the photon packet
       if (pphoton->status == EVOLVING) {
 	// Lorentz transform to comoving frame for scattering
@@ -274,7 +273,15 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
 	
         Scatter(this,pphoton);
 	//pmover->CartesianToCurvalinear(pphoton);
-	nscat++;
+	iscat++;
+	if (iscat %  MAXSCAT == 0) {
+	  if (pphoton->IsNanPhoton()) {
+	    pphoton->status = DESTROYED;
+	    std::cout << "Warning: IsNanPhoton() returned true, photon destroyed" 
+		      << std::endl;
+	    pphoton->PrintPhoton();
+	  }
+	}
 	// Update the absorption and scattering extinction coefficients
 	// with the new energy.
 	if (!coherent_scattering) {
@@ -291,12 +298,16 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
       pmover->Move(pphoton);
     }
     if (pphoton->status == ESCAPED) {
-      if (pspec != NULL)
-        pspec->UpdateSpectrum(pphoton);
+      // loop over spectra and update
+      Spectrum *pspect = pspec;
+      while (pspect != NULL) {
+        pspect->UpdateSpectrum(pphoton);
+	pspect = pspect->next;
+      }
       nesc++;
     } else
       nabs++;
-    
+    nscat += iscat;
   }
   nphtot += nprop;
   // Normalize moments for output
@@ -308,7 +319,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::LorentzTransform(Photon *pphot)
+//! \fn void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign)
 //  \brief Lorentz transform photon packet
 //
 // Does not transform stokes vectors but this seems
@@ -316,6 +327,8 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
 // transformation as discussed in Cocke & Holm (1972) Nature letter.
 // weight is not transformed either as weight represents number of photons
 // in the packet which is invariant.
+// to_comv: sign = 1.0;
+// to_eulr: sign = -1.0; 
 
 void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign) {
 
@@ -330,25 +343,57 @@ void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign) {
   }
   Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
 
-  if(beta2 >= 0.) {
+  if(beta2 > 0.) {
     Real gamma = 1. / sqrt(1. - beta2); // assumes v^2 < c^2 checked elsewhere
     Real bdk = k1 * beta[0] + k2 * beta[1] + k3 * beta[2];
     Real gonembdk = gamma * (1. - bdk);
-    Real aber = (gamma-1.) * bdk / beta2 - gamma;
-
+    //Real aber = (gamma-1.) * bdk / beta2 - gamma;
+    Real aber = gamma*(1.-gamma*bdk/(gamma+1.));
     pphot->energy *= gonembdk;
-    k1 = (k1 + aber * beta[0]) / gonembdk;
-    k2 = (k2 + aber * beta[1]) / gonembdk;
-    k3 = (k3 + aber * beta[2]) / gonembdk;
-
-    // If transforming to Eulerian frame, shift extinction values.  Currently
-    // we don't need to do anything for shifts to comoving frame because this
-    // is only done for scattering which doesn't depend on alpha or sigma
-    if (sign == -1.) {
-        pphot->abs_coef /= gonembdk;
-        pphot->sct_coef /= gonembdk;
-    }
+    //printf("%g %g %g\n",gonembdk,gamma,bdk);
+    Real kz = k3;
+    k1 = (k1 - aber * beta[0]) / gonembdk;
+    k2 = (k2 - aber * beta[1]) / gonembdk;
+    k3 = (k3 - aber * beta[2]) / gonembdk;
+    //printf("%g;",k3);
+    //if ((k3 < 1./32)&&(k3 > 0.)) printf("kz: %g %g %g %g %g\n",kz,k3,gonembdk,aber*beta[2],aber);
+    
+    // Transform opacities
+    // Must be performed even when transforming to comoving frame because inverse process 
+    // is performed to go back to Eulerian frame in cases where scattering is coherent
+    pphot->abs_coef /= gonembdk;
+    pphot->sct_coef /= gonembdk;
+    
   }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Real MonteCarloBlock::LorentzTransformFrequencyShift(Photon *pphot)
+//  \brief Returns frequency shift from Lorentz Trransformation
+
+Real MonteCarloBlock::LorentzTransformFrequencyShift(Photon *pphot) {
+
+  Real k1 = pphot->k[0];
+  Real k2 = pphot->k[1];
+  Real k3 = pphot->k[2];
+  int i1 = pphot->i1, i2 = pphot->i2, i3 = pphot->i3;
+  
+  Real beta[3];
+  for (int i=0; i<3; ++i) {
+    beta[i] = vel(i,i3,i2,i1) / 2.9979e10;
+  }
+  Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
+
+  Real gonembdk;
+  if(beta2 > 0.) {
+    Real gamma = 1. / sqrt(1. - beta2); // assumes v^2 < c^2 checked elsewhere
+    Real bdk = k1 * beta[0] + k2 * beta[1] + k3 * beta[2];
+    gonembdk = gamma * (1. - bdk);
+  } else {
+    gonembdk = 1.;
+  }
+  // Always called from lab frame so returna nu'/nu
+  return gonembdk;
   
 }
 
@@ -357,34 +402,38 @@ void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign) {
 //  \brief add contribution to radiation moments in current zone
 
 void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
-
-  int& i = pphot->i1;
-  int& j = pphot->i2;
-  int& k = pphot->i3;
   
-  Real wght = pphot->eweight * pphot->weight * pphot->energy * dl;
-  Real wght1 = wght * pphot->k[0]; // curvalinear coorindates k
-  Real wght2 = wght * pphot->k[1];
-  Real wght3 = wght * pphot->k[2];
+  Real weight = pphot->eweight * pphot->weight * pphot->energy * dl;
+  if ((isinf(weight)) || (isnan(weight))) {
+    std::cout << "Warning: UpdateMoments weight is : " << weight << std::endl;
+  } else {
+    // Higher order moments are weighted by curvalinear coorindates k
+    Real weight1 = weight * pphot->k[0];
+    Real weight2 = weight * pphot->k[1];
+    Real weight3 = weight * pphot->k[2];
 
-  // make this more efficient?
-  moments(MCIER,k,j,i) += wght;
-  moments(MCIFR1,k,j,i) += wght1;
-  moments(MCIFR2,k,j,i) += wght2;
-  moments(MCIFR3,k,j,i) += wght3;
+    int i = pphot->i1;
+    int j = pphot->i2;
+    int k = pphot->i3;
+    // Add contribution to corresponding moments
+    moments(MCIER,k,j,i) += weight;
+    moments(MCIFR1,k,j,i) += weight1;
+    moments(MCIFR2,k,j,i) += weight2;
+    moments(MCIFR3,k,j,i) += weight3;
 
-  wght = wght1 * pphot->k[0];
-  moments(MCIPR11,k,j,i) += wght;
-  wght = wght2 * pphot->k[1];
-  moments(MCIPR22,k,j,i) += wght;
-  wght = wght3 * pphot->k[2];
-  moments(MCIPR33,k,j,i) += wght;
-  wght = wght1 * pphot->k[1];
-  moments(MCIPR12,k,j,i) += wght;
-  wght = wght1 * pphot->k[2];
-  moments(MCIPR13,k,j,i)  += wght;
-  wght = wght2 * pphot->k[2];
-  moments(MCIPR23,k,j,i) += wght;
+    weight = weight1 * pphot->k[0];
+    moments(MCIPR11,k,j,i) += weight;
+    weight = weight2 * pphot->k[1];
+    moments(MCIPR22,k,j,i) += weight;
+    weight = weight3 * pphot->k[2];
+    moments(MCIPR33,k,j,i) += weight;
+    weight = weight1 * pphot->k[1];
+    moments(MCIPR12,k,j,i) += weight;
+    weight = weight1 * pphot->k[2];
+    moments(MCIPR13,k,j,i)  += weight;
+    weight = weight2 * pphot->k[2];
+    moments(MCIPR23,k,j,i) += weight;
+  }
 
 }
 
@@ -397,7 +446,7 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
   if (normalize) {
     // Normalize moments
     for (int n=0; n<10; ++n) {
-      Real norm = static_cast<Real>(nphtot)/static_cast<Real>(nx1*nx2*nx3);
+      Real norm = static_cast<Real>(nphtot)*pmy_mc->normalization;
       if ((n == 0) || (n >= 4))
 	norm *= 2.9979e10;
       for (int k=ks; k<=ke; ++k) {
@@ -416,7 +465,7 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
   } else {
     // Undo normalization for continuing evolution
     for (int n=0; n<10; ++n) {
-      Real norm = static_cast<Real>(nphtot)/static_cast<Real>(nx1*nx2*nx3);
+      Real norm = static_cast<Real>(nphtot)*pmy_mc->normalization;
       if ((n == 0) || (n >= 4))
 	norm *= 2.9979e10;
       for (int k=ks; k<=ke; ++k) {

@@ -479,7 +479,8 @@ if args['hdf5']:
     makefile_options['LINKER_FLAGS'] += ' -L{0}/lib'.format(args['hdf5_path'])
   if args['cxx'] == 'g++' or args['cxx'] == 'icc' or args['cxx'] == 'cray' \
       or args['cxx'] == 'icc-phi' or args['cxx'] == 'clang++':
-    makefile_options['LIBRARY_FLAGS'] += ' -lhdf5 -lz -ldl'
+    makefile_options['LIBRARY_FLAGS'] += ' -lhdf5 -L/usr/local/hdf5/lib -lz -ldl'
+    makefile_options['COMPILER_FLAGS'] += ' -I/usr/local/hdf5/include'
   if args['cxx'] == 'bgxl':
     makefile_options['PREPROCESSOR_FLAGS'] += \
         ' -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_BSD_SOURCE' \

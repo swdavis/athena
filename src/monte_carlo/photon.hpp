@@ -46,6 +46,6 @@ public:
   // functions
   void CopyPhoton(Photon *pphot);
   void PrintPhoton();
-
+  bool IsNanPhoton();
 };
 #endif // PHOTON_HPP

@@ -18,9 +18,10 @@
 class Photon;
 class MCCoord;
 
-//----------------------------------------------------------------------------------------
-// function pointer prototypes for boundary conditions set at runtime
+
+// function pointer prototypes for user-defined modules set at runtime
 typedef void (*MCBValFunc_t)(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
+
 
 //---------------------- prototypes for boundary functions -------------------------------
 void PeriodicInnerX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);

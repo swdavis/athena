@@ -38,17 +38,20 @@ public:
   AthenaArray<Real> mrwprob;
   AthenaArray<Real> mrwdev;
   bool acceleration;
-
+  bool lorentz_transform;
   // functions
   virtual void Move(Photon *pphot);
   virtual Real GetOpticalDepth(MCRandom *pran);
   virtual void NextFace(Real dx1, Real dx2, Real dx3, int &face, Real &dx);
   virtual void MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
     MonteCarloBlock *pmcb, int face, bool ascend[3]);
+  virtual void UpdateZone(Photon *pphot);
   virtual void CartesianToCurvalinear(Photon *pphot);
   virtual void CurvalinearToCartesian(Photon *pphot);
   virtual void InitializeMRWDist(void);
+  virtual bool MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real tauacc);
   virtual Real MRWDist(MCRandom *pran);
+  
 };
 
 //! \class CartesianMover

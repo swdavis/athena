@@ -131,5 +131,12 @@ typedef void (*MGBoundaryFunc_t)(AthenaArray<Real> &dst,Real time, int nvar,
 typedef void (*GravityBoundaryFunc_t)(MeshBlock *pmb, Coordinates *pco,
              AthenaArray<Real> &dst, Real time, Real dt,
              int is, int ie, int js, int je, int ks, int ke);
+// function pointer prototypes for user-defined monte carlo modules set at runtime
+//typedef void (*EmisFunc_t)(MonteCarloBlock *pmcb);
+//typedef void (*TempFunc_t)(MonteCarloBlock *pmcb);
+//typedef void (*MCBValFunc_t)(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
+//typedef Real (*OpacFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
+//typedef void (*ScatFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
+//typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, MCCoord *pco);
 
 #endif // ATHENA_HPP

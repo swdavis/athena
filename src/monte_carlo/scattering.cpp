@@ -3,12 +3,23 @@
 // Copyright(C) 2014 James M. Stone <jmstone@princeton.edu> and other code contributors
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
-//!  \file scattering.cpp
+//!  \file scattering.cp
 
 
 // Athena++ headers
 #include "montecarlo.hpp"
+#include "photonmover.hpp"
 
+//----------------------------------------------------------------------------------------
+//! \fn void NoScatter(MonteCarloBlock *pmcb, Photon *pphot)
+//  \brief prints warning, should not be called
+
+void NoScatter(MonteCarloBlock *pmcb, Photon *pphot) {
+
+  std::cout << "Warning: Scatter called with scattering=none." << std::endl;
+    pphot->PrintPhoton();
+    pphot->status = DESTROYED;
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot)
@@ -26,9 +37,9 @@ void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot) {
   Real sth = sqrt(1. - SQR(cth));
 
   // calculate new wave vector
-  pphot->kcart[0] = sth * cphi;
-  pphot->kcart[1] = sth * sphi;
-  pphot->kcart[2] = cth;
+  pphot->k[0] = sth * cphi;
+  pphot->k[1] = sth * sphi;
+  pphot->k[2] = cth;
 
 }
 
@@ -42,16 +53,24 @@ void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot) {
 void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot) {
 
   MCRandom *pran = pmcb->pran;
-  
+  PhotonMover *pmover = pmcb->pmover;
+
   Real norm = pphot->stokes[0];
   Real stokes[3];
   for(int i=0; i<3; ++i) {
     stokes[i] = pphot->stokes[i] / norm;
   }
+  //if (COORDINATE_SYSTEM != "cartesian") {
+    // Compute cartesian k vectors
+    pmover->CurvalinearToCartesian(pphot);
+    //}
+
+  // Polarized scattering must be computed relative to cartesian bases due to definition of
+  // stokes vectors
   Real &kx = pphot->kcart[0];
   Real &ky = pphot->kcart[1];
   Real &kz = pphot->kcart[2];
-  
+
   Real mu = kz;
   Real stheta = sqrt(1. - SQR(mu));
   Real phio = acos(kx / stheta);
@@ -199,7 +218,10 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot) {
   kx = sthetap * cos(phip);
   ky = sthetap * sin(phip);
   kz = mup;
-  
+  //if (COORDINATE_SYSTEM != "cartesian") {
+    // Update curvalinear k vectors
+  pmover->CartesianToCurvalinear(pphot);
+    //}
   
 }
 
@@ -212,9 +234,9 @@ void ScatterThomsonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot) {
 
   MCRandom *pran = pmcb->pran;
   
-  Real &k1 = pphot->kcart[0];
-  Real &k2 = pphot->kcart[1];
-  Real &k3 = pphot->kcart[2];
+  Real &k1 = pphot->k[0];
+  Real &k2 = pphot->k[1];
+  Real &k3 = pphot->k[2];
 
   Real k1p,k2p,k3p,cths;
   do {
@@ -248,9 +270,9 @@ void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot) {
   MCRandom *pran = pmcb->pran;
   Real mec2 = 8.18711e-7;
 
-  Real &k1 = pphot->kcart[0];
-  Real &k2 = pphot->kcart[1];
-  Real &k3 = pphot->kcart[2];
+  Real &k1 = pphot->k[0];
+  Real &k2 = pphot->k[1];
+  Real &k3 = pphot->k[2];
   
   Real v1,v2,v3,vdc,gamma,x,onemuvdc;
   do {
@@ -309,6 +331,172 @@ void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot) {
   k3 = k3p;
 
 }
+
+
+//------------------------------------------------------------------------------
+//! \fn void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot)
+//  \brief Polarized Compton scattering
+//
+// Note that this uses the correct R matrix expressions -- not the incorrect
+// expression listed in the appendix of Davis et al. (2009) */
+
+void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot) {
+
+  MCRandom *pran = pmcb->pran;
+  PhotonMover *pmover = pmcb->pmover;
+
+  Real norms = pphot->stokes[0];
+  Real stokes[3];
+  for(int i=0; i<3; ++i) {
+    stokes[i] = pphot->stokes[i] / norms;
+  }
+  if (COORDINATE_SYSTEM != "cartesian") {
+    // Compute cartesian k vectors
+    pmover->CurvalinearToCartesian(pphot);
+  }
+  // Polarized scattering must be computed relative to cartesian bases due to definition of
+  // stokes vectors
+  Real &kx = pphot->kcart[0];
+  Real &ky = pphot->kcart[1];
+  Real &kz = pphot->kcart[2];
+  
+  
+  Real stheta = sqrt(1. - SQR(kz));
+  Real mec2 = 8.18711e-7;
+  Real v1,v2,v3,vdc,mom,gamma,bgamma,x,vdotk;
+  do {
+    // Pick random direction for velocity of scattering electron
+    v3 = 2.0*pran->uniform()-1.0;
+    Real sinv = sqrt(1.0 - SQR(v3));
+    Real phiv = 2.*PI*pran->uniform();
+    v1 = sinv * cos(phiv);
+    v2 = sinv * sin(phiv);
+
+    // Calculate v . k
+    Real vdotk = kx * v1 + ky * v2 + kz * v3;
+
+    // Draw momentum from random distribution and calculate gamma,v/c,x
+    // sigma^ and test for acceptance
+    mom = ElectronDist(pmcb->tgas(pphot->i3,pphot->i2,pphot->i1),pran);
+    gamma = sqrt(1. + SQR(mom));
+    bgamma = gamma - vdotk * mom;
+    x = 2.0*pphot->energy /mec2*bgamma;
+
+  } while(pran->uniform()>=0.375*SigmaHat(x)*bgamma/gamma);
+
+  Real rho = sqrt(v1*v1+v2*v2);
+  Real beta = mom/gamma;
+
+  // Calculate scattering angles and scattered photon energies in fluid frame
+  // to evaluate probability for scattering
+  Real mup,k1p,k2p,k3p,bgammap,mus,cmus,xp,erat,diff,deltac,kcon,s2i1,c2i1;
+  Real s2,r00,r01,r02,norm;
+  do {
+
+    // Calculate trial scattering angles
+    Real mud = 2.0*pran->uniform()-1.0;
+    mup = (beta + mud)/(1.0 + beta * mud);
+
+    Real phip = 2.*PI*pran->uniform();
+    Real cphip = cos(phip);
+    Real sphip = sin(phip);
+    Real sthetap = sqrt(1.0-mup*mup);
+    bgammap = gamma-mup*mom;
+
+    if(rho > 0.0) {
+      k1p = mup * v1 + sthetap / rho * (v2*cphip + v1*v3*sphip);
+      k2p = mup * v2 + sthetap / rho * (v2*v3*sphip - v1*cphip);
+      k3p = mup * v3 - sthetap * rho * sphip;
+    }
+    else {
+      k1p = sthetap * cphip;
+      k2p = sthetap * sphip;
+      k3p = mup;
+    }
+
+    mus = kx*k1p + ky*k2p + kz*k3p;
+    cmus = 1.0 - mus;
+
+    xp = x / (1.0+pphot->energy/mec2*cmus/bgammap);
+    erat = xp / x;
+    diff = (1.0/x-1.0/xp);
+    deltac = sqrt(-1.0-1.0/diff);
+
+    // Cacluate angle, i1, which rotates stokes vectors into "internal"
+    // scattering basis
+    Real bottom = stheta*cmus*deltac;
+    kcon = k1p * ky - k2p * kx;
+    Real ci1,si1;
+    if(fabs(bottom) > TINY_NUMBER) {
+      ci1 = (bgamma*(k3p-mus*kz)+mom*cmus*(kz*vdotk-v3))/bottom;
+      si1 = (bgamma*kcon-mom*cmus*(v1*ky-v2*kx))/bottom;
+    }
+    else { // Very rare, but this should be improved
+      ci1 = 1.0;
+      si1 = 0.0;
+    }
+    s2i1 = 2.0*si1*ci1;
+    c2i1 = 2.0*ci1*ci1-1.0;
+
+    s2 = 4.0*diff*(1.0+diff);
+    r00 = (erat+1.0/erat+s2);
+    r01 = s2*c2i1;
+    r02 = s2*s2i1;
+
+    norm = r00 + r01 * stokes[1] + r02 * stokes[2];
+
+    // Scattering probability proportional to cross section
+  } while(2*pran->uniform() >= (erat*erat*norm));
+
+  // Calculate other elements of the Compton matrix
+  Real s1 = s2+2.0;
+  Real s3 = 4.0*diff+2.0;
+
+  // Determine i2 angle which rotates stokes vectors back from scattering plane
+  Real bottom = sqrt(1.0-k3p*k3p)*cmus*deltac;
+  Real ci2,si2;
+  if( fabs(bottom) > TINY_NUMBER) {
+    ci2 = (bgammap*(kz-mus*k3p)+mom*cmus*(k3p*mup-v3))/bottom;
+    si2 = -(bgammap*kcon+mom*cmus*(v1*k2p-v2*k1p))/bottom;
+  }
+  else {
+    ci2 = 1.0;
+    si2 = 0.0;
+  }
+  Real s2i2 = 2.0*si2*ci2;
+  Real c2i2 = 2.0*ci2*ci2-1.0;
+
+  // Rotate Stokes vectors
+  Real c1c2 = c2i1 * c2i2;
+  Real s1s2 = s2i1 * s2i2;
+  Real c1s2 = c2i1 * s2i2;
+  Real s1c2 = c2i2 * s2i1;
+
+  Real r10 = s2 * c2i2;
+  Real r11 = s1 * c1c2 + s3 * s1s2;
+  Real r12 = s1 * s1c2 - s3 * c1s2;
+
+  Real r20 = s2 * s2i2;
+  Real r21 = s1 * c1s2 - s3 * s1c2;
+  Real r22 = s3 * c1c2 + s1 * s1s2;
+
+  // Calculate new stokes vectors from rotation matrix.  Note that the
+  // value of the overall intensity (stokes[0]=1) does not change
+  pphot->stokes[1] = (r10+r11*stokes[1]+r12*stokes[2]) / norms;
+  pphot->stokes[2] = (r20+r21*stokes[1]+r22*stokes[2]) / norms;
+
+  // Calculate scattered energy and update k vector
+  pphot->energy = xp / (2.0 * bgammap) * mec2;
+  kx = k1p;
+  ky = k2p;
+  kz = k3p;
+  if (COORDINATE_SYSTEM != "cartesian") {
+    // Update curvalinear k vectors
+    pmover->CartesianToCurvalinear(pphot);
+  }
+}
+
+
 
 //----------------------------------------------------------------------------------------
 //! \fn Real Bigy(Real x, Real xp)

@@ -32,13 +32,17 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
  
   // Set flags that control emission, absorption and scattering
   emission_meth = GetEmissionFlag(pin->GetOrAddString("montecarlo","emission","error"));
-  if (emission_meth ==  EMISFF) {
+  if (emission_meth == EMISUSER) {
+    emission_array_flag = pin->GetOrAddBoolean("montecarlo","emiss_array",false);
+  } else if (emission_meth ==  EMISFF) {
     InitEmission = InitializeEmissionFreeFree;
+    emission_array_flag = true;
   }
   absorption_meth = GetAbsorptionFlag(pin->GetOrAddString("montecarlo","absorption",
                                                           "error"));
   scattering_meth = GetScatteringFlag(pin->GetOrAddString("montecarlo","scattering",
                                                           "error"));
+
   // read bc flags for each of the 6 boundaries.
   mc_bcs[INNER_X1] = GetMCBoundaryFlag(pin->GetOrAddString("mesh","ix1_mc_bc","escape"));
   mc_bcs[OUTER_X1] = GetMCBoundaryFlag(pin->GetOrAddString("mesh","ox1_mc_bc","escape"));
@@ -46,6 +50,9 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   mc_bcs[OUTER_X2] = GetMCBoundaryFlag(pin->GetOrAddString("mesh","ox2_mc_bc","escape"));
   mc_bcs[INNER_X3] = GetMCBoundaryFlag(pin->GetOrAddString("mesh","ix3_mc_bc","escape"));
   mc_bcs[OUTER_X3] = GetMCBoundaryFlag(pin->GetOrAddString("mesh","ox3_mc_bc","escape"));
+  // intitialize boundary functions
+  for (int dir=0; dir<6; dir++)
+    BoundaryFunction_[dir]=NULL;
 
   // Initialize output
   pmcout = new MCOutput(this,pin);
@@ -66,6 +73,12 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
     MPI_Bcast(&ncells, sizeof(int64_t), MPI_BYTE, 0, MPI_COMM_WORLD);
 #endif
   }
+  // Set overall photon normalization
+  if (emission_array_flag)
+    normalization = 1./static_cast<Real>(ncells);
+  else
+    normalization = 1.; // maybe modified with user defined function
+
   // Initialize all montecarlo blocks to correspond to mesh blocks
   mcranks = pin->GetOrAddInteger("montecarlo","mcranks",0);
   int nmesh = (Globals::nranks)-mcranks;
@@ -112,23 +125,33 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   }
 
   // set number of photons for each block
+  // nphot is total number of photons over all blocks
+  // nbtotal runs over the number meshblocks on this rank
+  // Globals::nranks is total number of cores
+  // nphlist is number of photons on each meshblock
   nphot = pin->GetInteger("montecarlo","nphot");
+  int cadence = pin->GetOrAddInteger("montecarlo","cadence",nphot);
+  int nout = nphot/cadence;
   int nbtotal = pmesh->nbtotal;
   nphlist = new int[nbtotal];
   int nperb = nphot / nbtotal;
+
   for (int i=0; i<nbtotal; ++i)
     nphlist[i] = nperb;
-  // ensure equal number of photons per mesh block
+  // ensure equal number of photons per mesh block assuming all meshblocks have 
+  // same number of zones; nphot may differ from input nphot
   nphot = 0;
   for (int i=0; i<nbtotal; ++i)
     nphot += nphlist[i];
   if(nphot < nbtotal) {
-    msg << "### FATAL ERROR Monte Carlo Constructor" << std::endl
+    msg << "###FATAL ERROR Monte Carlo Constructor" << std::endl
         << "Number of photons < number of mesh blocks= " << nphot << " "
         << nbtotal << std::endl;
     throw std::runtime_error(msg.str().c_str());
   } 
   // Divide photons between ranks and set blockid
+  // nranks[i] is the number of differen monte carlo blocks contributing to
+  // meshblock i
   int *nranks;
   nranks = new int[nmesh];
   for(int i=0; i<nmesh; ++i)
@@ -141,7 +164,9 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   MonteCarloBlock *pmcb = pblock;
   while (pmcb != NULL) {
     pmcb->myblockid = myblockid;
+    // allocates an even number of photons per monte carlo block
     pmcb->nphremain = nphlist[myblockid++]/nranks[my_mesh_rank];
+    pmcb->cadence = pmcb->nphremain / nout;
     pmcb = pmcb->next;
   }
 }
@@ -220,6 +245,27 @@ enum EmissionFlag GetEmissionFlag(std::string input_string) {
     throw std::runtime_error(msg.str().c_str());
   }
 
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::EnrollUserMCBoundaryFunction(enum BoundaryFace dir, BValHydro_t my_bc)
+//  \brief Enroll a user-defined monte carlo boundary function
+
+void MonteCarlo::EnrollUserMCBoundaryFunction(enum BoundaryFace dir, MCBValFunc_t my_bc) {
+  std::stringstream msg;
+  if (dir<0 || dir>5) {
+    msg << "### FATAL ERROR in EnrollMCBoundaryCondition function" << std::endl
+        << "dirName = " << dir << " not valid" << std::endl;
+    throw std::runtime_error(msg.str().c_str());
+  }
+  if (mc_bcs[dir]!=MC_USER_BNDRY) {
+    msg << "### FATAL ERROR in EnrollUserMCBoundaryFunction" << std::endl
+        << "The boundary condition flag must be set to the string 'user' in the "
+        << " <mesh> block in the input file to use user-enrolled BCs" << std::endl;
+    throw std::runtime_error(msg.str().c_str());
+  }
+  BoundaryFunction_[dir]=my_bc;
+  return;
 }
 
 //----------------------------------------------------------------------------------------
@@ -727,12 +773,29 @@ void MonteCarlo::InitializeMonteCarloBlocks(void) {
 //! \fn void MonteCarlo::RunStaticMonteCarlo(void)
 //  \brief start evolving photons in each monte carlo block
 
-void MonteCarlo::RunStaticMonteCarlo(void) {
+/*void MonteCarlo::RunStaticMonteCarloNew(void) {
  
   InitializeMonteCarloBlocks();
 
-  MonteCarloBlock *pmcb = pblock;
   // transfer photons over all blocks
+  if (Globals::my_rank == 0) {
+    nchunk = 100;
+  } else {
+    nchunk = 10000;
+  }
+
+  if (Globals::my_rank == 0) {
+    for (int i=0; i<nbtotal; ++i) {
+      nremain = nphlist[i];
+      for (int j=0; j<nranks[i]; ++j) {
+	
+      }
+    }
+  } else {
+    
+  }
+
+  MonteCarloBlock *pmcb = pblock;
   pmcb = pblock;
   pmcb->TransferPhotons(pmcb->nphremain);
   pmcb = pmcb->next;
@@ -741,6 +804,36 @@ void MonteCarlo::RunStaticMonteCarlo(void) {
     pmcb = pmcb->next;
   }
 
+  return;
+  }*/
+
+void MonteCarlo::RunStaticMonteCarlo(void) {
+ 
+  InitializeMonteCarloBlocks();
+
+  MonteCarloBlock *pmcb = pblock;
+  // transfer photons over all blocks
+  //  Assumes all blocks are allocated the same number photons to transfer
+  nphrun = 0;
+  while (pmcb->nphremain > 0) {
+    pmcb->TransferPhotons(pmcb->cadence);
+    pmcb->nphremain -= pmcb->cadence;
+    nphrun += pmcb->cadence*Globals::nranks; //temporary!!
+    pmcb = pmcb->next;
+    while (pmcb != NULL) {
+      pmcb->TransferPhotons(pmcb->cadence);
+      pmcb->nphremain -= pmcb->cadence;
+      nphrun += pmcb->cadence*Globals::nranks; //temporary!!
+      pmcb = pmcb->next;
+    }
+    pmcb = pblock;
+    pmcout->OutputSpectra(this);
+  }
+  // prepare moments for output
+  if (pmcout->moments)
+    CollectMoments();
+  // outputput final spectra
+  //pmcout->OutputSpectra(this);
   return;
 }
 

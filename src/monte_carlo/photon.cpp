@@ -26,7 +26,11 @@ Photon::~Photon() {
 
 }
 
-// rewrite this as a constructor
+//----------------------------------------------------------------------------------------
+//! \fn void Photon::CopyPhoton()
+//  \brief Initialize photon from another photon
+
+// rewrite this as a constructor?
 void Photon::CopyPhoton(Photon *pphot) {
 
   i1 = pphot->i1;
@@ -47,10 +51,32 @@ void Photon::CopyPhoton(Photon *pphot) {
     
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void Photon::IsNanPhoton()
+//  \brief check for Nan in photon properties
 
-// for debugging purposes
+bool Photon::IsNanPhoton() {
+
+  if (isnan(weight)) return true;
+  if (isnan(eweight)) return true;
+  if (isnan(energy)) return true;
+  for (int i=0; i<3; ++i) {
+    if (isnan(x[i])) return true;
+    if (isnan(k[i])) return true;
+    if (isnan(stokes[i])) return true;
+  }
+  if isnan(sct_coef) return true;
+  if isnan(abs_coef) return true;
+
+  return false;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Photon::PrintPhoton()
+//  \brief print key properites
+
 void Photon::PrintPhoton() {
-
+  // Used primarily for debugging
   std::cout << "----------------------------" << std::endl
             << "Energy, weights: " << energy << " " << weight
 	    << " " << eweight << std::endl
@@ -60,5 +86,6 @@ void Photon::PrintPhoton() {
 	    << "kcart: " << kcart[0] << " " << kcart[1] << " "
 	    << kcart[2] <<std::endl
 	    << "stokes: " << stokes[0] << " " << stokes[1] << " "
-	    << stokes[2] <<std::endl;
+	    << stokes[2] << std::endl
+	    << "opacity: " << sct_coef << " " << abs_coef << std::endl;
 }

@@ -12,6 +12,7 @@
 #include "../athena.hpp"
 #include "montecarlo.hpp"
 
+class Photon;
 
 //----------------------------------------------------------------------------------------
 //! \struct MomentumRange
@@ -35,11 +36,17 @@ public:
   Spectrum(Spectrum *pspec);
   ~Spectrum();
 
+  std::string base_name;
   MomentumRange range;
   bool polarized;
+  bool cartesian_axis;
+  bool coordinates;
   Spectrum *next;  // next spectrum
   enum BoundaryFace face;
   int id;
+  int output_number;// current output number
+  //int cadence;
+  Real x1min,x1max,x2min,x2max,x3min,x3max;
 
   AthenaArray<Real> energies;
   AthenaArray<Real> intensity;
@@ -52,8 +59,12 @@ public:
   //functions
   void BuildFrequencyGrid(Real emin, Real emax, int nfreq);
   void UpdateSpectrum(Photon *pphot);
-  int GetEbin(Real energy);
+  int EnergyBin(Real energy);
+  bool AngleBinsCartesian(Photon *pphot, int &Phibin, int &mubin);
+  bool AngleBinsSphericalPolar(Photon *pphot, int &Phibin, int &mubin);
   void SetSurface(std::string input_face);
+  bool ScreenCoordinates(Photon *pphot);
+  void ResetSpectrum();
   void AddSpectrum(Spectrum *pspec);
 };
 

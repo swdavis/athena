@@ -14,8 +14,8 @@
 #define MAXITER 1000000
 //#define DEBUG
 //#define OUTTEST
-#define NBUFFER 100
-#define TAU_TOL_COH  5.
+#define NBUFFER 50
+#define TAU_TOL_COH  10.
 
 // Implementation of Sphericalpolar Photon mover
 
@@ -43,6 +43,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
   Real TauRemaining = GetOpticalDepth(pran);
 
   // References for momentum vectors
+  CurvalinearToCartesian(pphot);// Redundant calculation of cth,sth,cph,sph
   Real& kx = pphot->kcart[0];
   Real& ky = pphot->kcart[1];
   Real& kz = pphot->kcart[2];
@@ -55,8 +56,8 @@ void SphericalPolarMover::Move(Photon *pphot) {
   typedef struct {
     Real dl, dlr, dlt, dlp;
     Real cth, sth, cph, sph;
-    Real kr, kth, kph;
-    Real kx, ky, kz;
+    //Real kr, kth, kph;
+    //Real kx, ky, kz;
     Real x,y,z;
     int i,j,k;
     bool ascend[3];
@@ -64,16 +65,21 @@ void SphericalPolarMover::Move(Photon *pphot) {
   } debug_t;
   debug_t db[NBUFFER];
 #endif
-#ifdef OUTTEST
-  Real rf,thf,phf,dl0;
-  FinalPositionSphericalPolar(pmcb,pco,pphot,rf,thf,phf,dl0);
-#endif
-
 
   Real cth = cos(pphot->x[1]);
   Real sth = sqrt(1. - SQR(cth));
   Real cph = cos(pphot->x[2]);
   Real sph = sin(pphot->x[2]);
+
+  // Make sure kcart is set
+  kx = kr*sth*cph + kth*cth*cph - kph*sph;
+  ky = kr*sth*sph + kth*cth*sph + kph*cph;
+  kz = kr*cth - kth*sth;
+
+#ifdef OUTTEST
+  Real rf,thf,phf,dl0;
+  FinalPositionSphericalPolar(pmcb,pco,pphot,rf,thf,phf,dl0);
+#endif
 
   int iter = 0;
   // Move photon until requisite # of mean free paths or escape
@@ -82,15 +88,16 @@ void SphericalPolarMover::Move(Photon *pphot) {
   while( (TauRemaining > 0.) && (pphot->status == EVOLVING) && (iter < MAXITER)) {
     iter++;
 
-    kr  = kx * sth * cph + ky * sth * sph + kz * cth;
-    kth = kx * cth * cph + ky * cth * sph - kz * sth;
-    kph = -kx * sph + ky * cph;
+    //kr  = kx * sth * cph + ky * sth * sph + kz * cth;
+    //kth = kx * cth * cph + ky * cth * sph - kz * sth;
+    //kph = -kx * sph + ky * cph;
     // Compute cartesian positions
     Real r0 = pphot->x[0];
     Real x0 = r0 * sth * cph;
     Real y0 = r0 * sth * sph;
     Real z0 = r0 * cth;
-    
+
+
     // Compute distance to all faces
     Real dl, dlr, dlt, dlp;
     bool ascend[3];
@@ -268,45 +275,35 @@ void SphericalPolarMover::Move(Photon *pphot) {
     Real chi = pphot->sct_coef + pphot->abs_coef;
     chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max
     if (dl > TauRemaining / chi) { // Photon remains in zone
-      if ((acceleration) && ((pphot->abs_coef+pphot->sct_coef) * dl > TAU_TOL_COH)) {
-        printf("a ");
-        // position packet on sphere of radius dl
-        Real mu = 2.*pran->uniform()-1.0;
-        Real stheta = sqrt(1.0-mu*mu);
-        Real phi = 2.*PI*pran->uniform();
-        
-        
-        x0 += stheta*cos(phi) * dl;
-        y0 += stheta*sin(phi) * dl;
-        z0 += mu * dl;
-        pphot->x[0] = sqrt(SQR(x0)+SQR(y0)+SQR(z0)); 
-        pphot->x[1] = acos((z0) / pphot->x[0]);
-        pphot->x[2] = atan2(y0,x0);
-        
-        // current assume photon k parallel to rhat
-        kr = 1.0;
-        kth = 0.;
-        kph = 0.;
-        
-        // draw from path length distribution and reduce weight accordingly
-        Real mrw = MRWDist(pran);          
-        while (mrw <= 0.)
-          mrw = MRWDist(pran);          
-        Real ct = -log(mrw)*SQR(dl)/SQR(PI)*(pphot->abs_coef+pphot->sct_coef)*3.;
-        pphot->weight *= exp(-ct*pphot->abs_coef);
+      bool accel_success = false;
+      if ((acceleration) && ((pphot->abs_coef+pphot->sct_coef) * dl > TAU_TOL_COH))
+	// Try/perform MRW acceleration
+	accel_success = MRWAcceleration(pphot,pran,dl,TAU_TOL_COH);
+
+      if (accel_success) {
+	// update cartesian k vector
+	CurvalinearToCartesian(pphot);
       } else {
-        dl = TauRemaining/chi;
-        // Update moments
-        if (pmcb->moments_flag)
-          pmcb->UpdateMoments(pphot,dl);
-        // Update postions
-        pphot->x[0] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
-        pphot->x[1] = acos((z0 + kz * dl) / pphot->x[0]);
-        pphot->x[2] = atan2(y0 + ky * dl,x0 + kx * dl);
-        
-        if (pphot->x[2] < 0.)
-          pphot->x[2] += 2.*PI;
-        return;
+	dl = TauRemaining/chi;
+	// Update moments
+	if (pmcb->moments_flag)
+	  pmcb->UpdateMoments(pphot,dl);
+	// Update postions
+	pphot->x[0] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
+	pphot->x[1] = acos((z0 + kz * dl) / pphot->x[0]);
+	pphot->x[2] = atan2(y0 + ky * dl,x0 + kx * dl);
+	if (pphot->x[2] < 0.)
+	  pphot->x[2] += 2.*PI;
+
+	// Update k vector
+	cth = cos(pphot->x[1]);
+	sth = sqrt(1. - SQR(cth));
+	cph = cos(pphot->x[2]);
+	sph = sin(pphot->x[2]);
+	kr  = kx * sth * cph + ky * sth * sph + kz * cth;
+	kth = kx * cth * cph + ky * cth * sph - kz * sth;
+	kph = -kx * sph + ky * cph;
+	return;
       }
     } else { // Photon moves to next zone and reduce TauRemaining
       // Update moments
@@ -328,9 +325,13 @@ void SphericalPolarMover::Move(Photon *pphot) {
       sth = sqrt(1. - SQR(cth));
       cph = cos(pphot->x[2]);
       sph = sin(pphot->x[2]);
-      
+      kr  = kx * sth * cph + ky * sth * sph + kz * cth;
+      kth = kx * cth * cph + ky * cth * sph - kz * sth;
+      kph = -kx * sph + ky * cph;
     }
   }
+
+  // -------------------------- Debugging -------------------------------------------
   if (iter >= MAXITER) {
     std::cout << "Warning: iter exceeded ITERMAX in photon mover." << std::endl;
 #ifdef DEBUG
@@ -411,7 +412,7 @@ void SphericalPolarMover::CurvalinearToCartesian(Photon *pphot) {
   // Compute cartesian
   pphot->kcart[0] = pphot->k[0]*sth*cph + pphot->k[1]*cth*cph - pphot->k[2]*sph;
   pphot->kcart[1] = pphot->k[0]*sth*sph + pphot->k[1]*cth*sph + pphot->k[2]*cph;
-  pphot->kcart[2] = pphot->k[0]*cph - pphot->k[1]*sph;
+  pphot->kcart[2] = pphot->k[0]*cth - pphot->k[1]*sth;
   
 }
 

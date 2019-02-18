@@ -11,10 +11,11 @@
 #include "photonmover.hpp"
 #include "../mesh/mesh.hpp"
 #include "debug.hpp"
-#define MAXITER 1000000
+#define MAXITER 10000
 //#define DEBUG
-#define TAU_TOL_COH  10.
+#define TAU_TOL_COH  15.
 
+int ix[MAXITER],iy[MAXITER],iz[MAXITER];
 // Implementation of Sphericalpolar Photon mover
 
 CartesianMover::CartesianMover(MonteCarloBlock *pmcb) 
@@ -38,8 +39,8 @@ void CartesianMover::Move(Photon *pphot) {
   MCCoord *pco = pmy_mcb->pcoord;
 
   // get number of mean free paths photon will travel
-  Real TauRemaining = GetOpticalDepth(pran);
-
+  Real tauremaining = GetOpticalDepth(pran);
+  Real tau0 = tauremaining;
 #ifdef DEBUG
   Real xf,yf,zf,dl0;
   Real xi,yi,zi;
@@ -47,16 +48,17 @@ void CartesianMover::Move(Photon *pphot) {
   FinalPositionCartesian(pmcb,pco,pphot,xf,yf,zf,dl0);
 #endif
 
+  CurvalinearToCartesian(pphot);
   Real& kx = pphot->kcart[0];
   Real& ky = pphot->kcart[1];
   Real& kz = pphot->kcart[2];
-  pphot->k[0] = kx;
-  pphot->k[1] = ky;
-  pphot->k[2] = kz;
 
   int iter = 0;
   // calculate distances to nearest faces
-  while( (TauRemaining > 0.) && (pphot->status == EVOLVING) && (iter < MAXITER)) {
+  while( (tauremaining > 0.) && (pphot->status == EVOLVING) && (iter < MAXITER)) {
+    ix[iter] = pphot->i1;
+    iy[iter] = pphot->i2;
+    iz[iter] = pphot->i3;
     iter++;
     // Compute distance to all faces
     Real dl, dlx, dly, dlz;
@@ -96,37 +98,35 @@ void CartesianMover::Move(Photon *pphot) {
 
     int face;
     NextFace(dlx,dly,dlz,face,dl);
-
+    if (dl < 0.){
+      printf("dl: %g %g %g %g\n",dl,dlx,dly,dlz);
+      if (ascend[0])
+	printf("u: %g %g %g\n",pco->x1f(pphot->i1+1),pphot->x[0],kx);
+      else
+	printf("d: %g %g %g\n",pco->x1f(pphot->i1),pphot->x[0],kx);
+      if (ascend[1])
+	printf("u: %g %g %g\n",pco->x2f(pphot->i2+1),pphot->x[1],ky);
+      else
+	printf("d: %g %g %g\n",pco->x2f(pphot->i2),pphot->x[1],ky);
+      if (ascend[2])
+	printf("u: %g %g %g\n",pco->x3f(pphot->i3+1),pphot->x[2],kz);
+      else
+	printf("d: %g %g %g\n",pco->x3f(pphot->i3),pphot->x[2],kz);
+    }
     Real chi = pphot->sct_coef + pphot->abs_coef;
     chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER;
-    if (dl > TauRemaining / chi) { // Photon remains in zone
-     
-      if ((acceleration) && ((pphot->abs_coef+pphot->sct_coef) * dl > TAU_TOL_COH)) {
-        //printf("a ");
-        // position packet on sphere of radius dl
-        Real mu = 2.*pran->uniform()-1.0;
-        Real stheta = sqrt(1.0-mu*mu);
-        Real phi = 2.*PI*pran->uniform();
-        
-        
-        pphot->x[0] += stheta*cos(phi) * dl;
-        pphot->x[1] += stheta*sin(phi) * dl;
-        pphot->x[2] += mu * dl;
-        
-        // current assume photon k parallel to rhat
-        kx = stheta*cos(phi);
-        ky = stheta*sin(phi);
-        kz = mu;
-        
-        // draw from path length distribution and reduce weight accordingly
-        Real mrw = MRWDist(pran);          
-        while (mrw <= 0.)
-          mrw = MRWDist(pran);          
-        Real ct = -log(mrw)*SQR(dl)/SQR(PI)*(pphot->abs_coef+pphot->sct_coef)*3.;
-        pphot->weight *= exp(-ct*pphot->abs_coef);
-
+    if (dl > tauremaining / chi) { // Photon remains in zone
+      
+      bool accel_success = false;
+      if ((acceleration) && ((pphot->abs_coef+pphot->sct_coef) * dl > TAU_TOL_COH))
+	// Try/perform MRW acceleration
+	accel_success = MRWAcceleration(pphot,pran,dl,TAU_TOL_COH);
+      if (accel_success) {
+	// update cartesian k vector
+	CurvalinearToCartesian(pphot);
       } else {
-        dl = TauRemaining/chi;
+	// move photon one scattering distance
+        dl = tauremaining/chi;
         if (pmcb->moments_flag) {
           pmcb->UpdateMoments(pphot,dl);
         }
@@ -135,19 +135,25 @@ void CartesianMover::Move(Photon *pphot) {
           pphot->x[i] += pphot->kcart[i] * dl;
         return;
       }
-    } else { // Photon moves to next zone and reduce TauRemaining
+    } else { // Photon moves to next zone and reduce tauremaining
       if (pmcb->moments_flag) {
 	pmcb->UpdateMoments(pphot,dl);
       }
       // update position
       for (int i=0; i<3; ++i)
 	pphot->x[i] += pphot->kcart[i] * dl;
-      TauRemaining -= chi * dl;
+      tauremaining -= chi * dl;
       MovePhotonToNextZone(pphot,pco,pmcb,face,ascend);
     }
   }
   if (iter >= MAXITER) {
-    std::cout << "Warning: iter exceeded ITERMAX in photon mover." << std::endl;
+    std::cout << "Warning: iter exceeded MAXITER " << MAXITER << " in photon mover." 
+	      << std::endl;
+    //for(int k=0;k<MAXITER;++k) {
+    //  printf("%d %d %d\n",ix[k],iy[k],iz[k]);
+    //}
+    std::cout << "tau: " << tau0 << " " << tauremaining << std::endl;
+    pphot->PrintPhoton();
     pphot->status = DESTROYED;
   }
 #ifdef DEBUG

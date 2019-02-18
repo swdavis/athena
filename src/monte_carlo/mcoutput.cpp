@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdexcept>  // runtime_error
+#include <iomanip>    // setfill(), setw()
 
 // Athena++ headers
 #include "montecarlo.hpp"
@@ -23,7 +24,10 @@ Spectrum::Spectrum(MomentumRange input_range, bool pol) {
   face = FACE_UNDEF;
   range = input_range;
   polarized = pol;
- 
+  coordinates = false;
+  x1min = x2min = x3min = -HUGE_NUMBER;
+  x1max = x2max = x3max = HUGE_NUMBER;
+
   // Allocate and intialize energy bins
   energies.NewAthenaArray(range.ne+1);
   BuildFrequencyGrid(range.emin,range.emax,range.ne);
@@ -39,15 +43,26 @@ Spectrum::Spectrum(MomentumRange input_range, bool pol) {
   }
 }
 
-// constructor
+// constructor from copy
 Spectrum::Spectrum(Spectrum *pspec) {
 
+  base_name.assign(pspec->base_name);
   next = NULL;
   range = pspec->range;
   polarized = pspec->polarized;
+  cartesian_axis = pspec->cartesian_axis;
+  coordinates = pspec->coordinates;
   face = pspec->face;
   id = pspec->id;
-
+  output_number = pspec->output_number;
+  //cadence = pspec->cadence;
+  x1min = pspec->x1min;
+  x2min = pspec->x2min;
+  x3min = pspec->x3min;
+  x1max = pspec->x1max;
+  x2max = pspec->x2max;
+  x3max = pspec->x3max;
+  
   // Allocate and intialize energy bins
   energies.NewAthenaArray(range.ne+1);
   BuildFrequencyGrid(range.emin,range.emax,range.ne);
@@ -62,6 +77,7 @@ Spectrum::Spectrum(Spectrum *pspec) {
     stokesu_sq.NewAthenaArray(range.nphi,range.ncth,range.ne);
   }
 }
+
 // destructor
 Spectrum::~Spectrum() {
 
@@ -111,62 +127,283 @@ void Spectrum::SetSurface(std::string input_face) {
   } else if (input_face == "outer_x3") {
     face = OUTER_X3;
   } else {
-    std::cout << "Warning: face not set correctly in output spectrum: " << input_face
-              << ", leaving undefined." << std::endl;
+    std::stringstream msg;
+      msg << "### FATAL ERROR in function [Spectrum::SetSurface]" << std::endl
+          << "Face not set in spectrum input." << std::endl;
+      throw std::runtime_error(msg.str().c_str());
   }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn bool Spectrum::AngleBinsCarteisan(Photon *pphot, int &phibin, int &cthbin)
+//  \brief set index of phi and cth bins relative to cartesian access
+
+bool Spectrum::AngleBinsCartesian(Photon *pphot, int &phibin, int &cthbin) {
+
+  Real kx = pphot->kcart[0];
+  Real ky = pphot->kcart[1];
+  Real kz = pphot->kcart[2];
+
+  Real ctheta, phi, stheta;
+  if (COORDINATE_SYSTEM == "cartesian") {
+    // Set ctheta, phi according to face
+    switch(face) {
+      case INNER_X1:
+	ctheta = -kx;
+	stheta = sqrt(SQR(ky)+SQR(kz));
+	phi = acos(ky/stheta);
+	if(kz < 0.0)
+	  phi = 2 * PI - phi;
+	break;
+      case OUTER_X1:
+	ctheta = kx;
+	stheta = sqrt(SQR(ky)+SQR(kz));
+	phi = acos(ky/stheta);
+	if(kz < 0.0)
+	  phi = 2 * PI - phi;
+	break;
+      case INNER_X2:
+	ctheta = -ky;
+	stheta = sqrt(SQR(kx)+SQR(kz));
+	phi = acos(kx/stheta);
+	if(kz < 0.0)
+	  phi = 2 * PI - phi;
+	break;
+      case OUTER_X2:
+	ctheta = ky;
+	stheta = sqrt(SQR(kx)+SQR(kz));
+	phi = acos(kx/stheta);
+	if(kz < 0.0)
+	  phi = 2 * PI - phi;
+	break;
+      case INNER_X3:
+	ctheta = -kz;
+	stheta = sqrt(SQR(kx)+SQR(ky));
+	phi = acos(kx/stheta);
+	if(ky < 0.0)
+	  phi = 2 * PI - phi;
+	break;
+      case OUTER_X3:
+	ctheta = kz;
+	stheta = sqrt(SQR(kx)+SQR(ky));
+	phi = acos(kx/stheta);
+	if(ky < 0.0)
+	  phi = 2 * PI - phi;
+	break;
+      default:
+	std::stringstream msg;
+	msg << "### FATAL ERROR in function [Spectrum::AngleBinsCartesian]" << std::endl
+	    << "Face not valid" << std::endl;
+	throw std::runtime_error(msg.str().c_str());
+	break;
+    }
+  } else if (COORDINATE_SYSTEM == "spherical_polar") {
+    if (kz >= 0.0) {
+      ctheta = kz;
+      stheta = sqrt(SQR(kx)+SQR(ky));
+      phi = acos(kx/stheta);
+      if(ky < 0.0)
+	phi = 2 * PI - phi;
+    } else {
+      ctheta = -kz;
+      stheta = sqrt(SQR(kx)+SQR(ky));
+      phi = acos(kx/stheta);
+      if(ky < 0.0)
+	phi = 2 * PI - phi;
+    }
+  }
+  if (ctheta < 0.0) {
+    printf("Warning: ctheta < 0\n");
+    pphot->PrintPhoton();
+    return false;
+  }
+
+  // Get ctheta bin
+  int ncth = range.ncth;
+  cthbin = static_cast<int>(ctheta * static_cast<Real>(ncth) );
+  if(cthbin >= ncth) {
+    std::cout << "Warning: cthbin > ncth (cthbin, mu, k1, k2, k3): " << cthbin << ' '
+              << ctheta << ' ' << kx << ' ' << ky << ' ' << kz << std::endl;
+    cthbin = ncth-1;
+  }
+
+  // Get phi bin
+  int nphi = range.nphi;
+  if (ctheta == 1.0) {
+    phibin = 0;
+  } else {
+    phibin = static_cast<int>(phi * static_cast<Real>(nphi) / (2.*PI));
+  }
+  if(phibin >= nphi) {
+    std::cout << "Warning: phibin > nphi (phibin, phi, k1, k2, k3): " << phibin << ' '
+              << phi << ' ' << kx << ' ' << ky << ' ' << kz << std::endl;
+    phibin = nphi-1;
+  }
+  if(phibin < 0) {
+    std::cout << "Warning: phibin < 0 (phibin, phi, k1, k2, k3): " << phibin << ' '
+              << phi << ' ' << kx << ' ' << ky << ' ' << kz << std::endl;
+    phibin = 0;
+  }
+  return true;
 }
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void Spectrum::UpdateSpectrum(Photon *pphot)
-//  \brief add photon contribution to spectrum
-//  *** should be more general to explitly account for non-cartesian possibilities
+//! \fn bool Spectrum::AngleBinsSphericalPolar(Photon *pphot, int &phibin, int &cthbin)
+//  \brief set index of phi and cth bins relative to cartesian access
 
-void Spectrum::UpdateSpectrum(Photon *pphot) {
+bool Spectrum::AngleBinsSphericalPolar(Photon *pphot, int &phibin, int &cthbin) {
 
-  Real mu = fabs(pphot->k[2]); //CARTESIAN ONLY
-  int ebin,mubin,phibin;
-  Real phi;
-  int nphi = range.nphi;
-  int nmu = range.ncth;
+  Real kr = pphot->k[0];
+  Real kth = pphot->k[1];
+  Real kph = pphot->k[2];
 
-  // Get ebin
-  ebin = GetEbin(pphot->energy);
-  if (ebin < 0) return;
+  Real ctheta, phi, stheta;
+  // Set ctheta, phi according to face
+  switch(face) {
+    case INNER_X1:
+      ctheta = -kr;
+      stheta = sqrt(SQR(kth)+SQR(kph));
+      phi = acos(kth/stheta);
+      if(kph < 0.0)
+	phi = 2 * PI - phi;
+      break;
+    case OUTER_X1:
+      ctheta = kr;
+      stheta = sqrt(SQR(kth)+SQR(kph));
+      phi = acos(kth/stheta);
+      if(kph < 0.0)
+	phi = 2 * PI - phi;
+      break;
+    case INNER_X2:
+      ctheta = -kth;
+      stheta = sqrt(SQR(kr)+SQR(kph));
+      phi = acos(kr/stheta);
+      if(kph < 0.0)
+	phi = 2 * PI - phi;
+      break;
+    case OUTER_X2:
+      ctheta = kth;
+      stheta = sqrt(SQR(kr)+SQR(kph));
+      phi = acos(kr/stheta);
+      if(kph < 0.0)
+	phi = 2 * PI - phi;
+      break;
+    case INNER_X3:
+      ctheta = -kph;
+      stheta = sqrt(SQR(kr)+SQR(kth));
+      phi = acos(kr/stheta);
+      if(kth < 0.0)
+	phi = 2 * PI - phi;
+      break;
+    case OUTER_X3:
+      ctheta = kph;
+      stheta = sqrt(SQR(kr)+SQR(kth));
+      phi = acos(kr/stheta);
+      if(kth < 0.0)
+	phi = 2 * PI - phi;
+      break;
+    default:
+      std::stringstream msg;
+      msg << "### FATAL ERROR in function [Spectrum::AngleBinsCartesian]" << std::endl
+          << "Face not valid" << std::endl;
+      throw std::runtime_error(msg.str().c_str());
+      break;
+  }
+  if (ctheta < 0.0) {
+    printf("Warning: ctheta < 0\n");
+    pphot->PrintPhoton();
+    return false;
+  }
+
+  // Get ctheta bin
+  int ncth = range.ncth;
+  cthbin = static_cast<int>(ctheta * static_cast<Real>(ncth) );
+  if(cthbin >= ncth) {
+    std::cout << "Warning: cthbin > ncth (cthbin, mu, k1, k2, k3): " << cthbin << ' '
+              << ctheta << ' ' << kr << ' ' << kth << ' ' << kph << std::endl;
+    return false;
+  }
+
   // Get phi bin
-  if (mu == 1.0) {
+  int nphi = range.nphi;
+  if (ctheta == 1.0) {
     phibin = 0;
   } else {
-    Real stheta = sqrt(SQR(pphot->k[0])+SQR(pphot->k[1]));
-    phi = acos(pphot->k[0]/stheta);
-    if(pphot->k[1] < 0.0)
-      phi = 2 * PI - phi;
     phibin = static_cast<int>(phi * static_cast<Real>(nphi) / (2.*PI));
   }
   if(phibin >= nphi) {
-    std::cout << "Warning: phibin > nphi (phibin, phi, kx, ky): " << phibin << ' '
-              << phi << ' ' << pphot->k[0] << ' ' << pphot->k[1] << std::endl;
-    phibin = nphi-1;
+    std::cout << "Warning: phibin > nphi (phibin, phi, k1, k2, k3): " << phibin << ' '
+              << phi << ' ' << kr << ' ' << kth << ' ' 
+	      << kph << std::endl;
+    return false;
   }
   if(phibin < 0) {
-    std::cout << "Warning: phibin < 0 (phibin, phi, kx, ky): " << phibin << ' '
-              << phi << ' ' << pphot->k[0] << ' ' << pphot->k[1] << std::endl;
-    phibin = 0;
+    std::cout << "Warning: phibin < 0 (phibin, phi, k1, k2, k3): " << phibin << ' '
+              << phi << ' ' << kr << ' ' << kth << ' ' 
+	      << kph << std::endl;
+    return false;
   }
-  // Get mu bin
-  mubin = static_cast<int>(mu * static_cast<Real>(nmu) );
-  if(mubin >= nmu) {
-    std::cout << "Warning: mubin > nmu (mubin, mu, kz): " << mubin << ' '
-              << mu << ' ' << pphot->k[2]  << std::endl;
-    mubin = nmu-1;
-  }
+  return true;
 
-  Real& weight = pphot->weight;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn bool Spectrum::ScreenCoordinates(Photon *pphot)
+//  \brief Returns true if photon is not within specified coordinate ranges
+
+bool Spectrum::ScreenCoordinates(Photon *pphot) {
+
+  if (pphot->x[0] < x1min) 
+    return true;
+  else if (pphot->x[0] > x1max)
+    return true;
+  else if (pphot->x[1] < x2min)
+    return true;
+  else if (pphot->x[1] > x2max)
+    return true;
+  else if (pphot->x[2] < x3min)
+    return true;
+  else if (pphot->x[2] > x3max)
+    return true;
+  else
+    return false;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Spectrum::UpdateSpectrum(Photon *pphot)
+//  \brief add photon contribution to spectrum
+
+void Spectrum::UpdateSpectrum(Photon *pphot) {
+ 
+  if (face != pphot->face)
+    return;
+
+  Real weight = pphot->weight;
   weight *= pphot->eweight;
   if ((isinf(weight)) || (isnan(weight))) {
     std::cout << "Warning: weight is Nan or Inf: " << weight << std::endl;
   } else {
-    //std::cout << "final: " << weight << std::endl;
+    if (coordinates) {
+      //Apply coordinate cuts
+      if (ScreenCoordinates(pphot))
+	return;
+    }
+    // Get energy bin
+    int ebin = EnergyBin(pphot->energy);
+    if (ebin < 0) return;
+    
+    // Get angle bins
+    int phibin, mubin;
+    if (cartesian_axis) {
+      if (!AngleBinsCartesian(pphot,phibin,mubin))
+	return;
+    } else {
+      if (COORDINATE_SYSTEM == "spherical_polar")
+	if(!AngleBinsSphericalPolar(pphot,phibin,mubin))
+	  return;	
+    }
+
     intensity(phibin,mubin,ebin) += pphot->stokes[0] * weight;
     intensity_sq(phibin,mubin,ebin) += SQR(pphot->stokes[0] * weight);  
     if (polarized) {
@@ -179,10 +416,10 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void Spectrum::GetEbin(Real energy)
+//! \fn void Spectrum::EnergyBin(Real energy)
 //  \brief return bin number corresponding to energy
 
-int Spectrum::GetEbin(Real energy)
+int Spectrum::EnergyBin(Real energy)
 {
 
   if ( (energy < energies(0)) || (energy > energies(range.ne)) )
@@ -212,6 +449,26 @@ int Spectrum::GetEbin(Real energy)
 
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void Spectrum::ResetSpectrum()
+//  \brief zero elements of output spectrum
+
+void Spectrum::ResetSpectrum() {
+
+  for(int i=0; i<range.nphi; ++i) {
+    for(int j=0; j<range.ncth; ++j) {
+      for(int k=0; k<range.ne; ++k) {
+	intensity(i,j,k) = 0.;
+	intensity_sq(i,j,k) = 0.;
+	if (polarized) {
+	  stokesq(i,j,k) = 0.;
+	  stokesq_sq(i,j,k) = 0.;
+	  stokesu(i,j,k) = 0.;
+	  stokesu_sq(i,j,k) = 0.;
+	}
+      }}}
+
+}
 //----------------------------------------------------------------------------------------
 //! \fn void Spectrum::AddSpectrum(Spectrum *pspec)
 //  \brief return add contents of another spectrum
@@ -254,13 +511,15 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
   // loop over input block names.  Find those that start with "output", read parameters,
   // and construct linked list of spectra if present, set moments flag if moments output
   // present
-  int id =0;
   Spectrum *pfirst = NULL, *plast;
+  int id =0;
   while (pib != NULL) {
     if (pib->block_name.compare(0,6,"output") == 0) {
       // Look for spectra
       std::string type = pin->GetString(pib->block_name,"file_type");
+
       if (type.compare("spec") == 0) {
+	// set momentum range and polarization flag for spectrum constructor
         MomentumRange range;
         range.ne = pin->GetInteger(pib->block_name,"ne");
         Real emin = pin->GetReal("montecarlo","emin");
@@ -273,14 +532,59 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         range.phimax = pin->GetOrAddReal(pib->block_name,"phimax",2.*PI);
         range.ncth = pin->GetOrAddInteger(pib->block_name,"ncth",8);
         range.cthmin = pin->GetOrAddReal(pib->block_name,"cthmin",0.);
-        range.cthmax = pin->GetOrAddReal(pib->block_name,"cthmax",1.); 
+        range.cthmax = pin->GetOrAddReal(pib->block_name,"cthmax",1.);
         bool polarized = pin->GetOrAddBoolean(pib->block_name,"polarized",pmc->polarized);
+	// Create spectrum
         pspec = new Spectrum(range,polarized);
-        pspec->id = id++;
+	pspec->id = id++;
+	pspec->output_number = 0;
+	// Generate file name
+	std::string outn = pib->block_name.substr(6); // 6 because counting starts at 0!
+	int outid = atoi(outn.c_str());
+	// set file name
+	std::string basename = pin->GetString("job","problem_id");
+	pspec->base_name.assign(basename);
+	pspec->base_name.append(".");
+	char define_id[10];
+        sprintf(define_id,"out%d",outid);  // default id="outN"
+	pspec->base_name.append(define_id);
+	//pspec->file_name.append(".spec");
+	// get/set checkpoint cadence
+	//pspec->cadence = pin->GetOrAddInteger(pib->block_name,"cadence",pmc->nphot);
+	// set output face if specified
         std::string face = pin->GetOrAddString(pib->block_name,"face","none");
-        if (face.compare("none") != 0) {
-          pspec->SetSurface(face);
-        }
+	pspec->SetSurface(face);
+	// Check for coordinate ranges for spectrum
+	if (pin->DoesParameterExist(pib->block_name,"x1min")) {
+	  pspec->x1min = pin->GetReal(pib->block_name,"x1min");
+	  pspec->coordinates = true;
+	}
+	if (pin->DoesParameterExist(pib->block_name,"x1max")) {
+	  pspec->x1max = pin->GetReal(pib->block_name,"x1max");
+	  pspec->coordinates = true;
+	}
+	if (pin->DoesParameterExist(pib->block_name,"x2min")) {
+	  pspec->x2min = pin->GetReal(pib->block_name,"x2min");
+	  pspec->coordinates = true;
+	}
+	if (pin->DoesParameterExist(pib->block_name,"x2max")) {
+	  pspec->x2max = pin->GetReal(pib->block_name,"x2max");
+	  pspec->coordinates = true;
+	}
+	if (pin->DoesParameterExist(pib->block_name,"x3min")) {
+	  pspec->x3min = pin->GetReal(pib->block_name,"x3min");
+	  pspec->coordinates = true;
+	}
+	if (pin->DoesParameterExist(pib->block_name,"x3max")) {
+	  pspec->x3max = pin->GetReal(pib->block_name,"x3max");
+	  pspec->coordinates = true;
+	}	  
+	// Set axis for determining output angles
+	if (COORDINATE_SYSTEM == "cartesian")
+	  pspec->cartesian_axis = true;
+	else
+	  pspec->cartesian_axis = pin->GetOrAddBoolean(pib->block_name,"cartesian_axis",false);
+	// Check for coordinate range
         if (pfirst == NULL)
           pfirst = pspec;
         else
@@ -308,37 +612,45 @@ MCOutput::~MCOutput() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCOutput::OutputSpectrum(MonteCarlo *pmc
+//! \fn void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string fname)
 //  \brief output intensity spectrum
 
-void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string outfile) {
+void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string fname) {
 
-  FILE *of_ptr;
+  // open file for output
+  FILE *pfile;
+  std::stringstream msg;
+  if ((pfile = fopen(fname.c_str(),"w")) == NULL) {
+    msg << "### FATAL ERROR in function [MCOutpus::OutputSpectrum]" << std::endl
+	<< "Output file '" << fname << "' could not be opened";
+    throw std::runtime_error(msg.str().c_str());
+  }
+   
+  // Write header information
   Real everg = 1.6021772e-12;  
   Real emin = pspec->range.emin / everg; // output in eV
   Real emax = pspec->range.emax / everg; // output in eV
-  if ((of_ptr=fopen("intens_sums.out","w")) != NULL) {
-    fprintf(of_ptr,"%d %d %d %g\n",pspec->range.ne,pspec->range.ncth,pspec->range.nphi,norm);
-    fprintf(of_ptr,"%lG %lG %lG\n",everg,emin,emax);
+  fprintf(pfile,"%d %d %d %g\n",pspec->range.ne,pspec->range.ncth,pspec->range.nphi,norm);
+  fprintf(pfile,"%lG %lG %lG\n",everg,emin,emax);
 
-    // Output intensity data at top of domain
-    for(int k=0; k<pspec->range.ne; ++k) {
-      for(int j=0; j<pspec->range.ncth; ++j) {
-        for(int i=0; i<pspec->range.nphi; ++i) {
-          fprintf(of_ptr,"%G %G ",pspec->intensity(i,j,k),
-                  pspec->intensity_sq(i,j,k));
-          if (pspec->polarized) {
-            fprintf(of_ptr,"%G %G %G %G\n",pspec->stokesq(i,j,k),
-                    pspec->stokesq_sq(i,j,k),pspec->stokesu(i,j,k),
-                    pspec->stokesu_sq(i,j,k));
-          } else {
-            fprintf(of_ptr,"\n");
-          }
-
-        }
+  // Output intensity data at top of domain
+  for(int k=0; k<pspec->range.ne; ++k) {
+    for(int j=0; j<pspec->range.ncth; ++j) {
+      for(int i=0; i<pspec->range.nphi; ++i) {
+	fprintf(pfile,"%G %G ",pspec->intensity(i,j,k),
+		pspec->intensity_sq(i,j,k));
+	if (pspec->polarized) {
+	  fprintf(pfile,"%G %G %G %G\n",pspec->stokesq(i,j,k),
+		  pspec->stokesq_sq(i,j,k),pspec->stokesu(i,j,k),
+		  pspec->stokesu_sq(i,j,k));
+	} else {
+	  fprintf(pfile,"\n");
+	}
+	
       }
     }
   }
+  fclose(pfile);
 }
 
 //----------------------------------------------------------------------------------------
@@ -350,6 +662,7 @@ void MCOutput::CollectSpectra(MonteCarlo *pmc) {
   Spectrum *poutspec=pspec, *pblockspec;
   while (poutspec != NULL) {
     int id = poutspec->id;
+    poutspec->ResetSpectrum();
     // loop over monte carlo blocks
     MonteCarloBlock *pmcb = pmc->pblock;
     pblockspec = pmcb->pspec;
@@ -380,10 +693,18 @@ void MCOutput::OutputSpectra(MonteCarlo *pmc) {
 
   if (Globals::my_rank == 0) {
     Spectrum *pspect = pspec;
-    std::string outfile;  
-    Real norm = static_cast<Real>(pmc->nphot)/ static_cast<Real>(pmc->ncells);    
+    //Real norm = static_cast<Real>(pmc->nphot)/ static_cast<Real>(pmc->ncells);
+    Real norm = static_cast<Real>(pmc->nphrun) * pmc->normalization;
     while (pspect != NULL) {
-      OutputSpectrum(pspec,norm,outfile);
+      std::string filename;
+      filename.assign(pspect->base_name);
+      filename.append(".");
+      std::stringstream file_number;
+      file_number << std::setw(5) << std::setfill('0') << pspect->output_number;
+      filename.append(file_number.str());
+      filename.append(".spec");
+      OutputSpectrum(pspect,norm,filename);
+      pspect->output_number++;
       pspect = pspect->next;
     }
   }

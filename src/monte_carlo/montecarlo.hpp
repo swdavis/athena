@@ -16,7 +16,6 @@
 
 // Athena++ classes headers
 #include "../athena.hpp"
-//#include "../athena_arrays.hpp"
 #include "../coordinates/coordinates.hpp"
 #include "photon.hpp"
 #include "mcbvals.hpp"
@@ -48,15 +47,13 @@ enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
 // function pointer prototypes for user-defined modules set at runtime
 typedef void (*EmisFunc_t)(MonteCarloBlock *pmcb);
 typedef void (*TempFunc_t)(MonteCarloBlock *pmcb);
-//typedef void (MonteCarloBlock::*TempFunc2_t)(void);
+typedef void (*MCBValFunc_t)(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
 typedef Real (*OpacFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
 typedef void (*ScatFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
 typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, MCCoord *pco);
 
 //---------------------- prototypes for provided functions -------------------------------
-void InitializeEmissionFreeFree(MonteCarloBlock *pmcb);
 void DefaultGetTemperature(MonteCarloBlock *pmcb);
-void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot);
 //--------------------- prototypes for opacity.cpp functions -----------------------------
 Real NoOpacity(MonteCarloBlock *pmcb, Photon *pphot);
 Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot);
@@ -67,14 +64,19 @@ Real ComptonCrossSection(Real energy, Real theta);
 Real Maxwell(Real theta, Real gamma);
 Real KleinNishina(Real x);
 //--------------------- prototypes for scatter.cpp functions -----------------------------
+void NoScatter(MonteCarloBlock *pmcb, Photon *pphot);
 void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot);
 void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot);
 void ScatterThomsonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot);
 void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot);
+void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot);
 Real Bigy(Real x, Real xp);
 Real SigmaHat(Real x);
 Real ElectronDist(Real tgas, MCRandom *pran);
 //--------------------- prototypes for emission.cpp functions ----------------------------
+void InitializeEmissionFreeFree(MonteCarloBlock *pmcb);
+void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot);
+Real PlanckDist(Real temp,MCRandom *pran);
 void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pco);
 void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pco);
 //---------------------- prototypes for setting flags ------------------------------------
@@ -127,6 +129,8 @@ public:
 //  \brief monte carlo functions and data
 
 class MonteCarlo {
+  friend class MCBoundaryValues;
+
 public:
   MonteCarlo(ParameterInput *pin, Mesh *pmesh);
   ~MonteCarlo();
@@ -143,6 +147,9 @@ public:
   int nderv; // number of derivative processes
   int *derv; // pointer to array of derivative processes
   int origin; // process with origin mesh block
+  int blocksize;
+  int nphrun; // number of photons run thus far
+  Real normalization; //overall normalization for photons
 
   enum EmissionFlag emission_meth;
   enum AbsorptionFlag absorption_meth;
@@ -150,24 +157,29 @@ public:
   enum MCBoundaryFlag mc_bcs[6];
 
   bool lorentz_transform;  // Compute lorentz transformations
-  bool polarized;
-  bool acceleration;
+  bool emission_array_flag;  // Compute and save zone emissivities
+  bool polarized;// track photon polarization
+  bool acceleration;  // use MRW acceleration
 
   EmisFunc_t InitEmission;
   TempFunc_t GetTemperature;
 
   // functions
   void RunStaticMonteCarlo(void);
+  void RunStaticMonteCarloNew(void);
   void InitUserMonteCarloData(ParameterInput *pin);
   void EnrollUserEmissionInitialization(EmisFunc_t emissfunc);
   void EnrollUserGetTemperature(TempFunc_t tempfunc);
   void SendMonteCarloSpectra(int dest);
   void ReceiveMonteCarloSpectra(int source);
   void CollectMoments(void);
+  void EnrollUserMCBoundaryFunction(enum BoundaryFace dir, MCBValFunc_t my_bc);
 
 private:
 
   // functions
+  MCBValFunc_t BoundaryFunction_[6];
+
   void GetDensity(MonteCarloBlock *pmcb);
   void GetVelocity(MonteCarloBlock *pmcb);
   void DistributePhotonsToBlocks(void);
@@ -224,6 +236,7 @@ public:
   int nx1,nx2,nx3;
   int is,ie,js,je,ks,ke;
   int nfreq, nmu, nphi, nsurf;
+  int cadence;
 
   bool zone_weight_flag; // flag for zone weighting
   bool weighted_absorption; // flag controling how absorption is handled
@@ -248,8 +261,9 @@ public:
   void MonteCarloProblemGenerator(ParameterInput *pin);
   void TransferPhotons(int nphot);  // Transfer photons on this block
   void LorentzTransform(Photon *pphot, const Real sign);
+  Real LorentzTransformFrequencyShift(Photon *pphot);
   void InitializePhoton(Photon *pphot);
-  void DefaultGetTemperature();
+  //void DefaultGetTemperature();
   void UpdateMoments(Photon *pphot, Real dl);
   void NormalizeMoments(bool normalize);
   //void GetPhotonsFromNeighbors();

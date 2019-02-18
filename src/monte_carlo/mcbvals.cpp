@@ -31,7 +31,10 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
       break;
     case MC_POLAR_BNDRY:
       BoundaryFunction_[INNER_X1] = Polar;
-      break; 
+      break;
+    case MC_USER_BNDRY:
+      BoundaryFunction_[INNER_X1] = pmcb->pmy_mc->BoundaryFunction_[INNER_X1];
+      break;
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
@@ -51,7 +54,10 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
       break;
     case MC_POLAR_BNDRY:
       BoundaryFunction_[OUTER_X1] = Polar;
-      break; 
+      break;
+    case MC_USER_BNDRY:
+      BoundaryFunction_[OUTER_X1] = pmcb->pmy_mc->BoundaryFunction_[OUTER_X1];
+      break;
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
@@ -71,7 +77,10 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
       break;
     case MC_POLAR_BNDRY:
       BoundaryFunction_[INNER_X2] = Polar;
-      break; 
+      break;
+    case MC_USER_BNDRY:
+      BoundaryFunction_[INNER_X2] = pmcb->pmy_mc->BoundaryFunction_[INNER_X2];
+      break;
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
@@ -91,7 +100,10 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
       break;
     case MC_POLAR_BNDRY:
       BoundaryFunction_[OUTER_X2] = Polar;
-      break; 
+      break;
+    case MC_USER_BNDRY:
+      BoundaryFunction_[OUTER_X2] = pmcb->pmy_mc->BoundaryFunction_[OUTER_X2];
+      break;
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
@@ -111,7 +123,10 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
       break;
     case MC_POLAR_BNDRY:
       BoundaryFunction_[INNER_X3] = Polar;
-      break; 
+      break;
+    case MC_USER_BNDRY:
+      BoundaryFunction_[OUTER_X3] = pmcb->pmy_mc->BoundaryFunction_[OUTER_X3];
+      break;
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
@@ -131,7 +146,10 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
       break;
     case MC_POLAR_BNDRY:
       BoundaryFunction_[OUTER_X3] = Polar;
-      break; 
+      break;
+    case MC_USER_BNDRY:
+      BoundaryFunction_[OUTER_X3] = pmcb->pmy_mc->BoundaryFunction_[OUTER_X3];
+      break;
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl

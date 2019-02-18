@@ -11,6 +11,7 @@
 #include "../mesh/mesh.hpp"
 #include "../coordinates/coordinates.hpp"
 #include "../hydro/hydro.hpp"
+#include "../globals.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn void InitializeEmissionFreefree(MonteCarloBlock *pmcb)
@@ -26,17 +27,25 @@ void InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
   int il = pmcb->is; int iu = pmcb->ie;
   int jl = pmcb->js; int ju = pmcb->je;
   int kl = pmcb->ks; int ku = pmcb->ke;
-  
+  Real ncells = static_cast<Real>(pmcb->pmy_mc->ncells);
+  Real emm_min = SQR(HUGE_NUMBER);
+  Real emm_max = -HUGE_NUMBER;
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
-      for (int i=il; i<=iu+1; ++i) {
+      for (int i=il; i<=iu; ++i) {
         Real temp = pmcb->tgas(k,j,i);
         Real nhii = pmcb->rho(k,j,i)/mp/(1.0+4.0*heabund);
         Real ne = (1.0+2.0*heabund) * nhii;
         Real vol = pmcb->pcoord->vol(k,j,i);
         //std::cout << vol << std::endl;
         pmcb->emission(k,j,i) = eta0/sqrt(temp)*ne*nhii*g*vol;
+	if (pmcb->emission(k,j,i) > emm_max) emm_max = pmcb->emission(k,j,i);
+	if (pmcb->emission(k,j,i) < emm_min) emm_min = pmcb->emission(k,j,i); 
       }}}
+  if (Globals::my_rank == 0) {
+    std::cout << "Emission array range (min, max): " << emm_min << " " << emm_max
+	      << std::endl;
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -73,9 +82,9 @@ void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot)
   Real sth = sqrt(1. - SQR(cth));
 
   // Initialize wave vector with isotropic distribution
-  pphot->kcart[0] = sth*cphi;
-  pphot->kcart[1] = sth*sphi;
-  pphot->kcart[2] = cth;
+  pphot->k[0] = sth*cphi;
+  pphot->k[1] = sth*sphi;
+  pphot->k[2] = cth;
 }
 
 
@@ -110,5 +119,30 @@ void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pcoor
   pphot->x[1] = acos(cth);
   Real pl = pcoord->x3f(pphot->i3); Real dp = pcoord->x3f(pphot->i3+1)-pl;
   pphot->x[2] = pl+pran->uniform()*dp;
+
+}
+//----------------------------------------------------------------------------------------
+//! \fn Real PlanckDist(Real temp, MCRandom *pran)
+//  \brief returns energy distributed according to Planck function
+
+Real PlanckDist(Real temp, MCRandom *pran)
+{
+// Method of choosing the energy of the initial photon which a Planck spectrum 
+// distribution. See Pozdnyakov et al. sec 9.4.  Originally, Fleck and Cumming (1971)
+
+  Real x1 = 1.202 * pran->uniform();
+  Real x2 = pran->uniform();
+  Real x3 = pran->uniform();
+  Real x4 = pran->uniform();
+
+  Real sum = 1.0;
+  int alpha = 1;
+  while (x1 >= sum) {
+    alpha++;
+    sum = sum + 1.0 / (alpha * alpha * alpha);
+  }
+
+  Real kb = 1.3807e-16;
+  return -kb * temp * log(x2 * x3 * x4) / ((Real)alpha);
 
 }

@@ -431,9 +431,6 @@ int main(int argc, char *argv[]) {
   // Perform Monte Carlo radiation tranfer
   if (MONTE_CARLO_STATIC) {
     pmc->RunStaticMonteCarlo();
-    if (pmc->pmcout->moments)
-      pmc->CollectMoments();
-    pmc->pmcout->OutputSpectra(pmc);
   }
 
   if (Globals::my_rank==0 && wtlim > 0)
