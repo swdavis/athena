@@ -300,6 +300,7 @@ void Polar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
     << "x: " << pphot->x[0] << " " << pphot->x[1] << " " << pphot->x[2] << std::endl
     << "k: " << pphot->k[0] << " " << pphot->k[1] << " " << pphot->k[2] << std::endl
     << "Destroying photon." << std::endl;
+  pphot->PrintPhoton();
   pphot->status = DESTROYED;
 
 }

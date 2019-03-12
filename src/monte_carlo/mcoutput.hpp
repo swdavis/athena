@@ -32,7 +32,7 @@ typedef struct MomentumRange {
 
 class Spectrum {
 public:
-  Spectrum(MomentumRange input_range, bool polarized);
+  Spectrum(MomentumRange input_range, bool polarized, bool logarithmic);
   Spectrum(Spectrum *pspec);
   ~Spectrum();
 
@@ -41,11 +41,13 @@ public:
   bool polarized;
   bool cartesian_axis;
   bool coordinates;
+  bool logarithmic;
+  bool pathbin; // Replace energy bin with path length bin
+  bool radbin; // Replace energy bin with radius bin
   Spectrum *next;  // next spectrum
   enum BoundaryFace face;
   int id;
   int output_number;// current output number
-  //int cadence;
   Real x1min,x1max,x2min,x2max,x3min,x3max;
 
   AthenaArray<Real> energies;
@@ -57,7 +59,7 @@ public:
   AthenaArray<Real> stokesu_sq;
 
   //functions
-  void BuildFrequencyGrid(Real emin, Real emax, int nfreq);
+  void BuildEnergyGrid(Real emin, Real emax, int nen, bool xlog);
   void UpdateSpectrum(Photon *pphot);
   int EnergyBin(Real energy);
   bool AngleBinsCartesian(Photon *pphot, int &Phibin, int &mubin);

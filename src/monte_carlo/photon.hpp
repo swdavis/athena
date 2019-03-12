@@ -40,6 +40,7 @@ public:
   Real stokes[3];  // stokes vectors for linear polarization
   Real weight, eweight; // photon weights
   Real energy;  // photon energy
+  Real path;
 
   Real sct_coef, abs_coef;  //scattering and absoprtion coefficients
 

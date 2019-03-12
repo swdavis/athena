@@ -50,6 +50,7 @@ typedef void (*TempFunc_t)(MonteCarloBlock *pmcb);
 typedef void (*MCBValFunc_t)(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
 typedef Real (*OpacFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
 typedef void (*ScatFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
+typedef void (*StatusFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
 typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, MCCoord *pco);
 
 //---------------------- prototypes for provided functions -------------------------------
@@ -59,10 +60,11 @@ Real NoOpacity(MonteCarloBlock *pmcb, Photon *pphot);
 Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot);
 Real ThomsonOpacity(MonteCarloBlock *pmcb, Photon *pphot);
 Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot);
-void GenerateComptonTable(void);
+void GenerateComptonTable(int io);
 Real ComptonCrossSection(Real energy, Real theta);
 Real Maxwell(Real theta, Real gamma);
 Real KleinNishina(Real x);
+void InitializeAccelerationOpacity(MonteCarloBlock *pmcb);
 //--------------------- prototypes for scatter.cpp functions -----------------------------
 void NoScatter(MonteCarloBlock *pmcb, Photon *pphot);
 void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot);
@@ -160,6 +162,7 @@ public:
   bool emission_array_flag;  // Compute and save zone emissivities
   bool polarized;// track photon polarization
   bool acceleration;  // use MRW acceleration
+  bool time_acc;  // use MRW acceleration with time limit
 
   EmisFunc_t InitEmission;
   TempFunc_t GetTemperature;
@@ -229,6 +232,7 @@ public:
   OpacFunc_t AbsorptionOpacity;
   OpacFunc_t ScatteringOpacity;
   ScatFunc_t Scatter;
+  StatusFunc_t ChangePhotonStatus;
 
   int nphtot; // Photons integrated thus far
   int nphremain; // total number of photons to integrate
@@ -246,6 +250,7 @@ public:
   bool coherent_scattering; // photon does notchange energy after scattering
   bool polarized; // track photon polarization
   bool acceleration;  // use MRW acceleration
+  bool time_acc;  // use MRW acceleration with time limit
 
   Real codetocgs_rho, codetoc_vel;
   Real emin, emax, elog, eminlog;
@@ -255,9 +260,11 @@ public:
   AthenaArray<Real> rho;
   AthenaArray<Real> tgas;
   AthenaArray<Real> vel;
-
+  AthenaArray<Real> planck_opacity; // for acceleration
+  AthenaArray<Real> planck_inv_opacity; // for acceleration
 
   // functions
+  void InitUserMonteCarloBlockData(ParameterInput *pin);
   void MonteCarloProblemGenerator(ParameterInput *pin);
   void TransferPhotons(int nphot);  // Transfer photons on this block
   void LorentzTransform(Photon *pphot, const Real sign);
@@ -268,6 +275,7 @@ public:
   void NormalizeMoments(bool normalize);
   //void GetPhotonsFromNeighbors();
   //void SendPhotonsToNeighbors();
+  void EnrollUserStatusCondition(StatusFunc_t statusfunc);
 
 private:
    void SetBoundaryValues(enum MCBoundaryFlag *input_bcs);

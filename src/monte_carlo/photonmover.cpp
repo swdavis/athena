@@ -6,13 +6,13 @@
 //! \file photonmover.cpp
 //  \brief implementation for photon moving functions
 
+// C/C++ headers
+#include <stdexcept>
+
 // Athena++ headers
 #include "photon.hpp"
 #include "photonmover.hpp"
 #include "../mesh/mesh.hpp"
-
-// Array size for MRW dist computation
-int nmax = 1000;
 
 // Implementation of base class
 
@@ -23,9 +23,16 @@ PhotonMover::PhotonMover(MonteCarloBlock *pmcb) {
   // MRW acceleration
   acceleration = pmcb->acceleration;
   lorentz_transform = pmcb->lorentz_transform;
-  if (acceleration)
-    InitializeMRWDist();
+  compton = !pmcb->coherent_scattering;
+  time_acc = pmcb->time_acc;
 
+  if (acceleration) {
+    InitializeMRWDist();
+    if (compton)
+      ReadComptonGreensFunction();
+    if (time_acc)
+      ReadTimeDistribution();
+  }
 }
 
 PhotonMover::~PhotonMover() {
@@ -33,6 +40,17 @@ PhotonMover::~PhotonMover() {
   if (acceleration) {
     mrwprob.DeleteAthenaArray();
     mrwdev.DeleteAthenaArray();
+    if (compton) {
+      mrwxf.DeleteAthenaArray();
+      mrwt.DeleteAthenaArray();
+      mrwxi.DeleteAthenaArray();
+      mrwp.DeleteAthenaArray();
+    }
+    if (time_acc) {
+      mrwty.DeleteAthenaArray();
+      mrwtp.DeleteAthenaArray();
+      mrwtr.DeleteAthenaArray();
+    }
   }
     
 }
@@ -55,62 +73,213 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
   while (mrw <= 0.)
     mrw = MRWDist(pran); 
   Real delta = -log(mrw);
-  Real chi = 3.*(pphot->abs_coef+pphot->sct_coef)/SQR(PI);
+  Real chi;
+  if (!compton)
+    chi = 3. * (pphot->abs_coef+pphot->sct_coef) / SQR(PI);
+  else
+    chi = 3. * pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) / SQR(PI);
   Real ct,r0;
-  Real vx=0.,vy=0.,vz=0.;
+  Real beta[3], beta2, gamma, gonembdk;
   if (lorentz_transform) {
-    //printf("%d %d %d \n",pphot->i3,pphot->i2,pphot->i1);
-    vx = pmcb->vel(0,pphot->i3,pphot->i2,pphot->i1);
-    vy = pmcb->vel(1,pphot->i3,pphot->i2,pphot->i1);
-    vz = pmcb->vel(2,pphot->i3,pphot->i2,pphot->i1);
-    Real beta = sqrt(SQR(vx)+SQR(vy)+SQR(vz)) / 2.9979e10;
-    Real gamma = 1./sqrt(1.-SQR(beta));
-    beta *= gamma;
-    vx *= gamma;
-    vy *= gamma;
-    vz *= gamma;
-    //chi *= 1.+4.*SQR(beta);
-    chi *= SQR(gamma)+SQR(beta)/3.;
-    r0 = 0.5*(sqrt(1+4.*chi*dist*delta*beta)-1.)/(delta*beta*chi);
-    //printf("%g %g %g %g %g\n",delta,r0,beta,chi,dist);
-    if ((pphot->abs_coef+pphot->sct_coef) * r0 > tauacc) {
-      ct = delta*SQR(r0)*chi;
-      //printf("b ");
+    // tranform relevant quanitites to comoving frame
+    beta[0] = pmcb->vel(0,pphot->i3,pphot->i2,pphot->i1) / 2.9979e10;
+    beta[1] = pmcb->vel(1,pphot->i3,pphot->i2,pphot->i1) / 2.9979e10;
+    beta[2] = pmcb->vel(2,pphot->i3,pphot->i2,pphot->i1) / 2.9979e10;
+    beta2 = SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
+    gamma = 1./sqrt(1.-beta2);
+    Real bdk = (pphot->k[0] * beta[0] + pphot->k[1] * beta[1] + pphot->k[2] * beta[2]);
+    gonembdk = gamma * (1. - bdk);
+    chi *= (1.+4.*beta2)/gonembdk;
+    pphot->abs_coef /= gonembdk;
+    pphot->sct_coef /= gonembdk;
+    pphot->energy *= gonembdk;
+    // multiply beta by gamma
+    Real betagamma = sqrt(beta2)*gamma; 
+    for(int i=0; i<3; ++i)
+      beta[i] *= gamma;
+    // Compute radius of sphere in comoving frame
+    if (betagamma > 0.) {
+      r0 = 0.5*(sqrt(1.+4.*chi*dist*delta*betagamma)-1.)/(delta*betagamma*chi);
+      Real tau;
+      if (!compton)
+	tau = (pphot->abs_coef+pphot->sct_coef) * r0;
+      else
+	tau = pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) *r0;
+      if (tau > tauacc) {
+	ct = delta*SQR(r0)*chi;      
+      } else {
+	accel_success = false;
+      }
     } else {
-      //printf("c ");
-      //printf("c %g %g %g %g\n",r0,(pphot->abs_coef+pphot->sct_coef) * r0,dist,pco->x1f(3)-pco->x2f(2));
-      // Reject delta and use standard update
-      accel_success = false;
+      // zone has zero velocity so use method for static MRW
+      for(int i=0; i<3; ++i)
+	beta[i] = 0.;
+      ct = delta*SQR(dist)*chi;
+      //Real tau = pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) * dist;
+      //ct = -log(pran->uniform())*3./SQR(PI)*SQR(tau+2./3.);
+      r0 = dist;
     }
   } else {
-    ct = delta*SQR(dist)*chi;
+    // use method for static MRW
+    for(int i=0; i<3; ++i)
+      beta[i] = 0.;
+    //ct = delta*SQR(dist)*chi;
+    if (!compton) {
+      Real tau = (pphot->abs_coef+pphot->sct_coef) * dist;
+      ct = -log(pran->uniform())*3./SQR(PI)*SQR(tau+2./3.)/(pphot->abs_coef+pphot->sct_coef);
+    } else {
+      Real tau = pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) * dist;
+      ct = -log(pran->uniform())*3./SQR(PI)*SQR(tau+2./3.)/pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1);
+      }
     r0 = dist;
   }
+
   if (accel_success) {
-    pphot->weight *= exp(-ct*pphot->abs_coef);
+    Real tauabs;
+    pphot->path += ct;
+    if (!compton) {
+      tauabs = ct*pphot->abs_coef;
+      pphot->weight *= exp(-tauabs);
+    } else {
+      tauabs = ct*sqrt(pphot->abs_coef*pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1));
+      Real c = 2.9979246e+10;
+      Real kb = 1.3806580e-16;
+      Real me = 9.1093897e-28;
+      Real temp = pmcb->tgas(pphot->i3,pphot->i2,pphot->i1);
+      Real xi = pphot->energy  / (kb *temp);
+      Real ypar = pphot->sct_coef*ct*kb*temp/(me*c*c);
+      Real xf = InterpComptonEnergy(xi,ypar,pran->uniform());
+ 
+      pphot->energy = xf * kb * temp;
+      //tauabs = ct*pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1);
+      //pphot->energy = PlanckDist(pmcb->tgas(pphot->i3,pphot->i2,pphot->i1),pran);
+      pphot->weight *= exp(-tauabs);
+    }
   
     // position packet on sphere of radius r0
     Real mu = 2.*pran->uniform()-1.0;
     Real stheta = sqrt(1.0-mu*mu);
     Real phi = 2.*PI*pran->uniform();
-    ct /= 2.9979e10;
-    pphot->x[0] += stheta*cos(phi) * r0 + vx * ct;
-    pphot->x[1] += stheta*sin(phi) * r0 + vy * ct;
-    pphot->x[2] += mu * r0 + vz * ct;
-    
-    UpdateZone(pphot);
-    
-    // Assume isotropic random direction
+    if (COORDINATE_SYSTEM == "cartesian") {
+      pphot->x[0] += stheta*cos(phi) * r0 + beta[0] * ct;
+      pphot->x[1] += stheta*sin(phi) * r0 + beta[1] * ct;
+      pphot->x[2] += mu * r0 + beta[2] * ct;
+    } else if (COORDINATE_SYSTEM == "spherical_polar") {
+      // convert to carteisan
+      Real cth = cos(pphot->x[1]);
+      Real sth = sqrt(1. - SQR(cth));
+      Real cph = cos(pphot->x[2]);
+      Real sph = sin(pphot->x[2]);
+      Real r = pphot->x[0];
+      Real x0 = r * sth * cph;
+      Real y0 = r * sth * sph;
+      Real z0 = r * cth;
+      Real betax = beta[0] * sth*cph + beta[1] * cth*cph + beta[2] * sph;
+      Real betay = beta[0] * sth*sph + beta[1] * cth*sph + beta[2] * cph;
+      Real betaz = beta[0] * cth + beta[1] * sth;
+      x0 += stheta*cos(phi) * r0 + betax * ct;
+      y0 += stheta*sin(phi) * r0 + betay * ct;
+      z0 += mu * r0 + betaz * ct; 
+      pphot->x[0] = sqrt(SQR(x0)+SQR(y0)+SQR(z0));
+      pphot->x[1] = acos(z0 / pphot->x[0]);
+      pphot->x[2] = atan2(y0,x0);
+      if (pphot->x[2] < 0.)
+	pphot->x[2] += 2.*PI;
+    }
+
+    // Check if photon has left original zone and update
+    if (UpdateZone(pphot)) {
+      // Check if photon is absorbed or escape due to boundary condition
+      if (pphot->status != EVOLVING)
+	return false;
+      else {
+	// update opacity if zone has changed
+	pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot);
+	pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,pphot);
+      }
+    }
+
+    // update direction assuming isotropic random direction in comoving frame
     mu = 2.*pran->uniform()-1.0;
     stheta = sqrt(1.0-mu*mu);
     phi = 2.*PI*pran->uniform();
     pphot->k[0] = stheta*cos(phi);
     pphot->k[1] = stheta*sin(phi);
     pphot->k[2] = mu;
+    if (lorentz_transform) {
+      //transform back to Eulerian frame
+      for(int i=0; i<3; ++i) {
+	// undo multiply by gamma above and flip sign
+	beta[i] /= -gamma;
+      }
+      if(beta2 > 0.) {
+	Real bdk = (pphot->k[0] * beta[0] + pphot->k[1] * beta[1] + pphot->k[2] * beta[2]);
+	Real gonembdk = gamma * (1. - bdk);
+	Real aber = gamma*(1.-gamma*bdk/(gamma+1.));
+	pphot->k[0] = (pphot->k[0] - aber * beta[0]) / gonembdk;
+	pphot->k[1] = (pphot->k[1] - aber * beta[1]) / gonembdk;
+	pphot->k[2] = (pphot->k[2] - aber * beta[2]) / gonembdk;
+	pphot->energy *= gonembdk;
+	pphot->abs_coef /= gonembdk;
+	pphot->sct_coef /= gonembdk;
+      }
+    }
+    
+    CurvalinearToCartesian(pphot);
+    if (pphot->IsNanPhoton())
+      pphot->PrintPhoton();
+
+  } else {
+    // return properties to eulerian frame if modified
+    if (lorentz_transform) { // should always be true if !accel_success
+      pphot->energy /= gonembdk;
+      pphot->abs_coef *= gonembdk;
+      pphot->sct_coef *= gonembdk;
+    }
   }
   return accel_success;
 
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn Real PhotonMover::InterpComptonEnergy(Real x0, Real time, Real prob)
+//  \brief return energy for photon after MRW with compton scattering
+
+Real PhotonMover::InterpComptonEnergy(Real xi, Real time, Real prob) {
+
+
+  // get interpolant for prob
+  int ip = mcbisect(prob,mrwp);
+  Real a = (prob-mrwp(ip))/(mrwp(ip+1)-mrwp(ip));
+  Real a1 = 1.-a;
+
+  // get interpolant for x0
+  int ixi = mcbisect(log(xi),mrwxi);
+  Real b = (log(xi)-mrwxi(ixi))/(mrwxi(ixi+1)-mrwxi(ixi));
+  Real b1 = 1.-b;
+
+  if (log(time) > mrwt(mrwt.GetDim1()-1)) {
+    printf("time: %g %g\n",time, exp(mrwt(mrwt.GetDim1()-1)));
+  }
+  // get interpolant for t
+  int it = mcbisect(log(time),mrwt);
+  Real c = (log(time)-mrwt(it))/(mrwt(it+1)-mrwt(it));
+  Real c1 = 1.-c;
+
+  /*printf("%d %d %d\n",ip,ixi,it);
+  printf("%d %g %g %g %g\n",ip,a,a1,mrwp(ip),mrwp(ip+1));
+  printf("%d %g %g %g %g\n",ixi,b,b1,mrwxi(ixi),mrwxi(ixi+1));
+  printf("%d %g %g %g %g\n",it,c,c1,mrwt(it),mrwt(it+1));
+  printf("final: %g\n",(b*(c*(a*mrwxf(ip+1,ixi+1,it+1)+a1*mrwxf(ip,ixi+1,it+1))
+  	  +c1*(a*mrwxf(ip+1,ixi+1,it)+a1*mrwxf(ip,ixi+1,it)))
+  	  +b1*(c*(a*mrwxf(ip+1,ixi,it+1)+a1*mrwxf(ip,ixi,it+1))
+	  +c1*(a*mrwxf(ip+1,ixi,it)+a1*mrwxf(ip,ixi,it)))));*/
+  return (b*(c*(a*mrwxf(ip+1,ixi+1,it+1)+a1*mrwxf(ip,ixi+1,it+1))
+	  +c1*(a*mrwxf(ip+1,ixi+1,it)+a1*mrwxf(ip,ixi+1,it)))
+	  +b1*(c*(a*mrwxf(ip+1,ixi,it+1)+a1*mrwxf(ip,ixi,it+1))
+	  +c1*(a*mrwxf(ip+1,ixi,it)+a1*mrwxf(ip,ixi,it))));
+}
+
 
 //----------------------------------------------------------------------------------------
 //! \fn Real PhotonMover::GetOpticalDepth(MCRandom *pran)
@@ -301,10 +470,10 @@ void PhotonMover::MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PhotonMover::UpdateZone(photon *pphot)
+//! \fn bool PhotonMover::UpdateZone(photon *pphot)
 //  \brief check/updates photon zone after displacement
 
-void PhotonMover::UpdateZone(Photon *pphot) {
+bool PhotonMover::UpdateZone(Photon *pphot) {
 
   bool change = false;
   MonteCarloBlock *pmcb = pmy_mcb;
@@ -312,6 +481,7 @@ void PhotonMover::UpdateZone(Photon *pphot) {
   bool update = false;
 
   if (pphot->x[0] >= pco->x1f(pphot->i1+1)) {
+    update = true;
     while (pphot->x[0] >= pco->x1f(pphot->i1+1)) {
       pphot->i1++;
       if(pphot->i1 > pmcb->ie)
@@ -324,6 +494,7 @@ void PhotonMover::UpdateZone(Photon *pphot) {
 	break;
     }
   } else if (pphot->x[0] < pco->x1f(pphot->i1)) {
+    update = true;
     while (pphot->x[0] < pco->x1f(pphot->i1)) {
       pphot->i1--;
       if(pphot->i1 < pmcb->is)
@@ -337,6 +508,7 @@ void PhotonMover::UpdateZone(Photon *pphot) {
     }
   }
   if (pphot->x[1] >= pco->x2f(pphot->i2+1)) {
+    update = true;
     while (pphot->x[1] >= pco->x2f(pphot->i2+1)) {
       pphot->i2++;
       if(pphot->i2 > pmcb->je)
@@ -349,6 +521,7 @@ void PhotonMover::UpdateZone(Photon *pphot) {
 	break;
     }
   } else if (pphot->x[1] < pco->x2f(pphot->i2)) {
+    update = true;
     while (pphot->x[1] < pco->x2f(pphot->i2)) {
       pphot->i2--;
       if(pphot->i2 < pmcb->js)
@@ -362,6 +535,7 @@ void PhotonMover::UpdateZone(Photon *pphot) {
     }
   }
   if (pphot->x[2] >= pco->x3f(pphot->i3+1)) {
+    update = true;
     while (pphot->x[2] >= pco->x3f(pphot->i3+1)) {
       pphot->i3++;
       if(pphot->i3 > pmcb->ke)
@@ -374,6 +548,7 @@ void PhotonMover::UpdateZone(Photon *pphot) {
 	break;
     }
   } else if (pphot->x[2] < pco->x3f(pphot->i3)) {
+    update = true;
     while (pphot->x[2] < pco->x3f(pphot->i3)) {
       pphot->i3--;
       if(pphot->i3 < pmcb->ks)
@@ -386,31 +561,8 @@ void PhotonMover::UpdateZone(Photon *pphot) {
 	break;
     }
   }
-
-  // Update opacities
-  if (pphot->status == EVOLVING) {
-    // Opacities need to be calculated using comoving frame energy and then transformed
-    // back to Eulerian frame when Lorentz Transformations are enabled.
-    Real shift;
-
-    if (lorentz_transform) {
-      // Shift photon energy to comoving frame
-      shift = pmcb->LorentzTransformFrequencyShift(pphot);
-      pphot->energy *= shift;
-      // compute opacities in comoving frame
-      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot);
-      pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,pphot);
-      // Shift energy back to Eulerian frame
-      pphot->energy /= shift;
-      // Shift opaciteis to Eulerian frame
-      pphot->abs_coef *= shift;
-      pphot->sct_coef *= shift;
-    } else {
-      // No distinction between comovinng frame and eulerian frame
-      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot);
-      pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,pphot);
-    }
-  }
+  // Returns true if zone changes, false otherwise
+  return update;
 
 }
 
@@ -439,12 +591,13 @@ void PhotonMover::CurvalinearToCartesian(Photon *pphot) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void InitializeMWDist(void)
+//! \fn void PhotonMover::InitializeMWDist(void)
 //  \brief initialize modified randon walk path length distribution
 
 void PhotonMover::InitializeMRWDist(void)
 {
 
+  nmax = 1000;
   mrwprob.NewAthenaArray(nmax);
   mrwdev.NewAthenaArray(nmax);
 
@@ -510,3 +663,127 @@ Real PhotonMover::MRWDist(MCRandom *pran)
 
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void  PhotonMover::ReadComptonGreensFunction()
+//  \brief Reads in pre-tabulated binary table used in MRW acceleration with Compton scat.
+
+void PhotonMover::ReadComptonGreensFunction(void)
+{
+
+  //int nt=200,nxi=100,np=100;
+  int nt=50,nxi=2,np=100;
+
+  FILE *pfile;
+  double fdat;
+  // Read in time array
+  if((pfile = fopen("compton_table_t.out","r")) == NULL) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in function [PhotonMover:ReadComptonGreensFunction]"
+          <<std::endl<< "Input file compton_table_t.out could not be opened" <<std::endl;
+      throw std::runtime_error(msg.str().c_str());
+  }
+  mrwt.NewAthenaArray(nt);
+  for (int i=0; i<nt; i++) {
+    fread(&fdat, sizeof(double), 1, pfile);
+    mrwt(i) = static_cast<Real>(fdat);
+    //printf("t: %15.8e \n",exp(mrwt(i)));
+  }
+  fclose(pfile);
+  // Read in initial dimensionless energy array
+  if((pfile = fopen("compton_table_x1.out","r")) == NULL) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in function [PhotonMover:ReadComptonGreensFunction]"
+          <<std::endl<< "Input file compton_table_x1.out could not be opened" <<std::endl;
+      throw std::runtime_error(msg.str().c_str());
+  }
+  mrwxi.NewAthenaArray(nxi);
+  for (int i=0; i<nxi; i++) {
+    fread(&fdat, sizeof(double), 1, pfile);
+    mrwxi(i) = static_cast<Real>(fdat);
+  }
+  fclose(pfile);
+  // Read in probability array
+  if((pfile = fopen("compton_table_p.out","r")) == NULL) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in function [PhotonMover:ReadComptonGreensFunction]"
+          <<std::endl<< "Input file compton_table_p.out could not be opened" <<std::endl;
+      throw std::runtime_error(msg.str().c_str());
+  }
+  mrwp.NewAthenaArray(np);
+  for (int i=0; i<np; i++) {
+    fread(&fdat, sizeof(double), 1, pfile);
+    mrwp(i) = static_cast<Real>(fdat);
+  }
+  fclose(pfile);
+  // Read in output dimensionless energy array
+  if((pfile = fopen("compton_table_x.out","r")) == NULL) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in function [PhotonMover:ReadComptonGreensFunction]"
+          <<std::endl<< "Input file compton_table_x.out could not be opened" <<std::endl;
+      throw std::runtime_error(msg.str().c_str());
+  }
+  mrwxf.NewAthenaArray(np,nxi,nt);
+  for (int k=0; k<np; k++) {
+    for (int j=0; j<nxi; j++) {
+      for (int i=0; i<nt; i++) {
+	fread(&fdat, sizeof(double), 1, pfile);
+	mrwxf(k,j,i) = static_cast<Real>(fdat);
+      }}}
+  fclose(pfile);
+
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void  PhotonMover::ReadTimeDistribution()
+//  \brief Reads in pre-tabulated binary table used in MRW acceleration with advection
+
+void PhotonMover::ReadTimeDistribution(void)
+{
+
+  int ny=100,np=100;
+
+  FILE *pfile;
+  double fdat;
+  // Read in y (y=exp(-t)) array 
+  if((pfile = fopen("time_table_y.out","r")) == NULL) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in function [PhotonMover:ReadTimeDistribution]"
+          <<std::endl<< "Input file time_table_y.out could not be opened" <<std::endl;
+      throw std::runtime_error(msg.str().c_str());
+  }
+  mrwty.NewAthenaArray(ny);
+  for (int i=0; i<ny; i++) {
+    fread(&fdat, sizeof(double), 1, pfile);
+    mrwty(i) = static_cast<Real>(fdat);
+  }
+  fclose(pfile);
+  // Read in probability array
+  if((pfile = fopen("time_table_p.out","r")) == NULL) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in function [PhotonMover:ReadTimeDistribution]"
+          <<std::endl<< "Input file time_table_p.out could not be opened" <<std::endl;
+      throw std::runtime_error(msg.str().c_str());
+  }
+  mrwtp.NewAthenaArray(np);
+  for (int i=0; i<np; i++) {
+    fread(&fdat, sizeof(double), 1, pfile);
+    mrwtp(i) = static_cast<Real>(fdat);
+  }
+  fclose(pfile);
+  // Read in output dimensionless radius
+  if((pfile = fopen("time_table_r.out","r")) == NULL) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in function [PhotonMover:ReadTimeDistribution]"
+          <<std::endl<< "Input file time_table_r.out could not be opened" <<std::endl;
+      throw std::runtime_error(msg.str().c_str());
+  }
+  mrwtr.NewAthenaArray(np,ny);
+  for (int j=0; j<np; j++) {
+      for (int i=0; i<nt; i++) {
+	fread(&fdat, sizeof(double), 1, pfile);
+	mrwtr(j,i) = static_cast<Real>(fdat);
+      }}
+  fclose(pfile);
+
+}

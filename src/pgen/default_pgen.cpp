@@ -83,19 +83,37 @@ void __attribute__((weak)) Mesh::UserWorkAfterLoop(ParameterInput *pin) {
 }
 
 //========================================================================================
-//! \fn MONTECARLO
-//  \brief
+//! \fn void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin)
+//  \brief Initializes user data specific to MonteCarlo class
 //========================================================================================
 
 void __attribute__((weak)) MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 
 }
 
-void __attribute__((weak)) MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin){
+//========================================================================================
+//! \fn void MonteCarlo::InitUserMonteCarloBlockData(ParameterInput *pin)
+//  \brief Initializes user data specific to MonteCarloBlock class
+//========================================================================================
 
-  
+void __attribute__((weak)) MonteCarloBlock::InitUserMonteCarloBlockData(ParameterInput *pin){
+
 }
 
+//========================================================================================
+//! \fn void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin)
+//  \brief Analogous to problem generator -- not currently used
+//========================================================================================
+
+void __attribute__((weak)) MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin){
+
+}
+
+//========================================================================================
+//! \fn void MonteCarloBlock::InitializePhoton(Photon *pphot)
+//  \brief Initializes Photon packets before integration
+//========================================================================================
+  
 void __attribute__((weak)) MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
 }

@@ -5,6 +5,8 @@
 //========================================================================================
 //!  \file opacity.cpp
 //   \brief contains functions related to setting absorption and scattering opacity
+// C/C++ headers
+#include <stdexcept>
 
 // Athena++ headers
 #include "montecarlo.hpp"
@@ -61,7 +63,7 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
 //  \brief calculation extinction coefficient for Thomson scattering
 
 Real ThomsonOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
-
+  
   Real heabund = 0.09; //hardcode for now (should be parameter)
   Real mp = 1.6726e-24; 
   Real sigmat = 6.65248e-25;
@@ -123,7 +125,7 @@ Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void GenerateComptonTable(void)
+//! \fn void GenerateComptonTable(int io)
 //  \brief Generates lookup table used by ComptonOpacity()
 //
 // Computes look up table for integrated cross section of a Maxwellian 
@@ -131,19 +133,72 @@ Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
 // in GRMONTY rather than approximate method of PSS.  Values are chosen to 
 // match GRMONTY (Dolence et al. 2009) defaults
 
-void GenerateComptonTable(void) {
+void GenerateComptonTable(int io) {
 
-  dle = log10(MAXE / MINE) / NE;
-  dlt = log10(MAXT / MINT) / NT;
-  lmine = log10(MINE);
-  lmint = log10(MINT);
+  if (io > 0) {
+    // generate table from scratch
+    dle = log10(MAXE / MINE) / NE;
+    dlt = log10(MAXT / MINT) / NT;
+    lmine = log10(MINE);
+    lmint = log10(MINT);
 
-  for (int i = 0; i <= NE; ++i) {
-    Real energy = pow(10.,lmine + i * dle);
-    for (int j = 0; j <= NT; ++j) {
-      Real theta = pow(10.,lmint + j * dlt);
-      xsect[i][j] = log10( ComptonCrossSection(energy,theta) );
-    }}
+    for (int i = 0; i <= NE; ++i) {
+      Real energy = pow(10.,lmine + i * dle);
+      for (int j = 0; j <= NT; ++j) {
+	Real theta = pow(10.,lmint + j * dlt);
+	xsect[i][j] = log10( ComptonCrossSection(energy,theta) );
+      }}
+    if (io == 2) {
+      // open file for output
+      FILE *pfile;
+      std::string fname;
+      fname.assign("comptontable.out");
+      std::stringstream msg;
+      if ((pfile = fopen(fname.c_str(),"w")) == NULL) {
+	msg << "### FATAL ERROR in function [GenerateComptonTable]"
+          <<std::endl<< "Output file '" <<fname<< "' could not be opened" <<std::endl;
+	throw std::runtime_error(msg.str().c_str());
+      }
+
+      // write table
+      Real data[NT+1];
+      for (int i=0; i<=NE; ++i) {
+	for (int j=0; j<=NT; ++j) {
+	  data[j] = xsect[i][j];
+	  //if (i==0) printf("%g ",data[j]);
+	}
+	fwrite(data,sizeof(Real),static_cast<size_t>(NT+1),pfile);
+      }
+      fclose(pfile);
+    }
+  } else {
+    // open file for output
+    FILE *pfile;
+    std::string fname;
+    fname.assign("comptontable.out");
+    std::stringstream msg;
+    if ((pfile = fopen(fname.c_str(),"r")) == NULL) {
+      msg << "### FATAL ERROR in function [GenerateComptonTable]"
+          <<std::endl<< "Input file '" <<fname<< "' could not be opened" <<std::endl;
+      throw std::runtime_error(msg.str().c_str());
+    }
+
+    // set global variables
+    dle = log10(MAXE / MINE) / NE;
+    dlt = log10(MAXT / MINT) / NT;
+    lmine = log10(MINE);
+    lmint = log10(MINT);
+    // read table from file
+    for (int i = 0; i <= NE; ++i) {
+      for (int j = 0; j <= NT; ++j) {
+	Real data;
+	fread(&data, sizeof(Real), 1, pfile);
+	//if (i == 0) printf("%g ",data);
+	xsect[i][j] = data;
+      }}
+
+    fclose(pfile);
+  }
 
 }
 //----------------------------------------------------------------------------------------
@@ -204,5 +259,66 @@ Real KleinNishina(Real x)
     return 0.75 / x * ( (1. - 4. / x * (1. + 2. / x) ) * log(1. + x) +
                         0.5 + 8. / x - 0.5 / SQR(1. + x) );
 
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void InitializeAccelerationOpacity(MonteCarloBlock *pmcb)
+//  \brief Computes mean opacity arrays used by acceleration routines
+
+void InitializeAccelerationOpacity(MonteCarloBlock *pmcb)
+{
+  int nx = 500;
+  Real x[500], dx[500];
+
+  // Make grid in x=hnu/kT space from 10^-4 to 10^2
+  for(int i=0; i<nx; ++i) {
+    Real log10x = static_cast<Real>(i)/(static_cast<Real>(nx)-1.0)*6.0;
+    x[i] = pow(10.0,log10x)*1.0e-4;   
+  }
+
+  // compute dx
+  dx[0] = x[1]-x[0];
+  dx[nx-1] = x[nx-1]-x[nx-2];
+  for(int i=1; i<nx-1; i++) {
+    dx[i] = 0.5 * (x[i+1]-x[i-1]);
+  }
+ 
+  // Loop over grid zones
+  int il = pmcb->is; int iu = pmcb->ie;
+  int jl = pmcb->js; int ju = pmcb->je;
+  int kl = pmcb->ks; int ku = pmcb->ke;
+
+  Photon phot(pmcb); // to pass to opacity functions
+  Real kb = 1.3807e-16;
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=il; i<=iu+1; ++i) {
+	Real temp = pmcb->tgas(k,j,i);
+	Real dens = pmcb->rho(k,j,i);
+	phot.i1 = i;
+	phot.i2 = j;
+	phot.i3 = k;
+	Real Bint = 0.0;
+	Real planck = 0.0;
+	Real planck_inv = 0.0;
+	for(int l=0; l<nx; ++l) {
+	  phot.energy = x[l] * kb * temp;
+	  Real abs_coef = pmcb->AbsorptionOpacity(pmcb,&phot);
+	  //printf("%g %g %g\n",abs_coef,2.44955e-23*dens*dens*(1.-exp(-7.2427e15*phot.energy/temp))/(pow(phot.energy,3)*sqrt(temp)),phot.energy);
+	  Real sct_coef = pmcb->ScatteringOpacity(pmcb,&phot);
+	  Real Bx = pow(x[l],3)/(exp(x[l])-1.0) *dx[l];
+	  Bint += Bx;
+	  planck += Bx * abs_coef;
+	  planck_inv += Bx / (abs_coef+sct_coef);
+	}
+	pmcb->planck_inv_opacity(k,j,i) = Bint/planck_inv;
+	pmcb->planck_opacity(k,j,i) = planck/Bint;
+	//if ((il==i)&&(jl==j))
+	//  printf("%g %g %g %g %g\n",dens,temp,pmcb->planck_opacity(k,j,i),pmcb->planck_inv_opacity(k,j,i),1.43311e24*dens*dens/pow(temp,3.5));
+      }}}
+     //double ffnrm = 3.692146e8;
+     //double nhii=dens/(mp*(1.0+4.0*heabund));
+     //double ne=(1.0+2.0*heabund)*nhii;
+     //double alphacomp = ffnrm*ne*nhii*15.*pow(h/kb,3)/pow(temp,3.5)/pow(pi,4);
 }
 

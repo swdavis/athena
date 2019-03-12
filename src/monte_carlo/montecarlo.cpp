@@ -29,7 +29,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
 
   InitEmission=NULL;
   GetTemperature=NULL;
- 
+
   // Set flags that control emission, absorption and scattering
   emission_meth = GetEmissionFlag(pin->GetOrAddString("montecarlo","emission","error"));
   if (emission_meth == EMISUSER) {
@@ -61,6 +61,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   lorentz_transform = pin->GetOrAddBoolean("montecarlo","boosts",false);
   polarized = pin->GetOrAddBoolean("montecarlo","polarized",false);
   acceleration = pin->GetOrAddBoolean("montecarlo","acceleration",false);
+  time_acc = pin->GetOrAddBoolean("montecarlo","time_acc",false);
 
   // Create and intitialize randon number generator
   iseed = pin->GetInteger("montecarlo","iseed");
@@ -294,6 +295,7 @@ enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string) {
   }
 
 }
+
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::GetDensity(MonteCarloBlock *pmcb)
 //  \brief Make hard copy of density from MeshBlock to MonteCarloBlock. Uses hard copy
@@ -529,6 +531,8 @@ void MonteCarlo::ReceiveMonteCarloData(int source) {
       pmcb->pcoord->x3f(i) = recv_buf[p++];
     // initialize emission array
     if (InitEmission != NULL) InitEmission(pmcb);
+    if (acceleration && !(pmcb->coherent_scattering)) 
+      InitializeAccelerationOpacity(pmcb);
     pmcb=pmcb->next;
   }
   delete recv_buf;
@@ -751,12 +755,16 @@ void MonteCarlo::InitializeMonteCarloBlocks(void) {
     //(pmcb->*(pmcb->GetTemperature2))();
     if (lorentz_transform) GetVelocity(pmcb);
     if (InitEmission != NULL) InitEmission(pmcb);
+    if (acceleration && !(pmcb->coherent_scattering)) 
+      InitializeAccelerationOpacity(pmcb);
     pmcb = pmcb->next;
     while (pmcb != NULL) {
       GetDensity(pmcb);
       GetTemperature(pmcb);
       if (lorentz_transform) GetVelocity(pmcb);
       if (InitEmission != NULL) InitEmission(pmcb);
+      if (acceleration && !(pmcb->coherent_scattering)) 
+	InitializeAccelerationOpacity(pmcb);
       pmcb = pmcb->next;
     }
     for(int i=0; i<nderv; ++i) {

@@ -16,5 +16,6 @@ Real BessI1(Real x);
 Real BessK0(Real x);
 Real BessK1(Real x);
 Real BessK(int n, Real x);
+int mcbisect(Real x, AthenaArray<Real> &array);
 
 #endif // MCUTILS_HPP

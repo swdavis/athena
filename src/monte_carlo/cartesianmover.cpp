@@ -13,7 +13,9 @@
 #include "debug.hpp"
 #define MAXITER 10000
 //#define DEBUG
-#define TAU_TOL_COH  15.
+#define TAU_TOL_COH 20.
+
+Real DistanceToNearestFace(MCCoord *pco, Photon *pphot);
 
 int ix[MAXITER],iy[MAXITER],iz[MAXITER];
 // Implementation of Sphericalpolar Photon mover
@@ -98,64 +100,72 @@ void CartesianMover::Move(Photon *pphot) {
 
     int face;
     NextFace(dlx,dly,dlz,face,dl);
-    if (dl < 0.){
-      printf("dl: %g %g %g %g\n",dl,dlx,dly,dlz);
-      if (ascend[0])
-	printf("u: %g %g %g\n",pco->x1f(pphot->i1+1),pphot->x[0],kx);
-      else
-	printf("d: %g %g %g\n",pco->x1f(pphot->i1),pphot->x[0],kx);
-      if (ascend[1])
-	printf("u: %g %g %g\n",pco->x2f(pphot->i2+1),pphot->x[1],ky);
-      else
-	printf("d: %g %g %g\n",pco->x2f(pphot->i2),pphot->x[1],ky);
-      if (ascend[2])
-	printf("u: %g %g %g\n",pco->x3f(pphot->i3+1),pphot->x[2],kz);
-      else
-	printf("d: %g %g %g\n",pco->x3f(pphot->i3),pphot->x[2],kz);
-    }
+
     Real chi = pphot->sct_coef + pphot->abs_coef;
     chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER;
     if (dl > tauremaining / chi) { // Photon remains in zone
-      
       bool accel_success = false;
-      if ((acceleration) && ((pphot->abs_coef+pphot->sct_coef) * dl > TAU_TOL_COH))
-	// Try/perform MRW acceleration
-	accel_success = MRWAcceleration(pphot,pran,dl,TAU_TOL_COH);
-      if (accel_success) {
-	// update cartesian k vector
-	CurvalinearToCartesian(pphot);
-      } else {
-	// move photon one scattering distance
+      if (acceleration) {
+	//Real dist = dl;
+	//Real dist = (pco->x1f(pphot->i1+1)-pco->x1f(pphot->i1));
+	Real dist = DistanceToNearestFace(pco,pphot);
+	//dist = std::min(dist,50./pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1));
+	
+	// Try/perform MRW acceleration if optical depth is large enough
+	if (pmcb->coherent_scattering) {
+	  Real tauacc = 10.;
+	  if ((pphot->abs_coef+pphot->sct_coef) * dist > tauacc)
+	    accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
+	} else {
+	  Real tauacc = 10.;
+	  if (pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) * dist > tauacc)
+	    accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
+	}
+      }
+
+      // Perform standard displacement if acceleration not atempted or unsuccsessful
+      if (!accel_success) {
+	if (pphot->status != EVOLVING)
+	  return;
+	// compute distance remaining in zone
         dl = tauremaining/chi;
+	// Update moments
         if (pmcb->moments_flag) {
           pmcb->UpdateMoments(pphot,dl);
         }
+	pphot->path += dl;
         // update position
         for (int i=0; i<3; ++i)
           pphot->x[i] += pphot->kcart[i] * dl;
-        return;
       }
+      // Check for user defined escape/absorption condition
+      if (pmcb->ChangePhotonStatus != NULL) pmcb->ChangePhotonStatus(pmcb,pphot);
+      return;
+
     } else { // Photon moves to next zone and reduce tauremaining
       if (pmcb->moments_flag) {
 	pmcb->UpdateMoments(pphot,dl);
-      }
+      }      
+      pphot->path += dl;
       // update position
       for (int i=0; i<3; ++i)
 	pphot->x[i] += pphot->kcart[i] * dl;
       tauremaining -= chi * dl;
+
+      // Check for user defined escape/absorption condition
+      if (pmcb->ChangePhotonStatus != NULL) pmcb->ChangePhotonStatus(pmcb,pphot);
+
       MovePhotonToNextZone(pphot,pco,pmcb,face,ascend);
     }
   }
   if (iter >= MAXITER) {
     std::cout << "Warning: iter exceeded MAXITER " << MAXITER << " in photon mover." 
 	      << std::endl;
-    //for(int k=0;k<MAXITER;++k) {
-    //  printf("%d %d %d\n",ix[k],iy[k],iz[k]);
-    //}
     std::cout << "tau: " << tau0 << " " << tauremaining << std::endl;
     pphot->PrintPhoton();
     pphot->status = DESTROYED;
   }
+
 #ifdef DEBUG
   Real delta = sqrt(SQR(xf-pphot->x[0])+SQR(yf-pphot->x[1])+SQR(zf-pphot->x[2]));
   Real dmax = 1.e-6*(pco->x3f(pmcb->ke+1)-pco->x3f(pmcb->ks));
@@ -170,3 +180,19 @@ void CartesianMover::Move(Photon *pphot) {
 #endif
 }
 
+Real DistanceToNearestFace(MCCoord *pco, Photon *pphot) {
+
+  Real dx1p = pco->x1f(pphot->i1+1) - pphot->x[0];
+  Real dx1m = pphot->x[0] - pco->x1f(pphot->i1);
+  Real dx2p = pco->x2f(pphot->i2+1) - pphot->x[1];
+  Real dx2m = pphot->x[1] - pco->x2f(pphot->i2);
+  Real dx3p = pco->x3f(pphot->i3+1) - pphot->x[2];
+  Real dx3m = pphot->x[2] - pco->x3f(pphot->i3);
+  dx1p = (dx1p < dx1m) ? dx1p : dx1m;
+  dx2p = (dx2p < dx2m) ? dx2p : dx2m;
+  dx3p = (dx3p < dx3m) ? dx3p : dx3m;
+  Real dist = (dx1p < dx2p) ? dx1p : dx2p;
+  dist = (dist < dx3p) ? dist : dx3p;
+  dist = (dist > 0.) ? dist : 0.;
+  return dist;
+}

@@ -40,7 +40,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
   MCCoord *pco = pmy_mcb->pcoord;
 
   // get number of mean free paths photon will travel
-  Real TauRemaining = GetOpticalDepth(pran);
+  Real tauremaining = GetOpticalDepth(pran);
 
   // References for momentum vectors
   CurvalinearToCartesian(pphot);// Redundant calculation of cth,sth,cph,sph
@@ -85,7 +85,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
   // Move photon until requisite # of mean free paths or escape
   // MAXITER is present to account for (near) infinite trajectories in optically thin,
   // periodic domains.
-  while( (TauRemaining > 0.) && (pphot->status == EVOLVING) && (iter < MAXITER)) {
+  while( (tauremaining > 0.) && (pphot->status == EVOLVING) && (iter < MAXITER)) {
     iter++;
 
     //kr  = kx * sth * cph + ky * sth * sph + kz * cth;
@@ -130,6 +130,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
 	ascend[0] = true;
       } else {
 	std::cout << "Warning: kr == 0 and ri < r0, absorbing photon" << std::endl;
+	pphot->PrintPhoton();
         pphot->status = DESTROYED;
         return;
       }
@@ -274,17 +275,43 @@ void SphericalPolarMover::Move(Photon *pphot) {
 
     Real chi = pphot->sct_coef + pphot->abs_coef;
     chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max
-    if (dl > TauRemaining / chi) { // Photon remains in zone
+    bool test = false;
+    if (dl > tauremaining / chi) { // Photon remains in zone
       bool accel_success = false;
-      if ((acceleration) && ((pphot->abs_coef+pphot->sct_coef) * dl > TAU_TOL_COH))
-	// Try/perform MRW acceleration
-	accel_success = MRWAcceleration(pphot,pran,dl,TAU_TOL_COH);
+      if (acceleration) {
+	/*Real drp,drm,dtp,dtm,dpp,dpm;
+	drp = pco->x1f(pphot->i1+1) - pphot->x[0];
+	drm = pphot->x[0] - pco->x1f(pphot->i1);
+	dtp = pco->x2f(pphot->i2+1) - pphot->x[1];
+	dtm = pphot->x[1] - pco->x2f(pphot->i2);
+	dpp = pco->x3f(pphot->i3+1) - pphot->x[2];
+	dpm = pphot->x[2] - pco->x3f(pphot->i3);
+	drp = (drp < drm) ? drp : drm;
+	dtp = (dtp < dtm) ? dtp : dtm;
+	dpp = (dpp < dpm) ? dpp : dpm;
+	dtp = 2.*pphot->x[0]*sin(0.5*dtp);
+	dpp = 2.*pphot->x[0]*sin(pphot->x[1])*sin(0.5*dpp);
+	Real dist = (drp < dtp) ? drp : dtp;
+	dist = (dist < dpp) ? dist : dpp;
+	dist = (dist > 0.) ? dist : 0.;*/
+	Real dist = dl;
+	// Try/perform MRW acceleration if optical depth is large enough
+	if (pmcb->coherent_scattering) {
+	  Real tauacc = 10.;
+	  if ((pphot->abs_coef+pphot->sct_coef) * dist > tauacc)
+	    accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
+	} else {
+	  Real tauacc = 30.;
+	  if (pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) * dist > tauacc)
+	    accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
+	}
+      }
 
-      if (accel_success) {
-	// update cartesian k vector
-	CurvalinearToCartesian(pphot);
-      } else {
-	dl = TauRemaining/chi;
+      if (!accel_success) {
+	if (pphot->status != EVOLVING)
+	  return;
+	// compute distance remaining in zone
+	dl = tauremaining/chi;
 	// Update moments
 	if (pmcb->moments_flag)
 	  pmcb->UpdateMoments(pphot,dl);
@@ -303,20 +330,20 @@ void SphericalPolarMover::Move(Photon *pphot) {
 	kr  = kx * sth * cph + ky * sth * sph + kz * cth;
 	kth = kx * cth * cph + ky * cth * sph - kz * sth;
 	kph = -kx * sph + ky * cph;
-	return;
       }
-    } else { // Photon moves to next zone and reduce TauRemaining
+      return;
+    } else { // Photon moves to next zone and reduce tauremaining
       // Update moments
       if (pmcb->moments_flag)
 	pmcb->UpdateMoments(pphot,dl);
-      // Update postions
+      // Update positions
       pphot->x[0] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
       pphot->x[1] = acos((z0 + kz * dl) / pphot->x[0]);
       pphot->x[2] = atan2(y0 + ky * dl,x0 + kx * dl);
       if (pphot->x[2] < 0.)
 	pphot->x[2] += 2.*PI;
     
-      TauRemaining -= chi * dl;
+      tauremaining -= chi * dl;
       // move photon to next zone and pdate angular positions
       MovePhotonToNextZone(pphot,pco,pmcb,face,ascend);
       if ((face == 1) || (face == 3) || (face == 4) || (face == 6))
@@ -329,6 +356,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
       kth = kx * cth * cph + ky * cth * sph - kz * sth;
       kph = -kx * sph + ky * cph;
     }
+
   }
 
   // -------------------------- Debugging -------------------------------------------

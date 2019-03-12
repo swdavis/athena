@@ -18,19 +18,19 @@
 #include "../globals.hpp"
 
 // constructor
-Spectrum::Spectrum(MomentumRange input_range, bool pol) {
+Spectrum::Spectrum(MomentumRange input_range, bool pol, bool xlog) {
 
   next = NULL;
   face = FACE_UNDEF;
   range = input_range;
   polarized = pol;
+  logarithmic = xlog;
   coordinates = false;
   x1min = x2min = x3min = -HUGE_NUMBER;
   x1max = x2max = x3max = HUGE_NUMBER;
-
   // Allocate and intialize energy bins
   energies.NewAthenaArray(range.ne+1);
-  BuildFrequencyGrid(range.emin,range.emax,range.ne);
+  BuildEnergyGrid(range.emin,range.emax,range.ne,logarithmic);
 
   // Allocate arrays for intensities
   intensity.NewAthenaArray(range.nphi,range.ncth,range.ne);
@@ -50,12 +50,14 @@ Spectrum::Spectrum(Spectrum *pspec) {
   next = NULL;
   range = pspec->range;
   polarized = pspec->polarized;
+  logarithmic = pspec->logarithmic;
   cartesian_axis = pspec->cartesian_axis;
   coordinates = pspec->coordinates;
   face = pspec->face;
   id = pspec->id;
   output_number = pspec->output_number;
-  //cadence = pspec->cadence;
+  pathbin = pspec->pathbin;
+  radbin = pspec->radbin;
   x1min = pspec->x1min;
   x2min = pspec->x2min;
   x3min = pspec->x3min;
@@ -65,7 +67,7 @@ Spectrum::Spectrum(Spectrum *pspec) {
   
   // Allocate and intialize energy bins
   energies.NewAthenaArray(range.ne+1);
-  BuildFrequencyGrid(range.emin,range.emax,range.ne);
+  BuildEnergyGrid(range.emin,range.emax,range.ne,logarithmic);
 
   // Allocate arrays for intensities
   intensity.NewAthenaArray(range.nphi,range.ncth,range.ne);
@@ -93,18 +95,29 @@ Spectrum::~Spectrum() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void Spectrum::BuildFrequencyGrid(Real emin, Real emax, int nfreq)
-//  \brief initialize frequency bins
+//! \fn void Spectrum::BuildEnergyGrid(Real emin, Real emax, int nen, bool logarithmic)
+//  \brief initialize energy bins
 
-void Spectrum::BuildFrequencyGrid(Real emin, Real emax, int nfreq) {
+void Spectrum::BuildEnergyGrid(Real emin, Real emax, int nen, bool logarthmic) {
 
-  Real de = log10(emax/emin) / static_cast<Real>(nfreq);
-  energies(0) = log10(emin);
-  for(int i=0; i<nfreq; ++i) {
-    energies(i+1) = energies(i) + de;
-  }
-  for(int i=0; i<=nfreq; ++i){
-    energies(i) = exp(2.30258509299*energies(i));
+  if (logarithmic) {
+    // Distribute energies logarithmically
+    Real de = log10(emax/emin) / static_cast<Real>(nen);
+    energies(0) = log10(emin);
+    for(int i=0; i<nen; ++i) {
+      energies(i+1) = energies(i) + de;
+    }
+    for(int i=0; i<=nen; ++i){
+      energies(i) = exp(2.30258509299*energies(i));
+    }
+  } else {
+    // Distribute frequencies linear.  Useful for lines or path length
+    // distributions
+    Real de = (emax-emin) / static_cast<Real>(nen);
+    energies(0) = emin;
+    for(int i=0; i<nen; ++i) {
+      energies(i+1) = energies(i) + de;
+    }
   }
 }
 
@@ -126,10 +139,12 @@ void Spectrum::SetSurface(std::string input_face) {
     face = INNER_X3;
   } else if (input_face == "outer_x3") {
     face = OUTER_X3;
+  } else if (input_face == "none") {
+    face = FACE_UNDEF;
   } else {
     std::stringstream msg;
       msg << "### FATAL ERROR in function [Spectrum::SetSurface]" << std::endl
-          << "Face not set in spectrum input." << std::endl;
+          << "Face not recognized in spectrum input." << std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
 }
@@ -190,6 +205,10 @@ bool Spectrum::AngleBinsCartesian(Photon *pphot, int &phibin, int &cthbin) {
 	if(ky < 0.0)
 	  phi = 2 * PI - phi;
 	break;
+      case FACE_UNDEF:
+	ctheta=0.0;
+	phi = 0.;
+	break;
       default:
 	std::stringstream msg;
 	msg << "### FATAL ERROR in function [Spectrum::AngleBinsCartesian]" << std::endl
@@ -244,6 +263,7 @@ bool Spectrum::AngleBinsCartesian(Photon *pphot, int &phibin, int &cthbin) {
               << phi << ' ' << kx << ' ' << ky << ' ' << kz << std::endl;
     phibin = 0;
   }
+
   return true;
 }
 
@@ -376,7 +396,7 @@ bool Spectrum::ScreenCoordinates(Photon *pphot) {
 
 void Spectrum::UpdateSpectrum(Photon *pphot) {
  
-  if (face != pphot->face)
+  if ((face != pphot->face) && (pphot->face != FACE_UNDEF))
     return;
 
   Real weight = pphot->weight;
@@ -384,15 +404,29 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
   if ((isinf(weight)) || (isnan(weight))) {
     std::cout << "Warning: weight is Nan or Inf: " << weight << std::endl;
   } else {
+
     if (coordinates) {
       //Apply coordinate cuts
       if (ScreenCoordinates(pphot))
 	return;
     }
-    // Get energy bin
-    int ebin = EnergyBin(pphot->energy);
+
+    int ebin;
+    if (!pathbin && !radbin)
+      ebin = EnergyBin(pphot->energy);
+    else {
+      if (pathbin) {
+	Real everg = 1.6021772e-12;  // accounts for energy rescaling
+	ebin = EnergyBin(pphot->path*everg);
+      } if (radbin) {
+	Real radius = sqrt(SQR(pphot->x[0])+SQR(pphot->x[1])+SQR(pphot->x[2]));
+	Real everg = 1.6021772e-12;  // accounts for energy rescaling
+	ebin = EnergyBin(radius*everg);
+	//printf("rad: %g %d\n",radius,ebin);
+      }
+    }
     if (ebin < 0) return;
-    
+  
     // Get angle bins
     int phibin, mubin;
     if (cartesian_axis) {
@@ -403,7 +437,7 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
 	if(!AngleBinsSphericalPolar(pphot,phibin,mubin))
 	  return;	
     }
-
+   
     intensity(phibin,mubin,ebin) += pphot->stokes[0] * weight;
     intensity_sq(phibin,mubin,ebin) += SQR(pphot->stokes[0] * weight);  
     if (polarized) {
@@ -432,15 +466,17 @@ int Spectrum::EnergyBin(Real energy)
   while(low <= high) {
     mid = (low + high) / 2;
     if(energies(mid) <= energy) {
-      if(energies(mid+1) > energy)
+      if(energies(mid+1) > energy) {
+	//printf("%d %g %g %g\n",mid,energies(mid)/1.6021772e-12,energies(mid+1)/1.6021772e-12,energy/1.6021772e-12);
         return mid;
-      else
+      } else
         low = mid+1;
     } else
       high = mid-1;
   }
-  if(mid == high)
+  if(mid == high) {
     return mid;
+  }
   else {
     return -1;
     std::cout << "Warning: binary search failed in ebin: " << energy << ' '
@@ -519,10 +555,11 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
       std::string type = pin->GetString(pib->block_name,"file_type");
 
       if (type.compare("spec") == 0) {
-	// set momentum range and polarization flag for spectrum constructor
+	// set momentum range and polarization, logarithmic flags for spectrum constructor
         MomentumRange range;
         range.ne = pin->GetInteger(pib->block_name,"ne");
-        Real emin = pin->GetReal("montecarlo","emin");
+	// Use monte carlos emin/emax for defaults
+	Real emin = pin->GetReal("montecarlo","emin");
         Real emax = pin->GetReal("montecarlo","emax");
         Real everg = 1.6021772e-12;
         range.emin = everg * pin->GetOrAddReal(pib->block_name,"emin",emin);
@@ -534,8 +571,9 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         range.cthmin = pin->GetOrAddReal(pib->block_name,"cthmin",0.);
         range.cthmax = pin->GetOrAddReal(pib->block_name,"cthmax",1.);
         bool polarized = pin->GetOrAddBoolean(pib->block_name,"polarized",pmc->polarized);
+	bool xlog = pin->GetOrAddBoolean(pib->block_name,"xlog",true);
 	// Create spectrum
-        pspec = new Spectrum(range,polarized);
+        pspec = new Spectrum(range,polarized,xlog);
 	pspec->id = id++;
 	pspec->output_number = 0;
 	// Generate file name
@@ -548,9 +586,11 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
 	char define_id[10];
         sprintf(define_id,"out%d",outid);  // default id="outN"
 	pspec->base_name.append(define_id);
-	//pspec->file_name.append(".spec");
 	// get/set checkpoint cadence
 	//pspec->cadence = pin->GetOrAddInteger(pib->block_name,"cadence",pmc->nphot);
+	// Select binning in path length or radius if desired
+	pspec->pathbin = pin->GetOrAddBoolean(pib->block_name,"pathbin",false);
+	pspec->radbin = pin->GetOrAddBoolean(pib->block_name,"radbin",false);
 	// set output face if specified
         std::string face = pin->GetOrAddString(pib->block_name,"face","none");
 	pspec->SetSurface(face);

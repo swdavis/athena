@@ -14,6 +14,7 @@
 #include "../coordinates/coordinates.hpp"
 #include "photon.hpp"
 #include "montecarlo.hpp"
+#include "mcutils.hpp"
 
 class MeshBlock;
 class ParameterInput;
@@ -37,21 +38,37 @@ public:
   // Arrays for MRW acceleration
   AthenaArray<Real> mrwprob;
   AthenaArray<Real> mrwdev;
+  AthenaArray<Real> mrwxf;
+  AthenaArray<Real> mrwt;
+  AthenaArray<Real> mrwxi;
+  AthenaArray<Real> mrwp;
+  AthenaArray<Real> mrwty;
+  AthenaArray<Real> mrwtp;
+  AthenaArray<Real> mrwtr;
+
+  int nmax,nxi,np,nt; //used for acceleration arrays
+
   bool acceleration;
   bool lorentz_transform;
+  bool compton;
+  bool time_acc;
+
   // functions
   virtual void Move(Photon *pphot);
   virtual Real GetOpticalDepth(MCRandom *pran);
   virtual void NextFace(Real dx1, Real dx2, Real dx3, int &face, Real &dx);
   virtual void MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
     MonteCarloBlock *pmcb, int face, bool ascend[3]);
-  virtual void UpdateZone(Photon *pphot);
+  virtual bool UpdateZone(Photon *pphot);
   virtual void CartesianToCurvalinear(Photon *pphot);
   virtual void CurvalinearToCartesian(Photon *pphot);
   virtual void InitializeMRWDist(void);
   virtual bool MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real tauacc);
   virtual Real MRWDist(MCRandom *pran);
-  
+  virtual void ReadComptonGreensFunction(void);
+  virtual Real InterpComptonEnergy(Real x0, Real time, Real prob);
+  virtual void ReadTimeDistribution(void);
+
 };
 
 //! \class CartesianMover

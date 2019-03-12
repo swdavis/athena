@@ -118,16 +118,6 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
       }}}
 }
 
-void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
-
-}
-
-void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin){
-
-  // Set codetocgs here
-  //EnrollUserEmissionFunction();
-  
-}
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 

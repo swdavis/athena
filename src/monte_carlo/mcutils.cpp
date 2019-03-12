@@ -128,3 +128,31 @@ Real BessK(int n, Real x) {
   }
   return bk;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn int mcbisect(Real x, AthenaArray<Real> &array)
+// use bisection to search array and return bin
+
+int mcbisect(Real x, AthenaArray<Real> &array) {
+
+  int nmax = array.GetDim1();
+  int low = 0, high = nmax-1, mid;
+
+  while(low<=high) {
+    mid=(low+high)/2;
+    if(array(mid-1) <= x) {
+      if(array(mid) > x)
+        break;
+      else
+        low=mid+1;
+    }
+    else
+      high=mid-1;
+  }
+
+  if (low >= nmax-1)
+    return nmax-2;
+  else
+    return std::max(mid-1,0);
+
+}

@@ -301,6 +301,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
           //  std::cout << phydro->u(IEN,k+ks,j+js,i+is) << " " << fdat << std::endl;
         }}}
   }
+  fclose(fp);
   for (int k=ks; k<=ke; k++) {
     for (int j=js; j<=je; j++) {
       for (int i=is; i<=ie; i++) {

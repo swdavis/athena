@@ -74,6 +74,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   emission_array_flag = pmy_mc->emission_array_flag;
   moments_flag = pmy_mc->pmcout->moments; // set in mcoutput
   acceleration = pmy_mc->acceleration;
+  time_acc = pmy_mc->time_acc;
 
   // *currently** assumes all block boundaries are physical
   SetBoundaryValues(pmy_mc->mc_bcs);
@@ -125,15 +126,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 
   codetocgs_rho = 1.0; codetoc_vel = 1.0;  // default cgs for code units
 
-
-  // Set up photon movement and initialization methods
-  if (COORDINATE_SYSTEM == "cartesian") {
-    pmover = new CartesianMover(this);
-    GetZonePosition = GetZonePositionCartesian;
-  } else if (COORDINATE_SYSTEM == "spherical_polar") {
-    pmover = new SphericalPolarMover(this);
-    GetZonePosition = GetZonePositionSphericalPolar;
-  }
+  ChangePhotonStatus=NULL;
 
   // Set absorption opacity
   if (absorption_meth == ABSUSER) {
@@ -156,7 +149,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     if (polarized) {
       std::stringstream msg;
       msg << "### ERROR in MonteCarloBlock constructor" << std::endl
-          << "Istropic scattering but polarized = " << polarized << std::endl;
+          << "Istropic scattering not suppored for polarized = " 
+	  << polarized << std::endl;
     throw std::runtime_error(msg.str().c_str());
     } else {
       ScatteringOpacity = ThomsonOpacity;
@@ -171,13 +165,24 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
       Scatter = ScatterThomsonUnpolarized;
     coherent_scattering = true;
   } else if (scattering_meth == SCATCOMP) {
-    GenerateComptonTable();
+    int comptonio = pin->GetOrAddInteger("montecarlo","comptonio",1);
+    GenerateComptonTable(comptonio);
     ScatteringOpacity = ComptonOpacity;
     if (polarized) {
       Scatter = ScatterComptonPolarized;
     } else {
       Scatter = ScatterComptonUnpolarized;
-    } 
+    }
+    coherent_scattering = false;
+  }
+
+  // Set up photon movement and initialization methods
+  if (COORDINATE_SYSTEM == "cartesian") {
+    pmover = new CartesianMover(this);
+    GetZonePosition = GetZonePositionCartesian;
+  } else if (COORDINATE_SYSTEM == "spherical_polar") {
+    pmover = new SphericalPolarMover(this);
+    GetZonePosition = GetZonePositionSphericalPolar;
   }
 
 
@@ -191,8 +196,15 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   if (lorentz_transform) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
   if (moments_flag) moments.NewAthenaArray(13,ncells3,ncells2,ncells1);
   if (emission_array_flag) emission.NewAthenaArray(ncells3,ncells2,ncells1);
+  if (acceleration && !(coherent_scattering)) {
+    planck_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
+    planck_inv_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
+  }
 
+  // Create user monte carlo block data
+  InitUserMonteCarloBlockData(pin);
 }
+
 
 // destructor
 
@@ -206,8 +218,12 @@ MonteCarloBlock::~MonteCarloBlock() {
   rho.DeleteAthenaArray();
   tgas.DeleteAthenaArray();
   if (lorentz_transform) vel.DeleteAthenaArray();
-  if (emission_array_flag) emission.DeleteAthenaArray();
   if (moments_flag) moments.DeleteAthenaArray();
+  if (emission_array_flag) emission.DeleteAthenaArray();
+  if (acceleration && !(coherent_scattering)) {
+    planck_opacity.DeleteAthenaArray();
+    planck_inv_opacity.DeleteAthenaArray();
+  }
 }
 
 /*void MonteCarloBlock::DefaultGetTemperature() {
@@ -272,9 +288,10 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
           LorentzTransform(pphoton,to_comv);
 	
         Scatter(this,pphoton);
-	//pmover->CartesianToCurvalinear(pphoton);
+
 	iscat++;
 	if (iscat %  MAXSCAT == 0) {
+	  // Check for possible infinite loop due to NaN in photon
 	  if (pphoton->IsNanPhoton()) {
 	    pphoton->status = DESTROYED;
 	    std::cout << "Warning: IsNanPhoton() returned true, photon destroyed" 
@@ -291,7 +308,6 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
 	// Lorentz transform to Eulerian frame and shift opacities
 	if (lorentz_transform)
 	  LorentzTransform(pphoton,to_eulr);
-	
       }
 
       // move photon to next scattering/absorption or to boundary
@@ -349,8 +365,9 @@ void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign) {
     Real gonembdk = gamma * (1. - bdk);
     //Real aber = (gamma-1.) * bdk / beta2 - gamma;
     Real aber = gamma*(1.-gamma*bdk/(gamma+1.));
+    
     pphot->energy *= gonembdk;
-    //printf("%g %g %g\n",gonembdk,gamma,bdk);
+    //printf("%g %g %g %g %g\n",pphot->eweight,gonembdk,gamma,bdk,pphot->energy/1.6021772e-12);
     Real kz = k3;
     k1 = (k1 - aber * beta[0]) / gonembdk;
     k2 = (k2 - aber * beta[1]) / gonembdk;
@@ -539,3 +556,13 @@ void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
     mcb_bcs[OUTER_X3] = input_bcs[OUTER_X3];
   }
   }*/
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::EnrollUserStatusCondition(StatusFunc_t statusfunc)
+//  \brief Enroll a user-defined condition for changin photon status
+
+void MonteCarloBlock::EnrollUserStatusCondition(StatusFunc_t statusfunc) {
+
+  ChangePhotonStatus = statusfunc;
+
+}
