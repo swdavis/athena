@@ -527,12 +527,12 @@ Real SigmaHat(Real x)
 
 //----------------------------------------------------------------------------------------
 
-//! \fn Real ElectronDist(Real tgas, MCRandom *pran)
+//! \fn Real ElectronDistOld(Real tgas, MCRandom *pran)
 //  \brief Return momentum for electon distribution
 //
 //  Method is from Pozdnyakov et al. page 317 for low temperaure electrons
 
-Real ElectronDist(Real tgas, MCRandom *pran) {
+Real ElectronDistOld(Real tgas, MCRandom *pran) {
 
   Real kmec2 = 1.68638e-10;
   Real ktgmec2 = kmec2 * tgas;
@@ -562,5 +562,55 @@ Real ElectronDist(Real tgas, MCRandom *pran) {
     } while((SQR(etapp) - SQR(etap)) <= 1.);
     return etap;
   }
+
+}
+
+
+//----------------------------------------------------------------------------------------
+
+//! \fn Real ElectronDist(Real tgas, MCRandom *pran)
+//  \brief Return momentum for electon distribution
+//
+//  Method is from Canfield et al. 1987, ApJ 323, 565
+
+Real ElectronDist(Real tgas, MCRandom *pran) {
+
+  Real kmec2 = 1.68638e-10;
+  Real ktgmec2 = kmec2 * tgas;
+
+  Real pi3 = 0.25 * sqrt(PI);
+  Real pi4 = 0.5 * sqrt(0.5 * ktgmec2);
+  Real pi5 = 0.375 * sqrt(PI) * ktgmec2;
+  Real pi6 = ktgmec2 * sqrt(0.5 * ktgmec2);
+  Real S3 = pi3 + pi4 + pi5 + pi6;
+
+  pi3 /= S3;
+  pi4 /= S3;
+  pi5 /= S3;
+  pi6 /= S3;
+
+  Real y, prob;
+  do {
+    Real dev = pran->uniform();
+    Real x;
+    if (dev < pi3) {
+      x = pran->chisquare(3);
+    } else if (dev < pi3 + pi4) {
+      x = pran->chisquare(4);
+    } else if (dev < pi3 + pi4 + pi5) {
+      x = pran->chisquare(5);
+    } else {
+      x = pran->chisquare(6);
+    }
+    // convert x to y
+    y = sqrt(0.5 * x);
+    prob = sqrt(1. + 0.5 * ktgmec2 * y * y) / (1. + y * sqrt(0.5 * ktgmec2));
+
+  } while (pran->uniform() >= prob);
+
+  // Convert y to dimensionless momentum (beta * gamma)
+  Real gamma = 1.+ SQR(y) * ktgmec2;
+  Real beta = sqrt(1.-1./SQR(gamma));
+  return beta*gamma;
 
 }

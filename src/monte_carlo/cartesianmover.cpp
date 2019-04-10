@@ -106,11 +106,11 @@ void CartesianMover::Move(Photon *pphot) {
     if (dl > tauremaining / chi) { // Photon remains in zone
       bool accel_success = false;
       if (acceleration) {
-	//Real dist = dl;
-	//Real dist = (pco->x1f(pphot->i1+1)-pco->x1f(pphot->i1));
-	Real dist = DistanceToNearestFace(pco,pphot);
-	//dist = std::min(dist,50./pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1));
-	
+	Real dist;
+	dist = DistanceToNearestFace(pco,pphot);
+	/*dist = pco->dmin(pphot->i3,pphot->i2,pphot->i1);
+	  dist = std::min(dl,dist);*/
+
 	// Try/perform MRW acceleration if optical depth is large enough
 	if (pmcb->coherent_scattering) {
 	  Real tauacc = 10.;

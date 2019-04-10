@@ -11,6 +11,7 @@
 // Athena++ headers
 #include "montecarlo.hpp"
 #include "mcutils.hpp"
+#include "../globals.hpp"
 
 // Lookup table parameters -- chosen to match GRMONTY (Dolence et al. 2009) defaults
 #define MINE 1.e-12
@@ -175,6 +176,8 @@ void GenerateComptonTable(int io) {
     // open file for output
     FILE *pfile;
     std::string fname;
+    if (Globals::my_rank == 0)
+      std::cout << "Reading in table for Compton cross section." << std::endl;
     fname.assign("comptontable.out");
     std::stringstream msg;
     if ((pfile = fopen(fname.c_str(),"r")) == NULL) {

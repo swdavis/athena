@@ -468,6 +468,7 @@ void MonteCarlo::SendMonteCarloData(int dest) {
   Real *send_buf;
   int size = 3; //tgas,rho,vol
   if (lorentz_transform) size+=3;
+  if (acceleration) size+=1; //dmin array
   size *= (pmcb->nx1*pmcb->nx2*pmcb->nx3); // all blocks have same size
   size += pmcb->nx1+1; size += pmcb->nx2+1; size+= pmcb->nx3+1;
   send_buf = new Real[size];
@@ -480,7 +481,9 @@ void MonteCarlo::SendMonteCarloData(int dest) {
     if (lorentz_transform)
       BufferUtility::Pack4DData(pmcb->vel,send_buf,0,2,pmcb->is,pmcb->ie,pmcb->js,pmcb->je,pmcb->ks,pmcb->ke,p);
     BufferUtility::Pack3DData(pmcb->pcoord->vol,send_buf,pmcb->is,pmcb->ie,pmcb->js,pmcb->je,pmcb->ks,pmcb->ke,p);
-    for (int i=pmcb->is; i<=pmcb->ie+1; ++i) 
+    if (acceleration)
+      BufferUtility::Pack3DData(pmcb->pcoord->dmin,send_buf,pmcb->is,pmcb->ie,pmcb->js,pmcb->je,pmcb->ks,pmcb->ke,p);
+    for (int i=pmcb->is; i<=pmcb->ie+1; ++i)
       send_buf[p++] = pmcb->pcoord->x1f(i);
      for (int i=pmcb->js; i<=pmcb->je+1; ++i) 
       send_buf[p++] = pmcb->pcoord->x2f(i);
@@ -505,6 +508,7 @@ void MonteCarlo::ReceiveMonteCarloData(int source) {
   Real *recv_buf;
   int size = 3; //tgas,rho,vol
   if (lorentz_transform) size+=3;
+  if (acceleration) size+=1; //dmin array
   size *= (pmcb->nx1*pmcb->nx2*pmcb->nx3); // all blocks have same size
   size += pmcb->nx1+1; size += pmcb->nx2+1; size+= pmcb->nx3+1;
   recv_buf = new Real[size];
@@ -523,6 +527,9 @@ void MonteCarlo::ReceiveMonteCarloData(int source) {
                                   pmcb->je, pmcb->ks, pmcb->ke, p);
     BufferUtility::Unpack3DData(recv_buf, pmcb->pcoord->vol, pmcb->is, pmcb->ie, pmcb->js, 
                                 pmcb->je, pmcb->ks, pmcb->ke, p);
+    if (acceleration)
+      BufferUtility::Unpack3DData(recv_buf, pmcb->pcoord->dmin, pmcb->is, pmcb->ie, pmcb->js, 
+				  pmcb->je, pmcb->ks, pmcb->ke, p);
     for (int i=pmcb->is; i<=pmcb->ie+1; ++i) 
       pmcb->pcoord->x1f(i) = recv_buf[p++];
     for (int i=pmcb->js; i<=pmcb->je+1; ++i) 
@@ -864,17 +871,42 @@ MCCoord::MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb) {
       for (int i=pmcb->is; i<=pmcb->ie; ++i) {
         vol(k,j,i) = pcoord->GetCellVolume(k,j,i);
       }}}
+  if(pmcb->acceleration) {
+    dmin.NewAthenaArray(ncells3,ncells2,ncells1);
+    AthenaArray<Real> dw1,dw2,dw3;
+    dw1.NewAthenaArray(ncells1);
+    dw2.NewAthenaArray(ncells2);
+    dw3.NewAthenaArray(ncells3);
+    // Initialize dmin array
+    for (int k=pmcb->ks; k<=pmcb->ke; ++k) {
+      for (int j=pmcb->js; j<=pmcb->je; ++j) {
+	pcoord->CenterWidth1(k,j,pmcb->is,pmcb->ie,dw1);
+	pcoord->CenterWidth2(k,j,pmcb->is,pmcb->ie,dw2);
+	pcoord->CenterWidth3(k,j,pmcb->is,pmcb->ie,dw3);
+	for (int i=pmcb->is; i<=pmcb->ie; ++i) {
+	  Real dmin0 = std::min(dw1(i),dw2(i));
+	  dmin(k,j,i) = std::min(dmin0,dw3(i));
+	  //printf("%d %d %d %g\n",k,j,i,dmin(k,j,i));
+	}
+      }}
+    dw1.DeleteAthenaArray();
+    dw2.DeleteAthenaArray();
+    dw3.DeleteAthenaArray();
+  }
 }
 
 // constructor
-MCCoord::MCCoord(int ncells1, int ncells2, int ncells3) {
+MCCoord::MCCoord(int ncells1, int ncells2, int ncells3, bool acc) {
 
   x1f.NewAthenaArray(ncells1+1);
   x2f.NewAthenaArray(ncells2+1);
   x3f.NewAthenaArray(ncells3+1);
 
   vol.NewAthenaArray(ncells3,ncells2,ncells1);
-
+  acceleration = acc;
+  if (acceleration) {
+    dmin.NewAthenaArray(ncells3,ncells2,ncells1);
+  }
 }
 
 
@@ -885,6 +917,8 @@ MCCoord::~MCCoord() {
   x2f.DeleteAthenaArray();
   x3f.DeleteAthenaArray();
   vol.DeleteAthenaArray();
+  if (acceleration)
+    dmin.DeleteAthenaArray();
 }
 
 // constructor
@@ -905,3 +939,9 @@ Real MCRandom::uniform() {
   if (MONTE_CARLO_ENABLED)
     return static_cast<Real>(gsl_rng_uniform(dev));
 }
+
+Real MCRandom::chisquare(int n) {
+  if (MONTE_CARLO_ENABLED)
+    return static_cast<Real>(gsl_ran_chisq(dev,n));
+}
+

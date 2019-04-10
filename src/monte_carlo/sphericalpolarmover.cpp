@@ -294,14 +294,15 @@ void SphericalPolarMover::Move(Photon *pphot) {
 	Real dist = (drp < dtp) ? drp : dtp;
 	dist = (dist < dpp) ? dist : dpp;
 	dist = (dist > 0.) ? dist : 0.;*/
-	Real dist = dl;
+	Real dist = pco->dmin(pphot->i3,pphot->i2,pphot->i1);
+	//Real dist = dl;
 	// Try/perform MRW acceleration if optical depth is large enough
 	if (pmcb->coherent_scattering) {
 	  Real tauacc = 10.;
 	  if ((pphot->abs_coef+pphot->sct_coef) * dist > tauacc)
 	    accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
 	} else {
-	  Real tauacc = 30.;
+	  Real tauacc = 10.;
 	  if (pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) * dist > tauacc)
 	    accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
 	}

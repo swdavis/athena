@@ -13,6 +13,7 @@
 #include "photon.hpp"
 #include "photonmover.hpp"
 #include "../mesh/mesh.hpp"
+#include "../globals.hpp"
 
 // Implementation of base class
 
@@ -31,7 +32,8 @@ PhotonMover::PhotonMover(MonteCarloBlock *pmcb) {
     if (compton)
       ReadComptonGreensFunction();
     if (time_acc)
-      ReadTimeDistribution();
+      ReadRadiusDistribution();
+    ReadTimeDistribution();
   }
 }
 
@@ -47,10 +49,13 @@ PhotonMover::~PhotonMover() {
       mrwp.DeleteAthenaArray();
     }
     if (time_acc) {
-      mrwty.DeleteAthenaArray();
-      mrwtp.DeleteAthenaArray();
-      mrwtr.DeleteAthenaArray();
+      mrwrt.DeleteAthenaArray();
+      mrwrp.DeleteAthenaArray();
+      mrwrr.DeleteAthenaArray();
     }
+    mrwta.DeleteAthenaArray();
+    mrwtp.DeleteAthenaArray();
+    mrwtt.DeleteAthenaArray();
   }
     
 }
@@ -67,17 +72,21 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
 
   MonteCarloBlock *pmcb = pmy_mcb;
   bool accel_success = true;
-  //printf("a");
+
   // draw from path length distribution and reduce weight accordingly
-  Real mrw = MRWDist(pran);          
-  while (mrw <= 0.)
-    mrw = MRWDist(pran); 
-  Real delta = -log(mrw);
+  //Real mrw = MRWDist(pran);          
+  //while (mrw <= 0.)
+  //  mrw = MRWDist(pran); 
+  //Real delta = -log(mrw);
+  Real delta = InterpPathTime((pphot->abs_coef+pphot->sct_coef)*dist,pran->uniform());
+  //printf("delta: %g\n",delta);
   Real chi;
   if (!compton)
     chi = 3. * (pphot->abs_coef+pphot->sct_coef) / SQR(PI);
-  else
-    chi = 3. * pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) / SQR(PI);
+  else {
+    //chi = 3. * pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) / SQR(PI);
+    chi = 3. * pphot->sct_coef / SQR(PI);
+  }
   Real ct,r0;
   Real beta[3], beta2, gamma, gonembdk;
   if (lorentz_transform) {
@@ -103,8 +112,10 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
       Real tau;
       if (!compton)
 	tau = (pphot->abs_coef+pphot->sct_coef) * r0;
-      else
-	tau = pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) *r0;
+      else {
+	//tau = pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) *r0;
+	tau = pphot->sct_coef*r0;
+      }
       if (tau > tauacc) {
 	ct = delta*SQR(r0)*chi;      
       } else {
@@ -123,14 +134,15 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
     // use method for static MRW
     for(int i=0; i<3; ++i)
       beta[i] = 0.;
-    //ct = delta*SQR(dist)*chi;
-    if (!compton) {
+    ct = delta*SQR(dist)*chi;
+    /*if (!compton) {
       Real tau = (pphot->abs_coef+pphot->sct_coef) * dist;
       ct = -log(pran->uniform())*3./SQR(PI)*SQR(tau+2./3.)/(pphot->abs_coef+pphot->sct_coef);
     } else {
       Real tau = pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) * dist;
+      //printf("%g %g\n",tau,dist);
       ct = -log(pran->uniform())*3./SQR(PI)*SQR(tau+2./3.)/pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1);
-      }
+      }*/
     r0 = dist;
   }
 
@@ -141,7 +153,11 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
       tauabs = ct*pphot->abs_coef;
       pphot->weight *= exp(-tauabs);
     } else {
-      tauabs = ct*sqrt(pphot->abs_coef*pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1));
+      
+      //tauabs = ct*sqrt(pphot->abs_coef*pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1));
+      //tauabs = ct*pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1);
+      //tauabs = ct*pphot->abs_coef;
+      Real opaci = pphot->abs_coef;
       Real c = 2.9979246e+10;
       Real kb = 1.3806580e-16;
       Real me = 9.1093897e-28;
@@ -153,6 +169,13 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
       pphot->energy = xf * kb * temp;
       //tauabs = ct*pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1);
       //pphot->energy = PlanckDist(pmcb->tgas(pphot->i3,pphot->i2,pphot->i1),pran);
+      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot);
+      Real opacf = pphot->abs_coef;
+      //Real opacf = std::max(pphot->abs_coef,pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1));
+      //tauabs = ct*sqrt(opaci*pphot->abs_coef);
+      //tauabs = ct*sqrt(opaci*(opacf));
+      tauabs = ct*(opaci-opacf)/(2.*log(xf/xi));
+      //printf("%g %g %g %g %g %g\n",ct,tauabs,opaci,opacf,xi,xf);
       pphot->weight *= exp(-tauabs);
     }
   
@@ -188,15 +211,16 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
     }
 
     // Check if photon has left original zone and update
-    if (UpdateZone(pphot)) {
+    bool newzone = UpdateZone(pphot);
+    if (newzone) {
       // Check if photon is absorbed or escape due to boundary condition
       if (pphot->status != EVOLVING)
 	return false;
-      else {
-	// update opacity if zone has changed
-	pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot);
-	pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,pphot);
-      }
+    }
+    if (newzone || compton) {
+      // update opacity if zone or energy has changed
+      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot);
+      pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,pphot);
     }
 
     // update direction assuming isotropic random direction in comoving frame
@@ -240,46 +264,6 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
   return accel_success;
 
 }
-
-//----------------------------------------------------------------------------------------
-//! \fn Real PhotonMover::InterpComptonEnergy(Real x0, Real time, Real prob)
-//  \brief return energy for photon after MRW with compton scattering
-
-Real PhotonMover::InterpComptonEnergy(Real xi, Real time, Real prob) {
-
-
-  // get interpolant for prob
-  int ip = mcbisect(prob,mrwp);
-  Real a = (prob-mrwp(ip))/(mrwp(ip+1)-mrwp(ip));
-  Real a1 = 1.-a;
-
-  // get interpolant for x0
-  int ixi = mcbisect(log(xi),mrwxi);
-  Real b = (log(xi)-mrwxi(ixi))/(mrwxi(ixi+1)-mrwxi(ixi));
-  Real b1 = 1.-b;
-
-  if (log(time) > mrwt(mrwt.GetDim1()-1)) {
-    printf("time: %g %g\n",time, exp(mrwt(mrwt.GetDim1()-1)));
-  }
-  // get interpolant for t
-  int it = mcbisect(log(time),mrwt);
-  Real c = (log(time)-mrwt(it))/(mrwt(it+1)-mrwt(it));
-  Real c1 = 1.-c;
-
-  /*printf("%d %d %d\n",ip,ixi,it);
-  printf("%d %g %g %g %g\n",ip,a,a1,mrwp(ip),mrwp(ip+1));
-  printf("%d %g %g %g %g\n",ixi,b,b1,mrwxi(ixi),mrwxi(ixi+1));
-  printf("%d %g %g %g %g\n",it,c,c1,mrwt(it),mrwt(it+1));
-  printf("final: %g\n",(b*(c*(a*mrwxf(ip+1,ixi+1,it+1)+a1*mrwxf(ip,ixi+1,it+1))
-  	  +c1*(a*mrwxf(ip+1,ixi+1,it)+a1*mrwxf(ip,ixi+1,it)))
-  	  +b1*(c*(a*mrwxf(ip+1,ixi,it+1)+a1*mrwxf(ip,ixi,it+1))
-	  +c1*(a*mrwxf(ip+1,ixi,it)+a1*mrwxf(ip,ixi,it)))));*/
-  return (b*(c*(a*mrwxf(ip+1,ixi+1,it+1)+a1*mrwxf(ip,ixi+1,it+1))
-	  +c1*(a*mrwxf(ip+1,ixi+1,it)+a1*mrwxf(ip,ixi+1,it)))
-	  +b1*(c*(a*mrwxf(ip+1,ixi,it+1)+a1*mrwxf(ip,ixi,it+1))
-	  +c1*(a*mrwxf(ip+1,ixi,it)+a1*mrwxf(ip,ixi,it))));
-}
-
 
 //----------------------------------------------------------------------------------------
 //! \fn Real PhotonMover::GetOpticalDepth(MCRandom *pran)
@@ -670,8 +654,8 @@ Real PhotonMover::MRWDist(MCRandom *pran)
 void PhotonMover::ReadComptonGreensFunction(void)
 {
 
-  //int nt=200,nxi=100,np=100;
-  int nt=50,nxi=2,np=100;
+  int nt=200,nxi=100,np=100;
+  //int nt=50,nxi=2,np=100;
 
   FILE *pfile;
   double fdat;
@@ -700,6 +684,7 @@ void PhotonMover::ReadComptonGreensFunction(void)
   for (int i=0; i<nxi; i++) {
     fread(&fdat, sizeof(double), 1, pfile);
     mrwxi(i) = static_cast<Real>(fdat);
+    //printf("xi: %15.8e \n",exp(mrwxi(i)));
   }
   fclose(pfile);
   // Read in probability array
@@ -735,10 +720,10 @@ void PhotonMover::ReadComptonGreensFunction(void)
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void  PhotonMover::ReadTimeDistribution()
+//! \fn void  PhotonMover::ReadRadiusDistribution()
 //  \brief Reads in pre-tabulated binary table used in MRW acceleration with advection
 
-void PhotonMover::ReadTimeDistribution(void)
+void PhotonMover::ReadRadiusDistribution(void)
 {
 
   int ny=100,np=100;
@@ -746,16 +731,71 @@ void PhotonMover::ReadTimeDistribution(void)
   FILE *pfile;
   double fdat;
   // Read in y (y=exp(-t)) array 
-  if((pfile = fopen("time_table_y.out","r")) == NULL) {
+  if((pfile = fopen("radius_table_t.out","r")) == NULL) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in function [PhotonMover:ReadRadiusDistribution]"
+          <<std::endl<< "Input file radius_table_t.out could not be opened" <<std::endl;
+      throw std::runtime_error(msg.str().c_str());
+  }
+  mrwrt.NewAthenaArray(ny);
+  for (int i=0; i<ny; i++) {
+    fread(&fdat, sizeof(double), 1, pfile);
+    mrwrt(i) = static_cast<Real>(fdat);
+  }
+  fclose(pfile);
+  // Read in probability array
+  if((pfile = fopen("radius_table_p.out","r")) == NULL) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in function [PhotonMover:ReadTRadiusDistribution]"
+          <<std::endl<< "Input file radius_table_p.out could not be opened" <<std::endl;
+      throw std::runtime_error(msg.str().c_str());
+  }
+  mrwrp.NewAthenaArray(np);
+  for (int i=0; i<np; i++) {
+    fread(&fdat, sizeof(double), 1, pfile);
+    mrwrp(i) = static_cast<Real>(fdat);
+  }
+  fclose(pfile);
+  // Read in output dimensionless radius
+  if((pfile = fopen("radius_table_r.out","r")) == NULL) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in function [PhotonMover:ReadRadiusDistribution]"
+          <<std::endl<< "Input file radius_table_r.out could not be opened" <<std::endl;
+      throw std::runtime_error(msg.str().c_str());
+  }
+  mrwrr.NewAthenaArray(np,ny);
+  for (int j=0; j<np; j++) {
+      for (int i=0; i<nt; i++) {
+	fread(&fdat, sizeof(double), 1, pfile);
+	mrwrr(j,i) = static_cast<Real>(fdat);
+      }}
+  fclose(pfile);
+
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void  PhotonMover::ReadTimeDistribution()
+//  \brief Reads in pre-tabulated binary table used in MRW acceleration with advection
+
+void PhotonMover::ReadTimeDistribution(void)
+{
+
+  int ntau=100,np=400;
+
+  FILE *pfile;
+  double fdat;
+
+  if((pfile = fopen("time_table_tau.out","r")) == NULL) {
     std::stringstream msg;
     msg << "### FATAL ERROR in function [PhotonMover:ReadTimeDistribution]"
           <<std::endl<< "Input file time_table_y.out could not be opened" <<std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
-  mrwty.NewAthenaArray(ny);
-  for (int i=0; i<ny; i++) {
+  mrwta.NewAthenaArray(ntau);
+  for (int i=0; i<ntau; i++) {
     fread(&fdat, sizeof(double), 1, pfile);
-    mrwty(i) = static_cast<Real>(fdat);
+    mrwta(i) = static_cast<Real>(fdat);
   }
   fclose(pfile);
   // Read in probability array
@@ -772,18 +812,86 @@ void PhotonMover::ReadTimeDistribution(void)
   }
   fclose(pfile);
   // Read in output dimensionless radius
-  if((pfile = fopen("time_table_r.out","r")) == NULL) {
+  if((pfile = fopen("time_table_t.out","r")) == NULL) {
     std::stringstream msg;
     msg << "### FATAL ERROR in function [PhotonMover:ReadTimeDistribution]"
-          <<std::endl<< "Input file time_table_r.out could not be opened" <<std::endl;
+          <<std::endl<< "Input file time_table_t.out could not be opened" <<std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
-  mrwtr.NewAthenaArray(np,ny);
+  mrwtt.NewAthenaArray(np,ntau);
   for (int j=0; j<np; j++) {
-      for (int i=0; i<nt; i++) {
+      for (int i=0; i<ntau; i++) {
 	fread(&fdat, sizeof(double), 1, pfile);
-	mrwtr(j,i) = static_cast<Real>(fdat);
+	mrwtt(j,i) = static_cast<Real>(fdat);
       }}
   fclose(pfile);
 
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn Real PhotonMover::InterpComptonEnergy(Real x0, Real time, Real prob)
+//  \brief return energy for photon after MRW with compton scattering
+
+Real PhotonMover::InterpComptonEnergy(Real xi, Real time, Real prob) {
+
+
+  // get interpolant for prob
+  int ip = mcbisect(prob,mrwp);
+  Real a = (prob-mrwp(ip))/(mrwp(ip+1)-mrwp(ip));
+  Real a1 = 1.-a;
+
+  if (log(xi) > mrwxi(mrwxi.GetDim1()-1)) {
+    printf("xi: %g %g\n",xi, exp(mrwxi(mrwxi.GetDim1()-1)));
+  }
+  // get interpolant for x0
+  int ixi = mcbisect(log(xi),mrwxi);
+  Real b = (log(xi)-mrwxi(ixi))/(mrwxi(ixi+1)-mrwxi(ixi));
+  Real b1 = 1.-b;
+
+  if (log(time) > mrwt(mrwt.GetDim1()-1)) {
+    printf("time: %g %g\n",time, exp(mrwt(mrwt.GetDim1()-1)));
+  }
+  // get interpolant for t
+  int it = mcbisect(log(time),mrwt);
+  Real c = (log(time)-mrwt(it))/(mrwt(it+1)-mrwt(it));
+  Real c1 = 1.-c;
+
+  /*printf("%d %d %d\n",ip,ixi,it);
+  printf("%d %g %g %g %g\n",ip,a,a1,mrwp(ip),mrwp(ip+1));
+  printf("%d %g %g %g %g\n",ixi,b,b1,mrwxi(ixi),mrwxi(ixi+1));
+  printf("%d %g %g %g %g\n",it,c,c1,mrwt(it),mrwt(it+1));
+  printf("final: %g\n",(b*(c*(a*mrwxf(ip+1,ixi+1,it+1)+a1*mrwxf(ip,ixi+1,it+1))
+  	  +c1*(a*mrwxf(ip+1,ixi+1,it)+a1*mrwxf(ip,ixi+1,it)))
+  	  +b1*(c*(a*mrwxf(ip+1,ixi,it+1)+a1*mrwxf(ip,ixi,it+1))
+	  +c1*(a*mrwxf(ip+1,ixi,it)+a1*mrwxf(ip,ixi,it)))));*/
+  return (b*(c*(a*mrwxf(ip+1,ixi+1,it+1)+a1*mrwxf(ip,ixi+1,it+1))
+	  +c1*(a*mrwxf(ip+1,ixi+1,it)+a1*mrwxf(ip,ixi+1,it)))
+	  +b1*(c*(a*mrwxf(ip+1,ixi,it+1)+a1*mrwxf(ip,ixi,it+1))
+	  +c1*(a*mrwxf(ip+1,ixi,it)+a1*mrwxf(ip,ixi,it))));
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Real PhotonMover::InterpPathTime(Real tau, Real prob)
+//  \brief return time/path for photon undergoing MRW at given tau
+
+Real PhotonMover::InterpPathTime(Real tau, Real prob) {
+
+
+  // get interpolant for prob
+  int ip = mcbisect(prob,mrwtp);
+  //int ip = static_cast<int>(prob*static_cast<Real>(200));
+  //if (ip == 200) ip = 199;
+  Real a = (prob-mrwtp(ip))/(mrwtp(ip+1)-mrwtp(ip));
+  Real a1 = 1.-a;
+
+  // get interpolant for tau
+  int it = mcbisect(log(tau),mrwta);
+  Real b = (log(tau)-mrwta(it))/(mrwta(it+1)-mrwta(it));
+  Real b1 = 1.-b;
+  //printf("%d %d %g %g %g %g\n",ip,it,mrwtt(ip+1,it+1),mrwtt(ip,it+1),
+  //	 mrwtt(ip+1,it),mrwtt(ip,it));
+  return b*(a*mrwtt(ip+1,it+1)+a1*mrwtt(ip,it+1))
+         +b1*(a*mrwtt(ip+1,it)+a1*mrwtt(ip,it));
+
+}
+

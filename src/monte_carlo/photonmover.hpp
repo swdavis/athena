@@ -42,9 +42,12 @@ public:
   AthenaArray<Real> mrwt;
   AthenaArray<Real> mrwxi;
   AthenaArray<Real> mrwp;
-  AthenaArray<Real> mrwty;
+  AthenaArray<Real> mrwrt;
+  AthenaArray<Real> mrwrp;
+  AthenaArray<Real> mrwrr;
+  AthenaArray<Real> mrwta;
   AthenaArray<Real> mrwtp;
-  AthenaArray<Real> mrwtr;
+  AthenaArray<Real> mrwtt;
 
   int nmax,nxi,np,nt; //used for acceleration arrays
 
@@ -67,8 +70,9 @@ public:
   virtual Real MRWDist(MCRandom *pran);
   virtual void ReadComptonGreensFunction(void);
   virtual Real InterpComptonEnergy(Real x0, Real time, Real prob);
+  virtual void ReadRadiusDistribution(void);
   virtual void ReadTimeDistribution(void);
-
+  virtual Real InterpPathTime(Real tau, Real prob);
 };
 
 //! \class CartesianMover

@@ -74,6 +74,7 @@ void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot);
 void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot);
 Real Bigy(Real x, Real xp);
 Real SigmaHat(Real x);
+Real ElectronDistOld(Real tgas, MCRandom *pran);
 Real ElectronDist(Real tgas, MCRandom *pran);
 //--------------------- prototypes for emission.cpp functions ----------------------------
 void InitializeEmissionFreeFree(MonteCarloBlock *pmcb);
@@ -109,6 +110,7 @@ public:
   gsl_rng *dev;
   
   Real uniform();
+  Real chisquare(int n);
 };
 
 
@@ -118,11 +120,14 @@ public:
 class MCCoord {
 public:
   MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb);
-  MCCoord(int ncells1, int ncells2, int ncells3);
+  MCCoord(int ncells1, int ncells2, int ncells3, bool acc);
   ~MCCoord();
+
+  bool acceleration;
 
   AthenaArray<Real> x1f, x2f, x3f; // face  positions
   AthenaArray<Real> vol;
+  AthenaArray<Real> dmin;
 
 };
 

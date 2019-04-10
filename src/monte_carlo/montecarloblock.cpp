@@ -20,7 +20,7 @@
 #include "../hydro/hydro.hpp"
 #include "../globals.hpp"
 
-#define MINWEIGHT 1.0e-15
+#define MINWEIGHT 1.0e-30
 #define MAXSCAT 10000
 //#define MINWEIGHT 1.0e-30
 
@@ -120,7 +120,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
       nx1 = pblsize->nx1;
       nx2 = pblsize->nx2;
       nx3 = pblsize->nx3;
-      pcoord = new MCCoord(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST));
+      pcoord = new MCCoord(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),acceleration);
     }
   }
 
@@ -330,8 +330,8 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
   //if (moments_flag)
   //  NormalizeMoments(true);
   
-  std::cout  << "nesc, nabs: " << nesc << ' ' << nabs << std::endl;
-  std::cout << "nscat: " << nscat << std::endl;
+  std::cout  << "nesc, nabs: " << nesc << ' ' << nabs << ' ' << Globals::my_rank << std::endl;
+  std::cout << "nscat: " << nscat << ' ' << Globals::my_rank << std::endl;
 }
 
 //----------------------------------------------------------------------------------------
