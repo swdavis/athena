@@ -134,15 +134,15 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
     // use method for static MRW
     for(int i=0; i<3; ++i)
       beta[i] = 0.;
-    ct = delta*SQR(dist)*chi;
-    /*if (!compton) {
+    //ct = delta*SQR(dist)*chi;
+    if (!compton) {
       Real tau = (pphot->abs_coef+pphot->sct_coef) * dist;
       ct = -log(pran->uniform())*3./SQR(PI)*SQR(tau+2./3.)/(pphot->abs_coef+pphot->sct_coef);
     } else {
       Real tau = pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) * dist;
       //printf("%g %g\n",tau,dist);
       ct = -log(pran->uniform())*3./SQR(PI)*SQR(tau+2./3.)/pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1);
-      }*/
+      }
     r0 = dist;
   }
 

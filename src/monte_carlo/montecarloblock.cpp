@@ -493,6 +493,22 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
   }
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::ResetMoments()
+//  \brief set moments to zero on origin blocks
+
+void MonteCarloBlock::ResetMoments() {
+
+    // set moments to zero
+  for (int n=0; n<10; ++n) {
+    for (int k=ks; k<=ke; ++k) {
+      for (int j=js; j<=je; ++j) {
+	for (int i=is; i<=ie; ++i) {
+	  moments(n,k,j,i) = 0.;
+	}}}}
+}
+
+
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs)

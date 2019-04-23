@@ -437,7 +437,6 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
 	if(!AngleBinsSphericalPolar(pphot,phibin,mubin))
 	  return;	
     }
-   
     intensity(phibin,mubin,ebin) += pphot->stokes[0] * weight;
     intensity_sq(phibin,mubin,ebin) += SQR(pphot->stokes[0] * weight);  
     if (polarized) {

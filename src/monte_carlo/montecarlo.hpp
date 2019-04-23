@@ -17,6 +17,7 @@
 // Athena++ classes headers
 #include "../athena.hpp"
 #include "../coordinates/coordinates.hpp"
+#include "../outputs/outputs.hpp"
 #include "photon.hpp"
 #include "mcbvals.hpp"
 #include "mcoutput.hpp"
@@ -147,6 +148,8 @@ public:
   MCOutput *pmcout;
   MonteCarloBlock *pblock;
   int nphot;  // total number of photons to integrate
+  int cadence; // number of photons per output
+  int nout;  // number of outputs
   int *nphlist; // number of photons per block
   int64_t ncells; // total number of cells in mesh
   int iseed;  // seed to initialized random number generator(s)
@@ -173,7 +176,7 @@ public:
   TempFunc_t GetTemperature;
 
   // functions
-  void RunStaticMonteCarlo(void);
+  void RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput *pinput);
   void RunStaticMonteCarloNew(void);
   void InitUserMonteCarloData(ParameterInput *pin);
   void EnrollUserEmissionInitialization(EmisFunc_t emissfunc);
@@ -278,6 +281,7 @@ public:
   //void DefaultGetTemperature();
   void UpdateMoments(Photon *pphot, Real dl);
   void NormalizeMoments(bool normalize);
+  void ResetMoments();
   //void GetPhotonsFromNeighbors();
   //void SendPhotonsToNeighbors();
   void EnrollUserStatusCondition(StatusFunc_t statusfunc);

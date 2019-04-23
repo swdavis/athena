@@ -65,8 +65,8 @@ bool Photon::IsNanPhoton() {
     if (isnan(k[i])) return true;
     if (isnan(stokes[i])) return true;
   }
-  if isnan(sct_coef) return true;
-  if isnan(abs_coef) return true;
+  if (isnan(sct_coef)) return true;
+  if (isnan(abs_coef)) return true;
 
   return false;
 }
