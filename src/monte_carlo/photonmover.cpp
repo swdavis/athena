@@ -78,7 +78,7 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
   //while (mrw <= 0.)
   //  mrw = MRWDist(pran); 
   //Real delta = -log(mrw);
-  Real delta = InterpPathTime((pphot->abs_coef+pphot->sct_coef)*dist,pran->uniform());
+  Real delta = InterpPathTime(pphot->sct_coef*dist,pran->uniform());
   //printf("delta: %g\n",delta);
   Real chi;
   if (!compton)
@@ -134,15 +134,15 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
     // use method for static MRW
     for(int i=0; i<3; ++i)
       beta[i] = 0.;
-    //ct = delta*SQR(dist)*chi;
-    if (!compton) {
+    ct = delta*SQR(dist)*chi;
+    /*if (!compton) {
       Real tau = (pphot->abs_coef+pphot->sct_coef) * dist;
       ct = -log(pran->uniform())*3./SQR(PI)*SQR(tau+2./3.)/(pphot->abs_coef+pphot->sct_coef);
     } else {
-      Real tau = pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) * dist;
+      Real tau =  pphot->sct_coef * dist;
       //printf("%g %g\n",tau,dist);
       ct = -log(pran->uniform())*3./SQR(PI)*SQR(tau+2./3.)/pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1);
-      }
+      }*/
     r0 = dist;
   }
 
@@ -174,8 +174,34 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
       //Real opacf = std::max(pphot->abs_coef,pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1));
       //tauabs = ct*sqrt(opaci*pphot->abs_coef);
       //tauabs = ct*sqrt(opaci*(opacf));
-      tauabs = ct*(opaci-opacf)/(2.*log(xf/xi));
-      //printf("%g %g %g %g %g %g\n",ct,tauabs,opaci,opacf,xi,xf);
+      //tauabs = ct*(opaci-opacf)/(2.*log(xf/xi));
+      Real ct0 = ypar/ct*log(xf/xi);
+      Real ct1 = ct;
+      //tauabs = ct0*(opaci-opacf)/(2.*log(xf/xi))+opacf*ct1;
+      if (xi < 1.) {
+        if (xf > 1.) {
+          tauabs = ct1*(opaci-2./3.*opacf)/(2.*log(xf/xi));
+        } else  {
+          tauabs = ct1*(opaci-opacf)/(2.*log(xf/xi));
+        }
+      } else {
+        if (xf > 1.) {
+          tauabs = ct1*(opaci-opacf)/(3.*log(xf/xi));
+        } else  {
+          tauabs = ct1*(opaci-opacf)/(2.*log(xf/xi));
+        }
+      }
+      //tauabs = opaci/8./ypar*ct;
+      
+      Real y = exp(4.*ypar);
+      Real tau0 = tauabs;
+      //tauabs = (-SQR(4-xi)+4.*y*(xi-4)*xi+SQR(y)*(16.+8.*xi+(4.*ypar-3.)*SQR(xi)))/32./SQR(y)*opaci/ypar*ct;
+      //tauabs = (1.-1./SQR(y))/8.*opaci/ypar*ct;
+      //tauabs = fabs(opaci-opacf)/8./ypar*ct;
+      Real us = fabs(0.25*log(xf/xi));
+      Real u0 = ct/ypar;
+      //tauabs = fabs(opaci-opacf)/8.*u0;
+      //printf("%g %g %g %g %g %g %g\n",ct,tauabs,tau0,opaci,opacf,xi,xf);
       pphot->weight *= exp(-tauabs);
     }
   

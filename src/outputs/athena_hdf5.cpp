@@ -402,6 +402,7 @@ void ATHDF5Output::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
           }
           int nv=1;
           if (pod->type=="VECTORS") nv=3;
+          else if(pod->type=="TENSORS") nv=9;
           for (int v=0; v < nv; v++, ndv++) {
             int index = 0;
             for (int k = out_ks; k <= out_ke; k++) {
@@ -420,6 +421,7 @@ void ATHDF5Output::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
         while(pod!=NULL) {
           int nv=1;
           if (pod->type=="VECTORS") nv=3;
+          else if(pod->type=="TENSORS") nv=9;
           for (int v=0; v < nv; v++, ndv++) {
             int index = 0;
             for (int k = out_ks; k <= out_ke; k++) {

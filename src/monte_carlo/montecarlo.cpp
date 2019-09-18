@@ -155,7 +155,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
     throw std::runtime_error(msg.str().c_str());
   } 
   // Divide photons between ranks and set blockid
-  // nranks[i] is the number of differen monte carlo blocks contributing to
+  // nranks[i] is the number of different monte carlo blocks contributing to
   // meshblock i
   int *nranks;
   nranks = new int[nmesh];
@@ -171,7 +171,11 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
     pmcb->myblockid = myblockid;
     // allocates an even number of photons per monte carlo block
     //pmcb->nphremain = nphlist[myblockid++]/(nranks[my_mesh_rank]);//oldold
+#ifdef MPI_PARALLEL
     pmcb->nphremain = nphlist[myblockid++]/(nranks[my_mesh_rank]-1);//somewhatold
+#else
+    pmcb->nphremain = nphlist[myblockid++]/(nranks[my_mesh_rank]);
+#endif
     //pmcb->nphremain = nphlist[myblockid++];//new
     pmcb->cadence = pmcb->nphremain / nout;
     pmcb = pmcb->next;
@@ -453,6 +457,7 @@ void MonteCarlo::ReceiveMonteCarloBlocks(ParameterInput *pin, int source) {
  
   for(int i=0; i<blcnt; ++i) {
     pblock = new MonteCarloBlock(NULL, &blocksize, this, pin);
+    pblock->MonteCarloProblemGenerator(pin);
     if (plast == NULL) 
       pfirst = pblock;
     else 
@@ -807,6 +812,7 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput
   // transfer photons over all blocks
   //  Assumes all blocks are allocated the same number photons to transfer
   nphrun = 0;
+#ifdef MPI_PARALLEL
   if (origin < 0) {
     for (int i=0; i<nout; ++i) {
       nphrun += pmcb->cadence*mcranks; //not general
@@ -842,6 +848,25 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput
       }
     }
   }
+#else
+  for (int i=0; i<nout; i++) {
+    pmcb->TransferPhotons(pmcb->cadence);
+    pmcb->nphremain -= pmcb->cadence;
+    pmcb = pmcb->next;
+    while (pmcb != NULL) {
+      pmcb->TransferPhotons(pmcb->cadence);
+      pmcb->nphremain -= pmcb->cadence;
+      pmcb = pmcb->next;
+    }
+    pmcb = pblock;
+    pmcout->OutputSpectra(this);
+    if (pmcout->moments) {
+      CollectMoments();
+      pouts->MakeOutputs(pmesh,pinput,true);
+    }
+  }
+
+#endif
   // prepare moments for output
   //if (pmcout->moments)
   //  CollectMoments();

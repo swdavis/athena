@@ -136,6 +136,11 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
       fread(&fcoord, sizeof(float), 1, fp);
       if(!big_end) Swap4Bytes2(&fcoord);
       domain.X[j] = fcoord;
+      if ((j == 0) || (j == 1)) 
+        printf("xcoord: %d %g\n",j,domain.X[j]);
+      else
+        printf("xcoord: %d %g %g\n",j,domain.X[j],(domain.X[j]-domain.X[j-1])/(domain.X[j-1]-domain.X[j-2]));
+
     }
     
     /* Y_COORDINATES NY float */

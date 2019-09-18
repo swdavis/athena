@@ -437,8 +437,12 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
 	if(!AngleBinsSphericalPolar(pphot,phibin,mubin))
 	  return;	
     }
-    intensity(phibin,mubin,ebin) += pphot->stokes[0] * weight;
-    intensity_sq(phibin,mubin,ebin) += SQR(pphot->stokes[0] * weight);  
+    Real tauabs = -log(weight);
+    Real opac = tauabs/pphot->path;
+    intensity(phibin,mubin,ebin) += weight;
+    intensity_sq(phibin,mubin,ebin) += 1.;
+    //intensity(phibin,mubin,ebin) += pphot->stokes[0] * weight;
+    //intensity_sq(phibin,mubin,ebin) += SQR(pphot->stokes[0] * weight);  
     if (polarized) {
       stokesq(phibin,mubin,ebin) += pphot->stokes[1] * weight;
       stokesq_sq(phibin,mubin,ebin) += SQR(pphot->stokes[1] * weight); 
@@ -723,13 +727,14 @@ void MCOutput::OutputSpectra(MonteCarlo *pmc) {
   if (pspec == NULL)
     return;
   CollectSpectra(pmc);
+#ifdef MPI_PARALLEL
   if (Globals::my_rank == 0) {
     for(int i=1; i<Globals::nranks; ++i) // temporary: assumes spectra on all processes
       pmc->ReceiveMonteCarloSpectra(i);
   } else {
     pmc->SendMonteCarloSpectra(0);
   }
-
+#endif
   if (Globals::my_rank == 0) {
     Spectrum *pspect = pspec;
     //Real norm = static_cast<Real>(pmc->nphot)/ static_cast<Real>(pmc->ncells);
