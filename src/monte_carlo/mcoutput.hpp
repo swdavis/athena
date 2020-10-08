@@ -71,6 +71,34 @@ public:
 };
 
 //----------------------------------------------------------------------------------------
+//! \class PhotonList
+//  \brief List of Photon properties (usually escaping photons)
+
+class PhotonList {
+public:
+  PhotonList(int init_len, int naddpars);
+  ~PhotonList();
+
+  MonteCarlo *pmy_mc;
+
+  std::string base_name;
+  bool append;
+  int length; // number of occupied elements
+  int nparams; // number of properties for each photon in list
+  int output_number;// current output number
+  AthenaArray<Real> photons;  // array of photon properies
+
+  //functions
+  void AddPhoton(Photon *pphot);
+  void WriteList(std::string filename, int ntot);
+
+private:
+  int max_len;  // number of photons allowed with current allocated memory
+  void ResizeList(int new_size); 
+
+};
+
+//----------------------------------------------------------------------------------------
 //! \class MCOutput
 //  \brief class for handling monte carlo specific spectral outputs
 
@@ -81,13 +109,16 @@ public:
 
   MonteCarlo *pmy_mc;
   Spectrum *pspec;
+  PhotonList *pphlist;
+  int max_list_size;
+
   bool moments;
 
   //functions
   void CollectSpectra(MonteCarlo *pmc);
   void OutputSpectra(MonteCarlo *pmc);
   void OutputSpectrum(Spectrum *pspec, Real norm, std::string outfile);
-
+  void OutputPhotonList(MonteCarlo *pmc);
 };
 
 #endif //MC_OUTPUT

@@ -103,7 +103,7 @@ Outputs::Outputs(Mesh *pm, ParameterInput *pin) {
       if (MONTE_CARLO_ENABLED) {
         // Skip spectrum outputs which are handled by MCOutput class
         std::string type = pin->GetString(pib->block_name,"file_type");
-        if (type.compare("spec") == 0) {
+        if ((type.compare("spec") == 0) || (type.compare("photons") == 0)) {
           pib = pib->pnext;  // move to next input block name
           break;
         }
@@ -607,6 +607,17 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       if (pmb != NULL) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIPR11,9);
       AppendOutputDataNode(pod);
       num_vars_ += 9;
+    }
+    printf("\n here in output\n");
+    // monte carlo mean energy * energy density
+    if (output_params.variable.compare("mcmom") == 0 || 
+        output_params.variable.compare("Eavemc") == 0) {
+      pod = new OutputData;
+      pod->type = "SCALARS";
+      pod->name = "Eavemc";
+      if (pmb != NULL) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIEN,1);
+      AppendOutputDataNode(pod);
+      num_vars_++;
     }
   }
 

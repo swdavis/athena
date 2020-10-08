@@ -9,6 +9,7 @@
 
 // Athena++ headers
 #include "mcutils.hpp"
+#include <complex>
 
 //------------------------------------------------------------------------------
 //! \fn Real BessI0(Real x)
@@ -154,5 +155,24 @@ int mcbisect(Real x, AthenaArray<Real> &array) {
     return nmax-2;
   else
     return std::max(mid-1,0);
+
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void ZetaFast(std::complex<double> arg, std::complex<double> &zeta, std::complex<double> &dzeta)
+// use bisection to search array and return bin
+
+void ZetaFast(std::complex<double> arg, std::complex<double> &zeta) {
+
+  std::complex<double> b=(0.5,0.80558);
+  std::complex<double> a=(0.50556,-0.81462);
+  std::complex<double> d2=(0.,7.08981540362206);
+  std::complex<double> aux0 = arg;
+  if(aux0.imag() < 0.) 
+    aux0 = std::conj(aux0);
+  zeta = b / (a-aux0) - std::conj(b) / (std::conj(a)+aux0);
+  if (aux0.imag() < 0.)
+    zeta = std::conj(zeta) + d2 * exp(-arg*arg);
 
 }

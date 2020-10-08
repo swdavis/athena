@@ -16,6 +16,34 @@
 #include "montecarlo.hpp"
 #include "mcoutput.hpp"
 #include "../globals.hpp"
+#include "../outputs/io_wrapper.hpp"
+
+namespace mcoutput {
+//----------------------------------------------------------------------------------------
+// Functions to detect big endian machine, and to byte-swap 32-bit words.
+
+  int IsBigEndian(void) {
+    int32_t n = 1;
+    // careful! although int -> char * -> int round-trip conversion is safe,
+    // an arbitrary char* may not be converted to int*
+    char *ep = reinterpret_cast<char *>(&n);
+    return (*ep == 0); // Returns 1 (true) on a big endian machine
+  }
+
+  static inline void Swap4Bytes(void *vdat) {
+    char tmp, *dat = static_cast<char *>(vdat);
+    tmp = dat[0];  dat[0] = dat[3];  dat[3] = tmp;
+    tmp = dat[1];  dat[1] = dat[2];  dat[2] = tmp;
+  }
+  static inline void Swap8Bytes(void *vdat) {
+    char tmp, *dat = static_cast<char *>(vdat);
+    tmp = dat[0];  dat[0] = dat[7];  dat[7] = tmp;
+    tmp = dat[1];  dat[1] = dat[6];  dat[6] = tmp;
+    tmp = dat[2];  dat[2] = dat[5];  dat[5] = tmp;
+    tmp = dat[3];  dat[3] = dat[4];  dat[4] = tmp;
+  }
+}
+
 
 // constructor
 Spectrum::Spectrum(MomentumRange input_range, bool pol, bool xlog) {
@@ -151,7 +179,7 @@ void Spectrum::SetSurface(std::string input_face) {
 
 //----------------------------------------------------------------------------------------
 //! \fn bool Spectrum::AngleBinsCarteisan(Photon *pphot, int &phibin, int &cthbin)
-//  \brief set index of phi and cth bins relative to cartesian access
+//  \brief set index of phi and cth bins relative to cartesian axis
 
 bool Spectrum::AngleBinsCartesian(Photon *pphot, int &phibin, int &cthbin) {
 
@@ -190,8 +218,8 @@ bool Spectrum::AngleBinsCartesian(Photon *pphot, int &phibin, int &cthbin) {
 	phi = acos(kx/stheta);
 	if(kz < 0.0)
 	  phi = 2 * PI - phi;
-	break;
-      case INNER_X3:
+	break; 
+     case INNER_X3:
 	ctheta = -kz;
 	stheta = sqrt(SQR(kx)+SQR(ky));
 	phi = acos(kx/stheta);
@@ -270,7 +298,7 @@ bool Spectrum::AngleBinsCartesian(Photon *pphot, int &phibin, int &cthbin) {
 
 //----------------------------------------------------------------------------------------
 //! \fn bool Spectrum::AngleBinsSphericalPolar(Photon *pphot, int &phibin, int &cthbin)
-//  \brief set index of phi and cth bins relative to cartesian access
+//  \brief set index of phi and cth bins relative to spherical-polar axis
 
 bool Spectrum::AngleBinsSphericalPolar(Photon *pphot, int &phibin, int &cthbin) {
 
@@ -440,7 +468,7 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
     Real tauabs = -log(weight);
     Real opac = tauabs/pphot->path;
     intensity(phibin,mubin,ebin) += weight;
-    intensity_sq(phibin,mubin,ebin) += 1.;
+    intensity_sq(phibin,mubin,ebin) += weight*weight;
     //intensity(phibin,mubin,ebin) += pphot->stokes[0] * weight;
     //intensity_sq(phibin,mubin,ebin) += SQR(pphot->stokes[0] * weight);  
     if (polarized) {
@@ -481,9 +509,9 @@ int Spectrum::EnergyBin(Real energy)
     return mid;
   }
   else {
-    return -1;
     std::cout << "Warning: binary search failed in ebin: " << energy << ' '
               << mid <<  std::endl;
+    return -1;
   }
 
 }
@@ -537,6 +565,106 @@ void Spectrum::AddSpectrum(Spectrum *pspec) {
 
 }
 
+// constructor
+PhotonList::PhotonList(int init_len, int naddpars) {
+
+  // Allocate memory for photon list
+  max_len = init_len;
+  nparams = 8 + naddpars;
+  photons.NewAthenaArray(init_len,nparams);
+  length = 0;
+}
+
+// destructor
+PhotonList::~PhotonList() {
+
+  photons.DeleteAthenaArray();
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn PhotonList::AddPhoton(Photon *pphot)
+//  \brief add photon to list
+
+void PhotonList::AddPhoton(Photon *pphot) {
+
+  if (length == max_len) {
+    // double array size when list is full
+    ResizeList(2*max_len);
+  }
+  photons(length,0) = pphot->weight*pphot->eweight;
+  photons(length,1) = pphot->energy;
+  for (int i=0; i<3; i++) {
+    photons(length,i+2) = pphot->x[i];
+    photons(length,i+5) = pphot->k[i];
+  }
+  length++;
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void PhotonList::WriteList(std::string filename, Real ntot)
+//  \brief write photon list to binary file
+
+void PhotonList::WriteList(std::string filename, int ntot) {
+  // Since list lengths are variable each process writes its own list
+
+  // open file for output
+  FILE *pfile;
+  std::stringstream msg;
+  if ((pfile = fopen(filename.c_str(),"w")) == NULL) {
+    msg << "### FATAL ERROR in function [PhotonList::WriteList]" << std::endl
+	<< "Output file '" << filename << "' could not be opened";
+    throw std::runtime_error(msg.str().c_str());
+  }
+
+  // write header information
+  fprintf(pfile,"length=%d\nnpars=%d\n",length,nparams);
+  fprintf(pfile,"ntot=%d\n",ntot);
+  //fprintf(pfile,"polarized=%s\n",pmy_mc->polarized ? "True" : "False");
+  fprintf(pfile,"polarized=%d\n",pmy_mc->polarized);
+  fprintf(pfile,"relativistic=%d\n",false);
+  fprintf(pfile,"coord=%s\n",COORDINATE_SYSTEM);
+  //printf("coord=%s\n",COORDINATE_SYSTEM);
+  // write data
+  int ndata = length*nparams;
+  double *data;
+  data = new double[ndata];
+  int n=0;
+  for (int i=0; i<length; ++i) {
+    for (int j=0; j<nparams; ++j) {
+      data[n++] = static_cast<double>(photons(i,j));
+    }}
+
+  // write data in big endian order
+  if (!(mcoutput::IsBigEndian())) {for (int i=0; i<ndata; ++i) mcoutput::Swap8Bytes(&data[i]);}
+  fwrite(data,sizeof(double),static_cast<size_t>(ndata),pfile);
+  fclose(pfile);
+  delete [] data;
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void PhotonList::ResizeList(int new_len)
+//  \brief resize a photon list
+
+void PhotonList::ResizeList(int new_len) {
+  
+  if (new_len < max_len) {
+    std::cout << "Warning: new list length " << new_len << " < max_len " 
+              << max_len << ".  Aborting ResizeList()" << std::endl;
+    return;
+  }
+  AthenaArray<Real> temp_array(photons); // create deep copy
+  photons.DeleteAthenaArray();
+  photons.NewAthenaArray(new_len,nparams);
+  for (int i=0; i<length; ++i) {
+    for (int j=0; j<nparams; ++j) {
+      photons(i,j) = temp_array(i,j);
+    }}
+  temp_array.DeleteAthenaArray();
+    
+}
 
 // constructor
 MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
@@ -547,6 +675,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
 
   moments = false;
   pspec = NULL;
+  pphlist = NULL;
   // loop over input block names.  Find those that start with "output", read parameters,
   // and construct linked list of spectra if present, set moments flag if moments output
   // present
@@ -633,6 +762,27 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         else
           plast->next = pspec;
         plast = pspec;
+      } else if (type.compare("list") == 0) {
+        // Create photon list
+        int add_pars = 0;
+        pphlist = new PhotonList(pmc->max_list_size,add_pars);
+	pphlist->output_number = 0;
+	// Generate file name
+	std::string outn = pib->block_name.substr(6); // 6 because counting starts at 0!
+	int outid = atoi(outn.c_str());
+	// set file name
+	std::string basename = pin->GetString("job","problem_id");
+	pphlist->base_name.assign(basename);
+        pphlist->base_name.append(".");
+	char define_id[10];
+        sprintf(define_id,"out%d",outid);  // default id="outN"
+	pphlist->base_name.append(define_id);
+	pphlist->base_name.append(".");
+        char proc_id[11];
+        sprintf(proc_id,"proc%d",Globals::my_rank);
+        pphlist->base_name.append(proc_id);
+        pphlist->append = pin->GetOrAddBoolean(pib->block_name,"append",false);
+
       } else {
         // Look for moments
         std::string var = pin->GetOrAddString(pib->block_name,"variable","none");
@@ -664,7 +814,7 @@ void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string fname) {
   FILE *pfile;
   std::stringstream msg;
   if ((pfile = fopen(fname.c_str(),"w")) == NULL) {
-    msg << "### FATAL ERROR in function [MCOutpus::OutputSpectrum]" << std::endl
+    msg << "### FATAL ERROR in function [MCOutput::OutputSpectrum]" << std::endl
 	<< "Output file '" << fname << "' could not be opened";
     throw std::runtime_error(msg.str().c_str());
   }
@@ -698,7 +848,7 @@ void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string fname) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MCOutput::CollectSpectra(MonteCarlo *pmc)
-//  \brief collect all spectra on this process
+//  \brief collect all spectra on this process for output
 
 void MCOutput::CollectSpectra(MonteCarlo *pmc) {
 
@@ -738,7 +888,8 @@ void MCOutput::OutputSpectra(MonteCarlo *pmc) {
   if (Globals::my_rank == 0) {
     Spectrum *pspect = pspec;
     //Real norm = static_cast<Real>(pmc->nphot)/ static_cast<Real>(pmc->ncells);
-    Real norm = static_cast<Real>(pmc->nphrun) * pmc->normalization;
+    //Real norm = static_cast<Real>(pmc->nphrun) * pmc->normalization;
+    Real norm = static_cast<Real>(pmc->nphrun);
     while (pspect != NULL) {
       std::string filename;
       filename.assign(pspect->base_name);
@@ -754,3 +905,25 @@ void MCOutput::OutputSpectra(MonteCarlo *pmc) {
   }
 
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCOutput::OutputPhotonList(MonteCarlo *pmc)
+//  \brief output list of photon properties
+
+void MCOutput::OutputPhotonList(MonteCarlo *pmc) {
+
+  if (pphlist == NULL)
+    return;
+
+  std::string filename;
+  filename.assign(pphlist->base_name);
+  filename.append(".");
+  std::stringstream file_number;
+  file_number << std::setw(5) << std::setfill('0') << pphlist->output_number;
+  filename.append(file_number.str());
+  filename.append(".list");
+  pphlist->WriteList(filename,pmc->nphrun);
+  pphlist->output_number++;
+
+}
+

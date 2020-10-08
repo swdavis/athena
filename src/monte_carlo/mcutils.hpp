@@ -10,6 +10,7 @@
 //
 // Athena++ classes headers
 #include "montecarlo.hpp"
+#include <complex>
 
 Real BessI0(Real x);
 Real BessI1(Real x);
@@ -17,5 +18,7 @@ Real BessK0(Real x);
 Real BessK1(Real x);
 Real BessK(int n, Real x);
 int mcbisect(Real x, AthenaArray<Real> &array);
+void ZetaFast(std::complex<double> arg, std::complex<double> &zeta);
+
 
 #endif // MCUTILS_HPP

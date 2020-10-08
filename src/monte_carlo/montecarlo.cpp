@@ -63,6 +63,15 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   acceleration = pin->GetOrAddBoolean("montecarlo","acceleration",false);
   time_acc = pin->GetOrAddBoolean("montecarlo","time_acc",false);
 
+  // Set photon numbers
+  nphot = pin->GetInteger("montecarlo","nphot");
+  cadence = pin->GetOrAddInteger("montecarlo","cadence",nphot);
+  nout = nphot/cadence;
+#ifdef MPI_PARALLEL
+  max_list_size = cadence/(Globals::nranks-1)+1;
+#else
+  max_list_size = cadence;
+#endif
   // Initialize output
   pmcout = new MCOutput(this,pin);
 
@@ -72,16 +81,17 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   // Initialize ncells and broadcast
   if (Globals::my_rank == 0) {
     ncells = pmesh->GetTotalCells();
+  }
 #ifdef MPI_PARALLEL
     // then broadcasts it
     MPI_Bcast(&ncells, sizeof(int64_t), MPI_BYTE, 0, MPI_COMM_WORLD);
 #endif
-  }
+
   // Set overall photon normalization
-  if (emission_array_flag)
-    normalization = 1./static_cast<Real>(ncells);
-  else
-    normalization = 1.; // maybe modified with user defined function
+  //if (emission_array_flag)
+  //  normalization = 1./static_cast<Real>(ncells);
+  //else
+  //  normalization = 1.; // maybe modified with user defined function
 
   // Initialize all montecarlo blocks to correspond to mesh blocks
   mcranks = pin->GetOrAddInteger("montecarlo","mcranks",0);
@@ -133,9 +143,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   // nbtotal runs over the number meshblocks on this rank
   // Globals::nranks is total number of cores
   // nphlist is number of photons on each meshblock
-  nphot = pin->GetInteger("montecarlo","nphot");
-  cadence = pin->GetOrAddInteger("montecarlo","cadence",nphot);
-  nout = nphot/cadence;
+
   int nbtotal = pmesh->nbtotal;
   nphlist = new int[nbtotal];
   int nperb = nphot / nbtotal;
@@ -167,6 +175,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   int my_mesh_rank = Globals::my_rank % nmesh;
   int myblockid = pmesh->nslist[my_mesh_rank];
   MonteCarloBlock *pmcb = pblock;
+  max_list_size = 0;
   while (pmcb != NULL) {
     pmcb->myblockid = myblockid;
     // allocates an even number of photons per monte carlo block
@@ -419,7 +428,7 @@ void MonteCarlo::SendMonteCarloBlocks(int dest) {
   head_buf[9] = pblock->ke;
 
   MPI_Request send_rq;
-  unsigned int tag = 0;
+  unsigned int tag = 0; //temporary
   MPI_Isend(head_buf,10,MPI_INT,dest,tag,MPI_COMM_WORLD,&send_rq);
   MPI_Wait(&send_rq, MPI_STATUS_IGNORE);
 #endif
@@ -436,7 +445,7 @@ void MonteCarlo::ReceiveMonteCarloBlocks(ParameterInput *pin, int source) {
   // Receive number and dimensions of monte carlo blocks
   int head_buf[10];
   MPI_Request recv_rq;
-  unsigned int tag = 0;
+  unsigned int tag = 0; //temporary
   MPI_Irecv(head_buf,10,MPI_INT,source,tag,MPI_COMM_WORLD,&recv_rq);
   MPI_Wait(&recv_rq, MPI_STATUS_IGNORE);
   
@@ -634,7 +643,7 @@ void MonteCarlo::ReceiveMonteCarloSpectra(int source) {
   Real *recv_buf;
   recv_buf = new Real[maxsize];
   MPI_Request recv_rq;
-  unsigned int tag = 100;
+  unsigned int tag = 100; // temporary
 
   
   pspec = pmcout->pspec;
@@ -705,13 +714,13 @@ void MonteCarlo::SendMoments(int dest) {
   // Send data for each block
   MonteCarloBlock *pmcb = pblock;
   Real *send_buf;
-  int size = 10 * (pmcb->nx1*pmcb->nx2*pmcb->nx3);
+  int size = 11 * (pmcb->nx1*pmcb->nx2*pmcb->nx3);
   send_buf = new Real[size];
   MPI_Request send_rq;
-  unsigned int tag = 1000;
+  unsigned int tag = 1000; // temporary
   while (pmcb != NULL) {
     int p=0;
-    BufferUtility::Pack4DData(pmcb->moments,send_buf,0,9,pmcb->is,pmcb->ie,pmcb->js,pmcb->je,pmcb->ks,pmcb->ke,p);
+    BufferUtility::Pack4DData(pmcb->moments,send_buf,0,10,pmcb->is,pmcb->ie,pmcb->js,pmcb->je,pmcb->ks,pmcb->ke,p);
     MPI_Isend(send_buf,size,MPI_ATHENA_REAL,dest,tag,MPI_COMM_WORLD,&send_rq);
     MPI_Wait(&send_rq, MPI_STATUS_IGNORE);
     pmcb=pmcb->next;
@@ -722,32 +731,81 @@ void MonteCarlo::SendMoments(int dest) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::ReceiveMoments(int source, bool sum_moments)
-//  \brief receive momdents
+//  \brief receive moments from source
 
 void MonteCarlo::ReceiveMoments(int source, bool sum_moments) {
 #ifdef MPI_PARALLEL
   // Receive data from each block
   MonteCarloBlock *pmcb=pblock;
   Real *recv_buf;
-  int size = 10 * (pmcb->nx1*pmcb->nx2*pmcb->nx3);
+  int size = 11 * (pmcb->nx1*pmcb->nx2*pmcb->nx3);
   recv_buf = new Real[size];
   MPI_Request recv_rq;
-  unsigned int tag = 1000;
+  unsigned int tag = 1000; //temporary
   while (pmcb != NULL) {
     MPI_Irecv(recv_buf,size,MPI_ATHENA_REAL,MPI_ANY_SOURCE,tag,MPI_COMM_WORLD,&recv_rq);
     MPI_Wait(&recv_rq, MPI_STATUS_IGNORE);
     int p=0;
     if (sum_moments) 
-      BufferUtility::Unpack4DDataSum(recv_buf, pmcb->moments,0,9,pmcb->is,pmcb->ie,pmcb->js, 
+      BufferUtility::Unpack4DDataSum(recv_buf, pmcb->moments,0,10,pmcb->is,pmcb->ie,pmcb->js, 
                                      pmcb->je,pmcb->ks,pmcb->ke,p);
     else 
-      BufferUtility::Unpack4DData(recv_buf, pmcb->moments,0,9,pmcb->is,pmcb->ie,pmcb->js, 
+      BufferUtility::Unpack4DData(recv_buf, pmcb->moments,0,10,pmcb->is,pmcb->ie,pmcb->js, 
       pmcb->je,pmcb->ks,pmcb->ke,p);
     pmcb=pmcb->next;
   }
   delete recv_buf;
 #endif
 }
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::ReceivePhotonList(int source)
+//  \brief receive photon lists from source
+
+/*void MonteCarlo::ReceivePhotonList(int source) {
+#ifdef MPI_PARALLEL
+  PhotonList *pphlist = pmcout->phlist;
+    
+  int size = max_list_size*nparams;
+  Real *recv_buf;
+  recv_buf = new Real[size];
+  MPI_Request recv_rq;
+  unsigned int tag = 230; // temporary
+  MPI_Irecv(recv_buf,size,MPI_ATHENA_REAL,MPI_ANY_SOURCE,tag++,MPI_COMM_WORLD,&recv_rq);
+  MPI_Wait(&recv_rq, MPI_STATUS_IGNORE);
+  int length = static_cast<int>(recv_buf[0]);
+  int old_len = pphlist->length;
+  int new_len = old_len + length;
+  if (new_len > pphlist->max_size) {
+    // Resize list
+    pphlist->ResizeList(new_len);
+  }
+  BufferUtility::Unpack3DData(recv_buf,pphlist,0,0,0,pphlist->nparams,pphlist->size,new_len,1);
+  delete recv_buf;
+#endif
+}*/
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::SendPhotonList(int dest)
+//  \brief send photon list to desitnation process
+
+/*void MonteCarlo::SendPhotonList(int dest) {
+#ifdef MPI_PARALLEL
+  PhotonList *pphlist = pmcout->pphlist;
+  
+  int size = max_list_size*pphlist->nparams;
+  Real *send_buf;
+  send_buf = new Real[size];
+  MPI_Request send_rq;
+  unsigned int tag = 230; //temporary
+  send_buf[0] = static_cast<Real>(pphlist->size);
+  BufferUtility::Pack3DData(pphlist->photons,send_buf,0,0,0,pphlist->nparams,0,pphlist->size,1);
+  MPI_Isend(send_buf,size,MPI_ATHENA_REAL,dest,tag++,MPI_COMM_WORLD,&send_rq);
+  MPI_Wait(&send_rq, MPI_STATUS_IGNORE);
+  delete send_buf;
+#endif
+}*/
 
 //----------------------------------------------------------------------------------------
 //! \fn unsigned int MonteCarlo::CreateMCMPITag(int bid)
@@ -815,7 +873,7 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput
 #ifdef MPI_PARALLEL
   if (origin < 0) {
     for (int i=0; i<nout; ++i) {
-      nphrun += pmcb->cadence*mcranks; //not general
+      nphrun += pmcb->cadence*mcranks; //not general, counts all processes
       //printf("mcranks: %d %d\n",pmcb->cadence,mcranks);
       pmcb = pmcb->next;
       while (pmcb != NULL) {
@@ -831,17 +889,21 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput
     }
   } else {
     //while (pmcb->nphremain > 0) {
-   for (int i=0; i<nout; i++) {
+    nphrun = 0;
+    for (int i=0; i<nout; i++) {
+      nphrun += pmcb->cadence; // only count photons on this process
       pmcb->TransferPhotons(pmcb->cadence);
       pmcb->nphremain -= pmcb->cadence;
       pmcb = pmcb->next;
       while (pmcb != NULL) {
+        nphrun += cadence;
 	pmcb->TransferPhotons(pmcb->cadence);
 	pmcb->nphremain -= pmcb->cadence;
 	pmcb = pmcb->next;
       }
       pmcb = pblock;
       pmcout->OutputSpectra(this);
+      pmcout->OutputPhotonList(this);
       if (pmcout->moments) {
 	CollectMoments();
 	pouts->MakeOutputs(pmesh,pinput,true);
@@ -860,6 +922,7 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput
     }
     pmcb = pblock;
     pmcout->OutputSpectra(this);
+    pmcout->OutputPhotonList(this);
     if (pmcout->moments) {
       CollectMoments();
       pouts->MakeOutputs(pmesh,pinput,true);

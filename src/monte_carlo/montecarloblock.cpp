@@ -98,6 +98,9 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   }
   pspec = pfirst;
 
+  // Setup output photon list
+  pphlist = pmy_mc->pmcout->pphlist;
+
   // set local mesh parameters to correspond to mesh block
   if (pmb != NULL) {
     is = pmb->is; ie = pmb->ie;
@@ -194,7 +197,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   rho.NewAthenaArray(ncells3,ncells2,ncells1);
   tgas.NewAthenaArray(ncells3,ncells2,ncells1);
   if (lorentz_transform) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
-  if (moments_flag) moments.NewAthenaArray(13,ncells3,ncells2,ncells1);
+  if (moments_flag) moments.NewAthenaArray(14,ncells3,ncells2,ncells1);
   if (emission_array_flag) emission.NewAthenaArray(ncells3,ncells2,ncells1);
   if (acceleration && !(coherent_scattering)) {
     planck_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
@@ -214,6 +217,7 @@ MonteCarloBlock::~MonteCarloBlock() {
   delete pmover;
   delete pran;
   delete pspec;
+  delete pphlist;
 
   rho.DeleteAthenaArray();
   tgas.DeleteAthenaArray();
@@ -319,6 +323,9 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
       while (pspect != NULL) {
         pspect->UpdateSpectrum(pphoton);
 	pspect = pspect->next;
+      }
+      if (pphlist != NULL) {
+        pphlist->AddPhoton(pphoton);
       }
       nesc++;
     } else
@@ -432,24 +439,29 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
     int i = pphot->i1;
     int j = pphot->i2;
     int k = pphot->i3;
+
     // Add contribution to corresponding moments
+    // Energy density
     moments(MCIER,k,j,i) += weight;
+    // Flux
     moments(MCIFR1,k,j,i) += weight1;
     moments(MCIFR2,k,j,i) += weight2;
     moments(MCIFR3,k,j,i) += weight3;
-
-    weight = weight1 * pphot->k[0];
-    moments(MCIPR11,k,j,i) += weight;
-    weight = weight2 * pphot->k[1];
-    moments(MCIPR22,k,j,i) += weight;
-    weight = weight3 * pphot->k[2];
-    moments(MCIPR33,k,j,i) += weight;
-    weight = weight1 * pphot->k[1];
-    moments(MCIPR12,k,j,i) += weight;
-    weight = weight1 * pphot->k[2];
-    moments(MCIPR13,k,j,i)  += weight;
-    weight = weight2 * pphot->k[2];
-    moments(MCIPR23,k,j,i) += weight;
+    // Radiation Pressure
+    Real weightp = weight1 * pphot->k[0];
+    moments(MCIPR11,k,j,i) += weightp;
+    weightp = weight2 * pphot->k[1];
+    moments(MCIPR22,k,j,i) += weightp;
+    weightp = weight3 * pphot->k[2];
+    moments(MCIPR33,k,j,i) += weightp;
+    weightp = weight1 * pphot->k[1];
+    moments(MCIPR12,k,j,i) += weightp;
+    weightp = weight1 * pphot->k[2];
+    moments(MCIPR13,k,j,i)  += weightp;
+    weightp = weight2 * pphot->k[2];
+    moments(MCIPR23,k,j,i) += weightp;
+    // Photon mean energy
+    moments(MCIEN,k,j,i) += weight * pphot->energy;
   }
 
 }
@@ -462,15 +474,17 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
 
   if (normalize) {
     // Normalize moments
-    for (int n=0; n<10; ++n) {
-      Real norm = static_cast<Real>(nphtot)*pmy_mc->normalization;
+    for (int n=0; n<11; ++n) {
+      //Real norm = static_cast<Real>(nphtot)*pmy_mc->normalization;
+      Real norm = static_cast<Real>(nphtot);
       if ((n == 0) || (n >= 4))
 	norm *= 2.9979e10;
       for (int k=ks; k<=ke; ++k) {
 	for (int j=js; j<=je; ++j) {
 	  for (int i=is; i<=ie; ++i) {
 	    moments(n,k,j,i) /= (pcoord->vol(k,j,i) * norm);
-	  }}}}
+	  }}}
+    }
     // Copy noramilzed moments to symmetric elements
     for (int k=ks; k<=ke; ++k) {
       for (int j=js; j<=je; ++j) {
@@ -481,15 +495,17 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
 	}}}
   } else {
     // Undo normalization for continuing evolution
-    for (int n=0; n<10; ++n) {
-      Real norm = static_cast<Real>(nphtot)*pmy_mc->normalization;
+    for (int n=0; n<11; ++n) {
+      //Real norm = static_cast<Real>(nphtot)*pmy_mc->normalization;
+      Real norm = static_cast<Real>(nphtot);
       if ((n == 0) || (n >= 4))
 	norm *= 2.9979e10;
       for (int k=ks; k<=ke; ++k) {
 	for (int j=js; j<=je; ++j) {
 	  for (int i=is; i<=ie; ++i) {
 	    moments(n,k,j,i) *= (pcoord->vol(k,j,i) * norm);
-	  }}}}
+	  }}}
+    }
   }
 }
 
@@ -500,12 +516,14 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
 void MonteCarloBlock::ResetMoments() {
 
     // set moments to zero
-  for (int n=0; n<10; ++n) {
+  for (int n=0; n<11; ++n) {
     for (int k=ks; k<=ke; ++k) {
       for (int j=js; j<=je; ++j) {
 	for (int i=is; i<=ie; ++i) {
 	  moments(n,k,j,i) = 0.;
-	}}}}
+	}}}
+  }
+
 }
 
 

@@ -42,7 +42,8 @@ enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY
                      MC_BLOCK_BNDRY = 6};
 // Array indices for monte carlo radiation moments
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
-      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCIPR21=10, MCIPR31=11, MCIPR32=12};
+      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCIEN = 10, MCIPR21=11, MCIPR31=12, 
+      MCIPR32=13};
 
 //----------------------------------------------------------------------------------------
 // function pointer prototypes for user-defined modules set at runtime
@@ -159,7 +160,8 @@ public:
   int origin; // process with origin mesh block
   int blocksize;
   int nphrun; // number of photons run thus far
-  Real normalization; //overall normalization for photons
+  int max_list_size; // maximum number of photons run per output on any process
+  //Real normalization; //overall normalization for photons
 
   enum EmissionFlag emission_meth;
   enum AbsorptionFlag absorption_meth;
@@ -183,6 +185,8 @@ public:
   void EnrollUserGetTemperature(TempFunc_t tempfunc);
   void SendMonteCarloSpectra(int dest);
   void ReceiveMonteCarloSpectra(int source);
+  //void SendPhotonList(int dest);
+  //void ReceivePhotonList(int source);
   void CollectMoments(void);
   void EnrollUserMCBoundaryFunction(enum BoundaryFace dir, MCBValFunc_t my_bc);
 
@@ -226,6 +230,7 @@ public:
   MCRandom *pran; // ptr to random number generator
   MCBoundaryValues *pbval; // ptr to MC boundary values
   Spectrum *pspec; // ptr to spectrum
+  PhotonList *pphlist; // ptr to photon list
 
   MonteCarloBlock *next;
 
