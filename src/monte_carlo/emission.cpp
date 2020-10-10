@@ -41,7 +41,7 @@ void InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
         Real ne = (1.0+2.0*heabund) * nhii;
         Real vol = pmcb->pcoord->vol(k,j,i);
         //std::cout << vol << std::endl;
-        pmcb->emission(k,j,i) = eta0/sqrt(temp)*ne*nhii*g*vol/ncells;
+        pmcb->emission(k,j,i) = eta0/sqrt(temp)*ne*nhii*g*vol*ncells;
 	if (pmcb->emission(k,j,i) > emm_max) emm_max = pmcb->emission(k,j,i);
 	if (pmcb->emission(k,j,i) < emm_min) emm_min = pmcb->emission(k,j,i); 
       }}}

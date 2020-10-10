@@ -34,10 +34,10 @@ public:
   int status; // photon status (escaped, absorbed, evolving)
   enum BoundaryFace face;
 
-  Real x[4];  // current photon position
-  Real k[4];  // photon direction (momentum vector) curvalinear
+  Real x[3];  // current photon position
+  Real k[3];  // photon direction (momentum vector) curvalinear
   Real kcart[3]; // photon direction in cartesian coordinates
-  Real stokes[4];  // stokes vectors for linear polarization
+  Real stokes[3];  // stokes vectors for linear polarization
   Real weight, eweight; // photon weights
   Real energy;  // photon energy
   Real path;

@@ -76,7 +76,7 @@ public:
 
 class PhotonList {
 public:
-  PhotonList(int init_len, int naddpars);
+  PhotonList(MonteCarlo *pmc, int naddpars);
   ~PhotonList();
 
   MonteCarlo *pmy_mc;
@@ -86,6 +86,7 @@ public:
   int length; // number of occupied elements
   int nparams; // number of properties for each photon in list
   int output_number;// current output number
+  bool polarized;
   AthenaArray<Real> photons;  // array of photon properies
 
   //functions
@@ -110,13 +111,13 @@ public:
   MonteCarlo *pmy_mc;
   Spectrum *pspec;
   PhotonList *pphlist;
-  int max_list_size;
 
   bool moments;
 
   //functions
   void CollectSpectra(MonteCarlo *pmc);
   void OutputSpectra(MonteCarlo *pmc);
+  void OutputSpectrumLegacy(Spectrum *pspec, Real norm, std::string outfile);
   void OutputSpectrum(Spectrum *pspec, Real norm, std::string outfile);
   void OutputPhotonList(MonteCarlo *pmc);
 };

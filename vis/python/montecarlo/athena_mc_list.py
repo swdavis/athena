@@ -1,5 +1,5 @@
 """
-Read in Athena++ monte carlo output data files.
+Support for manipulating Monce Carlo photon lists
 """
 
 # standard python modules
@@ -18,7 +18,7 @@ class photons:
         self.ntot = phlist['ntot']
         self.coord = phlist['coord']
         if (self.polarized):
-            self.npars = self.npars + 3
+            self.npars = self.npars + 2
         if (self.relativistic):
             self.npars = self.npars + 2
         ncol = phlist['npars']
@@ -59,12 +59,12 @@ class photons:
             if (self.polarized):
                 self.q = phlist['list'][:,8]
                 self.u = phlist['list'][:,9]
-                self.v = phlist['list'][:,10]
+                #self.v = phlist['list'][:,10]
         if (self.nuser > 0):
             for i in range(self.nuser):
                 self.user[:,i] = phlist['list'][:,i+self.npars]
 
-def readlist(filename):
+def read_list(filename):
     """
     Read unformated list output and return as a dictionary
     """
@@ -131,7 +131,7 @@ def readlist(filename):
     
     return phlist
 
-def writelist(filename,phlist):
+def write_list(filename,phlist):
     """
     Write photon list (dictionary) to file
     """
@@ -152,138 +152,3 @@ def writelist(filename,phlist):
     bin=struct.pack(myfmt,*(phlist['list']))
     outfile.write(bin)
     outfile.close()
-
-def write_spectrum(filename,spectrum):
-    """
-    Writes spectrum to output file
-    """
-
-    # Open outfile
-    outfile = open(filename, 'w')
-
-    nx = spectrum['nx']
-    nmu = spectrum['nmu']
-    nphi = spectrum['nphi']
-
-    # Write header information
-    outfile.write("nx={:d}\n".format(nx))
-    outfile.write("nmu={:d}\n".format(nmu))
-    outfile.write("nphi={:d}\n".format(nphi))
-    outfile.write("ntot={:d}\n".format(spectrum['ntot']))
-    outfile.write("nintens={:d}\n".format(spectrum['nintens']))
-    outfile.write("units="+spectrum['xaxis']+"\n")
-    outfile.write("yerror="+spectrum['yerror']+"\n")
-    # Write binfaces
-    myfmt='>'+'d'*(nx+1)
-    bin=struct.pack(myfmt,*(spectrum['xfaces']))
-    outfile.write(bin)
-    myfmt='>'+'d'*(nmu+1)
-    bin=struct.pack(myfmt,*(spectrum['mufaces']))
-    outfile.write(bin)
-    myfmt='>'+'d'*(nphi+1)
-    bin=struct.pack(myfmt,*(spectrum['phifaces']))
-    outfile.write(bin)        
-    # Write data
-    nelements = (spectrum['nintens']*nx*nmu*nphi)
-    myfmt='>'+'d'*nelements
-    bin=struct.pack(myfmt,*(spectrum['intensity'].reshape(nelements)))
-    outfile.write(bin)
-    if (spectrum['yerror'] == 'true'):
-        bin=struct.pack(myfmt,*(spectrum['errors'].reshape(nelements)))
-        outfile.write(bin)
-    outfile.close()
-
-def read_spectrum(filename):
-    """
-    Read spectrum and return as a dictionary
-    """
-
-    # Read raw data
-    with open(filename, 'rb') as data_file:
-        raw_data = data_file.read()
-    raw_data_ascii = raw_data.decode('ascii', 'replace')
-
-    spectrum = {}
-    current_index = 0
-    
-    # Function for skipping though the file
-    def skip_string(expected_string):
-        expected_string_len = len(expected_string)
-        if raw_data_ascii[current_index:current_index+expected_string_len] != expected_string:
-            raise RuntimeError('File not formatted as expected')
-        return current_index+expected_string_len
-
-    current_index = skip_string("nx=")
-    end_of_line_index = current_index + 1
-    while raw_data_ascii[end_of_line_index] != '\n':
-        end_of_line_index += 1
-    spectrum['nx'] = map(int,raw_data_ascii[current_index:end_of_line_index].split(' '))[0]
-    current_index = end_of_line_index + 1
-    current_index = skip_string("nmu=")
-    end_of_line_index = current_index + 1
-    while raw_data_ascii[end_of_line_index] != '\n':
-        end_of_line_index += 1
-    spectrum['nmu'] = map(int,raw_data_ascii[current_index:end_of_line_index].split(' '))[0]
-    current_index = end_of_line_index + 1
-    current_index = skip_string("nphi=")
-    end_of_line_index = current_index + 1
-    while raw_data_ascii[end_of_line_index] != '\n':
-        end_of_line_index += 1
-    spectrum['nphi'] = map(int,raw_data_ascii[current_index:end_of_line_index].split(' '))[0]
-    current_index = end_of_line_index + 1
-    current_index = skip_string("ntot=")
-    end_of_line_index = current_index + 1
-    while raw_data_ascii[end_of_line_index] != '\n':
-        end_of_line_index += 1
-    spectrum['ntot'] = map(int,raw_data_ascii[current_index:end_of_line_index].split(' '))[0]
-    current_index = end_of_line_index + 1
-    current_index = skip_string("nintens=")
-    end_of_line_index = current_index + 1
-    while raw_data_ascii[end_of_line_index] != '\n':
-        end_of_line_index += 1
-    spectrum['nintens'] = map(int,raw_data_ascii[current_index:end_of_line_index].split(' '))[0]
-    current_index = end_of_line_index + 1
-    current_index = skip_string("units=")
-    end_of_line_index = current_index + 1
-    while raw_data_ascii[end_of_line_index] != '\n':
-        end_of_line_index += 1
-    spectrum['units'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
-    current_index = end_of_line_index + 1
-    current_index = skip_string("yerror=")
-    end_of_line_index = current_index + 1
-    while raw_data_ascii[end_of_line_index] != '\n':
-        end_of_line_index += 1
-    spectrum['yerror'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
-    current_index = end_of_line_index + 1
-
-    # Read in faces
-    nx = spectrum['nx']
-    format_string = '>' + 'd'*(nx+1)
-    begin_index = current_index
-    end_index = begin_index + 8*(nx+1)
-    spectrum['xfaces'] = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
-    nmu = spectrum['nmu']
-    format_string = '>' + 'd'*(nmu+1)
-    begin_index = end_index
-    end_index = begin_index + 8*(nmu+1)
-    spectrum['mufaces'] = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
-    nphi = spectrum['nphi']
-    format_string = '>' + 'd'*(nphi+1)
-    begin_index = end_index
-    end_index = begin_index + 8*(nphi+1)
-    spectrum['phifaces'] = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
-
-    # Read intensities
-    nintens = spectrum['nintens']
-    nelements = nintens*nx*nmu*nphi
-    format_string = '>' + 'd'*nelements
-    begin_index = end_index
-    end_index = begin_index + 8*nelements
-    vals = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
-    spectrum['intensity'] = vals.reshape((nintens,nphi,nmu,nx))
-    if (spectrum['yerror'] == 'true'):
-        begin_index = end_index
-        end_index = begin_index + 8*nelements
-        vals = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
-        spectrum['errors'] = vals.reshape((nintens,nphi,nmu,nx))
-    return spectrum

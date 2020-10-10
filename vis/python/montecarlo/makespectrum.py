@@ -1,0 +1,91 @@
+#! /usr/bin/env python
+
+"""
+Read in photon list and create a spectrum from the list.
+"""
+
+# python standard modules
+import argparse
+import numpy as np
+
+# Athena++ modules
+import athena_mc_spec as mcspec
+import athena_mc_list as mclist
+from athena_mc_list import photons
+
+# Main function
+def main(**kwargs):
+
+    # Filenames for io
+    infile = kwargs.pop('infile')
+    outfile = kwargs.pop('outfile')
+
+    # Read photon list
+    phlist = mclist.read_list(infile)
+    phots = photons(phlist)
+
+    # Generate spectrum from phots
+    nx = kwargs.pop('nx')
+    xmin = kwargs.pop('xmin')
+    xmax = kwargs.pop('xmax')
+    spectrum = mcspec.make_spectrum(phots,nx,xmin,xmax,**kwargs)
+
+    # Write spectrum to file
+    if outfile is None:
+        outfile = infile.replace('.list','.spec')
+    mcspec.write_spectrum(outfile,spectrum)
+
+# Execute main function
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('infile',
+        help='input photon list filename')
+    parser.add_argument('nx',
+        type=int,
+        help='number of x bins')
+    parser.add_argument('xmin',
+        type=float,
+        help='minimum for x variable')
+    parser.add_argument('xmax',
+        type=float,
+        help='maximum for x variable')
+    parser.add_argument('--nmu',
+        type=int,
+        default=1,
+        help='number of cos(theta) bins')
+    parser.add_argument('--mumin',
+        type=float,
+        default=0.,
+        help='minimum cos(theta)')
+    parser.add_argument('--mumax',
+        type=float,
+        default=1.,
+        help='maximum cos(theta)')
+    parser.add_argument('--nphi',
+        type=int,
+        default=1,
+        help='number of phi bins')
+    parser.add_argument('--phimin',
+        type=float,
+        default=0.,
+        help='minimum phi')
+    parser.add_argument('--phimax',
+        type=float,
+        default=2.*np.pi,
+        help='maximum phi')
+    parser.add_argument('--xaxis',
+        default='kev',
+        help='variable to be used for x axis: ev, kev, nu, lambda')
+    parser.add_argument('--logx',
+        action='store_true',
+        help='bins energies distributed logarithmically')
+    parser.add_argument('--outfile',
+        default=None,
+        help='output filename for spectrum')
+    parser.add_argument('--yerror',
+        action='store_true',
+        help='compute intensity errors')
+    
+    args = parser.parse_args()
+    main(**vars(args))
+

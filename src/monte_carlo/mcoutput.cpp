@@ -566,12 +566,16 @@ void Spectrum::AddSpectrum(Spectrum *pspec) {
 }
 
 // constructor
-PhotonList::PhotonList(int init_len, int naddpars) {
+PhotonList::PhotonList(MonteCarlo *pmc, int naddpars) {
 
+  pmy_mc = pmc;
   // Allocate memory for photon list
-  max_len = init_len;
+  max_len = pmc->max_list_size;
   nparams = 8 + naddpars;
-  photons.NewAthenaArray(init_len,nparams);
+  polarized = pmy_mc->polarized;
+  if (polarized)
+    nparams += 2; // print only stokes q and u
+  photons.NewAthenaArray(max_len,nparams);
   length = 0;
 }
 
@@ -598,6 +602,10 @@ void PhotonList::AddPhoton(Photon *pphot) {
     photons(length,i+2) = pphot->x[i];
     photons(length,i+5) = pphot->k[i];
   }
+  if (polarized) {
+    photons(length,8) = pphot->stokes[1];
+    photons(length,9) = pphot->stokes[2];
+  }
   length++;
 
 }
@@ -621,11 +629,9 @@ void PhotonList::WriteList(std::string filename, int ntot) {
   // write header information
   fprintf(pfile,"length=%d\nnpars=%d\n",length,nparams);
   fprintf(pfile,"ntot=%d\n",ntot);
-  //fprintf(pfile,"polarized=%s\n",pmy_mc->polarized ? "True" : "False");
   fprintf(pfile,"polarized=%d\n",pmy_mc->polarized);
   fprintf(pfile,"relativistic=%d\n",false);
   fprintf(pfile,"coord=%s\n",COORDINATE_SYSTEM);
-  //printf("coord=%s\n",COORDINATE_SYSTEM);
   // write data
   int ndata = length*nparams;
   double *data;
@@ -635,7 +641,6 @@ void PhotonList::WriteList(std::string filename, int ntot) {
     for (int j=0; j<nparams; ++j) {
       data[n++] = static_cast<double>(photons(i,j));
     }}
-
   // write data in big endian order
   if (!(mcoutput::IsBigEndian())) {for (int i=0; i<ndata; ++i) mcoutput::Swap8Bytes(&data[i]);}
   fwrite(data,sizeof(double),static_cast<size_t>(ndata),pfile);
@@ -663,7 +668,7 @@ void PhotonList::ResizeList(int new_len) {
       photons(i,j) = temp_array(i,j);
     }}
   temp_array.DeleteAthenaArray();
-    
+  max_len = new_len;
 }
 
 // constructor
@@ -765,7 +770,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
       } else if (type.compare("list") == 0) {
         // Create photon list
         int add_pars = 0;
-        pphlist = new PhotonList(pmc->max_list_size,add_pars);
+        pphlist = new PhotonList(pmc,add_pars);
 	pphlist->output_number = 0;
 	// Generate file name
 	std::string outn = pib->block_name.substr(6); // 6 because counting starts at 0!
@@ -805,10 +810,10 @@ MCOutput::~MCOutput() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string fname)
-//  \brief output intensity spectrum
+//! \fn void MCOutput::OutputSpectrumLegacy(Spectrum *pspec, Real norm, std::string fname)
+//  \brief output intensity spectrum in original mcgrid format
 
-void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string fname) {
+void MCOutput::OutputSpectrumLegacy(Spectrum *pspec, Real norm, std::string fname) {
 
   // open file for output
   FILE *pfile;
@@ -845,6 +850,139 @@ void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string fname) {
   }
   fclose(pfile);
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCOutput::OutputSpectrumLegacy(Spectrum *pspec, Real norm, std::string fname)
+//  \brief output intensity spectrum in original mcgrid format
+
+void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string fname) {
+
+  // open file for output
+  FILE *pfile;
+  std::stringstream msg;
+  if ((pfile = fopen(fname.c_str(),"w")) == NULL) {
+    msg << "### FATAL ERROR in function [MCOutput::OutputSpectrum]" << std::endl
+	<< "Output file '" << fname << "' could not be opened";
+    throw std::runtime_error(msg.str().c_str());
+  }
+   
+  // Write header information
+  Real everg = 1.6021772e-12;  
+  Real emin = pspec->range.emin / everg; // output in eV
+  Real emax = pspec->range.emax / everg; // output in eV
+  int ne = pspec->range.ne;
+  int nmu = pspec->range.ncth;
+  int nphi = pspec->range.nphi;
+  fprintf(pfile,"nx=%d\n",ne);
+  fprintf(pfile,"nmu=%d\n",nmu);
+  fprintf(pfile,"nphi=%d\n",nphi);
+  fprintf(pfile,"ntot=%d\n",static_cast<int>(norm));
+  int nintens = 1;
+  if (pspec->polarized) nintens += 2;
+  fprintf(pfile,"nintens=%d\n",nintens);
+  fprintf(pfile,"units=ev\n");
+  if (pspec->polarized) 
+    fprintf(pfile,"polarized=true\n");
+  else
+    fprintf(pfile,"polarized=false\n");
+  fprintf(pfile,"yerror=true\n");
+  // Output bin faces with fwrite
+  bool bigend = mcoutput::IsBigEndian();
+  int nface = (ne+1 > nmu+1) ? ne+1 : nmu+1;
+  nface = (nface > nphi+1) ? nface : nphi+1;
+  double *faces;
+  faces = new double[nface];
+  everg = 1.6021772e-12;
+  for (int i=0; i<ne+1; ++i)
+    faces[i] = static_cast<double>(pspec->energies(i)/everg);
+  if (!bigend) {for (int i=0; i<ne+1; ++i) mcoutput::Swap8Bytes(&faces[i]);}
+  fwrite(faces,sizeof(double),static_cast<size_t>(ne+1),pfile);
+  for (int i=0; i<nphi+1; ++i)
+    faces[i] = static_cast<double>(i)/static_cast<double>(nphi)*2.*PI;
+  if (!bigend) {for (int i=0; i<nphi+1; ++i) mcoutput::Swap8Bytes(&faces[i]);}
+  fwrite(faces,sizeof(double),static_cast<size_t>(nphi+1),pfile);
+  for (int i=0; i<nmu+1; ++i)
+    faces[i] = static_cast<double>(i)/static_cast<double>(nmu);
+  if (!bigend) {for (int i=0; i<nmu+1; ++i) mcoutput::Swap8Bytes(&faces[i]);}
+  fwrite(faces,sizeof(double),static_cast<size_t>(nmu+1),pfile);
+  delete [] faces;
+  // Generate normalized intensties and errors
+  Real *emid, *dnu;
+  emid = new double[ne];
+  dnu = new double[ne];
+  Real h = 6.6262e-27;
+  for(int i=0; i<ne; ++i) { 
+    emid[i] = 0.5*(pspec->energies(i)+pspec->energies(i+1));
+    dnu[i] = (pspec->energies(i+1)-pspec->energies(i))/h;
+  }
+  // First compute normalized intensities, stokes vectors, and errors
+  AthenaArray<Real> intens, errors;
+  intens.NewAthenaArray(nintens,nphi,nmu,ne);
+  errors.NewAthenaArray(nintens,nphi,nmu,ne);
+  Real fac1 = static_cast<Real>(nmu)*static_cast<Real>(nphi)/2./PI;
+  for(int k=0; k<nphi; ++k) {
+    for(int j=0; j<nmu; ++j) {
+      Real mumid = (static_cast<Real>(j)+0.5)/static_cast<Real>(nmu);
+      for(int i=0; i<ne; ++i) {
+        Real fac2 = fac1*emid[i]/(mumid*dnu[i]);
+        intens(0,k,j,i) = static_cast<double>(pspec->intensity(k,j,i)*
+                                              (fac2/norm));
+        errors(0,k,j,i) = 0.675*sqrt((pspec->intensity_sq(k,j,i)*SQR(fac2)/norm-
+                                      SQR(intens(0,k,j,i)))/norm);
+      }}}
+  if (pspec->polarized) {
+    for(int k=0; k<nphi; ++k) {
+      for(int j=0; j<nmu; ++j) {
+        Real mumid = (static_cast<Real>(j)+0.5)/static_cast<Real>(nmu);
+        for(int i=0; i<ne; ++i) {
+          Real fac2 = fac1*emid[i]/(mumid*dnu[i]);
+          intens(1,k,j,i) = static_cast<double>(pspec->stokesq(k,j,i)*
+                                                (fac2/norm));
+          errors(1,k,j,i) = 0.675*sqrt((pspec->stokesq_sq(k,j,i)*SQR(fac2)/norm-
+                                        SQR(intens(1,k,j,i)))/norm);
+        }}}
+    for(int k=0; k<nphi; ++k) {
+      for(int j=0; j<nmu; ++j) {
+        Real mumid = (static_cast<Real>(j)+0.5)/static_cast<Real>(nmu);
+        for(int i=0; i<ne; ++i) {
+          Real fac2 = fac1*emid[i]/(mumid*dnu[i]);
+          intens(2,k,j,i) = static_cast<double>(pspec->stokesu(k,j,i)*
+                                                (fac2/norm));
+          errors(2,k,j,i) = 0.675*sqrt((pspec->stokesu_sq(k,j,i)*SQR(fac2)/norm-
+                                        SQR(intens(2,k,j,i)))/norm);
+        }}}
+  }
+  delete [] emid;
+  delete [] dnu;
+  int ndata = nintens*ne*nmu*nphi;
+  double *data;
+  data = new double[ndata];
+  // Output intensity and stokes parametres with fwrite
+  int n = 0;
+  for(int m=0; m<nintens; ++m) {
+    for(int k=0; k<nphi; ++k) {
+      for(int j=0; j<nmu; ++j) {
+        for(int i=0; i<ne; ++i) {
+          data[n++] = static_cast<double>(intens(m,k,j,i));
+        }}}}
+  if (!bigend) {for (int i=0; i<ndata; ++i) mcoutput::Swap8Bytes(&data[i]);}
+  fwrite(data,sizeof(double),static_cast<size_t>(ndata),pfile);
+  // Output normalized errors
+  n = 0;
+  for(int m=0; m<nintens; ++m) {
+    for(int k=0; k<nphi; ++k) {
+      for(int j=0; j<nmu; ++j) {
+        for(int i=0; i<ne; ++i) {
+          data[n++] = static_cast<double>(errors(m,k,j,i));
+        }}}}
+  if (!bigend) {for (int i=0; i<ndata; ++i) mcoutput::Swap8Bytes(&data[i]);}
+  fwrite(data,sizeof(double),static_cast<size_t>(ndata),pfile);
+  delete [] data;
+  intens.DeleteAthenaArray();
+  errors.DeleteAthenaArray();
+  fclose(pfile);
+}
+
 
 //----------------------------------------------------------------------------------------
 //! \fn void MCOutput::CollectSpectra(MonteCarlo *pmc)
@@ -924,6 +1062,8 @@ void MCOutput::OutputPhotonList(MonteCarlo *pmc) {
   filename.append(".list");
   pphlist->WriteList(filename,pmc->nphrun);
   pphlist->output_number++;
+  // Reset list length to 0
+  pphlist->length = 0;
 
 }
 
