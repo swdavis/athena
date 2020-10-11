@@ -46,7 +46,7 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
   Real h =  6.6262e-27;
   Real kb = 1.3807e-16;
 
-  ffnrm *= 12.;  // Added to match the Athena++ prescription
+  //ffnrm *= 12.;  // Added to match the Athena++ prescription
 
   Real nhii = pmcb->rho(pphot->i3,pphot->i2,pphot->i1) / (mp*(1.+4.*heabund));
   Real ne = (1. + 2.*heabund) * nhii;

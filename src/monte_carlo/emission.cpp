@@ -24,7 +24,7 @@ void InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
   Real eta0 = 1.032521e-11;
   Real g = 1.0;
 
-  eta0 *= 12.;  // Added to match the Athena++ prescription
+  //eta0 *= 12.;  // Added to match the Athena++ prescription
 
   Real ncells = static_cast<Real>(pmcb->pmy_mc->ncells);
   int il = pmcb->is; int iu = pmcb->ie;

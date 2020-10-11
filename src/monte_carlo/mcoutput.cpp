@@ -897,14 +897,14 @@ void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string fname) {
     faces[i] = static_cast<double>(pspec->energies(i)/everg);
   if (!bigend) {for (int i=0; i<ne+1; ++i) mcoutput::Swap8Bytes(&faces[i]);}
   fwrite(faces,sizeof(double),static_cast<size_t>(ne+1),pfile);
-  for (int i=0; i<nphi+1; ++i)
-    faces[i] = static_cast<double>(i)/static_cast<double>(nphi)*2.*PI;
-  if (!bigend) {for (int i=0; i<nphi+1; ++i) mcoutput::Swap8Bytes(&faces[i]);}
-  fwrite(faces,sizeof(double),static_cast<size_t>(nphi+1),pfile);
   for (int i=0; i<nmu+1; ++i)
     faces[i] = static_cast<double>(i)/static_cast<double>(nmu);
   if (!bigend) {for (int i=0; i<nmu+1; ++i) mcoutput::Swap8Bytes(&faces[i]);}
   fwrite(faces,sizeof(double),static_cast<size_t>(nmu+1),pfile);
+  for (int i=0; i<nphi+1; ++i)
+    faces[i] = static_cast<double>(i)/static_cast<double>(nphi)*2.*PI;
+  if (!bigend) {for (int i=0; i<nphi+1; ++i) mcoutput::Swap8Bytes(&faces[i]);}
+  fwrite(faces,sizeof(double),static_cast<size_t>(nphi+1),pfile);
   delete [] faces;
   // Generate normalized intensties and errors
   Real *emid, *dnu;
