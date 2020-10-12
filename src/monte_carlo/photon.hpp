@@ -32,6 +32,7 @@ public:
 
   int i1,i2,i3; // zone indicies currently containing photon
   int status; // photon status (escaped, absorbed, evolving)
+  int nuser_var; // number of user variables
   enum BoundaryFace face;
 
   Real x[3];  // current photon position
@@ -41,6 +42,7 @@ public:
   Real weight, eweight; // photon weights
   Real energy;  // photon energy
   Real path;
+  Real *user_var; // storage for user variables
 
   Real sct_coef, abs_coef;  //scattering and absoprtion coefficients
 
@@ -48,5 +50,7 @@ public:
   void CopyPhoton(Photon *pphot);
   void PrintPhoton();
   bool IsNanPhoton();
+  void AllocateUserVariables(int n);
+
 };
 #endif // PHOTON_HPP

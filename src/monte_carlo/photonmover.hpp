@@ -52,7 +52,7 @@ public:
   int nmax,nxi,np,nt; //used for acceleration arrays
 
   bool acceleration;
-  bool lorentz_transform;
+  bool boosts;
   bool compton;
   bool time_acc;
 

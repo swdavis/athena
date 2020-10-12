@@ -148,7 +148,8 @@ public:
   Mesh *pmy_mesh;
   MCOutput *pmcout;
   MonteCarloBlock *pblock;
-  int nphot;  // total number of photons to integrate
+
+  int nphtot;  // total number of photons to integrate
   int cadence; // number of photons per output
   int nout;  // number of outputs
   int *nphlist; // number of photons per block
@@ -161,14 +162,13 @@ public:
   int blocksize;
   int nphrun; // number of photons run thus far
   int max_list_size; // maximum number of photons run per output on any process
-  //Real normalization; //overall normalization for photons
 
   enum EmissionFlag emission_meth;
   enum AbsorptionFlag absorption_meth;
   enum ScatteringFlag scattering_meth;
   enum MCBoundaryFlag mc_bcs[6];
 
-  bool lorentz_transform;  // Compute lorentz transformations
+  bool boosts;  // Compute lorentz transformations
   bool emission_array_flag;  // Compute and save zone emissivities
   bool polarized;// track photon polarization
   bool acceleration;  // use MRW acceleration
@@ -185,8 +185,6 @@ public:
   void EnrollUserGetTemperature(TempFunc_t tempfunc);
   void SendMonteCarloSpectra(int dest);
   void ReceiveMonteCarloSpectra(int source);
-  //void SendPhotonList(int dest);
-  //void ReceivePhotonList(int source);
   void CollectMoments(void);
   void EnrollUserMCBoundaryFunction(enum BoundaryFace dir, MCBValFunc_t my_bc);
 
@@ -221,7 +219,6 @@ public:
 
   // data
   MonteCarlo* pmy_mc; // MonteCarlo
-  Mesh* pmy_mesh; // Mesh
   MeshBlock* pmy_block;    // MeshBlock corresponding to this MonteCarlo
   MCCoord *pcoord;
 
@@ -247,21 +244,22 @@ public:
   ScatFunc_t Scatter;
   StatusFunc_t ChangePhotonStatus;
 
-  int nphtot; // Photons integrated thus far
+  int nphdone; // Photons integrated thus far
   int nphremain; // total number of photons to integrate
   int myblockid;
   int nx1,nx2,nx3;
   int is,ie,js,je,ks,ke;
   int nfreq, nmu, nphi, nsurf;
   int cadence;
+  int nuser_var;
 
   bool zone_weight_flag; // flag for zone weighting
   bool weighted_absorption; // flag controling how absorption is handled
   bool moments_flag; // Compute/output moments
   bool emission_array_flag;  // Compute and save zone emissivities
-  bool lorentz_transform;  // Compute lorentz transformations
+  bool boosts;  // Compute lorentz transformations
   bool coherent_scattering; // photon does notchange energy after scattering
-  bool polarized; // track photon polarization
+  //bool polarized; // track photon polarization
   bool acceleration;  // use MRW acceleration
   bool time_acc;  // use MRW acceleration with time limit
 
@@ -279,7 +277,7 @@ public:
   // functions
   void InitUserMonteCarloBlockData(ParameterInput *pin);
   void MonteCarloProblemGenerator(ParameterInput *pin);
-  void TransferPhotons(int nphot);  // Transfer photons on this block
+  void TransferPhotons(int nphtot);  // Transfer photons on this block
   void LorentzTransform(Photon *pphot, const Real sign);
   Real LorentzTransformFrequencyShift(Photon *pphot);
   void InitializePhoton(Photon *pphot);

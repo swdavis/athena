@@ -566,17 +566,20 @@ void Spectrum::AddSpectrum(Spectrum *pspec) {
 }
 
 // constructor
-PhotonList::PhotonList(MonteCarlo *pmc, int naddpars) {
+PhotonList::PhotonList(int list_mem_size, bool pol, bool rel) {
 
-  pmy_mc = pmc;
+
   // Allocate memory for photon list
-  max_len = pmc->max_list_size;
-  nparams = 8 + naddpars;
-  polarized = pmy_mc->polarized;
+  max_len = list_mem_size;
+  nparams = 8;
+  polarized = pol;
   if (polarized)
     nparams += 2; // print only stokes q and u
+  relativistic = rel;
+  if (relativistic)
+    nparams += 2;
   photons.NewAthenaArray(max_len,nparams);
-  length = 0;
+
 }
 
 // destructor
@@ -629,8 +632,8 @@ void PhotonList::WriteList(std::string filename, int ntot) {
   // write header information
   fprintf(pfile,"length=%d\nnpars=%d\n",length,nparams);
   fprintf(pfile,"ntot=%d\n",ntot);
-  fprintf(pfile,"polarized=%d\n",pmy_mc->polarized);
-  fprintf(pfile,"relativistic=%d\n",false);
+  fprintf(pfile,"polarized=%d\n",polarized);
+  fprintf(pfile,"relativistic=%d\n",relativistic);
   fprintf(pfile,"coord=%s\n",COORDINATE_SYSTEM);
   // write data
   int ndata = length*nparams;
@@ -723,8 +726,6 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
 	char define_id[10];
         sprintf(define_id,"out%d",outid);  // default id="outN"
 	pspec->base_name.append(define_id);
-	// get/set checkpoint cadence
-	//pspec->cadence = pin->GetOrAddInteger(pib->block_name,"cadence",pmc->nphot);
 	// Select binning in path length or radius if desired
 	pspec->pathbin = pin->GetOrAddBoolean(pib->block_name,"pathbin",false);
 	pspec->radbin = pin->GetOrAddBoolean(pib->block_name,"radbin",false);
@@ -769,8 +770,9 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         plast = pspec;
       } else if (type.compare("list") == 0) {
         // Create photon list
-        int add_pars = 0;
-        pphlist = new PhotonList(pmc,add_pars);
+        pphlist = new PhotonList(pmc->max_list_size,pmc->polarized,false);
+        // Initialize photon list
+        pphlist->length = 0;
 	pphlist->output_number = 0;
 	// Generate file name
 	std::string outn = pib->block_name.substr(6); // 6 because counting starts at 0!
@@ -786,7 +788,6 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         char proc_id[11];
         sprintf(proc_id,"proc%d",Globals::my_rank);
         pphlist->base_name.append(proc_id);
-        pphlist->append = pin->GetOrAddBoolean(pib->block_name,"append",false);
 
       } else {
         // Look for moments
@@ -1025,8 +1026,6 @@ void MCOutput::OutputSpectra(MonteCarlo *pmc) {
 #endif
   if (Globals::my_rank == 0) {
     Spectrum *pspect = pspec;
-    //Real norm = static_cast<Real>(pmc->nphot)/ static_cast<Real>(pmc->ncells);
-    //Real norm = static_cast<Real>(pmc->nphrun) * pmc->normalization;
     Real norm = static_cast<Real>(pmc->nphrun);
     while (pspect != NULL) {
       std::string filename;
@@ -1048,7 +1047,7 @@ void MCOutput::OutputSpectra(MonteCarlo *pmc) {
 //! \fn void MCOutput::OutputPhotonList(MonteCarlo *pmc)
 //  \brief output list of photon properties
 
-void MCOutput::OutputPhotonList(MonteCarlo *pmc) {
+void MCOutput::OutputPhotonList(int nphtot) {
 
   if (pphlist == NULL)
     return;
@@ -1060,7 +1059,7 @@ void MCOutput::OutputPhotonList(MonteCarlo *pmc) {
   file_number << std::setw(5) << std::setfill('0') << pphlist->output_number;
   filename.append(file_number.str());
   filename.append(".list");
-  pphlist->WriteList(filename,pmc->nphrun);
+  pphlist->WriteList(filename,nphtot);
   pphlist->output_number++;
   // Reset list length to 0
   pphlist->length = 0;

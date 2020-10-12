@@ -28,7 +28,8 @@ def main(**kwargs):
     nx = kwargs.pop('nx')
     xmin = kwargs.pop('xmin')
     xmax = kwargs.pop('xmax')
-    spectrum = mcspec.make_spectrum(phots,nx,xmin,xmax,**kwargs)
+    logx = not kwargs.pop('linearx')
+    spectrum = mcspec.make_spectrum(phots,nx,xmin,xmax,logx=logx,**kwargs)
 
     # Write spectrum to file
     if outfile is None:
@@ -76,7 +77,7 @@ if __name__ == '__main__':
     parser.add_argument('--xaxis',
         default='kev',
         help='variable to be used for x axis: ev, kev, nu, lambda')
-    parser.add_argument('--logx',
+    parser.add_argument('--linearx',
         action='store_true',
         help='bins energies distributed logarithmically')
     parser.add_argument('--outfile',

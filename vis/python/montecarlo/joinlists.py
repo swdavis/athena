@@ -44,22 +44,19 @@ def main(**kwargs):
         for j in range(start,end+1):
             filename = basename+".proc{:d}".format(i)+".{:05d}".format(j)+".list"
             filelist += filename + " "
-            print("Reading: "+filename)
-            #if (not kwargs['removeold']):
-            ntotout = 0
             if (firstlist):
                 phlist = mclist.read_list(filename)
                 firstlist = False
-                ntotout = phlist['ntot']
+                ntot += phlist['ntot']
             else:
                 addlist = mclist.read_list(filename)
                 if (list_match(phlist,addlist)):
                     phlist['list'] = np.append(phlist['list'],addlist['list'])
                     phlist['length'] += addlist['length']
-                    ntotout = addlist['ntot']
+                    ntot += addlist['ntot']
                 else:
                     raise RuntimeError("List headers do not match.\n")
-        ntot += ntotout
+            print("Reading: "+filename,ntot)      
     phlist['ntot'] = ntot
     print("Final list contains {:d} photons out of {:d} initialized.\n"
           .format(phlist['length'],phlist['ntot']))

@@ -400,8 +400,9 @@ Mesh::Mesh(ParameterInput *pin, int mesh_test) {
   loclist=new LogicalLocation[nbtotal];
   tree.GetMeshBlockList(loclist,NULL,nbtotal);
   if (MONTE_CARLO_STATIC) {
-    int mcranks = pin->GetOrAddInteger("montecarlo","mcranks",0);
-    nrankmx = (Globals::nranks)-mcranks;
+    //int mcranks = pin->GetOrAddInteger("montecarlo","mcranks",0);
+    //nrankmx = (Globals::nranks)-mcranks;
+    nrankmx = 1;
   } else {
     nrankmx = Globals::nranks;
   }

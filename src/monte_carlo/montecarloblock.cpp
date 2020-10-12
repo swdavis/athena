@@ -30,7 +30,6 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
                                  ParameterInput *pin) {
   
   pmy_mc = pmc;
-  pmy_mesh = pmc->pmy_mesh;
 
   // Set related meshblock, coordinate
   pmy_block = pmb;
@@ -41,7 +40,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   }
 
   // Construct pointer to photon 
-  pphoton  = new Photon(this); // Currently one photon per block (will change)
+  pphoton  = new Photon(this); // Currently one photon per block
 
   // Initialize to NULL and set below
   pmover = NULL;
@@ -50,7 +49,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   // Initialize input parameters and flags
   zone_weight_flag = pin->GetOrAddBoolean("montecarlo","zone_weight",true);
   weighted_absorption = pin->GetOrAddBoolean("montecarlo","abs_weight",true);
-  polarized = pin->GetOrAddBoolean("montecarlo","polarized",false);
+  //polarized = pin->GetOrAddBoolean("montecarlo","polarized",false);
 
   // get seed and intitialize randon number generator
   int rank = Globals::my_rank;
@@ -70,7 +69,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   emission_meth = pmy_mc->emission_meth;
   absorption_meth = pmy_mc->absorption_meth;
   scattering_meth = pmy_mc->scattering_meth;
-  lorentz_transform = pmy_mc->lorentz_transform;
+  boosts = pmy_mc->boosts;
   emission_array_flag = pmy_mc->emission_array_flag;
   moments_flag = pmy_mc->pmcout->moments; // set in mcoutput
   acceleration = pmy_mc->acceleration;
@@ -149,12 +148,12 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     Scatter = NoScatter;  // should not be called
     coherent_scattering = true;
   } else if (scattering_meth == SCATISO) {
-    if (polarized) {
+    if (pmy_mc->polarized) {
       std::stringstream msg;
       msg << "### ERROR in MonteCarloBlock constructor" << std::endl
           << "Istropic scattering not suppored for polarized = " 
-	  << polarized << std::endl;
-    throw std::runtime_error(msg.str().c_str());
+	  << pmy_mc->polarized << std::endl;
+      throw std::runtime_error(msg.str().c_str());
     } else {
       ScatteringOpacity = ThomsonOpacity;
       Scatter = ScatterIsotropic;
@@ -162,7 +161,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     }
   } else if (scattering_meth == SCATTHOM) {
     ScatteringOpacity = ThomsonOpacity;
-    if (polarized) {
+    if (pmy_mc->polarized) {
       Scatter = ScatterThomsonPolarized;
     } else
       Scatter = ScatterThomsonUnpolarized;
@@ -171,7 +170,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     int comptonio = pin->GetOrAddInteger("montecarlo","comptonio",1);
     GenerateComptonTable(comptonio);
     ScatteringOpacity = ComptonOpacity;
-    if (polarized) {
+    if (pmy_mc->polarized) {
       Scatter = ScatterComptonPolarized;
     } else {
       Scatter = ScatterComptonUnpolarized;
@@ -196,7 +195,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   if (nx3 > 1) ncells3 = nx3 + 2*(NGHOST);
   rho.NewAthenaArray(ncells3,ncells2,ncells1);
   tgas.NewAthenaArray(ncells3,ncells2,ncells1);
-  if (lorentz_transform) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
+  if (boosts) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
   if (moments_flag) moments.NewAthenaArray(14,ncells3,ncells2,ncells1);
   if (emission_array_flag) emission.NewAthenaArray(ncells3,ncells2,ncells1);
   if (acceleration && !(coherent_scattering)) {
@@ -204,8 +203,12 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     planck_inv_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
   }
 
+  nuser_var = 0; // Initialize photon user variables to zero
   // Create user monte carlo block data
   InitUserMonteCarloBlockData(pin);
+
+  pphoton->AllocateUserVariables(nuser_var);
+
 }
 
 
@@ -221,7 +224,7 @@ MonteCarloBlock::~MonteCarloBlock() {
 
   rho.DeleteAthenaArray();
   tgas.DeleteAthenaArray();
-  if (lorentz_transform) vel.DeleteAthenaArray();
+  if (boosts) vel.DeleteAthenaArray();
   if (moments_flag) moments.DeleteAthenaArray();
   if (emission_array_flag) emission.DeleteAthenaArray();
   if (acceleration && !(coherent_scattering)) {
@@ -251,7 +254,7 @@ MonteCarloBlock::~MonteCarloBlock() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::TransferPhotons()
-//  \brief perform radiation transfer nphot photons
+//  \brief perform radiation transfer nphtot photons
 
 void MonteCarloBlock::TransferPhotons(int nphot) {
 
@@ -265,7 +268,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
     InitializePhoton(pphoton);
     
     // Lorentz transform E, k to Eulerian frame and update opacities.
-    if (lorentz_transform) {
+    if (boosts) {
       //LorentzTransformEmission(pphoton);
       LorentzTransform(pphoton,to_eulr);
     }
@@ -288,7 +291,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
       // Scatter the photon packet
       if (pphoton->status == EVOLVING) {
 	// Lorentz transform to comoving frame for scattering
-	if (lorentz_transform)
+	if (boosts)
           LorentzTransform(pphoton,to_comv);
 	
         Scatter(this,pphoton);
@@ -310,7 +313,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
 	  pphoton->sct_coef = ScatteringOpacity(this,pphoton);
 	}
 	// Lorentz transform to Eulerian frame and shift opacities
-	if (lorentz_transform)
+	if (boosts)
 	  LorentzTransform(pphoton,to_eulr);
       }
 
@@ -332,7 +335,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
       nabs++;
     nscat += iscat;
   }
-  nphtot += nprop;
+  nphdone += nprop;
   // Normalize moments for output
   //if (moments_flag)
   //  NormalizeMoments(true);
@@ -475,8 +478,8 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
   if (normalize) {
     // Normalize moments
     for (int n=0; n<11; ++n) {
-      //Real norm = static_cast<Real>(nphtot)*pmy_mc->normalization;
-      Real norm = static_cast<Real>(nphtot);
+      //Real norm = static_cast<Real>(nphdone)*pmy_mc->normalization;
+      Real norm = static_cast<Real>(nphdone);
       if ((n == 0) || (n >= 4))
 	norm *= 2.9979e10;
       for (int k=ks; k<=ke; ++k) {
@@ -496,8 +499,8 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
   } else {
     // Undo normalization for continuing evolution
     for (int n=0; n<11; ++n) {
-      //Real norm = static_cast<Real>(nphtot)*pmy_mc->normalization;
-      Real norm = static_cast<Real>(nphtot);
+      //Real norm = static_cast<Real>(nphdone)*pmy_mc->normalization;
+      Real norm = static_cast<Real>(nphdone);
       if ((n == 0) || (n >= 4))
 	norm *= 2.9979e10;
       for (int k=ks; k<=ke; ++k) {

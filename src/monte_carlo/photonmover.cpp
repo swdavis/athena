@@ -23,7 +23,7 @@ PhotonMover::PhotonMover(MonteCarloBlock *pmcb) {
 
   // MRW acceleration
   acceleration = pmcb->acceleration;
-  lorentz_transform = pmcb->lorentz_transform;
+  boosts = pmcb->boosts;
   compton = !pmcb->coherent_scattering;
   time_acc = pmcb->time_acc;
 
@@ -89,7 +89,7 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
   }
   Real ct,r0;
   Real beta[3], beta2, gamma, gonembdk;
-  if (lorentz_transform) {
+  if (boosts) {
     // tranform relevant quanitites to comoving frame
     beta[0] = pmcb->vel(0,pphot->i3,pphot->i2,pphot->i1) / 2.9979e10;
     beta[1] = pmcb->vel(1,pphot->i3,pphot->i2,pphot->i1) / 2.9979e10;
@@ -256,7 +256,7 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
     pphot->k[0] = stheta*cos(phi);
     pphot->k[1] = stheta*sin(phi);
     pphot->k[2] = mu;
-    if (lorentz_transform) {
+    if (boosts) {
       //transform back to Eulerian frame
       for(int i=0; i<3; ++i) {
 	// undo multiply by gamma above and flip sign
@@ -281,7 +281,7 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
 
   } else {
     // return properties to eulerian frame if modified
-    if (lorentz_transform) { // should always be true if !accel_success
+    if (boosts) { // should always be true if !accel_success
       pphot->energy /= gonembdk;
       pphot->abs_coef *= gonembdk;
       pphot->sct_coef *= gonembdk;
@@ -459,7 +459,7 @@ void PhotonMover::MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
     // back to Eulerian frame when Lorentz Transformations are enabled.
     Real shift;
 
-    if (pmy_mcb->lorentz_transform) {
+    if (pmy_mcb->boosts) {
       // Shift photon energy to comoving frame
       shift = pmy_mcb->LorentzTransformFrequencyShift(pphot);
       pphot->energy *= shift;

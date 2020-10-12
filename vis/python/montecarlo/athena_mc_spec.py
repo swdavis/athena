@@ -235,7 +235,7 @@ def plot_spectrum(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='nulnu',
         intensity = intensity[iphi,:,:]
         if ploterr:
             errors = errors[iphi,:,:]
-    # Selction for polar angle
+    # Selection for polar angle
     if imu == 'sum':
         nmu = spectrum['nmu']
         mumid = 0.5*(spectrum['mufaces'][1:]+spectrum['mufaces'][:-1])
@@ -325,6 +325,21 @@ def compute_angle_error(intensity,errors=None):
     else:
         return angle, None
 
+def compute_q_error(intensity,errors=None):
+    """
+    Compute q=Q/I (%)
+    """
+    i = intensity[0,:]
+    q = intensity[1,:]
+    frac = -q/i
+    if errors is not None:
+        ei = errors[0,:]
+        eq = errors[1,:]
+        err = np.sqrt(eq**2 + (q**2)*(ei/i)**2)/i
+        return frac*100, err*100.
+    else:
+        return frac, None
+
 def plot_polarization(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='frac',
                       ploterr=True,xscale='log',yscale='linear',xmin=None,xmax=None,
                       ymin=None,ymax=None,**kwargs):
@@ -332,7 +347,7 @@ def plot_polarization(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='frac',
     Plot polarization fraction or angle. Assumes saving, etc. are performed by the 
     calling function
     """
-        
+    
     if (ax is None):
         # Create figure, axis and assume a single plot window
         fig = plt.figure()
@@ -384,7 +399,8 @@ def plot_polarization(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='frac',
         intensity = intensity[:,iphi,:,:]
         if ploterr:
             errors = errors[:,iphi,:,:]
-    # Selction for polar angle
+
+    # Selection for polar angle
     imu = int(imu)
     intensity = intensity[:,imu,:]
     if ploterr:
@@ -397,8 +413,9 @@ def plot_polarization(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='frac',
     if (yunit == 'angle'):
         ylabel = r"$\rm Pol.\; Angle$"
         y, yerr = compute_angle_error(intensity,errors)
-        #y = 180./np.pi*0.5*np.arctan2(intensity[2,:],intensity[1,:])
-        #ploterr = False
+    if (yunit == 'q'):
+        ylabel = r"$Q$"
+        y, yerr = compute_q_error(intensity,errors)
     ax.set_ylabel(ylabel)
 
     if (ploterr):
@@ -694,8 +711,6 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
             errors[k,:,:,:] = 0.675*np.sqrt((errors[k,:,:,:] - (intensity[k,:,:,:])**2)/
                                             phots.ntot)
         spectrum['errors'] = errors
-    print "\n\n\n"
-    print errors[1,:,:,:]
 
     if yerror:
         spectrum['yerror'] = "true"

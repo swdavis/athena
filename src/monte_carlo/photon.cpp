@@ -18,11 +18,16 @@ Photon::Photon(MonteCarloBlock *pmcb) {
   pmy_mcb = pmcb;
   weight = 1.0;
   face = FACE_UNDEF;
+  nuser_var = 0;
+  user_var = NULL;
+
 }
 
 // destructor
 
 Photon::~Photon() {
+  
+  if (user_var != NULL) delete [] user_var;
 
 }
 
@@ -30,7 +35,7 @@ Photon::~Photon() {
 //! \fn void Photon::CopyPhoton()
 //  \brief Initialize photon from another photon
 
-// rewrite this as a constructor?
+// rewrite this as a constructor? Not currently used
 void Photon::CopyPhoton(Photon *pphot) {
 
   i1 = pphot->i1;
@@ -42,7 +47,6 @@ void Photon::CopyPhoton(Photon *pphot) {
     k[i] = pphot->k[i];
     stokes[i] = pphot->stokes[i];
   }
-
   weight = pphot->weight;
   eweight = pphot->eweight;
   energy = pphot->energy;
@@ -88,4 +92,15 @@ void Photon::PrintPhoton() {
 	    << "stokes: " << stokes[0] << " " << stokes[1] << " "
 	    << stokes[2] << std::endl
 	    << "opacity: " << sct_coef << " " << abs_coef << std::endl;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Photon::AllocateUserVariables(int n)
+//  \brief allocate memory for user variables
+
+void Photon::AllocateUserVariables(int n) {
+  
+  user_var = new Real[n];
+  nuser_var = n;
+
 }

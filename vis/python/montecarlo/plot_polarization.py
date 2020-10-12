@@ -34,7 +34,7 @@ def main(**kwargs):
             slist = imu.strip(('[]')).split(",")
             ilist = [int(i) for i in slist]
         else:
-            ilist = [imu]
+            ilist = [int(imu)]
         return ilist
 
     # Get imu or imus for plotting different polar angles

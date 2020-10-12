@@ -72,7 +72,6 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   dens1d(0) = tau1d(0) / dx / kapes;
   for (int i=1; i<nx; ++i) {
     dens1d(i) = (tau1d(i)-tau1d(i-1) ) / (dx * kapes);
-    printf("%g \n",dens1d(i));
   }
 
   // Set initial conditions
