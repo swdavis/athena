@@ -13,13 +13,16 @@
 
 // constructor, initializes data structures and parameters
 
-Photon::Photon(MonteCarloBlock *pmcb) {
+Photon::Photon(MonteCarloBlock *pmcb, int nuser) {
 
   pmy_mcb = pmcb;
   weight = 1.0;
   face = FACE_UNDEF;
-  nuser_var = 0;
-  user_var = NULL;
+  nuser_var = nuser;
+  if (nuser > 0)
+    user_var = new Real[nuser];
+  else
+    user_var = NULL;
 
 }
 
@@ -100,7 +103,8 @@ void Photon::PrintPhoton() {
 
 void Photon::AllocateUserVariables(int n) {
   
-  user_var = new Real[n];
+  if (n > 0)
+    user_var = new Real[n];
   nuser_var = n;
 
 }

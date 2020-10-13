@@ -293,7 +293,7 @@ void InitializeAccelerationOpacity(MonteCarloBlock *pmcb)
   int jl = pmcb->js; int ju = pmcb->je;
   int kl = pmcb->ks; int ku = pmcb->ke;
 
-  Photon phot(pmcb); // to pass to opacity functions
+  Photon phot(pmcb,0.); // to pass to opacity functions
   Real kb = 1.3807e-16;
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {

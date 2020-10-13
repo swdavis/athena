@@ -40,7 +40,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   }
 
   // Construct pointer to photon 
-  pphoton  = new Photon(this); // Currently one photon per block
+  pphoton  = new Photon(this,pmy_mc->nuser_var); // Currently one photon per block
 
   // Initialize to NULL and set below
   pmover = NULL;
@@ -203,11 +203,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     planck_inv_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
   }
 
-  nuser_var = 0; // Initialize photon user variables to zero
   // Create user monte carlo block data
   InitUserMonteCarloBlockData(pin);
-
-  pphoton->AllocateUserVariables(nuser_var);
 
 }
 

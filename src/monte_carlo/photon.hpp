@@ -24,7 +24,7 @@ enum PhotonStatus {EVOLVING = 0, ESCAPED = 1, DESTROYED = 2};
 
 class Photon {
 public:
-  Photon(MonteCarloBlock *pmcb);
+  Photon(MonteCarloBlock *pmcb, int nuser);
   ~Photon();
 
   // data

@@ -68,6 +68,8 @@ public:
   bool ScreenCoordinates(Photon *pphot);
   void ResetSpectrum();
   void AddSpectrum(Spectrum *pspec);
+  void WriteSpectrum(std::string filename, int ntot);
+
 };
 
 //----------------------------------------------------------------------------------------
@@ -76,7 +78,7 @@ public:
 
 class PhotonList {
 public:
-  PhotonList(int list_mem_size, bool pol, bool rel);
+  PhotonList(int list_mem_size, bool pol, bool rel, int nuser_out);
   ~PhotonList();
 
   std::string base_name;
@@ -84,7 +86,7 @@ public:
   int length; // number of occupied elements
   int nparams; // number of properties for each photon in list
   int output_number;// current output number
-  int nuser_var;
+  int nuser_out;
   bool polarized;
   bool relativistic;
   AthenaArray<Real> photons;  // array of photon properies
@@ -115,10 +117,10 @@ public:
   bool moments;
 
   //functions
-  void CollectSpectra(MonteCarlo *pmc);
-  void OutputSpectra(MonteCarlo *pmc);
+  void CollectSpectrum(MonteCarlo *pmc);
+  void OutputSpectrum(MonteCarlo *pmc);
   void OutputSpectrumLegacy(Spectrum *pspec, Real norm, std::string outfile);
-  void OutputSpectrum(Spectrum *pspec, Real norm, std::string outfile);
+  //void OutputSpectrum(Spectrum *pspec, Real norm, std::string outfile);
   void OutputPhotonList(int nphtot);
 };
 

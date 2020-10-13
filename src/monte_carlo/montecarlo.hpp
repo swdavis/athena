@@ -162,6 +162,7 @@ public:
   int blocksize;
   int nphrun; // number of photons run thus far
   int max_list_size; // maximum number of photons run per output on any process
+  int nuser_var;
 
   enum EmissionFlag emission_meth;
   enum AbsorptionFlag absorption_meth;
@@ -251,7 +252,6 @@ public:
   int is,ie,js,je,ks,ke;
   int nfreq, nmu, nphi, nsurf;
   int cadence;
-  int nuser_var;
 
   bool zone_weight_flag; // flag for zone weighting
   bool weighted_absorption; // flag controling how absorption is handled

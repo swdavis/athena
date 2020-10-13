@@ -59,6 +59,10 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   acceleration = pin->GetOrAddBoolean("montecarlo","acceleration",false);
   time_acc = pin->GetOrAddBoolean("montecarlo","time_acc",false);
 
+  nuser_var = 0; // Initialize photon user variables to zero
+  // Create user monte carlo data
+  InitUserMonteCarloData(pin);
+
   // Set photon numbers
   nphtot = pin->GetInteger("montecarlo","nphot");
   cadence = pin->GetOrAddInteger("montecarlo","cadence",nphtot);
@@ -764,13 +768,6 @@ unsigned int MonteCarlo::CreateMCMPITag(int bid) {
 
 void MonteCarlo::InitializeMonteCarloBlocks(void) {
 
-  // Check/set function pointers
-  //if (InitEmission == NULL) {
-  //  std::stringstream msg;
-  //  msg << "### FATAL ERROR in RunStaticMonteCarlo()" << std::endl
-  //      << "InitEmission function pointer not set." << std::endl;
-  //  throw std::runtime_error(msg.str().c_str());
-  //}
   if (GetTemperature == NULL)
     GetTemperature = DefaultGetTemperature;
 
@@ -816,14 +813,13 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput
   if (origin < 0) {
     for (int i=0; i<nout; ++i) {
       nphrun += pmcb->cadence*mcranks; //not general, counts all processes
-      //printf("mcranks: %d %d\n",pmcb->cadence,mcranks);
       pmcb = pmcb->next;
       while (pmcb != NULL) {
 	nphrun += pmcb->cadence*mcranks;//not general 
 	pmcb = pmcb->next;
       }
       pmcb = pblock;
-      pmcout->OutputSpectra(this);
+      pmcout->OutputSpectrum(this);
       if (pmcout->moments) {
 	CollectMoments();
 	pouts->MakeOutputs(pmesh,pinput,true);
@@ -844,7 +840,7 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput
 	pmcb = pmcb->next;
       }
       pmcb = pblock;
-      pmcout->OutputSpectra(this);
+      pmcout->OutputSpectrum(this);
       pmcout->OutputPhotonList(pmcb->cadence);
       if (pmcout->moments) {
 	CollectMoments();
@@ -863,7 +859,7 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput
       pmcb = pmcb->next;
     }
     pmcb = pblock;
-    pmcout->OutputSpectra(this);
+    pmcout->OutputSpectrum(this);
     pmcout->OutputPhotonList(pmcb->cadence);
     if (pmcout->moments) {
       CollectMoments();
@@ -872,11 +868,7 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput
   }
 
 #endif
-  // prepare moments for output
-  //if (pmcout->moments)
-  //  CollectMoments();
-  // outputput final spectra
-  //pmcout->OutputSpectra(this);
+
   return;
 }
 /*

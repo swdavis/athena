@@ -566,7 +566,7 @@ void Spectrum::AddSpectrum(Spectrum *pspec) {
 }
 
 // constructor
-PhotonList::PhotonList(int list_mem_size, bool pol, bool rel) {
+PhotonList::PhotonList(int list_mem_size, bool pol, bool rel, int nuser_out) {
 
 
   // Allocate memory for photon list
@@ -578,6 +578,7 @@ PhotonList::PhotonList(int list_mem_size, bool pol, bool rel) {
   relativistic = rel;
   if (relativistic)
     nparams += 2;
+  nparams += nuser_out;
   photons.NewAthenaArray(max_len,nparams);
 
 }
@@ -599,15 +600,19 @@ void PhotonList::AddPhoton(Photon *pphot) {
     // double array size when list is full
     ResizeList(2*max_len);
   }
-  photons(length,0) = pphot->weight*pphot->eweight;
-  photons(length,1) = pphot->energy;
-  for (int i=0; i<3; i++) {
-    photons(length,i+2) = pphot->x[i];
-    photons(length,i+5) = pphot->k[i];
-  }
+  int n = 0;
+  photons(length,n++) = pphot->weight*pphot->eweight;
+  photons(length,n++) = pphot->energy;
+  for (int i=0; i<3; i++)
+    photons(length,n++) = pphot->x[i];
+  for (int i=0; i<3; i++)
+    photons(length,n++) = pphot->k[i];
   if (polarized) {
-    photons(length,8) = pphot->stokes[1];
-    photons(length,9) = pphot->stokes[2];
+    photons(length,n++) = pphot->stokes[1];
+    photons(length,n++) = pphot->stokes[2];
+  }
+  for (int i=0; i<nuser_out; i++) {
+    photons(length,n++) = pphot->user_var[i];
   }
   length++;
 
@@ -770,7 +775,17 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         plast = pspec;
       } else if (type.compare("list") == 0) {
         // Create photon list
-        pphlist = new PhotonList(pmc->max_list_size,pmc->polarized,false);
+        // Get number of user output variables and confirm it is less than
+        // the number of user variables
+        int nuser_out = pin->GetOrAddInteger(pib->block_name,"nuser",0);
+        if (nuser_out > pmy_mc->nuser_var) {
+          std::stringstream msg;
+          msg << "### ERROR in MCOutput constructor" << std::endl
+              << "User output variables: " << nuser_out
+              << " greater than user variables: " << pmy_mc->nuser_var << std::endl; 
+          throw std::runtime_error(msg.str().c_str());
+        }
+        pphlist = new PhotonList(pmc->max_list_size,pmc->polarized,false,nuser_out);
         // Initialize photon list
         pphlist->length = 0;
 	pphlist->output_number = 0;
@@ -853,36 +868,36 @@ void MCOutput::OutputSpectrumLegacy(Spectrum *pspec, Real norm, std::string fnam
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCOutput::OutputSpectrumLegacy(Spectrum *pspec, Real norm, std::string fname)
+//! \fn void Spectrum::WriteSpectrum(Real norm, std::string fname)
 //  \brief output intensity spectrum in original mcgrid format
 
-void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string fname) {
+void Spectrum::WriteSpectrum(std::string fname, int nphot) {
 
   // open file for output
   FILE *pfile;
   std::stringstream msg;
   if ((pfile = fopen(fname.c_str(),"w")) == NULL) {
-    msg << "### FATAL ERROR in function [MCOutput::OutputSpectrum]" << std::endl
+    msg << "### FATAL ERROR in function [Spectrum::WriteSpectrum]" << std::endl
 	<< "Output file '" << fname << "' could not be opened";
     throw std::runtime_error(msg.str().c_str());
   }
    
   // Write header information
   Real everg = 1.6021772e-12;  
-  Real emin = pspec->range.emin / everg; // output in eV
-  Real emax = pspec->range.emax / everg; // output in eV
-  int ne = pspec->range.ne;
-  int nmu = pspec->range.ncth;
-  int nphi = pspec->range.nphi;
+  Real emin = range.emin / everg; // output in eV
+  Real emax = range.emax / everg; // output in eV
+  int ne = range.ne;
+  int nmu = range.ncth;
+  int nphi = range.nphi;
   fprintf(pfile,"nx=%d\n",ne);
   fprintf(pfile,"nmu=%d\n",nmu);
   fprintf(pfile,"nphi=%d\n",nphi);
-  fprintf(pfile,"ntot=%d\n",static_cast<int>(norm));
+  fprintf(pfile,"ntot=%d\n",nphot);
   int nintens = 1;
-  if (pspec->polarized) nintens += 2;
+  if (polarized) nintens += 2;
   fprintf(pfile,"nintens=%d\n",nintens);
   fprintf(pfile,"units=ev\n");
-  if (pspec->polarized) 
+  if (polarized) 
     fprintf(pfile,"polarized=true\n");
   else
     fprintf(pfile,"polarized=false\n");
@@ -895,7 +910,7 @@ void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string fname) {
   faces = new double[nface];
   everg = 1.6021772e-12;
   for (int i=0; i<ne+1; ++i)
-    faces[i] = static_cast<double>(pspec->energies(i)/everg);
+    faces[i] = static_cast<double>(energies(i)/everg);
   if (!bigend) {for (int i=0; i<ne+1; ++i) mcoutput::Swap8Bytes(&faces[i]);}
   fwrite(faces,sizeof(double),static_cast<size_t>(ne+1),pfile);
   for (int i=0; i<nmu+1; ++i)
@@ -913,10 +928,11 @@ void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string fname) {
   dnu = new double[ne];
   Real h = 6.6262e-27;
   for(int i=0; i<ne; ++i) { 
-    emid[i] = 0.5*(pspec->energies(i)+pspec->energies(i+1));
-    dnu[i] = (pspec->energies(i+1)-pspec->energies(i))/h;
+    emid[i] = 0.5*(energies(i)+energies(i+1));
+    dnu[i] = (energies(i+1)-energies(i))/h;
   }
   // First compute normalized intensities, stokes vectors, and errors
+  Real norm = static_cast<Real>(nphot);
   AthenaArray<Real> intens, errors;
   intens.NewAthenaArray(nintens,nphi,nmu,ne);
   errors.NewAthenaArray(nintens,nphi,nmu,ne);
@@ -926,20 +942,20 @@ void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string fname) {
       Real mumid = (static_cast<Real>(j)+0.5)/static_cast<Real>(nmu);
       for(int i=0; i<ne; ++i) {
         Real fac2 = fac1*emid[i]/(mumid*dnu[i]);
-        intens(0,k,j,i) = static_cast<double>(pspec->intensity(k,j,i)*
+        intens(0,k,j,i) = static_cast<double>(intensity(k,j,i)*
                                               (fac2/norm));
-        errors(0,k,j,i) = 0.675*sqrt((pspec->intensity_sq(k,j,i)*SQR(fac2)/norm-
+        errors(0,k,j,i) = 0.675*sqrt((intensity_sq(k,j,i)*SQR(fac2)/norm-
                                       SQR(intens(0,k,j,i)))/norm);
       }}}
-  if (pspec->polarized) {
+  if (polarized) {
     for(int k=0; k<nphi; ++k) {
       for(int j=0; j<nmu; ++j) {
         Real mumid = (static_cast<Real>(j)+0.5)/static_cast<Real>(nmu);
         for(int i=0; i<ne; ++i) {
           Real fac2 = fac1*emid[i]/(mumid*dnu[i]);
-          intens(1,k,j,i) = static_cast<double>(pspec->stokesq(k,j,i)*
+          intens(1,k,j,i) = static_cast<double>(stokesq(k,j,i)*
                                                 (fac2/norm));
-          errors(1,k,j,i) = 0.675*sqrt((pspec->stokesq_sq(k,j,i)*SQR(fac2)/norm-
+          errors(1,k,j,i) = 0.675*sqrt((stokesq_sq(k,j,i)*SQR(fac2)/norm-
                                         SQR(intens(1,k,j,i)))/norm);
         }}}
     for(int k=0; k<nphi; ++k) {
@@ -947,9 +963,9 @@ void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string fname) {
         Real mumid = (static_cast<Real>(j)+0.5)/static_cast<Real>(nmu);
         for(int i=0; i<ne; ++i) {
           Real fac2 = fac1*emid[i]/(mumid*dnu[i]);
-          intens(2,k,j,i) = static_cast<double>(pspec->stokesu(k,j,i)*
+          intens(2,k,j,i) = static_cast<double>(stokesu(k,j,i)*
                                                 (fac2/norm));
-          errors(2,k,j,i) = 0.675*sqrt((pspec->stokesu_sq(k,j,i)*SQR(fac2)/norm-
+          errors(2,k,j,i) = 0.675*sqrt((stokesu_sq(k,j,i)*SQR(fac2)/norm-
                                         SQR(intens(2,k,j,i)))/norm);
         }}}
   }
@@ -986,10 +1002,10 @@ void MCOutput::OutputSpectrum(Spectrum *pspec, Real norm, std::string fname) {
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCOutput::CollectSpectra(MonteCarlo *pmc)
+//! \fn void MCOutput::CollectSpectrum(MonteCarlo *pmc)
 //  \brief collect all spectra on this process for output
 
-void MCOutput::CollectSpectra(MonteCarlo *pmc) {
+void MCOutput::CollectSpectrum(MonteCarlo *pmc) {
 
   Spectrum *poutspec=pspec, *pblockspec;
   while (poutspec != NULL) {
@@ -1008,14 +1024,14 @@ void MCOutput::CollectSpectra(MonteCarlo *pmc) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCOutput::OutputSpectra(MonteCarlo *pmc)
+//! \fn void MCOutput::OutputSpectrum(MonteCarlo *pmc)
 //  \brief output all intensity spectra
 
-void MCOutput::OutputSpectra(MonteCarlo *pmc) {
+void MCOutput::OutputSpectrum(MonteCarlo *pmc) {
 
   if (pspec == NULL)
     return;
-  CollectSpectra(pmc);
+  CollectSpectrum(pmc);
 #ifdef MPI_PARALLEL
   if (Globals::my_rank == 0) {
     for(int i=1; i<Globals::nranks; ++i) // temporary: assumes spectra on all processes
@@ -1026,7 +1042,7 @@ void MCOutput::OutputSpectra(MonteCarlo *pmc) {
 #endif
   if (Globals::my_rank == 0) {
     Spectrum *pspect = pspec;
-    Real norm = static_cast<Real>(pmc->nphrun);
+    int nphot = static_cast<Real>(pmc->nphrun);
     while (pspect != NULL) {
       std::string filename;
       filename.assign(pspect->base_name);
@@ -1035,7 +1051,7 @@ void MCOutput::OutputSpectra(MonteCarlo *pmc) {
       file_number << std::setw(5) << std::setfill('0') << pspect->output_number;
       filename.append(file_number.str());
       filename.append(".spec");
-      OutputSpectrum(pspect,norm,filename);
+      pspect->WriteSpectrum(filename,nphot);
       pspect->output_number++;
       pspect = pspect->next;
     }

@@ -105,7 +105,7 @@ Outputs::Outputs(Mesh *pm, ParameterInput *pin) {
         std::string type = pin->GetString(pib->block_name,"file_type");
         if ((type.compare("spec") == 0) || (type.compare("photons") == 0)) {
           pib = pib->pnext;  // move to next input block name
-          break;
+          continue;
         }
       }
       OutputParameters op;  // define temporary OutputParameters struct
@@ -608,7 +608,6 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       AppendOutputDataNode(pod);
       num_vars_ += 9;
     }
-    printf("\n here in output\n");
     // monte carlo mean energy * energy density
     if (output_params.variable.compare("mcmom") == 0 || 
         output_params.variable.compare("Eavemc") == 0) {
