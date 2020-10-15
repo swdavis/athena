@@ -44,6 +44,7 @@ public:
   bool logarithmic;
   bool pathbin; // Replace energy bin with path length bin
   bool radbin; // Replace energy bin with radius bin
+  bool legacy; // Output format to be used (temporarily retained for testing)
   Spectrum *next;  // next spectrum
   enum BoundaryFace face;
   int id;
@@ -69,7 +70,7 @@ public:
   void ResetSpectrum();
   void AddSpectrum(Spectrum *pspec);
   void WriteSpectrum(std::string filename, int ntot);
-
+  void WriteSpectrumLegacy(std::string outfile, Real norm);
 };
 
 //----------------------------------------------------------------------------------------
@@ -119,8 +120,6 @@ public:
   //functions
   void CollectSpectrum(MonteCarlo *pmc);
   void OutputSpectrum(MonteCarlo *pmc);
-  void OutputSpectrumLegacy(Spectrum *pspec, Real norm, std::string outfile);
-  //void OutputSpectrum(Spectrum *pspec, Real norm, std::string outfile);
   void OutputPhotonList(int nphtot);
 };
 

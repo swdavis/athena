@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file mctest.cpp
-//  \brief Problem generator for simple monte carlo problem
+//  \brief Problem generator for  monte carlo through uniform sphere
 //
 //========================================================================================
 

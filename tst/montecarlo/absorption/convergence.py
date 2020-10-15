@@ -38,7 +38,7 @@ def write_athinput(iseed,nphot,nen,emin,emax,file='athinput.mctest'):
     outfile.write("nphi      = 8\n")
     outfile.write("\n")
     outfile.write("<time>\n")
-    outfile.write("cfl_number = 1.       # The CFL Number\n")
+    outfile.write("cfl_number = 0.1      # The CFL Number\n")
     outfile.write("nlim       = 1        # cycle limit\n")
     outfile.write("tlim       = 1.0      # time limit\n")
     outfile.write("\n")

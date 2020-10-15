@@ -36,49 +36,55 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   Real rideal = 8.314e7;
   Real c = 2.9979e10;
   Real temp = pin->GetReal("problem","temp");
-  Real taumin = pin->GetReal("problem","taumin");
-  Real taumax = pin->GetReal("problem","taumax");
+  bool constdens = pin->GetOrAddBoolean("problem","constdens",false);
+  Real rho, taumin, taumax;
+  if (constdens) {
+    rho = pin->GetReal("problem","dens");
+  } else {
+    taumin = pin->GetReal("problem","taumin");
+    taumax = pin->GetReal("problem","taumax");
+  }
   Real vel = pin->GetOrAddReal("problem","velocity",0.);
   Real gamma = peos->GetGamma();
 
   vel *= c;
 
-  Real xlow, xhigh;
-  int nx;
-  if (COORDINATE_SYSTEM == "cartesian") {
-    xlow = pin->GetReal("mesh","x3min");
-    xhigh = pin->GetReal("mesh","x3max");
-    nx = pin->GetInteger("mesh","nx3");
-  } else {
-    bool radial = pin->GetOrAddBoolean("problem","radial","true");
-    if (radial) {
-      xlow = pin->GetReal("mesh","x1min");
-      xhigh = pin->GetReal("mesh","x1max");
-      nx = pin->GetInteger("mesh","nx1");
-    }
-  }
   AthenaArray<Real> tau1d,dens1d;
-  
-  // Chosen to match initialize.py in mcgrid
-  tau1d.NewAthenaArray(nx); 
-  dens1d.NewAthenaArray(nx);
-  Real dx = (xhigh-xlow) / static_cast<Real>(nx);
-  Real step = log10(taumax/taumin) / static_cast<Real>(nx-1);
-  for (int i=0; i<nx; ++i) {
-    tau1d(i) = log10(taumin) + step * static_cast<Real>(i);
-    tau1d(i) = pow(10.,tau1d(i));
-  }
-  Real kapes = 0.33;
-  dens1d(0) = tau1d(0) / dx / kapes;
-  for (int i=1; i<nx; ++i) {
-    dens1d(i) = (tau1d(i)-tau1d(i-1) ) / (dx * kapes);
+  if (!constdens) {
+    Real xlow, xhigh;
+    int nx;
+    if (COORDINATE_SYSTEM == "cartesian") {
+      xlow = pin->GetReal("mesh","x3min");
+      xhigh = pin->GetReal("mesh","x3max");
+      nx = pin->GetInteger("mesh","nx3");
+    } else {
+      bool radial = pin->GetOrAddBoolean("problem","radial","true");
+      if (radial) {
+        xlow = pin->GetReal("mesh","x1min");
+        xhigh = pin->GetReal("mesh","x1max");
+        nx = pin->GetInteger("mesh","nx1");
+      }
+    }
+    tau1d.NewAthenaArray(nx); 
+    dens1d.NewAthenaArray(nx);
+    Real dx = (xhigh-xlow) / static_cast<Real>(nx);
+    Real step = log10(taumax/taumin) / static_cast<Real>(nx-1);
+    for (int i=0; i<nx; ++i) {
+      tau1d(i) = log10(taumin) + step * static_cast<Real>(i);
+      tau1d(i) = pow(10.,tau1d(i));
+    }
+    Real kapes = 0.33;
+    dens1d(0) = tau1d(0) / dx / kapes;
+    for (int i=1; i<nx; ++i) {
+      dens1d(i) = (tau1d(i)-tau1d(i-1) ) / (dx * kapes);
+    }
   }
 
   // Set initial conditions
   if (COORDINATE_SYSTEM == "cartesian") {
     // density varies in the z direction
     for (int k=ks; k<=ke; k++) {
-      Real rho = dens1d(ke-k);
+      if (!constdens) rho = dens1d(ke-k);
       for (int j=js; j<=je; j++) {
 	for (int i=is; i<=ie; i++) {
 	  phydro->u(IDN,k,j,i) = rho;
@@ -97,7 +103,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
       for (int k=ks; k<=ke; k++) {
 	for (int j=js; j<=je; j++) {
 	  for (int i=is; i<=ie; i++) {
-	    Real rho = dens1d(ie-i);
+	    if (!constdens) rho = dens1d(ie-i);
 	    phydro->u(IDN,k,j,i) = rho;
 	    phydro->u(IM1,k,j,i) = rho*vel;
 	    phydro->u(IM2,k,j,i) = 0.0;
@@ -128,7 +134,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   // Choose random intial position, weights, energy, and direction
   // for photon emission.  In this version an equal number of photons
   // is emitted in  each grid zone.  The relative emission from each grid 
-  // zone is then accounted for by a weighting factor cweight. 
+  // zone is then accounted for by a weighting factor eweight. 
 
   Real nx1 = static_cast<Real>(ie-is+1);
   Real nx2 = static_cast<Real>(je-js+1);
@@ -138,28 +144,19 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   pphot->i2 = static_cast<int>(pran->uniform()*nx2)+js;
   pphot->i3 = static_cast<int>(pran->uniform()*nx3)+ks;
 
-  // cweight is a constant weighting factor which accounts for the
+  // eweight is a constant weighting factor which accounts for the
   // emissivity of the grid zone in which the photon was emitted
   if (zone_weight_flag) {
     pphot->eweight = emission(pphot->i3,pphot->i2,pphot->i1);
-    //pphot->weight = pphot->eweight;
     pphot->weight = 1.0;
   }
 
-  //std::cout << "test: " << pphot->weight << ' ' << pphot->i1 << ' ' 
-  //          << pphot->i2 << ' ' << pphot->i3 << std::endl;
-
   // Obtain initial position within zone
   GetZonePosition(pphot,pran,pcoord);
-  //std::cout << pphot->x[0] << ' ' << pphot->x[1] << ' ' << pphot->x[2]
-  //          << std::endl;
 
   // Obtain intitial energy, polarization, direction and weight
   // Utilize free-free emission function in emission.cpp
   PhotonEmitFreeFree(this,pphot);
-  // initialize kcart
-  //pmover->CurvalinearToCartesian(pphot);
-
   
   if (pphot->weight < 0.0) pphot->status = DESTROYED;
 

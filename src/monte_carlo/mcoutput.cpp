@@ -80,6 +80,7 @@ Spectrum::Spectrum(Spectrum *pspec) {
   polarized = pspec->polarized;
   logarithmic = pspec->logarithmic;
   cartesian_axis = pspec->cartesian_axis;
+  legacy = pspec->legacy;
   coordinates = pspec->coordinates;
   face = pspec->face;
   id = pspec->id;
@@ -734,6 +735,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
 	// Select binning in path length or radius if desired
 	pspec->pathbin = pin->GetOrAddBoolean(pib->block_name,"pathbin",false);
 	pspec->radbin = pin->GetOrAddBoolean(pib->block_name,"radbin",false);
+        pspec->legacy = pin->GetOrAddBoolean(pib->block_name,"legacy",false);
 	// set output face if specified
         std::string face = pin->GetOrAddString(pib->block_name,"face","none");
 	pspec->SetSurface(face);
@@ -826,37 +828,35 @@ MCOutput::~MCOutput() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCOutput::OutputSpectrumLegacy(Spectrum *pspec, Real norm, std::string fname)
+//! \fn void Spectrum::WriteSpectrumLegacy(std::string fname, Real norm)
 //  \brief output intensity spectrum in original mcgrid format
 
-void MCOutput::OutputSpectrumLegacy(Spectrum *pspec, Real norm, std::string fname) {
+void Spectrum::WriteSpectrumLegacy(std::string filename, Real norm) {
 
   // open file for output
   FILE *pfile;
   std::stringstream msg;
-  if ((pfile = fopen(fname.c_str(),"w")) == NULL) {
+  if ((pfile = fopen(filename.c_str(),"w")) == NULL) {
     msg << "### FATAL ERROR in function [MCOutput::OutputSpectrum]" << std::endl
-	<< "Output file '" << fname << "' could not be opened";
+	<< "Output file '" << filename << "' could not be opened";
     throw std::runtime_error(msg.str().c_str());
   }
    
   // Write header information
   Real everg = 1.6021772e-12;  
-  Real emin = pspec->range.emin / everg; // output in eV
-  Real emax = pspec->range.emax / everg; // output in eV
-  fprintf(pfile,"%d %d %d %g\n",pspec->range.ne,pspec->range.ncth,pspec->range.nphi,norm);
+  Real emin = range.emin / everg; // output in eV
+  Real emax = range.emax / everg; // output in eV
+  fprintf(pfile,"%d %d %d %g\n",range.ne,range.ncth,range.nphi,norm);
   fprintf(pfile,"%lG %lG %lG\n",everg,emin,emax);
 
   // Output intensity data at top of domain
-  for(int k=0; k<pspec->range.ne; ++k) {
-    for(int j=0; j<pspec->range.ncth; ++j) {
-      for(int i=0; i<pspec->range.nphi; ++i) {
-	fprintf(pfile,"%G %G ",pspec->intensity(i,j,k),
-		pspec->intensity_sq(i,j,k));
-	if (pspec->polarized) {
-	  fprintf(pfile,"%G %G %G %G\n",pspec->stokesq(i,j,k),
-		  pspec->stokesq_sq(i,j,k),pspec->stokesu(i,j,k),
-		  pspec->stokesu_sq(i,j,k));
+  for(int k=0; k<range.ne; ++k) {
+    for(int j=0; j<range.ncth; ++j) {
+      for(int i=0; i<range.nphi; ++i) {
+	fprintf(pfile,"%G %G ",intensity(i,j,k),intensity_sq(i,j,k));
+	if (polarized) {
+	  fprintf(pfile,"%G %G %G %G\n",stokesq(i,j,k),stokesq_sq(i,j,k),stokesu(i,j,k),
+                  stokesu_sq(i,j,k));
 	} else {
 	  fprintf(pfile,"\n");
 	}
@@ -1051,7 +1051,11 @@ void MCOutput::OutputSpectrum(MonteCarlo *pmc) {
       file_number << std::setw(5) << std::setfill('0') << pspect->output_number;
       filename.append(file_number.str());
       filename.append(".spec");
-      pspect->WriteSpectrum(filename,nphot);
+      if (pspect->legacy) {
+        pspect->WriteSpectrumLegacy(filename,static_cast<Real>(nphot));
+      } else {
+        pspect->WriteSpectrum(filename,nphot);
+      }
       pspect->output_number++;
       pspect = pspect->next;
     }

@@ -287,7 +287,7 @@ public:
   void ResetMoments();
   //void GetPhotonsFromNeighbors();
   //void SendPhotonsToNeighbors();
-  void EnrollUserStatusCondition(StatusFunc_t statusfunc);
+  void EnrollUserWorkInMove(UserMoveFunc_t statusfunc);
 
 private:
    void SetBoundaryValues(enum MCBoundaryFlag *input_bcs);
