@@ -139,7 +139,7 @@ void CartesianMover::Move(Photon *pphot) {
           pphot->x[i] += pphot->kcart[i] * dl;
       }
       // Check for user defined escape/absorption condition
-      if (pmcb->ChangePhotonStatus != NULL) pmcb->ChangePhotonStatus(pmcb,pphot);
+      if (pmcb->UserWorkInMove != NULL) pmcb->UserWorkInMove(pmcb,pphot);
       return;
 
     } else { // Photon moves to next zone and reduce tauremaining
@@ -153,7 +153,7 @@ void CartesianMover::Move(Photon *pphot) {
       tauremaining -= chi * dl;
 
       // Check for user defined escape/absorption condition
-      if (pmcb->ChangePhotonStatus != NULL) pmcb->ChangePhotonStatus(pmcb,pphot);
+      if (pmcb->UserWorkInMove != NULL) pmcb->UserWorkInMove(pmcb,pphot);
 
       MovePhotonToNextZone(pphot,pco,pmcb,face,ascend);
     }

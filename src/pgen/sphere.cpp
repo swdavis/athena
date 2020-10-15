@@ -89,8 +89,9 @@ void MonteCarloBlock::InitUserMonteCarloBlockData(ParameterInput *pin){
   energy0 = kb*temp*xi;
   printf("Energy initial (keV, x): %g %g\n",energy0/1.6021772e-12/1000.,xi);
 
-  // enroll function to set escape radius
-  EnrollUserStatusCondition(SphericalOrTimedEscape);
+  // enroll function to cease photon propogation based on escape radius
+  // or total integration time
+  EnrollUserWorkInMove(SphericalOrTimedEscape);
 }
 
 void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin){

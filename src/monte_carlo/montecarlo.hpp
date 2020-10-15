@@ -52,7 +52,7 @@ typedef void (*TempFunc_t)(MonteCarloBlock *pmcb);
 typedef void (*MCBValFunc_t)(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
 typedef Real (*OpacFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
 typedef void (*ScatFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
-typedef void (*StatusFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
+typedef void (*UserMoveFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
 typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, MCCoord *pco);
 
 //---------------------- prototypes for provided functions -------------------------------
@@ -243,7 +243,7 @@ public:
   OpacFunc_t AbsorptionOpacity;
   OpacFunc_t ScatteringOpacity;
   ScatFunc_t Scatter;
-  StatusFunc_t ChangePhotonStatus;
+  UserMoveFunc_t UserWorkInMove;
 
   int nphdone; // Photons integrated thus far
   int nphremain; // total number of photons to integrate
@@ -287,7 +287,7 @@ public:
   void ResetMoments();
   //void GetPhotonsFromNeighbors();
   //void SendPhotonsToNeighbors();
-  void EnrollUserWorkInMove(UserMoveFunc_t statusfunc);
+  void EnrollUserWorkInMove(UserMoveFunc_t userfunc);
 
 private:
    void SetBoundaryValues(enum MCBoundaryFlag *input_bcs);

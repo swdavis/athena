@@ -128,7 +128,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 
   codetocgs_rho = 1.0; codetoc_vel = 1.0;  // default cgs for code units
 
-  ChangePhotonStatus=NULL;
+  UserWorkInMove = NULL;
 
   // Set absorption opacity
   if (absorption_meth == ABSUSER) {
@@ -592,11 +592,11 @@ void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
   }*/
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarlo::EnrollUserStatusCondition(StatusFunc_t statusfunc)
-//  \brief Enroll a user-defined condition for changin photon status
+//! \fn void MonteCarloBlock::EnrollUserWorkInMove(UserMoveFunc_t userfunc)
+//  \brief Enroll a user-defined condition to be called during photon moves
 
-void MonteCarloBlock::EnrollUserStatusCondition(StatusFunc_t statusfunc) {
+void MonteCarloBlock::EnrollUserWorkInMove(UserMoveFunc_t userfunc) {
 
-  ChangePhotonStatus = statusfunc;
+  UserWorkInMove = userfunc;
 
 }
