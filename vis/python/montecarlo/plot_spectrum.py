@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 
 # Athena++ modules
 import athena_mc_spec as mcspec
-#import athena_mc_io as mcio
 
 # Main function
 def main(**kwargs):

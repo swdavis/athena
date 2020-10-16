@@ -54,7 +54,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
 
 #ifdef DEBUG
   typedef struct {
-    Real dl, dlr, dlt, dlp;
+    Real dlr, dlt, dlp;
     Real cth, sth, cph, sph;
     //Real kr, kth, kph;
     //Real kx, ky, kz;
@@ -99,7 +99,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
 
 
     // Compute distance to all faces
-    Real dl, dlr, dlt, dlp;
+    Real dlr, dlt, dlp;
     bool ascend[3];
 
     // r face

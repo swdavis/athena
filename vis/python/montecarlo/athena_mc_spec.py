@@ -486,8 +486,6 @@ def get_luminosity(spec):
     lumin *= 2.*np.pi/nmu/nphi
     return lumin
 
-
-# function for building bins
 def build_bins(xmin,xmax,nx,logx):
     """
     Builds a x-axis grid for binning the photons
@@ -512,7 +510,7 @@ def get_bins(xphots,xfaces,nx,uniform=True,log=True):
             xwidth = xfaces[nx]-xfaces[0]
             for i,xphot in enumerate(xphots):
                 xbins[i] = int((xphot-xfaces[0])/xwidth*float(nx))
-                if ((xbins[i] < 0) or (xbins[i] > nx)):
+                if ((xbins[i] < 0) or (xbins[i] >= nx)):
                     xbins[i] = -1
         return xbins
     else:
@@ -524,34 +522,13 @@ def get_bins_binary_search(xphots,xfaces,nx):
     Returns x bin numbers corresponding to xphots for non-uniformly
     binned data via binary search. 
     """
-    xbins = np.zeros(len(xphots),dtype=int)-1
-    for i,xphot in enumerate(xphots):
-        if ((xphot < xfaces[0]) and (xphot > xfaces[nx])):
-            xbins[i] = -1
-            break
-
-        # perform binary search
-        low = 0
-        high = nx+1
-        while (low <= high):
-            mid = (low+high)/2
-            if (xfaces[mid] <= xphot):
-                if (xfaces[mid+1] > xphot):
-                    xbins[i] = mid
-                    break
-                else:
-                    low = mid+1
-            else:
-                high = mid-1
-        if (xbins[i] != mid):
-            if (mid == high):
-                xbins[i] = mid
-            else:
-                print("Warning: binary search failed for x: {:e}.".format(xphot))
-                xbins[i] = -1
-
+    # Exclude values outside of search range
+    indsp = (xphots > xfaces[nx]).nonzero()
+    indsm = (xphots < xfaces[0]).nonzero()
+    xbins = np.searchsorted(xfaces,xphots)-1
+    xbins[indsp] = -1
+    xbins[indsm] = -1
     return xbins
-
 
 def get_angle_bins_cartesian(photons,nmu,mufaces,nphi,phifaces):
     
@@ -668,14 +645,15 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     if yerror:
         errors = np.zeros((nintens,nphi,nmu,nx))
     for i in range(phots.nphot):
-        wght = phots.weight[i]
-        intensity[0,phibins[i],mubins[i],xbins[i]] += wght
-        intensity[1,phibins[i],mubins[i],xbins[i]] += wght*phots.q[i]
-        intensity[2,phibins[i],mubins[i],xbins[i]] += wght*phots.u[i]
-        if yerror:
-            errors[0,phibins[i],mubins[i],xbins[i]] += (wght)**2
-            errors[1,phibins[i],mubins[i],xbins[i]] += (wght*phots.q[i])**2
-            errors[2,phibins[i],mubins[i],xbins[i]] += (wght*phots.u[i])**2
+        if ((xbins[i] >= 0) and (mubins[i] >= 0) and (phibins[i] >= 0)):
+            wght = phots.weight[i]
+            intensity[0,phibins[i],mubins[i],xbins[i]] += wght
+            intensity[1,phibins[i],mubins[i],xbins[i]] += wght*phots.q[i]
+            intensity[2,phibins[i],mubins[i],xbins[i]] += wght*phots.u[i]
+            if yerror:
+                errors[0,phibins[i],mubins[i],xbins[i]] += (wght)**2
+                errors[1,phibins[i],mubins[i],xbins[i]] += (wght*phots.q[i])**2
+                errors[2,phibins[i],mubins[i],xbins[i]] += (wght*phots.u[i])**2
 
     # Compute frequency width and mean energy (in erg) of bins
     h = 6.6262e-27

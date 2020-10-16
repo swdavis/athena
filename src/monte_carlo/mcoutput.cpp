@@ -442,15 +442,15 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
 
     int ebin;
     if (!pathbin && !radbin)
-      ebin = EnergyBin(pphot->energy);
+      ebin = EnergyBinUniform(pphot->energy,logarithmic);
     else {
       if (pathbin) {
 	Real everg = 1.6021772e-12;  // accounts for energy rescaling
-	ebin = EnergyBin(pphot->path*everg);
+	ebin = EnergyBinUniform(pphot->path*everg,logarithmic);
       } if (radbin) {
 	Real radius = sqrt(SQR(pphot->x[0])+SQR(pphot->x[1])+SQR(pphot->x[2]));
 	Real everg = 1.6021772e-12;  // accounts for energy rescaling
-	ebin = EnergyBin(radius*everg);
+	ebin = EnergyBinUniform(radius*everg,logarithmic);
 	//printf("rad: %g %d\n",radius,ebin);
       }
     }
@@ -479,6 +479,27 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
       stokesu_sq(phibin,mubin,ebin) += SQR(pphot->stokes[2] * weight);
     }
   }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Spectrum::EnergyBinUniform(Real energy, bool loge)
+//  \brief return bin number corresponding to energy
+
+int Spectrum::EnergyBinUniform(Real energy, bool loge)
+{
+  int ne = range.ne;
+  Real elow = energies(0);
+  Real ehigh = energies(ne);
+  if ( (energy < elow) || (energy > ehigh) )
+    return -1;
+  if (loge) {
+    elow = log10(elow);
+    ehigh = log10(ehigh);
+    return static_cast<int>((log10(energy)-elow)/(ehigh-elow)*static_cast<Real>(ne));
+  } else {
+    return static_cast<int>((energy-elow)/(ehigh-elow)*static_cast<Real>(ne));
+  }
+
 }
 
 //----------------------------------------------------------------------------------------
@@ -567,7 +588,7 @@ void Spectrum::AddSpectrum(Spectrum *pspec) {
 }
 
 // constructor
-PhotonList::PhotonList(int list_mem_size, bool pol, bool rel, int nuser_out) {
+PhotonList::PhotonList(int list_mem_size, bool pol, bool rel, int nuser) {
 
 
   // Allocate memory for photon list
@@ -579,7 +600,8 @@ PhotonList::PhotonList(int list_mem_size, bool pol, bool rel, int nuser_out) {
   relativistic = rel;
   if (relativistic)
     nparams += 2;
-  nparams += nuser_out;
+  nparams += nuser;
+  nuser_out = nuser;
   photons.NewAthenaArray(max_len,nparams);
 
 }
@@ -775,7 +797,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         else
           plast->next = pspec;
         plast = pspec;
-      } else if (type.compare("list") == 0) {
+      } else if (type.compare("phlist") == 0) {
         // Create photon list
         // Get number of user output variables and confirm it is less than
         // the number of user variables

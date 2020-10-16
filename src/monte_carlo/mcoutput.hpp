@@ -63,6 +63,7 @@ public:
   void BuildEnergyGrid(Real emin, Real emax, int nen, bool xlog);
   void UpdateSpectrum(Photon *pphot);
   int EnergyBin(Real energy);
+  int EnergyBinUniform(Real energy, bool loge);
   bool AngleBinsCartesian(Photon *pphot, int &Phibin, int &mubin);
   bool AngleBinsSphericalPolar(Photon *pphot, int &Phibin, int &mubin);
   void SetSurface(std::string input_face);
@@ -70,7 +71,7 @@ public:
   void ResetSpectrum();
   void AddSpectrum(Spectrum *pspec);
   void WriteSpectrum(std::string filename, int ntot);
-  void WriteSpectrumLegacy(std::string outfile, Real norm);
+  void WriteSpectrumLegacy(std::string filename, Real norm);
 };
 
 //----------------------------------------------------------------------------------------
@@ -79,7 +80,7 @@ public:
 
 class PhotonList {
 public:
-  PhotonList(int list_mem_size, bool pol, bool rel, int nuser_out);
+  PhotonList(int list_mem_size, bool pol, bool rel, int nuser);
   ~PhotonList();
 
   std::string base_name;

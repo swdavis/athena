@@ -26,13 +26,12 @@ class photons:
         if (ncol < self.npars):
             raise ValueError("Error creating photon: ncol {:d} < npars {:d}".format(ncol,self.npars))
         else:
-            if (ncol < self.npars):
+            if (ncol > self.npars):
                 self.nuser = ncol - self.npars
                 self.user = np.zeros((self.nphot,self.nuser))
             else:
                 self.nuser = 0
 
-        
         # allocate arrays for each variable
         self.weight = phlist['list'][:,0]
         self.energy = phlist['list'][:,1]

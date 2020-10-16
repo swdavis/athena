@@ -128,8 +128,6 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 
   codetocgs_rho = 1.0; codetoc_vel = 1.0;  // default cgs for code units
 
-  UserWorkInMove = NULL;
-
   // Set absorption opacity
   if (absorption_meth == ABSUSER) {
     AbsorptionOpacity = NULL;
@@ -597,6 +595,6 @@ void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
 
 void MonteCarloBlock::EnrollUserWorkInMove(UserMoveFunc_t userfunc) {
 
-  UserWorkInMove = userfunc;
+  pmover->UserWorkInMove = userfunc;
 
 }

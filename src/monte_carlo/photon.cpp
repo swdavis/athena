@@ -106,5 +106,6 @@ void Photon::AllocateUserVariables(int n) {
   if (n > 0)
     user_var = new Real[n];
   nuser_var = n;
+  
 
 }

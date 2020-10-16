@@ -34,7 +34,13 @@ public:
   PhotonMover(MonteCarloBlock *pmcb);
   ~PhotonMover();
   // data
+
+  Real dl; //displacement
   MonteCarloBlock *pmy_mcb;
+
+  // function pointers
+  UserMoveFunc_t UserWorkInMove;
+
   // Arrays for MRW acceleration
   AthenaArray<Real> mrwprob;
   AthenaArray<Real> mrwdev;
@@ -66,6 +72,7 @@ public:
   virtual void CartesianToCurvalinear(Photon *pphot);
   virtual void CurvalinearToCartesian(Photon *pphot);
   virtual void InitializeMRWDist(void);
+  // Acceleration methods
   virtual bool MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real tauacc);
   virtual Real MRWDist(MCRandom *pran);
   virtual void ReadComptonGreensFunction(void);

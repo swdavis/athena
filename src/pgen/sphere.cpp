@@ -34,7 +34,7 @@ static bool first = true;
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
 //  \brief monte carlo test problem generator
 //========================================================================================
-void SphericalOrTimedEscape(MonteCarloBlock *pmcb, Photon *phot);
+void SphericalOrTimedEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover);
 
 void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
@@ -75,6 +75,10 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         phydro->u(IEN,k,j,i) += 0.5*SQR(phydro->u(IM2,k,j,i))/phydro->u(IDN,k,j,i);
         phydro->u(IEN,k,j,i) += 0.5*SQR(phydro->u(IM3,k,j,i))/phydro->u(IDN,k,j,i);
       }}}
+}
+
+void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
+  nuser_var = 1;
 }
 
 void MonteCarloBlock::InitUserMonteCarloBlockData(ParameterInput *pin){
@@ -119,6 +123,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
   pphot->energy = energy0;
   pphot->path = 0.;
+  pphot->user_var[0] = 0.;
 
   pphot->x[0] = 0.0;
   pphot->i1 = -1;
@@ -175,7 +180,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 	x = pran->uniform();
       dev = pran->uniform();
     }
-    //printf("x: %g\n",x);
+
     Real r0 = x*rad0;
     phi = 2. * PI * pran->uniform();
     cphi = cos(phi);
@@ -188,13 +193,16 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
     pphot->x[2] += r0*cth;
   }
   
+  for (int i=0; i<pphot->nuser_var; i++)
+    pphot->user_var[i] = 0.;
+
   if (pphot->weight < 0.0) pphot->status = DESTROYED;
   
   // Initialize the absorption and scattering extinction coefficients
   // to the values appropriate in the emitted zone
   pphot->abs_coef = AbsorptionOpacity(this,pphot);
   pphot->sct_coef = ScatteringOpacity(this,pphot);
-  //pphot->PrintPhoton();
+
   if (first) {
     printf("%g \n",pphot->abs_coef);
     printf("taus, taua: %g %g\n",pphot->sct_coef*rad0,pphot->abs_coef*rad0);
@@ -202,13 +210,17 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   }
 }
 
-void SphericalOrTimedEscape(MonteCarloBlock *pmcb, Photon *pphot) {
+void SphericalOrTimedEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
+
+  // Update path length for user output
+  pphot->user_var[0] += pmover->dl;
 
   // First check radius condition
   Real r = sqrt(SQR(pphot->x[0])+SQR(pphot->x[1])+SQR(pphot->x[2]));
   if (r >= rad0) {
     Real dr = r-rad0;
     pphot->path -= dr;
+    pphot->user_var[0] -= dr;
     for (int i=0; i<3; i++) {
       // assume cartesian for now
       pphot->x[i] -= pphot->k[i]*dr;
@@ -220,6 +232,7 @@ void SphericalOrTimedEscape(MonteCarloBlock *pmcb, Photon *pphot) {
   if (pphot->path >= path0) {
     Real dp = pphot->path - path0;
     pphot->path = path0;
+    pphot->user_var[0] = path0;
     for (int i=0; i<3; i++) {
       // assume cartesian for now
       pphot->x[i] -= pphot->k[i]*dp;

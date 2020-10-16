@@ -63,7 +63,7 @@ void CartesianMover::Move(Photon *pphot) {
     iz[iter] = pphot->i3;
     iter++;
     // Compute distance to all faces
-    Real dl, dlx, dly, dlz;
+    Real dlx, dly, dlz;
     bool ascend[3];
     if(kx > 0.0) {
       dlx = (pco->x1f(pphot->i1+1) - pphot->x[0]) / kx;
@@ -138,8 +138,8 @@ void CartesianMover::Move(Photon *pphot) {
         for (int i=0; i<3; ++i)
           pphot->x[i] += pphot->kcart[i] * dl;
       }
-      // Check for user defined escape/absorption condition
-      if (pmcb->UserWorkInMove != NULL) pmcb->UserWorkInMove(pmcb,pphot);
+      // Perform any user work
+      if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this);
       return;
 
     } else { // Photon moves to next zone and reduce tauremaining
@@ -152,12 +152,13 @@ void CartesianMover::Move(Photon *pphot) {
 	pphot->x[i] += pphot->kcart[i] * dl;
       tauremaining -= chi * dl;
 
-      // Check for user defined escape/absorption condition
-      if (pmcb->UserWorkInMove != NULL) pmcb->UserWorkInMove(pmcb,pphot);
+      // Perform any user work
+      if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this);
 
       MovePhotonToNextZone(pphot,pco,pmcb,face,ascend);
     }
   }
+
   if (iter >= MAXITER) {
     std::cout << "Warning: iter exceeded MAXITER " << MAXITER << " in photon mover." 
 	      << std::endl;
