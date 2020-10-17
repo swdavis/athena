@@ -58,6 +58,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   polarized = pin->GetOrAddBoolean("montecarlo","polarized",false);
   acceleration = pin->GetOrAddBoolean("montecarlo","acceleration",false);
   time_acc = pin->GetOrAddBoolean("montecarlo","time_acc",false);
+  raytrace_flag = pin->GetOrAddBoolean("montecarlo", "raytrace", false);
 
   nuser_var = 0; // Initialize photon user variables to zero
   // Create user monte carlo data
@@ -830,12 +831,18 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput
     nphrun = 0;
     for (int i=0; i<nout; i++) {
       nphrun += pmcb->cadence; // only count photons on this process
-      pmcb->TransferPhotons(pmcb->cadence);
+      if (raytrace_flag)
+        pmcb->RayTracePhotons(pmcb->cadence);
+      else
+        pmcb->TransferPhotons(pmcb->cadence);
       pmcb->nphremain -= pmcb->cadence;
       pmcb = pmcb->next;
       while (pmcb != NULL) {
         nphrun += cadence;
-	pmcb->TransferPhotons(pmcb->cadence);
+        if (raytrace_flag)
+          pmcb->RayTracePhotons(pmc->cadence);
+        else
+          pmcb->TransferPhotons(pmcb->cadence);
 	pmcb->nphremain -= pmcb->cadence;
 	pmcb = pmcb->next;
       }
@@ -850,11 +857,17 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput
   }
 #else
   for (int i=0; i<nout; i++) {
-    pmcb->TransferPhotons(pmcb->cadence);
+    if (raytrace_flag)
+      pmcb->RayTracePhotons(pmcb->cadence);
+    else
+      pmcb->TransferPhotons(pmcb->cadence);
     pmcb->nphremain -= pmcb->cadence;
     pmcb = pmcb->next;
     while (pmcb != NULL) {
-      pmcb->TransferPhotons(pmcb->cadence);
+      if (raytrace_flag)
+        pmcb->RayTracePhotons(pmcb->cadence);
+      else
+        pmcb->TransferPhotons(pmcb->cadence);
       pmcb->nphremain -= pmcb->cadence;
       pmcb = pmcb->next;
     }

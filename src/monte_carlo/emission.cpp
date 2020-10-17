@@ -101,9 +101,10 @@ void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pcoord) {
   Real yl = pcoord->x2f(pphot->i2); Real dy = pcoord->x2f(pphot->i2+1)-yl;
   Real zl = pcoord->x3f(pphot->i3); Real dz = pcoord->x3f(pphot->i3+1)-zl;
 
-  pphot->x[0] = xl+pran->uniform()*dx;
-  pphot->x[1] = yl+pran->uniform()*dy;
-  pphot->x[2] = zl+pran->uniform()*dz;
+  pphot->x[IMC0] = 1.;
+  pphot->x[IMC1] = xl+pran->uniform()*dx;
+  pphot->x[IMC2] = yl+pran->uniform()*dy;
+  pphot->x[IMC3] = zl+pran->uniform()*dz;
 
 }
 
@@ -114,14 +115,16 @@ void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pcoord) {
 void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pcoord) {
 
 
+  pphot->x[IMC0] = 1.;
+
   Real rl = pcoord->x1f(pphot->i1), rh = pcoord->x1f(pphot->i1+1);
-  pphot->x[0]  = pow(pran->uniform()*(rh*rh*rh-rl*rl*rl)+rl*rl*rl,1./3.);
+  pphot->x[IMC1]  = pow(pran->uniform()*(rh*rh*rh-rl*rl*rl)+rl*rl*rl,1./3.);
   Real cthh = cos(pcoord->x2f(pphot->i2));
   Real cthl = cos(pcoord->x2f(pphot->i2+1));
   Real cth = cthl + pran->uniform() * (cthh-cthl);
-  pphot->x[1] = acos(cth);
+  pphot->x[IMC2] = acos(cth);
   Real pl = pcoord->x3f(pphot->i3); Real dp = pcoord->x3f(pphot->i3+1)-pl;
-  pphot->x[2] = pl+pran->uniform()*dp;
+  pphot->x[IMC3] = pl+pran->uniform()*dp;
 
 }
 //----------------------------------------------------------------------------------------

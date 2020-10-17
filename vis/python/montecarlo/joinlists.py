@@ -8,7 +8,6 @@ into single file
 # python standard modules
 import argparse
 import numpy as np
-import math
 
 # Athena++ modules
 import athena_mc_list as mclist

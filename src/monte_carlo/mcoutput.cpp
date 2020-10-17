@@ -439,6 +439,7 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
     }
 
     int ebin;
+    // SWD: covariant mover requires: ebin = EnergyBin(pphot->k[0]);
     ebin = EnergyBinUniform(pphot->energy,logarithmic);
     if (ebin < 0) return;
   
@@ -612,9 +613,11 @@ void PhotonList::AddPhoton(Photon *pphot) {
   int n = 0;
   photons(length,n++) = pphot->weight*pphot->eweight;
   photons(length,n++) = pphot->energy;
-  for (int i=0; i<3; i++)
+  int nmax;
+  if (relativistic) nmax = 4; else nmax = 3;
+  for (int i=0; i<nmax; i++)
     photons(length,n++) = pphot->x[i];
-  for (int i=0; i<3; i++)
+  for (int i=0; i<nmax; i++)
     photons(length,n++) = pphot->k[i];
   if (polarized) {
     photons(length,n++) = pphot->stokes[1];
@@ -793,7 +796,8 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
               << " greater than user variables: " << pmy_mc->nuser_var << std::endl; 
           throw std::runtime_error(msg.str().c_str());
         }
-        pphlist = new PhotonList(pmc->max_list_size,pmc->polarized,false,nuser_out);
+        bool rel = pin->GetOrAddBoolean(pib->block_name,"relativistic",false);
+        pphlist = new PhotonList(pmc->max_list_size,pmc->polarized,rel,nuser_out);
         // Initialize photon list
         pphlist->length = 0;
 	pphlist->output_number = 0;

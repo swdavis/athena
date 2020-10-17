@@ -33,6 +33,9 @@ class MCBoundaryValues;
 class MCOutoupt;
 class MCCoord;
 
+// SWD: Make into a general MACRO set by configure?
+#define NCOORD 4
+
 // Flags for controlling monte carlo emission, scattering, absorption, bcs
 enum EmissionFlag {EMISUSER = 0, EMISFF = 1};
 enum AbsorptionFlag {ABSUSER = 0, ABSNONE = 1, ABSFF = 2};
@@ -54,6 +57,8 @@ typedef Real (*OpacFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
 typedef void (*ScatFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
 typedef void (*UserMoveFunc_t)(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover);
 typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, MCCoord *pco);
+typedef void (*ConnectFunc_t)(Real *x, Real gamma[NCOORD][NCOORD][NCOORD]);
+typedef void (*MCMetricFunc_t)(Real *x,  Real gcov[NCOORD][NCOORD]);
 
 //---------------------- prototypes for provided functions -------------------------------
 void DefaultGetTemperature(MonteCarloBlock *pmcb);
@@ -84,6 +89,34 @@ void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot);
 Real PlanckDist(Real temp,MCRandom *pran);
 void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pco);
 void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pco);
+void GetZonePositionSphericalPolarGR(Photon *pphot, MCRandom *pran, MCCoord *pcoord);
+void GetZonePositionCylindrical(Photon *pphot, MCRandom *pran, MCCoord *pcoord);
+void GetZonePositionCylindricalGR(Photon *pphot, MCRandom *pran, MCCoord *pcoord);
+//--------------------- protoypes for grmover.cpp functions ------------------------------
+void Metric_KerrSchild(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
+void Metric_KerrSchild_Up(Real x[NCOORD], Real gcon[NCOORD][NCOORD]);
+void Metric_BoyerLindquist(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
+void Metric_BoyerLindquist_Up(Real x[NCOORD], Real gcon[NCOORD][NCOORD]);
+void Metric_Cartesian(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
+void Metric_SphericalPolar(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
+void Metric_Cylindrical(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
+void Connect_KerrSchild(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
+void Connect_BoyerLindquist(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
+void Connect_Cartesian(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
+void Connect_SphericalPolar(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
+void Connect_Cylindrical(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
+void GetMCDirection(Photon *pphot, Real alpha, Real beta);
+//------------------ prototypes for frame_transformations.cpp functions ------------------
+void ConstructTetrad(Real ucon[NCOORD], Real bcon[NCOORD], Real gcov[NCOORD][NCOORD],
+		      Real econ[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD]);
+int KroneckerDelta(int i, int j);
+void ProjectVecSub(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD]);
+Real DotVec(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD]);
+void NormalizeVec(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD]);
+void ConToCov(Real ucon[NCOORD], Real ucov[NCOORD], Real gcov[NCOORD][NCOORD]);
+void CovToCon(Real ucov[NCOORD], Real ucon[NCOORD], Real gcon[NCOORD][NCOORD]);
+void CoordinateToTetrad(Real ucoord[NCOORD], Real utet[NCOORD], Real ecov[NCOORD][NCOORD]);
+void TetradToCoordinate(Real utet[NCOORD], Real ucoord[NCOORD], Real econ[NCOORD][NCOORD]);
 //---------------------- prototypes for setting flags ------------------------------------
 enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string);
 enum EmissionFlag GetEmissionFlag(std::string input_string);
@@ -174,6 +207,7 @@ public:
   bool polarized;// track photon polarization
   bool acceleration;  // use MRW acceleration
   bool time_acc;  // use MRW acceleration with time limit
+  bool raytrace_flag; // Will trace photons rather than scatter
 
   EmisFunc_t InitEmission;
   TempFunc_t GetTemperature;
@@ -244,6 +278,8 @@ public:
   OpacFunc_t ScatteringOpacity;
   ScatFunc_t Scatter;
   //UserMoveFunc_t UserWorkInMove;
+  ConnectFunc_t Connection;
+  MCMetricFunc_t Metric;
 
   int nphdone; // Photons integrated thus far
   int nphremain; // total number of photons to integrate
@@ -263,8 +299,18 @@ public:
   bool acceleration;  // use MRW acceleration
   bool time_acc;  // use MRW acceleration with time limit
 
+  // Associated with general mover
+  // SWD some of these should be eliminated others moved to MonteCarlo
+  bool covariant_mover_flag; // use GR covariant mover
+  bool kerrschild_flag; // use KerrSchild coordinates and BH test
+  bool boyerlindquist_flag; // use Boyer-Lindquist coordinates 
+  bool orthotet_flag; // use orthonormal tetrad for TransferPhotons()
+  bool varystep_flag; // use variable (true) or constant (false) step
+
   Real codetocgs_rho, codetoc_vel;
   Real emin, emax, elog, eminlog;
+  // SWD: used by covariant mover, move/eliminate 
+  Real stepsize, a, velocity;
 
   AthenaArray<Real> emission;
   AthenaArray<Real> moments;
@@ -277,10 +323,12 @@ public:
   // functions
   void InitUserMonteCarloBlockData(ParameterInput *pin);
   void MonteCarloProblemGenerator(ParameterInput *pin);
-  void TransferPhotons(int nphtot);  // Transfer photons on this block
+  void RayTracePhotons(int nphtot); // Ray trace photon on this block
+  void TransferPhotons(int nphtot); // Transfer photons on this block
   void LorentzTransform(Photon *pphot, const Real sign);
   Real LorentzTransformFrequencyShift(Photon *pphot);
   void InitializePhoton(Photon *pphot);
+  void FinalizePhoton(Photon *pphot);
   //void DefaultGetTemperature();
   void UpdateMoments(Photon *pphot, Real dl);
   void NormalizeMoments(bool normalize);
@@ -288,6 +336,8 @@ public:
   //void GetPhotonsFromNeighbors();
   //void SendPhotonsToNeighbors();
   void EnrollUserWorkInMove(UserMoveFunc_t userfunc);
+  void TetradTransform(Photon *pphot, const Real sign);
+  Real TetradTransformFrequencyShift(Photon *pphot);
 
 private:
    void SetBoundaryValues(enum MCBoundaryFlag *input_bcs);

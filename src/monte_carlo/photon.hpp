@@ -12,12 +12,11 @@
 #include "../athena.hpp"
 #include "montecarlo.hpp"
 
-//
-
 class MonteCarloBlock;
 
 // photon status identifiers
 enum PhotonStatus {EVOLVING = 0, ESCAPED = 1, DESTROYED = 2};
+enum {IMC1 = 0, IMC2 = 1, IMC3 = 2, IMC0 = 3};
 
 //! \class Photon
 //  \brief phton data and functions
@@ -35,10 +34,13 @@ public:
   int nuser_var; // number of user variables
   enum BoundaryFace face;
 
-  Real x[3];  // current photon position
-  Real k[3];  // photon direction (momentum vector) curvalinear
+  // SWD: x can always include time, k could always include energy?
+  // SWD: kcart maybe should be deprecated
+  Real x[4];  // current photon position
+  Real k[4];  // photon direction (momentum vector) curvalinear
+  Real dk[4]; // the change in photon direction used for general mover
   Real kcart[3]; // photon direction in cartesian coordinates
-  Real stokes[3];  // stokes vectors for linear polarization
+  Real stokes[4];  // stokes vectors
   Real weight, eweight; // photon weights
   Real energy;  // photon energy
   Real *user_var; // storage for user variables

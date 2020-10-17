@@ -128,6 +128,66 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 
   codetocgs_rho = 1.0; codetoc_vel = 1.0;  // default cgs for code units
 
+  stepsize = pin->GetOrAddReal("montecarlo","stepsize",1.0e-3);
+  a = pin->GetOrAddReal("montecarlo", "spin", 0.0);
+  velocity = pin->GetOrAddReal("problem", "velocity", 0.0);
+
+
+  // Set up photon movement and initialization methods
+  covariant_mover_flag = pin->GetOrAddBoolean("montecarlo","covariant_mover",
+					      false);
+  kerrschild_flag = pin->GetOrAddBoolean("montecarlo","kerrschild",false);
+  boyerlindquist_flag = pin->GetOrAddBoolean("montecarlo","boyerlindquist",false);
+  orthotet_flag = pin->GetOrAddBoolean("montecarlo", "orthotet", false);
+  varystep_flag = pin->GetOrAddBoolean("montecarlo", "varystep", false);
+
+ if (covariant_mover_flag) {
+    pmover = new CovariantMover(this);
+    if (COORDINATE_SYSTEM == "cartesian") {
+      GetZonePosition = GetZonePositionCartesian;
+      if (kerrschild_flag) {
+	Connection = Connect_KerrSchild;
+	Metric = Metric_KerrSchild;
+      }
+      else {
+	Connection = Connect_Cartesian;
+	Metric = Metric_Cartesian;
+      }
+    } else if (COORDINATE_SYSTEM == "spherical_polar") {
+      GetZonePosition = GetZonePositionSphericalPolar;
+      if (kerrschild_flag) {
+	Connection = Connect_KerrSchild;
+	Metric = Metric_KerrSchild;
+      } else if (boyerlindquist_flag) {
+	Connection = Connect_BoyerLindquist;
+	Metric = Metric_BoyerLindquist;
+      } else {
+	Connection = Connect_SphericalPolar;
+	Metric = Metric_SphericalPolar;
+      }
+    } else if (COORDINATE_SYSTEM == "cylindrical") {
+      GetZonePosition = GetZonePositionCylindricalGR;
+      Connection = Connect_Cylindrical;
+      Metric = Metric_Cylindrical;
+    }
+  } else {
+    if (COORDINATE_SYSTEM == "cartesian") {
+      pmover = new CartesianMover(this);
+      GetZonePosition = GetZonePositionCartesian;
+    } else if (COORDINATE_SYSTEM == "spherical_polar") {
+      pmover = new SphericalPolarMover(this);
+      GetZonePosition = GetZonePositionSphericalPolar;
+    } else if (COORDINATE_SYSTEM == "cylindrical") {
+      std::stringstream msg;
+      msg << "### ERROR in MonteCarloBlock constructor" << std::endl
+          << "cylindircal coordinates only suppored with general photon mover" 
+	  << std::endl;
+      throw std::runtime_error(msg.str().c_str());
+      //pmover = new CylindricalMover(this);
+      //GetZonePosition = GetZonePositionCylindrical;
+    }
+  }
+
   // Set absorption opacity
   if (absorption_meth == ABSUSER) {
     AbsorptionOpacity = NULL;
@@ -175,16 +235,6 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     }
     coherent_scattering = false;
   }
-
-  // Set up photon movement and initialization methods
-  if (COORDINATE_SYSTEM == "cartesian") {
-    pmover = new CartesianMover(this);
-    GetZonePosition = GetZonePositionCartesian;
-  } else if (COORDINATE_SYSTEM == "spherical_polar") {
-    pmover = new SphericalPolarMover(this);
-    GetZonePosition = GetZonePositionSphericalPolar;
-  }
-
 
   // Allocate (/initialize) variable arrays needed for evolution/output
   int ncells1 = nx1 + 2*(NGHOST);
@@ -248,6 +298,51 @@ MonteCarloBlock::~MonteCarloBlock() {
       }*/
 
 //----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::RayTracePhotons()
+//  \brief Integrate photons to termination condtion without scattering
+
+void MonteCarloBlock::RayTracePhotons(int nphot) {
+
+    Real const to_comv = 1.0;
+    Real const to_eulr = -1.0; 
+    int nscat = 0, nesc = 0, nabs = 0;
+    int nprop = (nphot > nphremain) ? nphremain : nphot;
+ 
+    for (int i=0; i<nprop; ++i) {
+  
+      // user definied photon initialization
+      InitializePhoton(pphoton);
+      
+      // Photon initialized in coordinate frame
+      // move photon until  stopping condition
+      pmover->Move(pphoton);
+ 
+      if (pphoton->status == ESCAPED) {
+        // User defined completion work
+        FinalizePhoton(pphoton);
+	// loop over spectra and update
+	Spectrum *pspect = pspec;
+	while (pspect != NULL) {
+          pspect->UpdateSpectrum(pphoton);
+	  pspect = pspect->next;
+	}
+        if (pphlist != NULL) {
+          pphlist->AddPhoton(pphoton);
+        }
+	nesc++;
+      } else
+	nabs++;
+    }
+
+    std::cout  << "nesc, nabs: " << nesc << ' ' << nabs << ' ' << Globals::my_rank 
+               << std::endl;
+    std::cout << "nscat: " << nscat << ' ' << Globals::my_rank << std::endl;
+
+
+    return;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::TransferPhotons()
 //  \brief perform radiation transfer nphtot photons
 
@@ -255,17 +350,21 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
 
   Real const to_comv = 1.0;
   Real const to_eulr = -1.0; 
-  int nscat = 0, nesc = 0, nabs =0;
+  int nscat = 0, nesc = 0, nabs = 0;
   int nprop = (nphot > nphremain) ? nphremain : nphot;
   for(int i=0; i<nprop; ++i) {
-    //printf("%d ",i);
+
     // user definied photon initialization
     InitializePhoton(pphoton);
     
     // Lorentz transform E, k to Eulerian frame and update opacities.
     if (boosts) {
-      //LorentzTransformEmission(pphoton);
-      LorentzTransform(pphoton,to_eulr);
+      // SWD: Change this to a function pointer
+      if (orthotet_flag) {
+        TetradTransform(pphoton, to_eulr);  
+      } else {
+        LorentzTransform(pphoton,to_eulr);
+      }
     }
 
     // move photon to next scattering/absorption or to boundary
@@ -286,9 +385,13 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
       // Scatter the photon packet
       if (pphoton->status == EVOLVING) {
 	// Lorentz transform to comoving frame for scattering
-	if (boosts)
-          LorentzTransform(pphoton,to_comv);
-	
+	if (boosts) {
+          if (orthotet_flag) {
+            TetradTransform(pphoton, to_comv);
+          } else { 
+            LorentzTransform(pphoton,to_comv);
+          }
+	}
         Scatter(this,pphoton);
 
 	iscat++;
@@ -308,14 +411,22 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
 	  pphoton->sct_coef = ScatteringOpacity(this,pphoton);
 	}
 	// Lorentz transform to Eulerian frame and shift opacities
-	if (boosts)
-	  LorentzTransform(pphoton,to_eulr);
+	if (boosts) {
+          if (orthotet_flag) {
+            LorentzTransform(pphoton,to_eulr);
+          } else {
+            TetradTransform(pphoton, to_eulr);
+          }
+        }
       }
 
       // move photon to next scattering/absorption or to boundary
       pmover->Move(pphoton);
     }
+
     if (pphoton->status == ESCAPED) {
+      // User defined completion work
+      FinalizePhoton(pphoton);
       // loop over spectra and update
       Spectrum *pspect = pspec;
       while (pspect != NULL) {
@@ -331,9 +442,6 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
     nscat += iscat;
   }
   nphdone += nprop;
-  // Normalize moments for output
-  //if (moments_flag)
-  //  NormalizeMoments(true);
   
   std::cout  << "nesc, nabs: " << nesc << ' ' << nabs << ' ' << Globals::my_rank << std::endl;
   std::cout << "nscat: " << nscat << ' ' << Globals::my_rank << std::endl;
@@ -420,6 +528,166 @@ Real MonteCarloBlock::LorentzTransformFrequencyShift(Photon *pphot) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign)
+//  \brief Tetrad transform photon packet
+//
+// Does not transform stokes vectors..
+// weight is not transformed either as weight represents number of photons
+// in the packet which is invariant.
+// to_comv: sign = 1.0;
+// to_eulr: sign = -1.0; 
+
+void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign) {
+
+  // Construct the orthonormal tetrad
+  Real ucon[NCOORD], bcon[NCOORD];
+  Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
+  Real kcopy[NCOORD];
+  Real gcov[NCOORD][NCOORD];
+  Real energy_shift;
+  Real kdotu = 0.;
+  
+  Metric(pphot->x, gcov);
+
+  if ((kerrschild_flag) or (boyerlindquist_flag)) {
+    Real r = pphot->x[IMC1];
+    Real omega = 1.0/(pow(r, 3./2.) + a); // circular velocity 
+
+    ucon[IMC0] = sqrt(-1.0/(gcov[IMC0][IMC0] + 2.*gcov[IMC0][IMC3]*omega +
+			    SQR(omega)*gcov[IMC3][IMC3]));
+    Real del = SQR(r)+SQR(a)-2.*r;
+    Real aeq = SQR(r)+SQR(a);
+    aeq = SQR(aeq)-SQR(a)*del;
+    Real enu = sqrt(del/aeq)*r;
+    Real vg = (SQR(r)-2.*a*sqrt(r)+SQR(a))/sqrt(del)*omega;
+    Real gam = 1./sqrt(1.-SQR(vg));
+    Real comp = gam/enu;
+    //printf("u0: %g %g\n",comp,ucon[IMC0]);
+    ucon[IMC1] = 0.;
+    ucon[IMC2] = 0.;
+    ucon[IMC3] = (ucon[IMC0])*omega;
+  } else {
+    Real beta2 = SQR(velocity);
+    Real gamma = 1. / sqrt(1. - beta2);
+
+    ucon[IMC0] = gamma;
+    ucon[IMC1] = gamma * velocity;
+    ucon[IMC2] = 0.;
+    ucon[IMC3] = 0.;
+  }
+  //printf("ucon: %g %g %g %g\n", ucon[IMC0], ucon[IMC1], ucon[IMC2], ucon[IMC3]);
+
+  for (int i = 0; i < NCOORD; i++) {
+    bcon[i] = 0.;
+    kcopy[i] = pphot->k[i];
+  }
+
+  // create tetrad basis
+  ConstructTetrad(ucon, bcon, gcov, econ, ecov);
+
+  if (sign > 0) { // tranforming to comoving frame
+
+    for (int i = 0; i < NCOORD; i++) 
+      kdotu += pphot->k[i] * ucon[i]; // pphot->k in coordinate frame
+
+    energy_shift = - pphot->k[IMC0] / kdotu; 
+
+    CoordinateToTetrad(kcopy, pphot->k, ecov); // updates pphot->k 
+
+    Real klow[NCOORD];
+    ConToCov(kcopy,klow,gcov);
+    Real r = pphot->x[IMC1];
+    Real omega = 1.0/(pow(r, 3./2.) + a); // circular velocity 
+    Real del = SQR(r)+SQR(a)-2.*r;
+    Real aeq = SQR(r)+SQR(a);
+    aeq = SQR(aeq)-SQR(a)*del;
+    Real enu = sqrt(del/aeq)*r;
+    Real vg = (SQR(r)-2.*a*sqrt(r)+SQR(a))/sqrt(del)*omega;
+    Real gam = 1./sqrt(1.-SQR(vg));
+    Real comp1 = (1.+omega*klow[IMC3]/klow[IMC0])*gam/enu;
+    Real comp2 = -DotVec(kcopy,ucon,gcov);
+    //printf("kt: %g %g %g\n",pphot->k[IMC0],comp1,comp2);
+     
+    //  update pphot->energy and coefficients
+    pphot->energy *= energy_shift; // now in tetrad frame
+    pphot->abs_coef *= energy_shift;
+    pphot->sct_coef *= energy_shift;
+    //printf("energy_shift to comoving frame: %g\n", energy_shift);
+
+  } else { // transforming to coordinate frame
+
+    TetradToCoordinate(kcopy, pphot->k, econ); // updates pphot->k
+
+    /*for (int i = 0; i < NCOORD; i++) 
+      kdotu += pphot->k[i] * ucon[i]; // pphot->k in coordinate frame*/
+    kdotu = DotVec(pphot->k, ucon, gcov);
+
+    if (fabs(kdotu) < 1.0e-30) {
+      printf("warning: kdotu = %g\n", kdotu);
+      kdotu = 1.0e-30;
+    }
+
+    //energy_shift = pphot->k[IMC0] / kdotu;
+    energy_shift = - kdotu / pphot->k[IMC0]; // new calculation
+    //printf("energy_shift to coordinate frame: %g\n", energy_shift);
+    /*printf("energy_shift: %g  k^t_tet = %g  k^t_coord = %g  tet/coord = %g\n",
+      energy_shift, kcopy[IMC0], pphot->k[IMC0], kcopy[IMC0]/pphot->k[IMC0]);*/
+    
+    // update pphot->energy and opacities
+    pphot->energy *= energy_shift;
+    pphot->abs_coef *= energy_shift;
+    pphot->sct_coef *= energy_shift;
+    
+  }
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Real MonteCarloBlock::TetradTransformFrequencyShift(Photon *pphot)
+//  \brief return energy shift
+
+Real MonteCarloBlock::TetradTransformFrequencyShift(Photon *pphot) {
+
+  // Construct the orthonormal tetrad
+  Real r = pphot->x[IMC1];
+  Real ucon[NCOORD], bcon[NCOORD];
+  Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
+  Real kcopy[NCOORD];
+  Real gcov[NCOORD][NCOORD];
+  Real energy_shift;
+  Real omega;
+  Real kdotu = 0.;
+  Real gamma, beta2;
+
+  omega = 1.0/(pow(r, 3./2.) + a);
+  
+  Metric(pphot->x, gcov);
+
+  if (COORDINATE_SYSTEM == "spherical_polar") {
+    ucon[IMC0] = sqrt(-1.0/(gcov[IMC0][IMC0] + 2.*gcov[IMC0][IMC3]*omega +
+			    SQR(omega)*gcov[IMC3][IMC3]));
+    ucon[IMC1] = 0.;
+    ucon[IMC2] = 0.;
+    ucon[IMC3] = (ucon[IMC0])*omega;
+  } else if (COORDINATE_SYSTEM == "cartesian") {
+    beta2 = SQR(velocity);
+    gamma = 1. / sqrt(1. - velocity);
+    ucon[IMC0] = gamma;
+    ucon[IMC1] = gamma * velocity;
+    ucon[IMC2] = gamma * 0.;
+    ucon[IMC3] = gamma * 0.;
+  }
+  
+  for (int i = 0; i < NCOORD; i++) 
+    kdotu += pphot->k[i] * ucon[i];
+
+  energy_shift = kdotu / pphot->k[IMC0];
+
+  return energy_shift;
+
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl)
 //  \brief add contribution to radiation moments in current zone
 
@@ -440,6 +708,8 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
 
     // Add contribution to corresponding moments
     // Energy density
+    if (covariant_mover_flag) 
+      weight *= pphot->k[IMC0];
     moments(MCIER,k,j,i) += weight;
     // Flux
     moments(MCIFR1,k,j,i) += weight1;

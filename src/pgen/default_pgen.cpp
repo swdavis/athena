@@ -117,3 +117,12 @@ void __attribute__((weak)) MonteCarloBlock::MonteCarloProblemGenerator(Parameter
 void __attribute__((weak)) MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
 }
+
+//========================================================================================
+//! \fn void MonteCarloBlock::FinalizePhoton(Photon *pphot)
+//  \brief Complete work at end of photon packets before integration
+//========================================================================================
+  
+void __attribute__((weak)) MonteCarloBlock::FinalizePhoton(Photon *pphot) {
+
+}
