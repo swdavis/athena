@@ -42,8 +42,6 @@ public:
   bool cartesian_axis;
   bool coordinates;
   bool logarithmic;
-  bool pathbin; // Replace energy bin with path length bin
-  bool radbin; // Replace energy bin with radius bin
   bool legacy; // Output format to be used (temporarily retained for testing)
   Spectrum *next;  // next spectrum
   enum BoundaryFace face;

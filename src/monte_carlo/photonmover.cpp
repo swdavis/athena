@@ -149,7 +149,7 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
 
   if (accel_success) {
     Real tauabs;
-    pphot->path += ct;
+    //pphot->path += ct;
     if (!compton) {
       tauabs = ct*pphot->abs_coef;
       pphot->weight *= exp(-tauabs);

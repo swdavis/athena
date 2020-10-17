@@ -8,7 +8,9 @@
 //
 //========================================================================================
 
-#include <iostream> // temporary for testing
+// C/C++ headers
+#include <iostream> 
+#include <stdexcept>
 
 // Athena++ headers
 #include "../athena.hpp"
@@ -34,7 +36,8 @@ static bool first = true;
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
 //  \brief monte carlo test problem generator
 //========================================================================================
-void SphericalOrTimedEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover);
+void SphericalEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover);
+void TimedEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover);
 
 void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
@@ -42,7 +45,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   Real c = 2.9979e10;
   Real temp = pin->GetReal("problem","temp");
   Real tau = pin->GetReal("problem","tau");
-  Real rad0 = pin->GetReal("problem","rad0");
+  Real rad0 = pin->GetReal("problem","radius");
   Real vel = pin->GetOrAddReal("problem","velocity",0.);
   Real gamma = peos->GetGamma();
   vel *= c;
@@ -85,9 +88,8 @@ void MonteCarloBlock::InitUserMonteCarloBlockData(ParameterInput *pin){
 
   // Set variables 
   srcdist =pin->GetOrAddBoolean("problem","srcdist",false);
-  rad0 = pin->GetReal("problem","rad0");
-  path0 = pin->GetOrAddReal("problem","path0",HUGE_NUMBER);
-  Real xi = pin->GetReal("problem","energy0");
+
+  Real xi = pin->GetReal("problem","x0");
   Real temp = pin->GetReal("problem","temp");
   Real kb = 1.3807e-16;
   energy0 = kb*temp*xi;
@@ -95,7 +97,13 @@ void MonteCarloBlock::InitUserMonteCarloBlockData(ParameterInput *pin){
 
   // enroll function to cease photon propogation based on escape radius
   // or total integration time
-  EnrollUserWorkInMove(SphericalOrTimedEscape);
+  rad0 = pin->GetReal("problem","radius");
+  path0 = pin->GetOrAddReal("problem","path",-1.);
+  if (path0 > 0.) {
+    EnrollUserWorkInMove(TimedEscape);
+  } else
+    EnrollUserWorkInMove(SphericalEscape);
+
 }
 
 void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin){
@@ -122,7 +130,6 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   }
 
   pphot->energy = energy0;
-  pphot->path = 0.;
   pphot->user_var[0] = 0.;
 
   pphot->x[0] = 0.0;
@@ -210,16 +217,16 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   }
 }
 
-void SphericalOrTimedEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
+// Used to evalue photons time (path) length distribution as fixed spherical
+// escape surface
+void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
 
   // Update path length for user output
   pphot->user_var[0] += pmover->dl;
-
   // First check radius condition
   Real r = sqrt(SQR(pphot->x[0])+SQR(pphot->x[1])+SQR(pphot->x[2]));
   if (r >= rad0) {
     Real dr = r-rad0;
-    pphot->path -= dr;
     pphot->user_var[0] -= dr;
     for (int i=0; i<3; i++) {
       // assume cartesian for now
@@ -228,10 +235,32 @@ void SphericalOrTimedEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *p
     pphot->status = ESCAPED;
     pphot->face = FACE_UNDEF;
   } 
+ 
+}
+
+
+// Used to test photons radial distributions after a fixed travel time
+void TimedEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
+
+  // Update path length for user output
+  pphot->user_var[0] += pmover->dl;
+
+  // First check radius condition
+  Real r = sqrt(SQR(pphot->x[0])+SQR(pphot->x[1])+SQR(pphot->x[2]));
+  if (r >= rad0) {
+    Real dr = r-rad0;
+    pphot->user_var[0] -= dr;
+    for (int i=0; i<3; i++) {
+      // assume cartesian for now
+      pphot->x[i] -= pphot->k[i]*dr;
+    }
+    pphot->status = ESCAPED;
+    pphot->face = FACE_UNDEF;
+  }
   // Then check path condition -- ensures path is not over estimated
-  if (pphot->path >= path0) {
-    Real dp = pphot->path - path0;
-    pphot->path = path0;
+  if (pphot->user_var[0] >= path0) {
+    //printf("%g %g %g %g\n",pphot->x[0],pphot->x[1],pphot->x[2],pphot->user_var[0]);
+    Real dp = pphot->user_var[0] - path0;
     pphot->user_var[0] = path0;
     for (int i=0; i<3; i++) {
       // assume cartesian for now

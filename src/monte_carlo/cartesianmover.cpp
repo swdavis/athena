@@ -133,7 +133,6 @@ void CartesianMover::Move(Photon *pphot) {
         if (pmcb->moments_flag) {
           pmcb->UpdateMoments(pphot,dl);
         }
-	pphot->path += dl;
         // update position
         for (int i=0; i<3; ++i)
           pphot->x[i] += pphot->kcart[i] * dl;
@@ -146,7 +145,6 @@ void CartesianMover::Move(Photon *pphot) {
       if (pmcb->moments_flag) {
 	pmcb->UpdateMoments(pphot,dl);
       }      
-      pphot->path += dl;
       // update position
       for (int i=0; i<3; ++i)
 	pphot->x[i] += pphot->kcart[i] * dl;

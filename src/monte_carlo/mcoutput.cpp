@@ -85,8 +85,6 @@ Spectrum::Spectrum(Spectrum *pspec) {
   face = pspec->face;
   id = pspec->id;
   output_number = pspec->output_number;
-  pathbin = pspec->pathbin;
-  radbin = pspec->radbin;
   x1min = pspec->x1min;
   x2min = pspec->x2min;
   x3min = pspec->x3min;
@@ -441,19 +439,7 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
     }
 
     int ebin;
-    if (!pathbin && !radbin)
-      ebin = EnergyBinUniform(pphot->energy,logarithmic);
-    else {
-      if (pathbin) {
-	Real everg = 1.6021772e-12;  // accounts for energy rescaling
-	ebin = EnergyBinUniform(pphot->path*everg,logarithmic);
-      } if (radbin) {
-	Real radius = sqrt(SQR(pphot->x[0])+SQR(pphot->x[1])+SQR(pphot->x[2]));
-	Real everg = 1.6021772e-12;  // accounts for energy rescaling
-	ebin = EnergyBinUniform(radius*everg,logarithmic);
-	//printf("rad: %g %d\n",radius,ebin);
-      }
-    }
+    ebin = EnergyBinUniform(pphot->energy,logarithmic);
     if (ebin < 0) return;
   
     // Get angle bins
@@ -466,8 +452,8 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
 	if(!AngleBinsSphericalPolar(pphot,phibin,mubin))
 	  return;	
     }
-    Real tauabs = -log(weight);
-    Real opac = tauabs/pphot->path;
+    //Real tauabs = -log(weight);
+    //Real opac = tauabs/pphot->path;
     intensity(phibin,mubin,ebin) += weight;
     intensity_sq(phibin,mubin,ebin) += weight*weight;
     //intensity(phibin,mubin,ebin) += pphot->stokes[0] * weight;
@@ -754,9 +740,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
 	char define_id[10];
         sprintf(define_id,"out%d",outid);  // default id="outN"
 	pspec->base_name.append(define_id);
-	// Select binning in path length or radius if desired
-	pspec->pathbin = pin->GetOrAddBoolean(pib->block_name,"pathbin",false);
-	pspec->radbin = pin->GetOrAddBoolean(pib->block_name,"radbin",false);
+	// Select legacy output format if desired
         pspec->legacy = pin->GetOrAddBoolean(pib->block_name,"legacy",false);
 	// set output face if specified
         std::string face = pin->GetOrAddString(pib->block_name,"face","none");

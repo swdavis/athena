@@ -68,18 +68,29 @@ def main(**kwargs):
     # Read escape time dist
     tdist = np.loadtxt(infile)
     tmid = 0.5*(tdist[:,0]+tdist[:,1])/time0
-    pt = tdist[:,2]/(tdist[:,1]-tdist[:,0])*time0
-    ax.plot(tmid,pt,'.')
+    pt = tdist[:,2]*time0
 
     # Compute comparison function
     pt_comp = np.zeros(len(tmid))
     for i,t in enumerate(tmid):
         pt_comp[i] = prob_ct_tau(t,tau)
+
+    ax.set_ylabel(r"$P(t)$")
+    ax.set_xlabel(r"$t$")
+    # Plot times
+    if (kwargs['notnorm']): 
+        c = 2.99792e10
+        tmid *= time0/c
+        ax.set_xlabel(r"$t \; \rm(s)$")
+    ax.plot(tmid,pt,'.')
     ax.plot(tmid,pt_comp,':')
 
     # Set axis scales
     ax.set_xscale('linear')
     ax.set_yscale('log')
+
+
+
 
     # Write spectrum to file
     if outfile is None:
@@ -101,6 +112,9 @@ if __name__ == '__main__':
         type=float,
         default = 1.e10,
         help='radius of sphere')
+    parser.add_argument('--notnorm',
+        action='store_true',
+        help='Sets t axis to physical units')
     parser.add_argument('--outfile',
         default=None,
         help='output filename for escape time plot')
