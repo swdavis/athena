@@ -58,8 +58,6 @@ typedef Real (*OpacFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
 typedef void (*ScatFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
 typedef void (*UserMoveFunc_t)(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover);
 typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, MCCoord *pco);
-typedef void (*ConnectFunc_t)(Real *x, Real gamma[NCOORD][NCOORD][NCOORD]);
-typedef void (*MCMetricFunc_t)(Real *x,  Real gcov[NCOORD][NCOORD]);
 
 //---------------------- prototypes for provided functions -------------------------------
 void DefaultGetTemperature(MonteCarloBlock *pmcb);
@@ -93,20 +91,6 @@ void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pco);
 void GetZonePositionSphericalPolarGR(Photon *pphot, MCRandom *pran, MCCoord *pcoord);
 void GetZonePositionCylindrical(Photon *pphot, MCRandom *pran, MCCoord *pcoord);
 void GetZonePositionCylindricalGR(Photon *pphot, MCRandom *pran, MCCoord *pcoord);
-//--------------------- protoypes for grmover.cpp functions ------------------------------
-void Metric_KerrSchild(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
-void Metric_KerrSchild_Up(Real x[NCOORD], Real gcon[NCOORD][NCOORD]);
-void Metric_BoyerLindquist(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
-void Metric_BoyerLindquist_Up(Real x[NCOORD], Real gcon[NCOORD][NCOORD]);
-void Metric_Cartesian(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
-void Metric_SphericalPolar(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
-void Metric_Cylindrical(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
-void Connect_KerrSchild(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
-void Connect_BoyerLindquist(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
-void Connect_Cartesian(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
-void Connect_SphericalPolar(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
-void Connect_Cylindrical(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
-void GetMCDirection(Photon *pphot, Real alpha, Real beta);
 //------------------ prototypes for frame_transformations.cpp functions ------------------
 void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD],
 		      Real econ[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD]);
@@ -255,14 +239,10 @@ public:
   enum MCBoundaryFlag mcb_bcs[6];
 
   // function pointers
-  //TempFunc2_t GetTemperature2;
   GetZonePos_t GetZonePosition;
   OpacFunc_t AbsorptionOpacity;
   OpacFunc_t ScatteringOpacity;
   ScatFunc_t Scatter;
-  //UserMoveFunc_t UserWorkInMove;
-  ConnectFunc_t Connection;
-  MCMetricFunc_t Metric;
 
   int nphdone; // Photons integrated thus far
   int nphremain; // total number of photons to integrate
@@ -284,7 +264,8 @@ public:
 
   // Associated with general mover
   // SWD some of these should be eliminated others moved to MonteCarlo
-  bool general_mover_flag; // use general integration for mover
+  bool general_mover_flag; // use general integration (default for all but
+                           // cartesian, spherical
   bool kerrschild_flag; // use KerrSchild coordinates and BH test
   bool boyerlindquist_flag; // use Boyer-Lindquist coordinates 
   bool orthotet_flag; // use orthonormal tetrad for TransferPhotons()
@@ -293,7 +274,7 @@ public:
   Real codetocgs_rho, codetoc_vel;
   Real emin, emax, elog, eminlog;
   // SWD: used by general mover, move/eliminate 
-  Real stepsize, a, velocity;
+  Real stepsize, velocity;
 
   AthenaArray<Real> emission;
   AthenaArray<Real> moments;

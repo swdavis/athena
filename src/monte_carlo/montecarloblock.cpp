@@ -108,7 +108,6 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     nx1 = pmb->block_size.nx1;
     nx2 = pmb->block_size.nx2;
     nx3 = pmb->block_size.nx3;
-    pcoord = new MCCoord(pmb->pcoord,this);
   } else {
     if (pblsize == NULL) {
       std::stringstream msg;
@@ -122,7 +121,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
       nx1 = pblsize->nx1;
       nx2 = pblsize->nx2;
       nx3 = pblsize->nx3;
-      pcoord = new MCCoord(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),acceleration);
+      //pcoord = new MCCoord(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),acceleration);
     }
   }
 
@@ -130,7 +129,6 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 
   stepsize = pin->GetOrAddReal("montecarlo","stepsize",1.0e-3);
   // SWD: a needs to go
-  a = pin->GetOrAddReal("montecarlo", "spin", 0.0);
   velocity = pin->GetOrAddReal("problem", "velocity", 0.0);
 
 
@@ -141,52 +139,42 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   orthotet_flag = pin->GetOrAddBoolean("montecarlo", "orthotet", false);
   varystep_flag = pin->GetOrAddBoolean("montecarlo", "varystep", false);
 
- if (general_mover_flag) {
-    pmover = new GeneralMover(this);
-    if (COORDINATE_SYSTEM == "cartesian") {
-      GetZonePosition = GetZonePositionCartesian;
-      if (kerrschild_flag) {
-	Connection = Connect_KerrSchild;
-	Metric = Metric_KerrSchild;
-      }
-      else {
-	Connection = Connect_Cartesian;
-	Metric = Metric_Cartesian;
-      }
-    } else if ((COORDINATE_SYSTEM == "spherical_polar") ||
-               (COORDINATE_SYSTEM == "kerr-schild")){
-      GetZonePosition = GetZonePositionSphericalPolar;
-      if (kerrschild_flag) {
-	Connection = Connect_KerrSchild;
-	Metric = Metric_KerrSchild;
-      } else if (boyerlindquist_flag) {
-	Connection = Connect_BoyerLindquist;
-	Metric = Metric_BoyerLindquist;
-      } else {
-	Connection = Connect_SphericalPolar;
-	Metric = Metric_SphericalPolar;
-      }
-    } else if (COORDINATE_SYSTEM == "cylindrical") {
-      GetZonePosition = GetZonePositionCylindricalGR;
-      Connection = Connect_Cylindrical;
-      Metric = Metric_Cylindrical;
-    }
-  } else {
-    if (COORDINATE_SYSTEM == "cartesian") {
+  // SWD: change metric, connection to function pointer MCCoord?
+
+  pmover = new GeneralMover(this);
+  if (COORDINATE_SYSTEM == "cartesian") {
+    GetZonePosition = GetZonePositionCartesian;
+    if (general_mover_flag) {
+      pmover = new GeneralMover(this);
+      pcoord = new MCCartesian(pmb->pcoord,this);
+    } else {
       pmover = new CartesianMover(this);
-      GetZonePosition = GetZonePositionCartesian;
-    } else if (COORDINATE_SYSTEM == "spherical_polar") {
+      pcoord = new MCCoord(pmb->pcoord,this);
+    }
+  } else if (COORDINATE_SYSTEM == "spherical_polar") {
+    GetZonePosition = GetZonePositionSphericalPolar;
+    if (general_mover_flag) {
+      pmover = new GeneralMover(this);
+      pcoord = new MCSphericalPolar(pmb->pcoord,this);
+    } else {
       pmover = new SphericalPolarMover(this);
-      GetZonePosition = GetZonePositionSphericalPolar;
-    } else if (COORDINATE_SYSTEM == "cylindrical") {
+      pcoord = new MCCoord(pmb->pcoord,this);
+    } 
+  } else if (COORDINATE_SYSTEM == "cylindrical") {
+    GetZonePosition = GetZonePositionCylindrical;
+    pmover = new GeneralMover(this);
+    pcoord = new MCCylindrical(pmb->pcoord,this);
+  } else if (COORDINATE_SYSTEM == "kerr-schild") {
+    GetZonePosition = GetZonePositionSphericalPolar;//approximate
+    pmover = new GeneralMover(this);
+    pcoord = new MCKerrSchild(pmb->pcoord,this);
+  } else {
       std::stringstream msg;
       msg << "### ERROR in MonteCarloBlock constructor" << std::endl
-          << "cylindircal coordinates only suppored with general photon mover" 
+          << COORDINATE_SYSTEM
+          << "coordinates not currently supported with Monte Carlo" 
 	  << std::endl;
       throw std::runtime_error(msg.str().c_str());
-      //pmover = new CylindricalMover(this);
-      //GetZonePosition = GetZonePositionCylindrical;
-    }
   }
 
   // Set absorption opacity
@@ -528,6 +516,8 @@ Real MonteCarloBlock::LorentzTransformFrequencyShift(Photon *pphot) {
   
 }
 
+// SWD: The follwoing need to be modified to automatically use hydro velocities
+// could conceivable include functional form option at later date if needed
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign)
 //  \brief Tetrad transform photon packet
@@ -548,8 +538,8 @@ void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign) {
   Real energy_shift;
   Real kdotu = 0.;
   
-  Metric(pphot->x, gcov);
-
+  pcoord->Metric(pphot->x, gcov);
+  Real a = pcoord->GetSpin();
   if ((kerrschild_flag) or (boyerlindquist_flag)) {
     Real r = pphot->x[IMC1];
     Real omega = 1.0/(pow(r, 3./2.) + a); // circular velocity 
@@ -657,10 +647,11 @@ Real MonteCarloBlock::TetradTransformFrequencyShift(Photon *pphot) {
   Real kdotu = 0.;
   Real gamma, beta2;
 
+  Real a = pcoord->GetSpin();
   omega = 1.0/(pow(r, 3./2.) + a);
   
-  Metric(pphot->x, gcov);
-
+  pcoord->Metric(pphot->x, gcov);
+ 
   if (COORDINATE_SYSTEM == "spherical_polar") {
     ucon[IMC0] = sqrt(-1.0/(gcov[IMC0][IMC0] + 2.*gcov[IMC0][IMC3]*omega +
 			    SQR(omega)*gcov[IMC3][IMC3]));

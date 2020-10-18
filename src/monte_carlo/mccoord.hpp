@@ -12,6 +12,8 @@
 #include "../athena.hpp"
 #include "montecarlo.hpp"
 
+#define NCOORD 4
+
 //----------------------------------------------------------------------------------------
 //! \class MCCoord
 //  \brief monte carlo specific coordinate values
@@ -28,16 +30,85 @@ public:
   AthenaArray<Real> vol;
   AthenaArray<Real> dmin;
 
+  virtual void Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
+  virtual void InverseMetric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
+  virtual void Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
+
   Real GetMass() const {return bh_mass_;}
   Real GetSpin() const {return bh_spin_;}
 
-private:
+protected:
  // GR-specific variables
   Real bh_mass_;
   Real bh_spin_;
 
 };
 
+//! \class MCCartesian
+//  \brief derived class for Cartesian coordinates
 
+class MCCartesian : public MCCoord {
+public:
+  MCCartesian(Coordinates *pcoord, MonteCarloBlock *pmcb);
+  ~MCCartesian();
+ 
+};
+
+//! \class MCSphericalPolar
+//  \brief derived class for Spherical coordinates
+
+class MCSphericalPolar : public MCCoord {
+public:
+  MCSphericalPolar(Coordinates *pcoord, MonteCarloBlock *pmcb);
+  ~MCSphericalPolar();
+
+  // functions
+  void Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
+  void Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
+};
+
+//! \class MCKerrSchild
+//  \brief derived class for Kerr-Schild coordinates
+
+class MCKerrSchild: public MCCoord {
+public:
+  MCKerrSchild(Coordinates *pcoord, MonteCarloBlock *pmcb);
+  ~MCKerrSchild();
+
+  // functions
+  void Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
+  void Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
+  void InverseMetric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
+
+};
+
+//! \class MCCylindrical
+//  \brief derived class for Cylindrical coordinates
+
+class MCCylindrical : public MCCoord {
+public:
+  MCCylindrical(Coordinates *pcoord, MonteCarloBlock *pmcb);
+  ~MCCylindrical();
+
+  // functions
+  void Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
+  void Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
+
+};
+
+//! \class MCBoyerLindquist
+//  \brief derived class for Boyer-Lindquist coordinates
+
+class MCBoyerLindquist : public MCCoord {
+public:
+  MCBoyerLindquist(Coordinates *pcoord, MonteCarloBlock *pmcb);
+  ~MCBoyerLindquist();
+
+  // functions
+  void Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
+  void Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
+  void InverseMetric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
+
+};
 
 #endif // MCCOORD_HPP

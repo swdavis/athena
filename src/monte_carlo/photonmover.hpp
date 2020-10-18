@@ -119,7 +119,6 @@ public:
 
   Real step;
   bool store_trajectory;
-  AthenaArray<Real> trajectory;
 
   // functions
   void Move(Photon *pphot);
