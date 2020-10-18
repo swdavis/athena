@@ -109,16 +109,17 @@ public:
   void CurvalinearToCartesian(Photon *pphot);
 };
 
-//! \class CovariantMover
+//! \class GeneralMover
 //  \brief derived class for general covariant coordinates
 
-// SWD Update names, including covariant mover, photon_step -> VerletStep
-class CovariantMover : public PhotonMover {
+class GeneralMover : public PhotonMover {
 public:
-  CovariantMover(MonteCarloBlock *pmcb);
-  ~CovariantMover();
+  GeneralMover(MonteCarloBlock *pmcb);
+  ~GeneralMover();
 
   Real step;
+  bool store_trajectory;
+  AthenaArray<Real> trajectory;
 
   // functions
   void Move(Photon *pphot);
@@ -126,7 +127,7 @@ public:
   void CurvalinearToCartesian(Photon *pphot);
   void UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb);
   bool UpdateZone(Photon *pphot);
-  void photon_step(Photon *pphot, FILE *file_output);
+  void VerletStep(Photon *pphot);
   void Stepsize(Photon *pphot);
 
 };

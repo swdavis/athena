@@ -129,20 +129,20 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   codetocgs_rho = 1.0; codetoc_vel = 1.0;  // default cgs for code units
 
   stepsize = pin->GetOrAddReal("montecarlo","stepsize",1.0e-3);
+  // SWD: a needs to go
   a = pin->GetOrAddReal("montecarlo", "spin", 0.0);
   velocity = pin->GetOrAddReal("problem", "velocity", 0.0);
 
 
   // Set up photon movement and initialization methods
-  covariant_mover_flag = pin->GetOrAddBoolean("montecarlo","covariant_mover",
-					      false);
+  general_mover_flag = pin->GetOrAddBoolean("montecarlo","general_mover",false);
   kerrschild_flag = pin->GetOrAddBoolean("montecarlo","kerrschild",false);
   boyerlindquist_flag = pin->GetOrAddBoolean("montecarlo","boyerlindquist",false);
   orthotet_flag = pin->GetOrAddBoolean("montecarlo", "orthotet", false);
   varystep_flag = pin->GetOrAddBoolean("montecarlo", "varystep", false);
 
- if (covariant_mover_flag) {
-    pmover = new CovariantMover(this);
+ if (general_mover_flag) {
+    pmover = new GeneralMover(this);
     if (COORDINATE_SYSTEM == "cartesian") {
       GetZonePosition = GetZonePositionCartesian;
       if (kerrschild_flag) {
@@ -153,7 +153,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 	Connection = Connect_Cartesian;
 	Metric = Metric_Cartesian;
       }
-    } else if (COORDINATE_SYSTEM == "spherical_polar") {
+    } else if ((COORDINATE_SYSTEM == "spherical_polar") ||
+               (COORDINATE_SYSTEM == "kerr-schild")){
       GetZonePosition = GetZonePositionSphericalPolar;
       if (kerrschild_flag) {
 	Connection = Connect_KerrSchild;
@@ -312,7 +313,7 @@ void MonteCarloBlock::RayTracePhotons(int nphot) {
   
       // user definied photon initialization
       InitializePhoton(pphoton);
-      
+  
       // Photon initialized in coordinate frame
       // move photon until  stopping condition
       pmover->Move(pphoton);
@@ -540,7 +541,7 @@ Real MonteCarloBlock::LorentzTransformFrequencyShift(Photon *pphot) {
 void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign) {
 
   // Construct the orthonormal tetrad
-  Real ucon[NCOORD], bcon[NCOORD];
+  Real ucon[NCOORD];
   Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
   Real kcopy[NCOORD];
   Real gcov[NCOORD][NCOORD];
@@ -577,13 +578,8 @@ void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign) {
   }
   //printf("ucon: %g %g %g %g\n", ucon[IMC0], ucon[IMC1], ucon[IMC2], ucon[IMC3]);
 
-  for (int i = 0; i < NCOORD; i++) {
-    bcon[i] = 0.;
-    kcopy[i] = pphot->k[i];
-  }
-
   // create tetrad basis
-  ConstructTetrad(ucon, bcon, gcov, econ, ecov);
+  ConstructTetrad(ucon, gcov, econ, ecov);
 
   if (sign > 0) { // tranforming to comoving frame
 
@@ -592,6 +588,8 @@ void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign) {
 
     energy_shift = - pphot->k[IMC0] / kdotu; 
 
+    for (int i = 0; i < NCOORD; i++)
+      kcopy[i] = pphot->k[i];
     CoordinateToTetrad(kcopy, pphot->k, ecov); // updates pphot->k 
 
     Real klow[NCOORD];
@@ -650,7 +648,7 @@ Real MonteCarloBlock::TetradTransformFrequencyShift(Photon *pphot) {
 
   // Construct the orthonormal tetrad
   Real r = pphot->x[IMC1];
-  Real ucon[NCOORD], bcon[NCOORD];
+  Real ucon[NCOORD];
   Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
   Real kcopy[NCOORD];
   Real gcov[NCOORD][NCOORD];
@@ -708,7 +706,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
 
     // Add contribution to corresponding moments
     // Energy density
-    if (covariant_mover_flag) 
+    if (general_mover_flag) 
       weight *= pphot->k[IMC0];
     moments(MCIER,k,j,i) += weight;
     // Flux

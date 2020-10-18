@@ -44,7 +44,7 @@ public:
   Real weight, eweight; // photon weights
   Real energy;  // photon energy
   Real *user_var; // storage for user variables
-
+  AthenaArray<Real> trajectory; // Store trajectory
   Real sct_coef, abs_coef;  //scattering and absoprtion coefficients
 
   // functions

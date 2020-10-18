@@ -21,6 +21,7 @@
 #include "photon.hpp"
 #include "mcbvals.hpp"
 #include "mcoutput.hpp"
+#include "mccoord.hpp"
 
 class Mesh;
 class MeshBlock;
@@ -107,7 +108,7 @@ void Connect_SphericalPolar(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
 void Connect_Cylindrical(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
 void GetMCDirection(Photon *pphot, Real alpha, Real beta);
 //------------------ prototypes for frame_transformations.cpp functions ------------------
-void ConstructTetrad(Real ucon[NCOORD], Real bcon[NCOORD], Real gcov[NCOORD][NCOORD],
+void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD],
 		      Real econ[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD]);
 int KroneckerDelta(int i, int j);
 void ProjectVecSub(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD]);
@@ -146,24 +147,6 @@ public:
   
   Real uniform();
   Real chisquare(int n);
-};
-
-
-//----------------------------------------------------------------------------------------
-//! \class MCCoord
-//  \brief monte carlo specific coordinate values
-class MCCoord {
-public:
-  MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb);
-  MCCoord(int ncells1, int ncells2, int ncells3, bool acc);
-  ~MCCoord();
-
-  bool acceleration;
-
-  AthenaArray<Real> x1f, x2f, x3f; // face  positions
-  AthenaArray<Real> vol;
-  AthenaArray<Real> dmin;
-
 };
 
 //----------------------------------------------------------------------------------------
@@ -301,7 +284,7 @@ public:
 
   // Associated with general mover
   // SWD some of these should be eliminated others moved to MonteCarlo
-  bool covariant_mover_flag; // use GR covariant mover
+  bool general_mover_flag; // use general integration for mover
   bool kerrschild_flag; // use KerrSchild coordinates and BH test
   bool boyerlindquist_flag; // use Boyer-Lindquist coordinates 
   bool orthotet_flag; // use orthonormal tetrad for TransferPhotons()
@@ -309,7 +292,7 @@ public:
 
   Real codetocgs_rho, codetoc_vel;
   Real emin, emax, elog, eminlog;
-  // SWD: used by covariant mover, move/eliminate 
+  // SWD: used by general mover, move/eliminate 
   Real stepsize, a, velocity;
 
   AthenaArray<Real> emission;
