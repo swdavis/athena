@@ -145,8 +145,11 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   nphlist = new int[nbtotal];
   int nperb = nphtot / nbtotal;
 
-  for (int i=0; i<nbtotal; ++i)
+  for (int i=0; i<nbtotal; ++i) {
     nphlist[i] = nperb;
+    if (i == nbtotal-1)
+      nphlist[i] += nphtot % nbtotal;
+  }
   // ensure equal number of photons per mesh block assuming all meshblocks have 
   // same number of zones; nphtot may differ from input nphtot
   nphtot = 0;
@@ -840,7 +843,7 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput
       while (pmcb != NULL) {
         nphrun += cadence;
         if (raytrace_flag)
-          pmcb->RayTracePhotons(pmc->cadence);
+          pmcb->RayTracePhotons(pmcb->cadence);
         else
           pmcb->TransferPhotons(pmcb->cadence);
 	pmcb->nphremain -= pmcb->cadence;

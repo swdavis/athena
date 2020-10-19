@@ -36,6 +36,8 @@ public:
 
   Real GetMass() const {return bh_mass_;}
   Real GetSpin() const {return bh_spin_;}
+  void SetMass(Real m) {bh_mass_ = m;}
+  void SetSpin(Real a) {bh_spin_ = a;}
 
 protected:
  // GR-specific variables
@@ -50,6 +52,7 @@ protected:
 class MCCartesian : public MCCoord {
 public:
   MCCartesian(Coordinates *pcoord, MonteCarloBlock *pmcb);
+  MCCartesian(int ncells1, int ncells2, int ncells3, bool acc);
   ~MCCartesian();
  
 };
@@ -60,6 +63,7 @@ public:
 class MCSphericalPolar : public MCCoord {
 public:
   MCSphericalPolar(Coordinates *pcoord, MonteCarloBlock *pmcb);
+  MCSphericalPolar(int ncells1, int ncells2, int ncells3, bool acc);
   ~MCSphericalPolar();
 
   // functions
@@ -73,6 +77,7 @@ public:
 class MCKerrSchild: public MCCoord {
 public:
   MCKerrSchild(Coordinates *pcoord, MonteCarloBlock *pmcb);
+  MCKerrSchild(int ncells1, int ncells2, int ncells3, bool acc);
   ~MCKerrSchild();
 
   // functions
@@ -88,6 +93,7 @@ public:
 class MCCylindrical : public MCCoord {
 public:
   MCCylindrical(Coordinates *pcoord, MonteCarloBlock *pmcb);
+  MCCylindrical(int ncells1, int ncells2, int ncells3, bool acc);
   ~MCCylindrical();
 
   // functions
@@ -102,13 +108,25 @@ public:
 class MCBoyerLindquist : public MCCoord {
 public:
   MCBoyerLindquist(Coordinates *pcoord, MonteCarloBlock *pmcb);
+  MCBoyerLindquist(int ncells1, int ncells2, int ncells3, bool acc);
   ~MCBoyerLindquist();
 
   // functions
   void Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
   void Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
   void InverseMetric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
-
 };
+
+//! \class MCMinkowski
+//  \brief derived class for Minkowski coordinates
+
+class MCMinkowski : public MCCoord {
+public:
+  MCMinkowski(Coordinates *pcoord, MonteCarloBlock *pmcb);
+  MCMinkowski(int ncells1, int ncells2, int ncells3, bool acc);
+  ~MCMinkowski();
+ 
+};
+
 
 #endif // MCCOORD_HPP

@@ -132,42 +132,84 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   velocity = pin->GetOrAddReal("problem", "velocity", 0.0);
 
 
-  // Set up photon movement and initialization methods
+  // Flags for handling photon movement
   general_mover_flag = pin->GetOrAddBoolean("montecarlo","general_mover",false);
-  kerrschild_flag = pin->GetOrAddBoolean("montecarlo","kerrschild",false);
   boyerlindquist_flag = pin->GetOrAddBoolean("montecarlo","boyerlindquist",false);
   orthotet_flag = pin->GetOrAddBoolean("montecarlo", "orthotet", false);
   varystep_flag = pin->GetOrAddBoolean("montecarlo", "varystep", false);
 
-  // SWD: change metric, connection to function pointer MCCoord?
-
+  // Set up photon movement and initialization methods
   pmover = new GeneralMover(this);
   if (COORDINATE_SYSTEM == "cartesian") {
     GetZonePosition = GetZonePositionCartesian;
     if (general_mover_flag) {
       pmover = new GeneralMover(this);
-      pcoord = new MCCartesian(pmb->pcoord,this);
+      if (pmb != NULL)
+        pcoord = new MCCartesian(pmb->pcoord,this);
+      else
+        pcoord = new MCCartesian(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
+                                 acceleration);
     } else {
       pmover = new CartesianMover(this);
-      pcoord = new MCCoord(pmb->pcoord,this);
+      if (pmb != NULL)
+        pcoord = new MCCoord(pmb->pcoord,this);
+      else
+        pcoord = new MCCoord(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
+                             acceleration);
     }
   } else if (COORDINATE_SYSTEM == "spherical_polar") {
     GetZonePosition = GetZonePositionSphericalPolar;
     if (general_mover_flag) {
       pmover = new GeneralMover(this);
-      pcoord = new MCSphericalPolar(pmb->pcoord,this);
+      if (pmb != NULL)
+        pcoord = new MCSphericalPolar(pmb->pcoord,this);
+      else
+        pcoord = new MCSphericalPolar(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
+                                      acceleration);
     } else {
       pmover = new SphericalPolarMover(this);
-      pcoord = new MCCoord(pmb->pcoord,this);
+      if (pmb != NULL)
+        pcoord = new MCCoord(pmb->pcoord,this);
+      else
+        pcoord = new MCCoord(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
+                             acceleration);
     } 
   } else if (COORDINATE_SYSTEM == "cylindrical") {
     GetZonePosition = GetZonePositionCylindrical;
     pmover = new GeneralMover(this);
-    pcoord = new MCCylindrical(pmb->pcoord,this);
+    if (pmb != NULL)
+      pcoord = new MCCylindrical(pmb->pcoord,this);
+    else
+      pcoord = new MCCylindrical(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
+                                 acceleration);
   } else if (COORDINATE_SYSTEM == "kerr-schild") {
     GetZonePosition = GetZonePositionSphericalPolar;//approximate
     pmover = new GeneralMover(this);
-    pcoord = new MCKerrSchild(pmb->pcoord,this);
+    if (boyerlindquist_flag) {
+     if (pmb != NULL)
+       pcoord = new MCBoyerLindquist(pmb->pcoord,this);
+     else {
+       pcoord = new MCBoyerLindquist(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
+                                     acceleration);
+       pcoord->SetSpin(pin->GetReal("coord", "a"));
+     }
+    } else {
+      if (pmb != NULL)
+        pcoord = new MCKerrSchild(pmb->pcoord,this);
+      else {
+        pcoord = new MCKerrSchild(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
+                                  acceleration);
+        pcoord->SetSpin(pin->GetReal("coord", "a"));
+      }
+    }
+  } else if (COORDINATE_SYSTEM == "minkowski") {
+    GetZonePosition = GetZonePositionCartesian;
+    pmover = new GeneralMover(this);
+    if (pmb != NULL)
+      pcoord = new MCMinkowski(pmb->pcoord,this);
+    else
+      pcoord = new MCMinkowski(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
+                               acceleration);
   } else {
       std::stringstream msg;
       msg << "### ERROR in MonteCarloBlock constructor" << std::endl

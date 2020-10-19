@@ -131,6 +131,12 @@ MCCartesian::MCCartesian(Coordinates *pcoord, MonteCarloBlock *pmcb)
 
 }
 
+// constructor
+MCCartesian::MCCartesian(int ncells1, int ncells2, int ncells3, bool acc)
+  : MCCoord(ncells1,ncells2,ncells3,acc) {
+
+}
+
 // destructor
 MCCartesian::~MCCartesian() {
 
@@ -139,6 +145,12 @@ MCCartesian::~MCCartesian() {
 // constructor
 MCSphericalPolar::MCSphericalPolar(Coordinates *pcoord, MonteCarloBlock *pmcb)
   : MCCoord(pcoord,pmcb) {
+
+}
+
+// constructor
+MCSphericalPolar::MCSphericalPolar(int ncells1, int ncells2, int ncells3, bool acc)
+  : MCCoord(ncells1,ncells2,ncells3,acc) {
 
 }
 
@@ -197,11 +209,16 @@ MCCylindrical::MCCylindrical(Coordinates *pcoord, MonteCarloBlock *pmcb)
 
 }
 
+// constructor
+MCCylindrical::MCCylindrical(int ncells1, int ncells2, int ncells3, bool acc)
+  : MCCoord(ncells1,ncells2,ncells3,acc) {
+
+}
+
 // destructor
 MCCylindrical::~MCCylindrical() {
 
 }
-
 
 void MCCylindrical::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
   int m, n;
@@ -237,6 +254,12 @@ void MCCylindrical::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]) 
 // constructor
 MCKerrSchild::MCKerrSchild(Coordinates *pcoord, MonteCarloBlock *pmcb)
   : MCCoord(pcoord,pmcb) {
+
+}
+
+// constructor
+MCKerrSchild::MCKerrSchild(int ncells1, int ncells2, int ncells3, bool acc)
+  : MCCoord(ncells1,ncells2,ncells3,acc) {
 
 }
 
@@ -458,6 +481,12 @@ MCBoyerLindquist::MCBoyerLindquist(Coordinates *pcoord, MonteCarloBlock *pmcb)
 
 }
 
+// constructor
+MCBoyerLindquist::MCBoyerLindquist(int ncells1, int ncells2, int ncells3, bool acc)
+  : MCCoord(ncells1,ncells2,ncells3,acc) {
+
+}
+
 // destructor
 MCBoyerLindquist::~MCBoyerLindquist() {
 
@@ -625,7 +654,22 @@ void MCBoyerLindquist::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD
   
 }
 
+// constructor
+MCMinkowski::MCMinkowski(Coordinates *pcoord, MonteCarloBlock *pmcb)
+  : MCCoord(pcoord,pmcb) {
 
+}
+
+// constructor
+MCMinkowski::MCMinkowski(int ncells1, int ncells2, int ncells3, bool acc)
+  : MCCoord(ncells1,ncells2,ncells3,acc) {
+
+}
+
+// destructor
+MCMinkowski::~MCMinkowski() {
+
+}
 
 
 
