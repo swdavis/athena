@@ -96,10 +96,44 @@ public:
   void WriteList(std::string filename, int ntot);
 
 private:
-  int max_len;  // number of photons allowed with current allocated memory
+  int len_limit;  // number of photons allowed with current allocated memory
   void ResizeList(int new_size); 
 
 };
+
+//----------------------------------------------------------------------------------------
+//! \class PhotonTrajectoryList
+//  \brief List of photon trajectories
+
+class PhotonTrajectoryList {
+public:
+  PhotonTrajectoryList(int init_len_limit, int init_step_limit, int nuser);
+  ~PhotonTrajectoryList();
+
+  std::string base_name;
+
+  int length; // number of trajectories
+  int step;  // current step in trajectory
+  int maxstep;
+  int nparams; // number of properties for each photon trajectory
+  int output_number;// current output number
+  int nuser_out; 
+
+  int *nsteps;  // step number for each trajectory
+  AthenaArray<Real> trajectories;  // array of photon properies
+
+  //functions
+  void CompleteTrajectory();
+  void AddToTrajectory(Photon *pphot);
+  void WriteList(std::string filename);
+
+private:
+  int len_limit;  // number of trajectories allowed with current allocated memory
+  int step_limit; // maximum number of steps to 
+  void ResizeList(int new_len_limit, int new_step_limit); 
+
+};
+
 
 //----------------------------------------------------------------------------------------
 //! \class MCOutput
@@ -113,6 +147,7 @@ public:
   MonteCarlo *pmy_mc;
   Spectrum *pspec;
   PhotonList *pphlist;
+  PhotonTrajectoryList *ptraj;
 
   bool moments;
 
@@ -120,6 +155,8 @@ public:
   void CollectSpectrum(MonteCarlo *pmc);
   void OutputSpectrum(MonteCarlo *pmc);
   void OutputPhotonList(int nphtot);
+  void OutputTrajectoryList();
+
 };
 
 #endif //MC_OUTPUT

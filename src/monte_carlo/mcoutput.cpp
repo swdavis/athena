@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <stdexcept>  // runtime_error
 #include <iomanip>    // setfill(), setw()
+#include <errno.h>
 
 // Athena++ headers
 #include "montecarlo.hpp"
@@ -579,7 +580,7 @@ PhotonList::PhotonList(int list_mem_size, bool pol, bool rel, int nuser) {
 
 
   // Allocate memory for photon list
-  max_len = list_mem_size;
+  len_limit = list_mem_size;
   nparams = 8;
   polarized = pol;
   if (polarized)
@@ -589,7 +590,7 @@ PhotonList::PhotonList(int list_mem_size, bool pol, bool rel, int nuser) {
     nparams += 2;
   nparams += nuser;
   nuser_out = nuser;
-  photons.NewAthenaArray(max_len,nparams);
+  photons.NewAthenaArray(len_limit,nparams);
 
 }
 
@@ -606,9 +607,9 @@ PhotonList::~PhotonList() {
 
 void PhotonList::AddPhoton(Photon *pphot) {
 
-  if (length == max_len) {
+  if (length == len_limit) {
     // double array size when list is full
-    ResizeList(2*max_len);
+    ResizeList(2*len_limit);
   }
   int n = 0;
   photons(length,n++) = pphot->weight*pphot->eweight;
@@ -640,6 +641,8 @@ void PhotonList::WriteList(std::string filename, int ntot) {
   // open file for output
   FILE *pfile;
   std::stringstream msg;
+
+  //if ((pfile = fopen("temp.out","w")) == NULL) {
   if ((pfile = fopen(filename.c_str(),"w")) == NULL) {
     msg << "### FATAL ERROR in function [PhotonList::WriteList]" << std::endl
 	<< "Output file '" << filename << "' could not be opened";
@@ -675,9 +678,9 @@ void PhotonList::WriteList(std::string filename, int ntot) {
 
 void PhotonList::ResizeList(int new_len) {
   
-  if (new_len < max_len) {
-    std::cout << "Warning: new list length " << new_len << " < max_len " 
-              << max_len << ".  Aborting ResizeList()" << std::endl;
+  if (new_len < len_limit) {
+    std::cout << "Warning: new list length " << new_len << " < len_limit " 
+              << len_limit << ".  Aborting ResizeList()" << std::endl;
     return;
   }
   AthenaArray<Real> temp_array(photons); // create deep copy
@@ -688,8 +691,154 @@ void PhotonList::ResizeList(int new_len) {
       photons(i,j) = temp_array(i,j);
     }}
   temp_array.DeleteAthenaArray();
-  max_len = new_len;
+  len_limit = new_len;
 }
+
+
+// constructor
+PhotonTrajectoryList::PhotonTrajectoryList(int init_len_limit, int init_step_limit, int nuser) {
+
+  // Allocate memory for trajectory list
+  len_limit = init_len_limit;
+  step_limit = init_step_limit;
+  nparams = 4;
+  nparams += nuser;
+  nuser_out = nuser;
+  trajectories.NewAthenaArray(len_limit,step_limit,nparams);
+  nsteps = new int[len_limit];
+}
+
+// destructor
+PhotonTrajectoryList::~PhotonTrajectoryList() {
+
+  trajectories.DeleteAthenaArray();
+  delete [] nsteps;
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn PhotonTrajectoryList::CompleteTrajectory()
+//  \brief add location to trajectory
+
+void PhotonTrajectoryList::CompleteTrajectory() {
+
+  nsteps[length] = step;
+  if (step > maxstep) maxstep = step;
+  length++;
+  if (length == len_limit) {
+    // double array size when list is full
+    ResizeList(2*len_limit,step_limit);
+  }
+  step = 0;
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn PhotonTrajectoryList::AddToTrajectory(Photon *pphot)
+//  \brief add photon location to trajectory
+
+void PhotonTrajectoryList::AddToTrajectory(Photon *pphot) {
+ 
+  if (step == step_limit)
+    return;
+ 
+  int n = 0; 
+  for (int i=0; i<4; i++) {
+    trajectories(length,step,n++) = pphot->x[i];
+  }
+  for (int i=0; i<nuser_out; i++) {
+    trajectories(length,step,n++) = pphot->user_var[i];
+  }
+  step++;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void PhotonTrajectoryList::WriteList(std::string filename, Real ntot)
+//  \brief write photon trajectory list to binary file with header
+
+void PhotonTrajectoryList::WriteList(std::string filename) {
+  // Since list lengths are variable each process writes its own list
+
+  // open file for output
+  FILE *pfile;
+  std::stringstream msg;
+
+  //if ((pfile = fopen("temp.out","w")) == NULL) {
+  if ((pfile = fopen(filename.c_str(),"w")) == NULL) {
+    msg << "### FATAL ERROR in function [PhotonTrajectoryList::WriteList]" << std::endl
+	<< "Output file '" << filename << "' could not be opened";
+    throw std::runtime_error(msg.str().c_str());
+  }
+
+  // write header information
+  fprintf(pfile,"length=%d\n",length);
+  fprintf(pfile,"maxstep=%d\n",maxstep);
+  fprintf(pfile,"npars=%d\n",nparams);
+  fprintf(pfile,"coord=%s\n",COORDINATE_SYSTEM);
+  int *idata = new int[length];
+  for (int i=0; i<length; ++i)
+    idata[i] = nsteps[i];
+  // write step numbers
+  if (!(mcoutput::IsBigEndian()))
+    for (int i=0; i<length; ++i) mcoutput::Swap4Bytes(&idata[i]);
+  fwrite(idata,sizeof(int),static_cast<size_t>(length),pfile);
+  // Get total length of array
+  int ndata = 0;
+  for (int i=0; i<length; ++i)
+    ndata += nsteps[i];
+  ndata *= nparams;
+  double *data = new double[ndata];
+  // write data
+  int n=0;
+  for (int i=0; i<length; ++i) {
+    for (int j=0; j<nsteps[i]; ++j) {
+      for (int k=0; k<nparams; ++k) {
+        data[n++] = static_cast<double>(trajectories(i,j,k));
+      }}}
+  // write data in big endian order
+  if (!(mcoutput::IsBigEndian()))
+    for (int i=0; i<ndata; ++i) mcoutput::Swap8Bytes(&data[i]);
+  fwrite(data,sizeof(double),static_cast<size_t>(ndata),pfile);
+  fclose(pfile);
+  delete [] data;
+  delete [] idata;
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void PhotonTrajectoryList::ResizeList(int new_len_limit, int new_step_limit)
+//  \brief resize a photon trajectory list
+
+void PhotonTrajectoryList::ResizeList(int new_len_limit, int new_step_limit) {
+  
+  if (new_len_limit < len_limit) {
+    std::cout << "Warning: new list length " << new_len_limit << " < len_limit " 
+              << len_limit << ".  Aborting ResizeList()" << std::endl;
+    return;
+  }
+  // Resize nsteps
+  int *itemp_array = new int[length];
+  for (int i=0; i<length; i++)
+    itemp_array[i] = nsteps[i];
+  delete [] nsteps;
+  nsteps = new int[new_len_limit];
+ for (int i=0; i<length; i++)
+   nsteps[i] = itemp_array[i];
+  delete [] itemp_array;
+  // Resize trajectories
+  AthenaArray<Real> temp_array(trajectories); // create deep copy
+  trajectories.DeleteAthenaArray();
+  trajectories.NewAthenaArray(new_len_limit,step_limit,nparams);
+  for (int i=0; i<length; ++i) {
+    for (int j=0; j<step_limit; ++j) {
+      for (int k=0; k<nparams; ++k) {
+        trajectories(i,j,k) = temp_array(i,j,k);
+      }}}
+  temp_array.DeleteAthenaArray();
+  len_limit = new_len_limit;
+
+}
+
 
 // constructor
 MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
@@ -701,6 +850,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
   moments = false;
   pspec = NULL;
   pphlist = NULL;
+  ptraj = NULL;
   // loop over input block names.  Find those that start with "output", read parameters,
   // and construct linked list of spectra if present, set moments flag if moments output
   // present
@@ -815,7 +965,39 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         char proc_id[11];
         sprintf(proc_id,"proc%d",Globals::my_rank);
         pphlist->base_name.append(proc_id);
-
+ } else if (type.compare("traj") == 0) {
+        // Create photon trajectory list
+        // Get number of user output variables and confirm it is less than
+        // the number of user variables
+        int nuser_out = pin->GetOrAddInteger(pib->block_name,"nuser",0);
+        if (nuser_out > pmy_mc->nuser_var) {
+          std::stringstream msg;
+          msg << "### ERROR in MCOutput constructor" << std::endl
+              << "User output variables: " << nuser_out
+              << " greater than user variables: " << pmy_mc->nuser_var << std::endl; 
+          throw std::runtime_error(msg.str().c_str());
+        }
+        int step_limit = pin->GetOrAddInteger(pib->block_name,"steplimit",10000);
+        if (pmc->max_list_size <= 0) pmc->max_list_size = 1;
+        ptraj = new PhotonTrajectoryList(pmc->max_list_size+1,step_limit,nuser_out);
+        // Initialize photon list
+        ptraj->length = 0;
+        ptraj->maxstep = ptraj->step = 0;
+	ptraj->output_number = 0;
+	// Generate file name
+	std::string outn = pib->block_name.substr(6); // 6 because counting starts at 0!
+	int outid = atoi(outn.c_str());
+	// set file name
+	std::string basename = pin->GetString("job","problem_id");
+	ptraj->base_name.assign(basename);
+        ptraj->base_name.append(".");
+	char define_id[10];
+        sprintf(define_id,"out%d",outid);  // default id="outN"
+	ptraj->base_name.append(define_id);
+	ptraj->base_name.append(".");
+        char proc_id[11];
+        sprintf(proc_id,"proc%d",Globals::my_rank);
+        ptraj->base_name.append(proc_id);
       } else {
         // Look for moments
         std::string var = pin->GetOrAddString(pib->block_name,"variable","none");
@@ -1096,3 +1278,25 @@ void MCOutput::OutputPhotonList(int nphtot) {
 
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void MCOutput::OutputTrajectoryList()
+//  \brief output list of photon trajectories
+
+void MCOutput::OutputTrajectoryList() {
+
+  if (ptraj == NULL)
+    return;
+
+  std::string filename;
+  filename.assign(ptraj->base_name);
+  filename.append(".");
+  std::stringstream file_number;
+  file_number << std::setw(5) << std::setfill('0') << ptraj->output_number;
+  filename.append(file_number.str());
+  filename.append(".traj");
+  ptraj->WriteList(filename);
+  ptraj->output_number++;
+  // Reset list length to 0
+  ptraj->length = 0;
+
+}

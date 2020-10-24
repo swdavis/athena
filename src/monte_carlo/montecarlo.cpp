@@ -852,6 +852,7 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput
       pmcb = pblock;
       pmcout->OutputSpectrum(this);
       pmcout->OutputPhotonList(pmcb->cadence);
+      pmcout->OutputTrajectoryList();
       if (pmcout->moments) {
 	CollectMoments();
 	pouts->MakeOutputs(pmesh,pinput,true);
@@ -877,6 +878,7 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput
     pmcb = pblock;
     pmcout->OutputSpectrum(this);
     pmcout->OutputPhotonList(pmcb->cadence);
+    pmcout->OutputTrajectoryList();
     if (pmcout->moments) {
       CollectMoments();
       pouts->MakeOutputs(pmesh,pinput,true);

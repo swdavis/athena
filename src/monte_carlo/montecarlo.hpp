@@ -13,6 +13,7 @@
 
 #include <sstream>
 #include <gsl/gsl_randist.h>
+#include <complex>
 
 // Athena++ classes headers
 #include "../athena.hpp"
@@ -92,6 +93,7 @@ void GetZonePositionSphericalPolarGR(Photon *pphot, MCRandom *pran, MCCoord *pco
 void GetZonePositionCylindrical(Photon *pphot, MCRandom *pran, MCCoord *pcoord);
 void GetZonePositionCylindricalGR(Photon *pphot, MCRandom *pran, MCCoord *pcoord);
 //------------------ prototypes for frame_transformations.cpp functions ------------------
+// SWD:  Add these to MCCoord class, utils, keep here?
 void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD],
 		      Real econ[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD]);
 int KroneckerDelta(int i, int j);
@@ -100,8 +102,16 @@ Real DotVec(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD]);
 void NormalizeVec(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD]);
 void ConToCov(Real ucon[NCOORD], Real ucov[NCOORD], Real gcov[NCOORD][NCOORD]);
 void CovToCon(Real ucov[NCOORD], Real ucon[NCOORD], Real gcon[NCOORD][NCOORD]);
-void CoordinateToTetrad(Real ucoord[NCOORD], Real utet[NCOORD], Real ecov[NCOORD][NCOORD]);
-void TetradToCoordinate(Real utet[NCOORD], Real ucoord[NCOORD], Real econ[NCOORD][NCOORD]);
+void CoordinateToTetrad(Real ucoord[NCOORD],Real utet[NCOORD],Real ecov[NCOORD][NCOORD]);
+void TetradToCoordinate(Real utet[NCOORD],Real ucoord[NCOORD],Real econ[NCOORD][NCOORD]);
+void StokesToTensor(Real stokes[NCOORD], std::complex<Real> tensor[NCOORD][NCOORD]);
+void TensorToStokes(std::complex<Real> tensor[NCOORD][NCOORD], Real stokes[NCOORD]);
+void ComplexCoordinateToTetrad(std::complex<Real> tcoord[NCOORD][NCOORD], 
+                               std::complex<Real> ttet[NCOORD][NCOORD],
+                               Real ecov[NCOORD][NCOORD]);
+void ComplexTetradToCoordinate(std::complex<Real> ttet[NCOORD][NCOORD],
+                               std::complex<Real> tcoord[NCOORD][NCOORD],
+                               Real econ[NCOORD][NCOORD]);
 //---------------------- prototypes for setting flags ------------------------------------
 enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string);
 enum EmissionFlag GetEmissionFlag(std::string input_string);
@@ -228,8 +238,10 @@ public:
   PhotonMover* pmover; // ptr to photon mover
   MCRandom *pran; // ptr to random number generator
   MCBoundaryValues *pbval; // ptr to MC boundary values
+  // SWD: Need to consider future where photons cross meshblocks
   Spectrum *pspec; // ptr to spectrum
   PhotonList *pphlist; // ptr to photon list
+  PhotonTrajectoryList *ptraj;
 
   MonteCarloBlock *next;
 

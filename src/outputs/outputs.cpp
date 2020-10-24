@@ -103,7 +103,8 @@ Outputs::Outputs(Mesh *pm, ParameterInput *pin) {
       if (MONTE_CARLO_ENABLED) {
         // Skip spectrum outputs which are handled by MCOutput class
         std::string type = pin->GetString(pib->block_name,"file_type");
-        if ((type.compare("spec") == 0) || (type.compare("phlist") == 0)) {
+        if ((type.compare("spec") == 0) || (type.compare("phlist") == 0) ||
+            (type.compare("traj") == 0)) {
           pib = pib->pnext;  // move to next input block name
           continue;
         }

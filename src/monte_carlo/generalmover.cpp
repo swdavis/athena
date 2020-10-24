@@ -15,8 +15,8 @@
 #include "debug.hpp"
 //#include "montecarlo.hpp"
 #define MAXITER 1e8
+//#define MAXITER 100
 //#define DEBUG
-//#define OUTTEST_SP
 //#define OUTTEST_GK
 //#define OUTTEST_TF
 #define NBUFFER 1000
@@ -33,16 +33,12 @@
 #define slope 1
 #define R0 0
 
-static Real dlambda;
-static Real a;
-static Real ri;
-
 // Implementation of general photon mover
 
 GeneralMover::GeneralMover(MonteCarloBlock *pmcb) 
   : PhotonMover(pmcb) {
 
-  dlambda = pmy_mcb->stepsize;
+  step_par = pmy_mcb->stepsize;
 
 }
 
@@ -57,29 +53,19 @@ GeneralMover::~GeneralMover() {
 
 void GeneralMover::Move(Photon *pphot) {
 
-  FILE *file_output = fopen("output_gr.dat", "a");
-
   MonteCarloBlock *pmcb = pmy_mcb;
   MCRandom *pran = pmy_mcb->pran;
   MCCoord *pco = pmy_mcb->pcoord;
+  PhotonTrajectoryList *ptraj = pmy_mcb->ptraj;
 
   // get number of mean free paths photon will travel
   Real TauRemaining = GetOpticalDepth(pran);
-
-  // References for momentum vectors
-  Real& kx = pphot->kcart[0];
-  Real& ky = pphot->kcart[1];
-  Real& kz = pphot->kcart[2];
-  Real& kr  = pphot->k[IMC1];
-  Real& kth = pphot->k[IMC2];
-  Real& kph = pphot->k[IMC3];
-
+ 
 #ifdef DEBUG
   typedef struct {
     Real dl, dlr, dlt, dlp;
     Real cth, sth, cph, sph;
     Real kr, kth, kph;
-    Real kx, ky, kz;
     Real x,y,z;
     int i,j,k;
     bool ascend[3];
@@ -87,239 +73,107 @@ void GeneralMover::Move(Photon *pphot) {
   debug_t db[NBUFFER];
 #endif
 
-  Real r_outer = 1.0 + sqrt(1.0 - SQR(a)) + 1.0e-3;
   
-  // Added by Shane
-#ifdef OUTTEST_GK
-
-  FILE *outfile1 = fopen("mccomp.in","a");
-  FILE *outfile3 = fopen("mccomp.in3", "a");
-  Real gcov0[NCOORD][NCOORD];
-  Real kphi0, kphif, kt0, ktf, kth0, kthf, xIMC1_old, rf;
-  int su,sui,tpr=0;
-  Real kphi0_bl, kt0_bl, kth0_bl, delta;
-  Real alpha, beta;
-  Real e_const, l_const, q_const;
-
-  delta = SQR(pphot->x[IMC1]) - 2. * pphot->x[IMC1] + SQR(a);
-  pmcb->Metric(pphot->x,gcov0);
-
-  kt0 = pphot->k[IMC0]*gcov0[IMC0][IMC0] + pphot->k[IMC1]*gcov0[IMC0][IMC1] + 
-    pphot->k[IMC2]*gcov0[IMC0][IMC2] + pphot->k[IMC3]*gcov0[IMC0][IMC3];
-  kth0 = pphot->k[IMC0]*gcov0[IMC2][IMC0] + pphot->k[IMC1]*gcov0[IMC2][IMC1] + 
-    pphot->k[IMC2]*gcov0[IMC2][IMC2] + pphot->k[IMC3]*gcov0[IMC2][IMC3];
-  kphi0 = pphot->k[IMC0]*gcov0[IMC3][IMC0] + pphot->k[IMC1]*gcov0[IMC3][IMC1] + 
-    pphot->k[IMC2]*gcov0[IMC3][IMC2] + pphot->k[IMC3]*gcov0[IMC3][IMC3];
-  
-  e_const = -kt0;
-  l_const = kphi0;
-  q_const = SQR(kth0) + SQR(kphi0 * cos(pphot->x[IMC2])/sin(pphot->x[IMC2])) - 
-    SQR(a * kt0 * cos(pphot->x[IMC2]));
-  /*printf("Constants of motion before integration (E, l, Q): %g %g %g\n", 
-    e_const, l_const, q_const);*/
-  
-  // SWD: Commented out to avoid compilation error
-  //if (pmcb->kerrschild_flag) {
-  //  Metric_BoyerLindquist(pphot->x, gcov0);
-  //}
-
-  kt0_bl = (pphot->k[IMC0] - 2. * pphot->x[IMC1] / delta * pphot->k[IMC1])*gcov0[IMC0][IMC0] 
-    + pphot->k[IMC1]*gcov0[IMC0][IMC1] + pphot->k[IMC2]*gcov0[IMC0][IMC2] 
-    + (pphot->k[IMC3] - a / delta * pphot->k[IMC1])*gcov0[IMC0][IMC3];
-  kth0_bl = (pphot->k[IMC0] - 2. * pphot->x[IMC1] / delta * pphot->k[IMC1])*gcov0[IMC2][IMC0]
-    + pphot->k[IMC1]*gcov0[IMC2][IMC1] + pphot->k[IMC2]*gcov0[IMC2][IMC2] 
-    + (pphot->k[IMC3] - a / delta * pphot->k[IMC1])*gcov0[IMC2][IMC3];
-  kphi0_bl = (pphot->k[IMC0] - 2. * pphot->x[IMC1] / delta * pphot->k[IMC1])*gcov0[IMC3][IMC0]
-    + pphot->k[IMC1]*gcov0[IMC3][IMC1] + pphot->k[IMC2]*gcov0[IMC3][IMC2] 
-    + (pphot->k[IMC3] - a / delta * pphot->k[IMC1])*gcov0[IMC3][IMC3];
-
-  ri = 0.;
-  /*if ( (COORDINATE_SYSTEM == "spherical_polar") && (!pmcb->blackhole_flag) )
-    ri = pphot->x[IMC1]; // Spherical Polar
-    if (pmcb->blackhole_flag) ri = exp(pphot->x[IMC1]); // Kerr-Schild*/
-  if (COORDINATE_SYSTEM == "spherical_polar")
-    ri = pphot->x[IMC1];
-
-  if (pmy_mcb->kerrschild_flag) {
-    Real r = pphot->x[IMC1];
-    Real a2 = SQR(a);
-    Real phi_bl = pphot->x[IMC3] - a * 0.5 / sqrt(1. - a2) * (log((r - 1. - sqrt(1. - a2)) /
-							    (r - 1. + sqrt(1. - a2)))
-							- log((ri - 1. - sqrt(1. - a2)) / 
-							      (ri - 1. + sqrt(1. - a2))));
-    Real delta = SQR(pphot->x[IMC1]) - 2 * pphot->x[IMC1] + SQR(a);
-    Real kt_bl = pphot->k[IMC0] - 2. * pphot->x[IMC1] / delta * pphot->k[IMC1];
-    Real kph_bl = pphot->k[IMC3] - a / delta * pphot->k[IMC1];
-
-    fprintf(file_output, "0 %5.5g %5.5g %5.5g %5.5g %5.5g %5.5g %5.5g %5.5g\n", 
-	    pphot->x[IMC0], pphot->x[IMC1], pphot->x[IMC2], phi_bl,
-	    kt_bl, pphot->k[IMC1], pphot->k[IMC2], kph_bl);
-
-  } else if (pmy_mcb->boyerlindquist_flag) {
-    fprintf(file_output, "0 %5.5g %5.5g %5.5g %5.5g %5.5g %5.5g %5.5g %5.5g\n",
-	    pphot->x[IMC0], pphot->x[IMC1], pphot->x[IMC2], pphot->x[IMC3],
-	    pphot->k[IMC0], pphot->k[IMC1], pphot->k[IMC2], pphot->k[IMC3]);
-
-  } else {
-    fprintf(file_output, "0 %5.5g %5.5g %5.5g %5.5g %5.5g %5.5g %5.5g %5.5g\n",
-	    pphot->x[IMC0], pphot->x[IMC1], pphot->x[IMC2], pphot->x[IMC3],
-	    pphot->k[IMC0], pphot->k[IMC1], pphot->k[IMC2], pphot->k[IMC3]);
-  }
-#endif // #ifdef OUTTEST_GK
-
-
-#ifdef OUTTEST_TF
-  FILE *outtest_tf = fopen("outtest_tf.dat", "a");
-  Real psi, coszeta, r0, kt0, kth0, rf, kthf, ktf;
-  pphot->k[IMC0] *= -1;
-  pphot->k[IMC1] *= -1;
-  pphot->k[IMC2] *= -1;
-  pphot->k[IMC3] *= -1;
-  pmcb->TetradTransform(pphot, 1.0); // 1.0 = to comoving frame
-  kt0 = pphot->k[IMC0];
-  //printf("kt0: %g\n",kt0);
-  pmcb->TetradTransform(pphot, -1.0); // -1.0 = to Eulerian frame
-  pphot->k[IMC0] *= -1;
-  pphot->k[IMC1] *= -1;
-  pphot->k[IMC2] *= -1;
-  pphot->k[IMC3] *= -1;
-
-  pmcb->TetradTransform(pphot, 1.0); // 1.0 = to comoving frame
-
-  r0 = pphot->x[IMC1];
-  kth0 = pphot->k[IMC2];
-  
-
-  pmcb->TetradTransform(pphot, -1.0); // -1.0 = to Eulerian frame
-
-#endif 
-
-  // this should eventually get moved to photon initialization 
+  // SWD: this should get moved to photon initialization 
   pphot->dk[IMC0] = 0.;
   pphot->dk[IMC1] = 0.;
   pphot->dk[IMC2] = 0.;
   pphot->dk[IMC3] = 0.;
 
-  Stepsize(pphot);
+  Real step = StepSize(pphot);
 
   int count = 0;
   int iter = 0;
   int zone_counter = 0;
   Real chi = pphot->sct_coef + pphot->abs_coef;
   chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max
+
 #ifdef VERBOSE
   printf("Tau: %g; chi: %g; chi*dlambda: %g\n", TauRemaining, chi, chi*dlambda);
 #endif
 
-#ifdef OUTTEST_SP
-  //printf("%g %g\n", pphot->x[IMC1], sin(pphot->x[IMC2]));
-  pmcb->TetradTransform(pphot, 1.0);
-  /*printf("tetrad frame kt: %g  |n|: %g\n", pphot->k[IMC0], 
-    sqrt(SQR(pphot->k[IMC1]) + SQR(pphot->k[IMC2]) + SQR(pphot->k[IMC3])));*/
-  CurvalinearToCartesian(pphot);
-  Real rf_sp,thf,phf,dl0;
-  FinalPositionSphericalPolarGR(pmcb,pco,pphot,rf_sp,thf,phf,dl0);
-  pmcb->TetradTransform(pphot, -1.0);
-  Real gcov[NCOORD][NCOORD];
-  pmcb->Metric(pphot->x, gcov);
-/*printf("coordinate frame kt: %g  |n|: %g\n", pphot->k[IMC0], 
-	 sqrt(SQR(pphot->k[IMC1]) + SQR(pphot->x[IMC1] * pphot->k[IMC2]) 
-	 + SQR(pphot->x[IMC1] * sin(pphot->x[IMC2]) * pphot->k[IMC3])));*/
-  FILE *spres = fopen("spres.dat", "a");
-  fprintf(spres, "%g %g %g\n", pphot->x[IMC1], pphot->x[IMC2], pphot->x[IMC3]);
-  fprintf(spres, "%g %g %g\n\n", rf_sp, thf, phf);
-#endif
+  Real cth, sth, cph, sph;
+  Real x,y,z,x0,y0,z0;
+  cth = cos(pphot->x[1]);
+  sth = sqrt(1. - SQR(cth));
+  cph = cos(pphot->x[2]);
+  sph = sin(pphot->x[2]);
+  x0 = pphot->x[0]*sth*cph;
+  y0 = pphot->x[0]*sth*sph;
+  z0 = pphot->x[0]*cth;
 
   while ( (pphot->status == EVOLVING) && (iter < MAXITER) && (TauRemaining > 0.) ) {
 
     iter++;
     count++;
 
-#ifdef OUTTEST_GK
-    fprintf(file_output, "%d ", count);
-#endif // #ifdef OUTTEST_GK
-
+    /*Real cth = cos(pphot->x[1]);
+    Real sth = sqrt(1. - SQR(cth));
+    Real cph = cos(pphot->x[2]);
+    Real sph = sin(pphot->x[2]);
+    //pphot->PrintPhoton();
+    // Compute cartesian
+    pphot->kcart[0] = pphot->k[0]*sth*cph + pphot->k[1]*cth*cph - pphot->k[2]*sph;
+    pphot->kcart[1] = pphot->k[0]*sth*sph + pphot->k[1]*cth*sph + pphot->k[2]*cph;
+    pphot->kcart[2] = pphot->k[0]*cth - pphot->k[1]*sth;*/
+  
    if (TauRemaining > chi * step) {
-     VerletStep(pphot);
+     VerletStep(pphot,step);
+     if (pmy_mcb->pmy_mc->polarized)
+       PropogatePolarization(pphot);
    } else {
      step = TauRemaining / chi;
-     VerletStep(pphot);
+     VerletStep(pphot,step);
+     if (pmy_mcb->pmy_mc->polarized)
+       PropogatePolarization(pphot);
    }
-
+   cth = cos(pphot->x[1]);
+   sth = sqrt(1. - SQR(cth));
+   cph = cos(pphot->x[2]);
+   sph = sin(pphot->x[2]);
+   // Compute cartesian
+   Real kx = pphot->k[0]*sth*cph + pphot->k[1]*cth*cph - pphot->k[2]*sph;
+   Real ky  = pphot->k[0]*sth*sph + pphot->k[1]*cth*sph + pphot->k[2]*cph;
+   Real kz = pphot->k[0]*cth - pphot->k[1]*sth;
+   x = pphot->x[0]*sth*cph;
+   y = pphot->x[0]*sth*sph;
+   z = pphot->x[0]*cth;
+   //printf("ks: %g %g %g %g %g %g\n",pphot->kcart[0],kx,pphot->kcart[1],ky,pphot->kcart[2],kz);
+   x0 += step*pphot->kcart[0];
+   y0 += step*pphot->kcart[1];
+   z0 += step*pphot->kcart[2];
+   //printf("xs: %g %g %g %g %g %g\n",x0,x,y0,y,z0,z,step);
    TauRemaining -= chi * step;
 
-#ifdef OUTTEST_GK
-   if (iter == 1) {
-     if (COORDINATE_SYSTEM == "spherical_polar") {
-       if (pphot->x[IMC1] > ri) sui = -1;
-       else sui = 1;
-       //printf("first step: %g %g %d\n",pphot->x[IMC1],xIMC1_old,sui);
-     }
-   } else {
-     Real sustep;
-     if (pphot->x[IMC1] > ri) 
-       sustep = -1;
-     else 
-       sustep = 1;
-     if (sui != sustep)
-       tpr = 1;
+   // Check if photon changed zones
+   if (UpdateZone(pphot)) {
+     UpdateOpacities(pphot, pmcb);
+     zone_counter++;
+     chi = pphot->sct_coef + pphot->abs_coef;
+     chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max(chi, TINY_NUMBER)
+   } 
+   if (pphot->status == DESTROYED) {
+     pphot->PrintPhoton();
+   }
+   // Update moments
+   if (pmcb->moments_flag) {
+     pmcb->UpdateMoments(pphot,step);
    }
    
-#endif
-
-   if (COORDINATE_SYSTEM == "spherical_polar" && (pmcb->kerrschild_flag or pmcb->boyerlindquist_flag)) {
-     if (pphot->x[IMC1] <= r_outer) {
-       step = -fabs((pphot->x[IMC1] - r_outer) / pphot->k[IMC1]);
-       for (int i = 0; i < NCOORD; i++) 
-	 pphot->x[i] += pphot->k[i] * step;
-       //pphot->x[IMC1] = r_outer + 1.0e-3;
-       pphot->status = DESTROYED;
-     }
+   if ((isnan(pphot->k[IMC0])) or (pphot->IsNanPhoton())) {
+     pphot->PrintPhoton();
+     pphot->status = DESTROYED;
    }
 
-    // Check if photon changed zones
-    if (UpdateZone(pphot)) {
-      UpdateOpacities(pphot, pmcb);
-      zone_counter++;
-      chi = pphot->sct_coef + pphot->abs_coef;
-      chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max(chi, TINY_NUMBER)
-      } 
+    step = StepSize(pphot);
 
-    // Update moments
-    if (pmcb->moments_flag) {
-      pmcb->UpdateMoments(pphot,step);
-    }
-
-    if ((isnan(pphot->k[IMC0])) or (pphot->IsNanPhoton())) {
-      pphot->PrintPhoton();
-      printf("pphot->x[IMC0]: %g  pphot->x[IMC1]: %g  pphot->x[IMC2]: %g  pphot->x[IMC3]: %g\n",
-	     pphot->x[IMC0], pphot->x[IMC1], pphot->x[IMC2], pphot->x[IMC3]);
-      printf("pphot->k[IMC0]: %g  pphot->k[IMC1]: %g  pphot->k[IMC2]: %g  pphot->k[IMC3]: %g\n",
-	     pphot->k[IMC0], pphot->k[IMC1], pphot->k[IMC2], pphot->k[IMC3]);
-      printf("iter: %d\n", iter);
-      pphot->status = DESTROYED;
-    }
-
-    Stepsize(pphot);
-
-#ifdef OUTTEST_TF
-
-    Real rdisk = 1.0e10; // outer edge for thin optically thick disk
-    if ((pphot->x[IMC2] >= (M_PI / 2.0)) and (pphot->x[IMC1] - r_outer > 1.0e-3)) { // photon has crossed plane for the first time
-      if (pphot->x[IMC1] < rdisk) {
-	step = -(pphot->x[IMC2] - M_PI/2.0) / pphot->k[IMC2];
-	for (int i = 0; i < NCOORD; i++) 
-	  pphot->x[i] += pphot->k[i] * step;      
-	pphot->status = DESTROYED;
-      }
-    }
-    
-#endif
     // Perform any user work
     if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this);
-
+    // SWD: put here for now, may need additional flag
+    if (ptraj != NULL) ptraj->AddToTrajectory(pphot);
   } // end of photon integration
 
+  // SWD: Try to remove this
   CurvalinearToCartesian(pphot);
 
   /*if (pphot->status == ESCAPED) {
@@ -334,36 +188,6 @@ void GeneralMover::Move(Photon *pphot) {
   }
 
 
-#ifdef OUTTEST_TF
-
-  // transform k^alpha to k^(a) and print relevant quantites
-  // if photon terminated because it hit the black hole, then transforming
-  // into the tetrad frame will cause errors
-  if (pphot->x[IMC1] - r_outer > 1.0e-3) {
-    pphot->k[IMC0] *= -1;
-    pphot->k[IMC1] *= -1;
-    pphot->k[IMC2] *= -1;
-    pphot->k[IMC3] *= -1;
-    pmcb->TetradTransform(pphot, 1.0); // 1.0 = to comoving frame
-    Real ktf = pphot->k[IMC0];
-    //printf("ktf: %g\n",ktf);
-    pmcb->TetradTransform(pphot, -1.0); // -1.0 = to Eulerian frame
-    pphot->k[IMC0] *= -1;
-    pphot->k[IMC1] *= -1;
-    pphot->k[IMC2] *= -1;
-    pphot->k[IMC3] *= -1;
-
-    pmcb->TetradTransform(pphot, 1.0); // 1.0 = to comoving frame
-    //fprintf(outtest_tf, "%15.10g %15.10g %15.10g %15.10g\n",
-    //	    kth0, pphot->x[IMC1], pphot->k[IMC2], pphot->k[IMC0]);
-    fprintf(outtest_tf, "%15.10g %15.10g %15.10g %15.10g\n",
-	    kth0, pphot->x[IMC1], pphot->k[IMC2], kt0/ktf);
-  } else { // don't tetrad transform if photon is inside the event horizon
-    fprintf(outtest_tf, "%15.10g %15.10g %15.10g %15.10g\n",
-	    kth0, pphot->x[IMC1], -1.0, -1.0);
-  }
-  
-#endif
 
 #ifdef VERBOSE
   printf("The photon crossed %d zones, traveling %g after %d iterations.\n", zone_counter, 
@@ -373,93 +197,10 @@ void GeneralMover::Move(Photon *pphot) {
   printf("end GeneralMover::Move\n");
 #endif
 
-#ifdef OUTTEST_GK
-  fprintf(file_output,"\n\n");
-  rf = 0.;
-  if (COORDINATE_SYSTEM == "spherical_polar") {
-    rf = pphot->x[IMC1];
-  }
-
-  pmcb->Metric(pphot->x,gcov0);
-  kphif = pphot->k[IMC0]*gcov0[IMC3][IMC0] + pphot->k[IMC1]*gcov0[IMC3][IMC1] + 
-    pphot->k[IMC2]*gcov0[IMC3][IMC2] + pphot->k[IMC3]*gcov0[IMC3][IMC3];
-  ktf = pphot->k[IMC0]*gcov0[IMC0][IMC0] + pphot->k[IMC1]*gcov0[IMC0][IMC1] + 
-    pphot->k[IMC2]*gcov0[IMC0][IMC2] + pphot->k[IMC3]*gcov0[IMC0][IMC3];
-  kthf = pphot->k[IMC0]*gcov0[IMC2][IMC0] + pphot->k[IMC1]*gcov0[IMC2][IMC1] +
-    pphot->k[IMC2]*gcov0[IMC2][IMC2] + pphot->k[IMC3]*gcov0[IMC2][IMC3];
-  
-  e_const = -ktf;
-  l_const = kphif;
-  q_const = SQR(kthf) + SQR(kphif * cos(pphot->x[IMC2])/sin(pphot->x[IMC2])) - 
-    SQR(a * ktf * cos(pphot->x[IMC2]));
-  /*printf("Constants of motion after integration (E, l, Q): %g %g %g\n", 
-    e_const, l_const, q_const);*/
-
-  //printf("out: %g %g %g\n",kphi0,kt0,-kphi0/kt0);
-  Real ui = 1./ri;
-  Real uf = 1./rf;
-
-  // alpha -kphi0/kt0/sin(theta)
-  if (pmcb->kerrschild_flag) 
-    alpha = -kphi0_bl / kt0_bl;
-  else if (pmcb->boyerlindquist_flag)
-    alpha = -kphi0/kt0;
-
-  // beta =sqrt(SQR(kth0)/SQR(kt0)+a*cos^2(theta)-\alpha^2*cos^2(theta));
-  // Assumes with start at theta = pi/2, then beta^2 = q^2
-  if (pmcb->boyerlindquist_flag) {
-    beta = sqrt(SQR(kth0)/SQR(kt0));
-    if (kth0 > 0)
-      beta = -beta;
-  } else if (pmcb->kerrschild_flag) {
-    beta = sqrt(SQR(kth0_bl)/SQR(kt0_bl));
-    if (kth0_bl > 0)
-      beta = -beta;
-  }
-
-  fprintf(outfile1, "%g %g %g %g %g %d %d\n", alpha, beta, ui, 0., uf, sui, tpr);
-  if (su < 0) 
-    fprintf(outfile3, "%g %g %g %g %g %d %d\n", -kphif/ktf, 0., uf, 0., ui, -su, tpr); 
-  else if (su > 0) 
-    fprintf(outfile3, "%g %g %g %g %g %d %d\n", kphif/ktf, 0., uf, 0., ui, -su, tpr); 
-  fclose(outfile1);
-  fclose(outfile3);
-  
-  FILE *outfile2 = fopen("angles.in", "a");
-  if (rf < r_outer + 1.0e-3) fprintf(outfile2, "%g\n", pphot->x[IMC3]);
-  else fprintf(outfile2, "%g\n", pphot->x[IMC3]);
-  //fprintf(outfile2, "%g\n", pphot->x[IMC3]);
-  fclose(outfile2);
-#endif
-
-#ifdef OUTTEST_SP
-  if (pphot->status == ESCAPED) {
-    Real xf = rf_sp*sin(thf)*cos(phf);
-    Real yf = rf_sp*sin(thf)*sin(phf);
-    Real zf = rf_sp*cos(thf);
-    Real xp =  pphot->x[IMC1]*sin(pphot->x[IMC2])*cos(pphot->x[IMC3]);
-    Real yp =  pphot->x[IMC1]*sin(pphot->x[IMC2])*sin(pphot->x[IMC3]);
-    Real zp =  pphot->x[IMC1]*cos(pphot->x[IMC2]);
-    Real delta = sqrt(SQR(xf-xp)+SQR(yf-yp)+SQR(zf-zp));
-    Real dmax = 1.e-8*rf_sp;
-    FILE *file_outtest = fopen("output_outtest.dat", "a");
-    /*printf("%.3g %.3g %.3g %.3g %.3g %.3g\n", pphot->x[IMC1], pphot->x[IMC2],
-	   pphot->x[IMC3], rf_sp, thf, phf);
-	   printf("%.3g %.3g %.3g %.3g %.3g %.3g %.3g %.3e\n", xp, yp, zp, xf, yf, zf, delta, dlambda);*/
-    fprintf(file_outtest, "%.3g %.3g %.3g %.3g %.3g %.3g %.3g %.3e\n", xp, yp, zp, xf, yf, zf, delta, dlambda);
-    fclose(file_outtest);
-  }
-
-#endif
-
-#ifdef OUTTEST_TF
-  fclose(outtest_tf);
-#endif
-
-  fclose(file_output);
-
 }
 
+// SWD: The conversion from Cartesian to Curvalinear should be removed entirely
+// or handled by MC coordinate class.
 //----------------------------------------------------------------------------------------
 //! \fn void GeneralMover::CartesianToCurvalinear(Photon *pphot)
 //  \brief convert k vector from cartesian to curvalinear
@@ -650,7 +391,7 @@ bool GeneralMover::UpdateZone(Photon *pphot) {
 // GR functions
 
 
-void GeneralMover::VerletStep(Photon *pphot) {
+void GeneralMover::VerletStep(Photon *pphot, Real step) {
    
   Real gamma[NCOORD][NCOORD][NCOORD];
   Real k_n1[NCOORD],k_n1_copy[NCOORD];
@@ -663,7 +404,7 @@ void GeneralMover::VerletStep(Photon *pphot) {
     k_n1[i] = (pphot->k[i]) + (pphot->dk[i])*step;
   }
 
-  // SWD: This shoudl be removed
+  // SWD: This should be removed
   for (i=0;i<NCOORD;i++) {
     for (j=0;j<NCOORD;j++) {
       for (k=0;k<NCOORD;k++) {
@@ -683,8 +424,9 @@ void GeneralMover::VerletStep(Photon *pphot) {
     for (i=0;i<NCOORD;i++) {
       k_n1_copy[i] = k_n1[i];
     }
-    
+
     for (k=0;k<NCOORD;k++) {  
+      // off diagonal elements
       dk_n1[k] = 
 	-2. * (k_n1_copy[IMC0] * 
 	       (gamma[k][IMC0][IMC1] * k_n1_copy[IMC1] +
@@ -694,7 +436,7 @@ void GeneralMover::VerletStep(Photon *pphot) {
 	       k_n1_copy[IMC1] * (gamma[k][IMC1][IMC2] * k_n1_copy[IMC2] +
 			          gamma[k][IMC1][IMC3] * k_n1_copy[IMC3]) +
 	       k_n1_copy[IMC2] * gamma[k][IMC2][IMC3] * k_n1_copy[IMC3]);
-     
+      // diagonal elements
       dk_n1[k] -= 
 	(gamma[k][IMC0][IMC0] * k_n1_copy[IMC0] * k_n1_copy[IMC0] +
 	 gamma[k][IMC1][IMC1] * k_n1_copy[IMC1] * k_n1_copy[IMC1] +
@@ -708,91 +450,67 @@ void GeneralMover::VerletStep(Photon *pphot) {
     }
   } while ((error > tolerance) && (n_iteration < max_iteration));
 
-  /*printf("%g %g %g %g %g %g %g %g %g\n", step, pphot->k[IMC0], pphot->k[IMC1],
-    pphot->k[IMC2], pphot->k[IMC3], k_n1[IMC0], k_n1[IMC1], k_n1[IMC2], k_n1[IMC3]);*/
+  //printf("%g %g %g %g %g %g %g %g %g\n", step, pphot->k[IMC0], pphot->k[IMC1],
+  // pphot->k[IMC2], pphot->k[IMC3], k_n1[IMC0], k_n1[IMC1], k_n1[IMC2], k_n1[IMC3]);
 
   // update photon energy due to evolving k_t (coordinate frame)
   pphot->energy *= k_n1[IMC0]/(pphot->k[IMC0]); 
-
+  
   for (i=0;i<NCOORD;i++) {
     pphot->k[i] = k_n1[i];
     pphot->dk[i] = dk_n1[i];
   }
-  
-#ifdef OUTTEST_GK
-  if (pmy_mcb->kerrschild_flag) {
-    /*Real phi_bl = pphot->x[IMC3] - a * (atan((pphot->x[IMC1] - 1.) / sqrt(1. - SQR(a))) / 
-					sqrt(1. - SQR(a)) - 
-					atan((ri - 1.) / sqrt(1. - SQR(a))) / 
-					sqrt(1. - SQR(a)));*/
-    Real r = pphot->x[IMC1];
-    Real a2 = SQR(a);
-    Real phi_bl = pphot->x[IMC3] - a * 0.5 / sqrt(1. - a2) * (log((r - 1. - sqrt(1. - a2)) /
-							    (r - 1. + sqrt(1. - a2)))
-							- log((ri - 1. - sqrt(1. - a2)) / 
-							      (ri - 1. + sqrt(1. - a2))));
-    Real delta = SQR(pphot->x[IMC1]) - 2 * pphot->x[IMC1] + SQR(a);
-    Real kt_bl = pphot->k[IMC0] - 2. * pphot->x[IMC1] / delta * pphot->k[IMC1];
-    Real kph_bl = pphot->k[IMC3] - a / delta * pphot->k[IMC1];
-    fprintf(file_output, "%5.5g %5.5g %5.5g %5.5g %5.5g %5.5g %5.5g %5.5g\n", 
-	    pphot->x[IMC0], pphot->x[IMC1], pphot->x[IMC2], phi_bl,
-	    kt_bl, pphot->k[IMC1], pphot->k[IMC2], kph_bl); // KS coords
-
-  } else if (pmy_mcb->boyerlindquist_flag) {
-    fprintf(file_output, "%5.5g %5.5g %5.5g %5.5g %5.5g %5.5g %5.5g %5.5g\n",
-	    pphot->x[IMC0], pphot->x[IMC1], pphot->x[IMC2], pphot->x[IMC3],
-	    pphot->k[IMC0], pphot->k[IMC1], pphot->k[IMC2], pphot->k[IMC3]); // BL coords
-
-  } else {
-    fprintf(file_output, "%5.5g %5.5g %5.5g %5.5g %5.5g %5.5g %5.5g %5.5g\n",
-	    pphot->x[IMC0], pphot->x[IMC1], pphot->x[IMC2], pphot->x[IMC3],
-	    pphot->k[IMC0], pphot->k[IMC1], pphot->k[IMC2], pphot->k[IMC3]);
-  }
-#endif // #ifdef OUTTEST_GK
-
-  return;
 
 }
 
+
+void GeneralMover::PropogatePolarization(Photon *pphot) {
+
+  Real gamma[NCOORD][NCOORD][NCOORD];
+
+  pmy_mcb->pcoord->Connect(pphot->x, gamma);
+
+  int i, j, k, l;
+  std::complex<Real> Ni[NCOORD][NCOORD];
+
+  for (int i = 0; i < 4; i++)
+    for (int j = 0; j < 4; j++)
+      Ni[i][j] = pphot->polten[i][j];
+
+  for (int i = 0; i < 4; i++)
+    for (int j = 0; j < 4; j++)
+      for (int k = 0; k < 4; k++)
+	for (int l = 0; l < 4; l++)
+	  pphot->polten[i][j] += -(gamma[i][k][l] * Ni[k][j] * pphot->k[l] +
+				   gamma[j][k][l] * Ni[i][k] * pphot->k[l]);
+
+}
+
+
 // return the stepsize based on the current zone and k-vector
 // this should be updated with every iteration since k continuously changes
-void GeneralMover::Stepsize(Photon *pphot) {
+Real GeneralMover::StepSize(Photon *pphot) {
 
   if (!pphot->pmy_mcb->varystep_flag) {
-    step = dlambda; // keep pphot->step constant
-    return;
+    return step_par; // keep step constant
   }
 
-  Real stepx1, stepx2, stepx3;
-  Real kx1, kx2, kx3;
   Real small = 1.e-20;
   MCCoord *pco = pmy_mcb->pcoord;
-
-  if (pphot->IsNanPhoton()) 
-    return;
   
-  kx1 = (fabs(pphot->k[IMC1]) > epsilon) ? fabs(pphot->k[IMC1]) : small; // prevents divide by 0
-  kx2 = (fabs(pphot->k[IMC2]) > epsilon) ? fabs(pphot->k[IMC2]) : small;
-  kx3 = (fabs(pphot->k[IMC3]) > epsilon) ? fabs(pphot->k[IMC3]) : small;
-  /*printf("%g %g %g %g %g %g %g %g\n", pphot->k[IMC1], pphot->k[IMC2],
-    pphot->k[IMC3], kx1, kx2, kx3, epsilon, small);*/
+  Real kx1 = (fabs(pphot->k[IMC1]) > epsilon) ? fabs(pphot->k[IMC1]) : small; 
+  Real kx2 = (fabs(pphot->k[IMC2]) > epsilon) ? fabs(pphot->k[IMC2]) : small;
+  Real kx3 = (fabs(pphot->k[IMC3]) > epsilon) ? fabs(pphot->k[IMC3]) : small;
 
-  stepx1 = ((pco->x1f(pphot->i1 + 1) - pco->x1f(pphot->i1)) / kx1) * dlambda;
-  stepx2 = ((pco->x2f(pphot->i2 + 1) - pco->x2f(pphot->i2)) / kx2) * dlambda;
-  stepx3 = ((pco->x3f(pphot->i3 + 1) - pco->x3f(pphot->i3)) / kx3) * dlambda;
-  
-  if (stepx1 < stepx2) {
-    if (stepx1 < stepx3)
-      step = stepx1;
-    else 
-      step = stepx3;
-  } else if (stepx2 < stepx3) {
-    step = stepx2;
-  } else
-    step = stepx3;
-  
-  return;
+  // SWD: May want to store as dx1, etc.
+  Real stepx1 = ((pco->x1f(pphot->i1 + 1) - pco->x1f(pphot->i1)) / kx1);
+  Real stepx2 = ((pco->x2f(pphot->i2 + 1) - pco->x2f(pphot->i2)) / kx2);
+  Real stepx3 = ((pco->x3f(pphot->i3 + 1) - pco->x3f(pphot->i3)) / kx3);
 
+  Real step = (stepx1 < stepx2) ? stepx1 : stepx2;
+  step = (step < stepx3) ? step : stepx3;
+
+  return step*step_par;
 }
 
 

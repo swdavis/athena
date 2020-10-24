@@ -97,8 +97,9 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   }
   pspec = pfirst;
 
-  // Setup output photon list
+  // Setup output photon list and trajectory list
   pphlist = pmy_mc->pmcout->pphlist;
+  ptraj = pmy_mc->pmcout->ptraj;
 
   // set local mesh parameters to correspond to mesh block
   if (pmb != NULL) {
@@ -297,6 +298,7 @@ MonteCarloBlock::~MonteCarloBlock() {
   delete pran;
   delete pspec;
   delete pphlist;
+  delete ptraj;
 
   rho.DeleteAthenaArray();
   tgas.DeleteAthenaArray();
@@ -347,7 +349,7 @@ void MonteCarloBlock::RayTracePhotons(int nphot) {
       // Photon initialized in coordinate frame
       // move photon until  stopping condition
       pmover->Move(pphoton);
- 
+      if (ptraj != NULL) ptraj->CompleteTrajectory();
       if (pphoton->status == ESCAPED) {
         // User defined completion work
         FinalizePhoton(pphoton);
@@ -454,7 +456,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
       // move photon to next scattering/absorption or to boundary
       pmover->Move(pphoton);
     }
-
+    if (ptraj != NULL) ptraj->CompleteTrajectory();
     if (pphoton->status == ESCAPED) {
       // User defined completion work
       FinalizePhoton(pphoton);
@@ -472,6 +474,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
       nabs++;
     nscat += iscat;
   }
+  
   nphdone += nprop;
   
   std::cout  << "nesc, nabs: " << nesc << ' ' << nabs << ' ' << Globals::my_rank << std::endl;
@@ -582,32 +585,15 @@ void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign) {
   
   pcoord->Metric(pphot->x, gcov);
   Real a = pcoord->GetSpin();
-  if ((kerrschild_flag) or (boyerlindquist_flag)) {
-    Real r = pphot->x[IMC1];
-    Real omega = 1.0/(pow(r, 3./2.) + a); // circular velocity 
 
-    ucon[IMC0] = sqrt(-1.0/(gcov[IMC0][IMC0] + 2.*gcov[IMC0][IMC3]*omega +
-			    SQR(omega)*gcov[IMC3][IMC3]));
-    Real del = SQR(r)+SQR(a)-2.*r;
-    Real aeq = SQR(r)+SQR(a);
-    aeq = SQR(aeq)-SQR(a)*del;
-    Real enu = sqrt(del/aeq)*r;
-    Real vg = (SQR(r)-2.*a*sqrt(r)+SQR(a))/sqrt(del)*omega;
-    Real gam = 1./sqrt(1.-SQR(vg));
-    Real comp = gam/enu;
-    //printf("u0: %g %g\n",comp,ucon[IMC0]);
-    ucon[IMC1] = 0.;
-    ucon[IMC2] = 0.;
-    ucon[IMC3] = (ucon[IMC0])*omega;
-  } else {
-    Real beta2 = SQR(velocity);
-    Real gamma = 1. / sqrt(1. - beta2);
-
-    ucon[IMC0] = gamma;
-    ucon[IMC1] = gamma * velocity;
-    ucon[IMC2] = 0.;
-    ucon[IMC3] = 0.;
-  }
+  Real beta2 = SQR(velocity);
+  Real gamma = 1. / sqrt(1. - beta2);
+  
+  ucon[IMC0] = gamma;
+  ucon[IMC1] = gamma * velocity;
+  ucon[IMC2] = 0.;
+  ucon[IMC3] = 0.;
+  
   //printf("ucon: %g %g %g %g\n", ucon[IMC0], ucon[IMC1], ucon[IMC2], ucon[IMC3]);
 
   // create tetrad basis

@@ -61,6 +61,7 @@ MCCoord::MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb) {
 // constructor
 MCCoord::MCCoord(int ncells1, int ncells2, int ncells3, bool acc) {
 
+
   x1f.NewAthenaArray(ncells1+1);
   x2f.NewAthenaArray(ncells2+1);
   x3f.NewAthenaArray(ncells3+1);
@@ -163,6 +164,7 @@ void MCSphericalPolar::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
 
   int m, n;
   Real sin, cos;
+  // Remove sincos and let compile handle this
   void sincos(Real t, Real *s, Real *c);
   sincos(x[IMC2], &sin, &cos);
   for (m = 0; m < 4; m++) {
@@ -170,7 +172,7 @@ void MCSphericalPolar::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
       gcov[m][n] = 0;
     }
   }
-  gcov[IMC0][IMC0] = -1;
+  gcov[IMC0][IMC0] = -1; // time variable is c*t
   gcov[IMC1][IMC1] = 1;
   gcov[IMC2][IMC2] = x[IMC1] * x[IMC1];
   gcov[IMC3][IMC3] = x[IMC1] * x[IMC1] * sin * sin;

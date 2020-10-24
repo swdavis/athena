@@ -50,6 +50,7 @@ void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot) {
 //  Rotation matrix (r):  L(\pi-i2)R(\Theta)L(-i1)
 //  Here \Theta=smu
 
+// SWD: Needs to be changed to handle non-cartesian k
 void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot) {
 
   MCRandom *pran = pmcb->pran;

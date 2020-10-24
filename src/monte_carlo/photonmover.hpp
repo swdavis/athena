@@ -69,6 +69,7 @@ public:
   virtual void MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
     MonteCarloBlock *pmcb, int face, bool ascend[3]);
   virtual bool UpdateZone(Photon *pphot);
+  // SWD Move Cartesian conversions to coordinates
   virtual void CartesianToCurvalinear(Photon *pphot);
   virtual void CurvalinearToCartesian(Photon *pphot);
   virtual void InitializeMRWDist(void);
@@ -117,8 +118,7 @@ public:
   GeneralMover(MonteCarloBlock *pmcb);
   ~GeneralMover();
 
-  Real step;
-  bool store_trajectory;
+  Real step_par;
 
   // functions
   void Move(Photon *pphot);
@@ -126,8 +126,9 @@ public:
   void CurvalinearToCartesian(Photon *pphot);
   void UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb);
   bool UpdateZone(Photon *pphot);
-  void VerletStep(Photon *pphot);
-  void Stepsize(Photon *pphot);
+  void VerletStep(Photon *pphot, Real step);
+  void PropogatePolarization(Photon *nphot);
+  Real StepSize(Photon *pphot);
 
 };
 

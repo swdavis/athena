@@ -38,12 +38,13 @@ void SphericalPolarMover::Move(Photon *pphot) {
   MonteCarloBlock *pmcb = pmy_mcb;
   MCRandom *pran = pmy_mcb->pran;
   MCCoord *pco = pmy_mcb->pcoord;
+  PhotonTrajectoryList *ptraj = pmy_mcb->ptraj;
 
   // get number of mean free paths photon will travel
   Real tauremaining = GetOpticalDepth(pran);
 
   // References for momentum vectors
-  CurvalinearToCartesian(pphot);// Redundant calculation of cth,sth,cph,sph
+  CurvalinearToCartesian(pphot);// SWD: Redundant calculation of cth,sth,cph,sph
   Real& kx = pphot->kcart[0];
   Real& ky = pphot->kcart[1];
   Real& kz = pphot->kcart[2];
@@ -332,6 +333,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
 	kth = kx * cth * cph + ky * cth * sph - kz * sth;
 	kph = -kx * sph + ky * cph;
       }
+      if (ptraj != NULL) ptraj->AddToTrajectory(pphot);
       return;
     } else { // Photon moves to next zone and reduce tauremaining
       // Update moments
@@ -356,6 +358,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
       kr  = kx * sth * cph + ky * sth * sph + kz * cth;
       kth = kx * cth * cph + ky * cth * sph - kz * sth;
       kph = -kx * sph + ky * cph;
+      if (ptraj != NULL) ptraj->AddToTrajectory(pphot);
     }
 
   }
@@ -442,6 +445,5 @@ void SphericalPolarMover::CurvalinearToCartesian(Photon *pphot) {
   pphot->kcart[0] = pphot->k[0]*sth*cph + pphot->k[1]*cth*cph - pphot->k[2]*sph;
   pphot->kcart[1] = pphot->k[0]*sth*sph + pphot->k[1]*cth*sph + pphot->k[2]*cph;
   pphot->kcart[2] = pphot->k[0]*cth - pphot->k[1]*sth;
-  
 }
 

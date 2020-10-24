@@ -8,6 +8,8 @@
 //! \file photon.hpp
 //  \brief definitions for Photon class
 
+#include <complex>
+
 // Athena++ classes headers
 #include "../athena.hpp"
 #include "montecarlo.hpp"
@@ -46,6 +48,7 @@ public:
   Real *user_var; // storage for user variables
   AthenaArray<Real> trajectory; // Store trajectory
   Real sct_coef, abs_coef;  //scattering and absoprtion coefficients
+  std::complex<Real> polten[4][4]; // the polarization tensor
 
   // functions
   void CopyPhoton(Photon *pphot);
