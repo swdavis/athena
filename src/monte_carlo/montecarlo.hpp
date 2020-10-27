@@ -284,6 +284,8 @@ public:
   bool varystep_flag; // use variable (true) or constant (false) step
 
   Real codetocgs_rho, codetoc_vel;
+  // SWD: these are problem dependent -- not needed if using single
+  // emission energy
   Real emin, emax, elog, eminlog;
   // SWD: used by general mover, move/eliminate 
   Real stepsize, velocity;

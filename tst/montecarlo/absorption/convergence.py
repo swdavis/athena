@@ -113,7 +113,6 @@ def main(**kwargs):
     for i,nphot in enumerate(nphots):            
         write_athinput(iseed+99*i,nphot,kwargs['nen'],kwargs['emin'],kwargs['emax'])
         com="mpirun -np {:d} ".format(mcranks+1)+athena_path+"/athena -i athinput.mctest"
-        print com
         system(com)
         # read spectrum as dict from infile
         spectrum = mcspec.read_spectrum("MCTest.out1.00000.spec")
