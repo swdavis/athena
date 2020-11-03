@@ -861,6 +861,7 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput
   }
 #else
   for (int i=0; i<nout; i++) {
+    nphrun += pmcb->cadence;
     if (raytrace_flag)
       pmcb->RayTracePhotons(pmcb->cadence);
     else

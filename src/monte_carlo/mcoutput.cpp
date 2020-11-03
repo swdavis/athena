@@ -1073,7 +1073,6 @@ void Spectrum::WriteSpectrum(std::string fname, int nphot) {
 	<< "Output file '" << fname << "' could not be opened";
     throw std::runtime_error(msg.str().c_str());
   }
-   
   // Write header information
   Real everg = 1.6021772e-12;  
   Real emin = range.emin / everg; // output in eV
@@ -1234,7 +1233,7 @@ void MCOutput::OutputSpectrum(MonteCarlo *pmc) {
 #endif
   if (Globals::my_rank == 0) {
     Spectrum *pspect = pspec;
-    int nphot = static_cast<Real>(pmc->nphrun);
+    int nphot = pmc->nphrun;
     while (pspect != NULL) {
       std::string filename;
       filename.assign(pspect->base_name);

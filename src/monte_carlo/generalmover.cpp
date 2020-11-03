@@ -6,7 +6,6 @@
 //! \file grmover.cpp
 //  \brief implementation for moving photons via integration for curvalinear coordinates
 //         and general relativity via a metric and connection
-
 // Athena++ headers
 #include "montecarlo.hpp"
 #include "photon.hpp"
@@ -55,7 +54,6 @@ void GeneralMover::Move(Photon *pphot) {
 
   MonteCarloBlock *pmcb = pmy_mcb;
   MCRandom *pran = pmy_mcb->pran;
-  MCCoord *pco = pmy_mcb->pcoord;
   PhotonTrajectoryList *ptraj = pmy_mcb->ptraj;
 
   // get number of mean free paths photon will travel
@@ -294,15 +292,14 @@ bool GeneralMover::UpdateZone(Photon *pphot) {
 
   bool change = false;
   MonteCarloBlock *pmcb = pmy_mcb;
-  MCCoord *pco = pmcb->pcoord;
   bool update = false;
 
-  if (pphot->x[IMC1] >= pco->x1f(pphot->i1+1)) {
+  if (pphot->x[IMC1] >= pcoord->x1f(pphot->i1+1)) {
     update = true;
-    while (pphot->x[IMC1] >= pco->x1f(pphot->i1+1)) {
+    while (pphot->x[IMC1] >= pcoord->x1f(pphot->i1+1)) {
       pphot->i1++;
       if(pphot->i1 > pmcb->ie)
-	pmcb->pbval->BoundaryFunction_[OUTER_X1](pmcb,pco,pphot);
+	pmcb->pbval->BoundaryFunction_[OUTER_X1](pmcb,pcoord,pphot);
       if (pphot->status == ESCAPED) {
 	pphot->face = OUTER_X1;
 	break;
@@ -310,12 +307,12 @@ bool GeneralMover::UpdateZone(Photon *pphot) {
       if (pphot->status == DESTROYED)
 	break;
     }
-  } else if (pphot->x[IMC1] < pco->x1f(pphot->i1)) {
+  } else if (pphot->x[IMC1] < pcoord->x1f(pphot->i1)) {
     update = true;
-    while (pphot->x[IMC1] < pco->x1f(pphot->i1)) {
+    while (pphot->x[IMC1] < pcoord->x1f(pphot->i1)) {
       pphot->i1--;
       if(pphot->i1 < pmcb->is)
-	pmcb->pbval->BoundaryFunction_[INNER_X1](pmcb,pco,pphot);
+	pmcb->pbval->BoundaryFunction_[INNER_X1](pmcb,pcoord,pphot);
       if (pphot->status == ESCAPED) {
 	pphot->face = INNER_X1;
 	break;
@@ -325,12 +322,12 @@ bool GeneralMover::UpdateZone(Photon *pphot) {
     }
   }
 
-  if (pphot->x[IMC2] >= pco->x2f(pphot->i2+1)) {
+  if (pphot->x[IMC2] >= pcoord->x2f(pphot->i2+1)) {
     update = true;
-    while (pphot->x[IMC2] >= pco->x2f(pphot->i2+1)) {
+    while (pphot->x[IMC2] >= pcoord->x2f(pphot->i2+1)) {
       pphot->i2++;
       if(pphot->i2 > pmcb->je)
-	pmcb->pbval->BoundaryFunction_[OUTER_X2](pmcb,pco,pphot);
+	pmcb->pbval->BoundaryFunction_[OUTER_X2](pmcb,pcoord,pphot);
       if (pphot->status == ESCAPED) {
 	pphot->face = OUTER_X2;
 	break;
@@ -338,12 +335,12 @@ bool GeneralMover::UpdateZone(Photon *pphot) {
       if (pphot->status == DESTROYED)
 	break;
     }
-  } else if (pphot->x[IMC2] < pco->x2f(pphot->i2)) {
+  } else if (pphot->x[IMC2] < pcoord->x2f(pphot->i2)) {
     update = true;
-    while (pphot->x[IMC2] < pco->x2f(pphot->i2)) {
+    while (pphot->x[IMC2] < pcoord->x2f(pphot->i2)) {
       pphot->i2--;
       if(pphot->i2 < pmcb->js)
-	pmcb->pbval->BoundaryFunction_[INNER_X2](pmcb,pco,pphot);
+	pmcb->pbval->BoundaryFunction_[INNER_X2](pmcb,pcoord,pphot);
       if (pphot->status == ESCAPED) {
 	pphot->face = INNER_X2;
 	break;
@@ -354,12 +351,12 @@ bool GeneralMover::UpdateZone(Photon *pphot) {
     }
   }
 
-  if (pphot->x[IMC3] >= pco->x3f(pphot->i3+1)) {
+  if (pphot->x[IMC3] >= pcoord->x3f(pphot->i3+1)) {
     update = true;
-    while (pphot->x[IMC3] >= pco->x3f(pphot->i3+1)) {
+    while (pphot->x[IMC3] >= pcoord->x3f(pphot->i3+1)) {
       pphot->i3++;
       if(pphot->i3 > pmcb->ke)
-	pmcb->pbval->BoundaryFunction_[OUTER_X3](pmcb,pco,pphot);
+	pmcb->pbval->BoundaryFunction_[OUTER_X3](pmcb,pcoord,pphot);
       if (pphot->status == ESCAPED) {
 	pphot->face = OUTER_X3;
 	break;
@@ -367,12 +364,12 @@ bool GeneralMover::UpdateZone(Photon *pphot) {
       if (pphot->status == DESTROYED)
 	break;
     }
-  } else if (pphot->x[IMC3] < pco->x3f(pphot->i3)) {
+  } else if (pphot->x[IMC3] < pcoord->x3f(pphot->i3)) {
     update = true;
-    while (pphot->x[IMC3] < pco->x3f(pphot->i3)) {
+    while (pphot->x[IMC3] < pcoord->x3f(pphot->i3)) {
       pphot->i3--;
       if(pphot->i3 < pmcb->ks)
-	pmcb->pbval->BoundaryFunction_[INNER_X3](pmcb,pco,pphot);
+	pmcb->pbval->BoundaryFunction_[INNER_X3](pmcb,pcoord,pphot);
       if (pphot->status == ESCAPED) {
 	pphot->face = INNER_X3;
 	break;
@@ -387,8 +384,6 @@ bool GeneralMover::UpdateZone(Photon *pphot) {
 
 }
 
-//----------------------------------------------------------------------------------------
-// GR functions
 
 
 void GeneralMover::VerletStep(Photon *pphot, Real step) {
@@ -413,7 +408,7 @@ void GeneralMover::VerletStep(Photon *pphot, Real step) {
     }
   }
   
-  pmy_mcb->pcoord->Connect(pphot->x, gamma);
+  pcoord->Connect(pphot->x, gamma);
   n_iteration = 0;
   
   do {
@@ -468,7 +463,7 @@ void GeneralMover::PropogatePolarization(Photon *pphot) {
 
   Real gamma[NCOORD][NCOORD][NCOORD];
 
-  pmy_mcb->pcoord->Connect(pphot->x, gamma);
+  pcoord->Connect(pphot->x, gamma);
 
   int i, j, k, l;
   std::complex<Real> Ni[NCOORD][NCOORD];
@@ -496,16 +491,15 @@ Real GeneralMover::StepSize(Photon *pphot) {
   }
 
   Real small = 1.e-20;
-  MCCoord *pco = pmy_mcb->pcoord;
   
   Real kx1 = (fabs(pphot->k[IMC1]) > epsilon) ? fabs(pphot->k[IMC1]) : small; 
   Real kx2 = (fabs(pphot->k[IMC2]) > epsilon) ? fabs(pphot->k[IMC2]) : small;
   Real kx3 = (fabs(pphot->k[IMC3]) > epsilon) ? fabs(pphot->k[IMC3]) : small;
 
   // SWD: May want to store as dx1, etc.
-  Real stepx1 = ((pco->x1f(pphot->i1 + 1) - pco->x1f(pphot->i1)) / kx1);
-  Real stepx2 = ((pco->x2f(pphot->i2 + 1) - pco->x2f(pphot->i2)) / kx2);
-  Real stepx3 = ((pco->x3f(pphot->i3 + 1) - pco->x3f(pphot->i3)) / kx3);
+  Real stepx1 = ((pcoord->x1f(pphot->i1 + 1) - pcoord->x1f(pphot->i1)) / kx1);
+  Real stepx2 = ((pcoord->x2f(pphot->i2 + 1) - pcoord->x2f(pphot->i2)) / kx2);
+  Real stepx3 = ((pcoord->x3f(pphot->i3 + 1) - pcoord->x3f(pphot->i3)) / kx3);
 
   Real step = (stepx1 < stepx2) ? stepx1 : stepx2;
   step = (step < stepx3) ? step : stepx3;

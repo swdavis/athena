@@ -140,7 +140,6 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   varystep_flag = pin->GetOrAddBoolean("montecarlo", "varystep", false);
 
   // Set up photon movement and initialization methods
-  pmover = new GeneralMover(this);
   if (COORDINATE_SYSTEM == "cartesian") {
     GetZonePosition = GetZonePositionCartesian;
     if (general_mover_flag) {
@@ -219,7 +218,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 	  << std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
-
+  // Set pcoord in pmover
+  pmover->pcoord = pcoord;
   // Set absorption opacity
   if (absorption_meth == ABSUSER) {
     AbsorptionOpacity = NULL;
@@ -353,6 +353,8 @@ void MonteCarloBlock::RayTracePhotons(int nphot) {
       if (pphoton->status == ESCAPED) {
         // User defined completion work
         FinalizePhoton(pphoton);
+        // Transform to orthonormal frame
+
 	// loop over spectra and update
 	Spectrum *pspect = pspec;
 	while (pspect != NULL) {

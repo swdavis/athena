@@ -37,6 +37,7 @@ public:
 
   Real dl; //displacement
   MonteCarloBlock *pmy_mcb;
+  MCCoord *pcoord;
 
   // function pointers
   UserMoveFunc_t UserWorkInMove;

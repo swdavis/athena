@@ -287,7 +287,7 @@ def plot_spectrum(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='nulnu',
     if ymax is not None:
         right=float(ymax)
     ax.set_ylim([left,right])
-
+    print left,right,ymax
     # Return x and nu to facilitate evaluation of comparison functions
     # that may plotted by calling function.  Return ax to enable
     # further call to plot on the same axis

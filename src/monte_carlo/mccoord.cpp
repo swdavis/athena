@@ -6,7 +6,16 @@
 //! \file monte_carlo.cpp
 //  \brief implementation of functions in class MCCoord
 
+// SWD: General notes:
+// * need to add documentation
+// * remove zeroing of metric,connection at top?
+// * remove extraneous variable definitions
+// * rename X to x to better match athena style
+// * add mass parameter to black hole metrics
+// * conversion to cgs units for black hole metrics? 
+
 // Athena++ headers
+#include "../athena.hpp"
 #include "mccoord.hpp"
 
 // constructor
@@ -162,28 +171,22 @@ MCSphericalPolar::~MCSphericalPolar() {
 
 void MCSphericalPolar::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
 
-  int m, n;
-  Real sin, cos;
-  // Remove sincos and let compile handle this
-  void sincos(Real t, Real *s, Real *c);
-  sincos(x[IMC2], &sin, &cos);
-  for (m = 0; m < 4; m++) {
-    for (n = 0; n < 4; n++) {
-      gcov[m][n] = 0;
+  for (int i = 0; i < NCOORD; i++) {
+    for (int j = 0; j < NCOORD; j++) {
+      gcov[i][j] = 0;
     }
   }
-  gcov[IMC0][IMC0] = -1; // time variable is c*t
+
+  Real sth = sin(x[IMC2]);
+  gcov[IMC0][IMC0] = -1; 
   gcov[IMC1][IMC1] = 1;
   gcov[IMC2][IMC2] = x[IMC1] * x[IMC1];
-  gcov[IMC3][IMC3] = x[IMC1] * x[IMC1] * sin * sin;
+  gcov[IMC3][IMC3] = x[IMC1] * x[IMC1] * sth * sth;
 
 }
 
 void MCSphericalPolar::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]) {
 
-  void sincos(Real th, Real *sth, Real *cth);
-  Real sin,cos;
-  sincos(x[IMC2],&sin,&cos);
 
   for(int i = 0; i < NCOORD; i++) {
     for(int j = 0; j < NCOORD; j++) {
@@ -193,15 +196,18 @@ void MCSphericalPolar::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD
     }
   }
 
+  Real sth = sin(x[IMC2]);
+  Real cth = cos(x[IMC2]);
+
   gamma[IMC1][IMC2][IMC2] = -x[IMC1];
-  gamma[IMC1][IMC3][IMC3] = -x[IMC1]*sin*sin;
+  gamma[IMC1][IMC3][IMC3] = -x[IMC1]*sth*sth;
   gamma[IMC2][IMC1][IMC2] = 1./x[IMC1];
   gamma[IMC2][IMC2][IMC1] = 1./x[IMC1];
-  gamma[IMC2][IMC3][IMC3] = -sin*cos;
+  gamma[IMC2][IMC3][IMC3] = -sth*cth;
   gamma[IMC3][IMC1][IMC3] = 1./x[IMC1];
-  gamma[IMC3][IMC2][IMC3] = cos/sin;
+  gamma[IMC3][IMC2][IMC3] = cth/sth;
   gamma[IMC3][IMC3][IMC1] = 1./x[IMC1];
-  gamma[IMC3][IMC3][IMC2] = cos/sin;
+  gamma[IMC3][IMC3][IMC2] = cth/sth;
 
 }
 
@@ -223,10 +229,10 @@ MCCylindrical::~MCCylindrical() {
 }
 
 void MCCylindrical::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
-  int m, n;
-  for (m = 0; m < 4; m++) {
-    for (n = 0; n < 4; n++) {
-      gcov[m][n] = 0;
+
+  for(int i = 0; i < NCOORD; i++) {
+    for(int j = 0; j < NCOORD; j++) {
+      gcov[i][j] = 0;
     }
   }
   gcov[IMC0][IMC0] = -1;
@@ -272,29 +278,25 @@ MCKerrSchild::~MCKerrSchild() {
 
 void MCKerrSchild::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]){
 
-  Real sth, cth, s2, rho2, sigma, A, delta, a, a2;
-  Real r, th, sth2, cth2, r2;
-  /* required by broken math.h */
-  void sincos(Real th, Real *sth, Real *cth);
-
   for (int i = 0; i < NCOORD; i++) {
     for (int j = 0; j < NCOORD; j++) {
       gcov[i][j] = 0.;
     }
   }
 
-  a = bh_spin_;
-  r = x[IMC1];
-  r2 = SQR(r);
-  th = x[IMC2];
-  sincos(th, &sth, &cth);
-  cth2 = SQR(cth);
-  sth2 = SQR(sth);
-  a2 = SQR(a);
+  Real a = bh_spin_;
+  Real r = x[IMC1];
+  Real r2 = SQR(r);
+  Real th = x[IMC2];
+  Real sth = sin(th);
+  Real cth = cos(th);
+  Real cth2 = SQR(cth);
+  Real sth2 = SQR(sth);
+  Real a2 = SQR(a);
 
-  sigma = r2 + a2 * cth2;
-  delta = r2 - 2 * r + a2;
-  A = SQR(r2 + a2) - a2 * delta * sth2;
+  Real sigma = r2 + a2 * cth2;
+  Real delta = r2 - 2 * r + a2;
+  Real A = SQR(r2 + a2) - a2 * delta * sth2;
   
   gcov[IMC0][IMC0] = -1. * (1. - 2. * r / sigma);
   gcov[IMC0][IMC1] = 2 * r / sigma;
@@ -316,28 +318,24 @@ void MCKerrSchild::InverseMetric(Real x[NCOORD], Real gcon[NCOORD][NCOORD]) {
   
   // equations come from Takahasi (2007) Appendix
 
-  Real sth, cth, s2, rho2, sigma, delta, a, a2;
-  Real r, th, sth2, cth2, r2;
-  /* required by broken math.h */
-  void sincos(Real th, Real *sth, Real *cth);
-
   for (int i = 0; i < NCOORD; i++) {
     for (int j = 0; j < NCOORD; j++) {
       gcon[i][j] = 0.;
     }
   }
 
-  a = bh_spin_;
-  r = x[IMC1];
-  r2 = SQR(r);
-  th = x[IMC2];
-  sincos(th, &sth, &cth);
-  cth2 = SQR(cth);
-  sth2 = SQR(sth);
-  a2 = SQR(a);
+  Real a = bh_spin_;
+  Real r = x[IMC1];
+  Real r2 = SQR(r);
+  Real th = x[IMC2];
+  Real sth = sin(th);
+  Real cth = cos(th);
+  Real cth2 = SQR(cth);
+  Real sth2 = SQR(sth);
+  Real a2 = SQR(a);
 
-  sigma = r2 + a2 * cth2;
-  delta = r2 - 2 * r + a2;
+  Real sigma = r2 + a2 * cth2;
+  Real delta = r2 - 2 * r + a2;
 
   gcon[IMC0][IMC0] = -(1. + (2. * r / sigma));
   gcon[IMC0][IMC1] = 2. * r / sigma;
@@ -355,23 +353,22 @@ void MCKerrSchild::InverseMetric(Real x[NCOORD], Real gcon[NCOORD][NCOORD]) {
 
 void MCKerrSchild::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]){
 
-  Real r, r2, cth, sth, cth2, sth2, c2th, s2th;
-  Real a, a2, sigma, sigma2, A, delta;
-  void sincos(Real th, Real *sth, Real *cth);
 
-  a = bh_spin_;
-  r = x[IMC1];
-  r2 = SQR(r);
-  sincos(x[IMC2], &sth, &cth);
-  cth2 = SQR(cth);
-  sth2 = SQR(sth);
-  sincos(2. * x[IMC2], &s2th, &c2th);
-  
-  a2 = SQR(a);
-  sigma = r2 + a2 * cth2;
-  sigma2 = SQR(sigma);
-  delta = r2 - 2 * r + a2;
-  A = SQR(r2 + a2) - a2 * delta * sth2;
+  Real a = bh_spin_;
+  Real r = x[IMC1];
+  Real r2 = SQR(r);
+  Real sth = sin(x[IMC2]);
+  Real cth = cos(x[IMC2]);
+  Real cth2 = SQR(cth);
+  Real sth2 = SQR(sth);
+  Real s2th = 2.*sth*cth;
+  Real c2th = cth2 - sth2;
+
+  Real a2 = SQR(a);
+  Real sigma = r2 + a2 * cth2;
+  Real sigma2 = SQR(sigma);
+  Real delta = r2 - 2 * r + a2;
+  Real A = SQR(r2 + a2) - a2 * delta * sth2;
 
   gamma[IMC0][IMC0][IMC0] = -2. * r / sigma2 * (1. - 2. * r2 / sigma);
   gamma[IMC0][IMC0][IMC1] = -1. / sigma * (1. + 2. * r / sigma) * (1. - 2. * r2 / sigma);
@@ -498,34 +495,26 @@ void MCBoyerLindquist::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
 
   // equation for the Metric comes from the inside cover of Hartle
   
-  Real m, r, j, th, phi;
-  Real sth, sth2, cth, cth2;
-  Real r2, a, a2;
-  Real rho2, delta;
-
-  void sincos(Real th, Real *sth, Real *cth);
-
-  for (int i = 0; i < 4; i++) {
-    for (int j = 0; j < 4; j++) {
-      gcov[i][j] = 0;
+  for (int i = 0; i < NCOORD; i++) {
+    for (int j = 0; j < NCOORD; j++) {
+      gcov[i][j] = 0.;
     }
   }
 
-  a = bh_spin_;
-  r = x[IMC1];
-  th = x[IMC2];
-  phi = x[IMC3];
-  m = 1.0;
-  j = a*m;
+  Real a = bh_spin_;
+  Real m = bh_mass_;
 
-  sincos(th, &sth, &cth);
-  cth2 = SQR(cth);
-  sth2 = SQR(sth);
+  Real r = x[IMC1];
+  Real th = x[IMC2];
+  Real sth = sin(x[IMC2]);
+  Real cth = cos(x[IMC2]);
+  Real cth2 = SQR(cth);
+  Real sth2 = SQR(sth);
 
-  r2 = SQR(r);
-  a2 = SQR(a);
-  rho2 = r2 + a2*cth2;
-  delta = r2 - 2. * m* r + a2;
+  Real r2 = SQR(r);
+  Real a2 = SQR(a);
+  Real rho2 = r2 + a2*cth2;
+  Real delta = r2 - 2. * m* r + a2;
 
   gcov[IMC0][IMC0] = (-1. + 2.*m*r/rho2);
   gcov[IMC1][IMC1] = rho2/delta;
@@ -542,30 +531,25 @@ void MCBoyerLindquist::InverseMetric(Real x[NCOORD], Real gcon[NCOORD][NCOORD]) 
   // Equation comes from ColinsCosmos.com/wiki/boyer-lindquist-coordinates, which
   // sites Frolov & Novikov Section D.1 (but I don't have access to this book)
 
-  Real r, th;
-  Real sth, sth2, cth, cth2;
-  Real r2, a, a2;
-  Real rho2, delta;
 
-  void sincos(Real th, Real *sth, Real *cth);
-
-  for (int i = 0; i < 4; i++) {
-    for (int j = 0; j < 4; j++) {
-      gcon[i][j] = 0;
+  for (int i = 0; i < NCOORD; i++) {
+    for (int j = 0; j < NCOORD; j++) {
+      gcon[i][j] = 0.;
     }
   }
-  a = bh_spin_;
-  r = x[IMC1];
-  th = x[IMC2];
 
-  sincos(th, &sth, &cth);
-  cth2 = SQR(cth);
-  sth2 = SQR(sth);
 
-  r2 = SQR(r);
-  a2 = SQR(a);
-  rho2 = r2 + a2 * cth2;
-  delta = r2 - 2. * r + a2;
+  Real a = bh_spin_;
+  Real r = x[IMC1];
+  Real sth = sin(x[IMC2]);
+  Real cth = cos(x[IMC2]);
+  Real cth2 = SQR(cth);
+  Real sth2 = SQR(sth);
+
+  Real r2 = SQR(r);
+  Real a2 = SQR(a);
+  Real rho2 = r2 + a2 * cth2;
+  Real delta = r2 - 2. * r + a2;
 
   gcon[IMC0][IMC0] = -1. / delta * (r2 + a2 + 2. * r * a2 * sth2 / rho2);
   gcon[IMC1][IMC1] = delta / rho2;
@@ -582,35 +566,6 @@ void MCBoyerLindquist::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD
 
   // equations for the connection coefficients come from Frutos-Alfaro et al. (2012)
 
-  Real m, r, j, th, phi;
-  Real sth, sth2, cth, cth2;
-  Real rho2, delta, rs;
-  Real a, a2, r2, rho4, rho6;
-  
-  void sincos(Real th, Real *sth, Real *cth);
-
-  a = bh_spin_;
-  r = x[IMC1];
-  th = x[IMC2];
-  phi = x[IMC3];
-  m = 1.0;
-  j = a*m;
-
-  sincos(th, &sth, &cth);
-  cth2 = SQR(cth);
-  sth2 = 1. - cth2;
-
-  r2 = SQR(r);
-  a2 = SQR(a);
-  rho2 = r2 + a2*cth2;
-  rs = 2.*m; 
-  delta = r2 - rs*r + a2;
-
-  rho4 = SQR(rho2);
-  rho6 = rho4*rho2;
-
-  // Real A = SQR(r2+a2) - a2*delta*sth2;
-
   for (int i = 0; i < NCOORD; i++) {
     for (int j = 0; j < NCOORD; j++) {
       for (int k = 0; k < NCOORD; k++) {
@@ -618,6 +573,29 @@ void MCBoyerLindquist::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD
       }
     }
   }
+
+  // SWD: Clean this one up
+  Real a = bh_spin_;
+  Real m = bh_mass_;
+  Real r = x[IMC1];
+
+  Real j = a*m;
+
+  Real sth = sin(x[IMC2]);
+  Real cth = cos(x[IMC2]);
+  Real cth2 = SQR(cth);
+  Real sth2 = 1. - cth2;
+
+  Real r2 = SQR(r);
+  Real a2 = SQR(a);
+  Real rho2 = r2 + a2*cth2;
+  Real rs = 2.*m; 
+  Real delta = r2 - rs*r + a2;
+
+  Real rho4 = SQR(rho2);
+  Real rho6 = rho4*rho2;
+
+  // Real A = SQR(r2+a2) - a2*delta*sth2;
 
   gamma[IMC0][IMC0][IMC1] = rs/(2.*rho4*delta)*(r2+a2)*(2.*r2-rho2);
   gamma[IMC0][IMC0][IMC2] = -2.*a*j*r/rho4*sth*cth;

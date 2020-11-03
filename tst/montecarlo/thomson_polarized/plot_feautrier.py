@@ -16,16 +16,13 @@ import athena_mc_spec as mcspec
 import feautrier as feaut
 
 def interp_feaut(mu0,mu,varin):
-    #mu2d,nu2d = np.meshgrid(mu,nu)
-    #f = interpolate.interp2d(mu,nu,var)
-    print mu0
-    print mu.shape
-    print varin.shape
+    """
+    Interpolate feautrier solution in angle
+    """
     nnu = len(varin[:,0])
     varout  = np.zeros(nnu)
     for i in range(nnu):
         varout[i] = np.interp(mu0,mu,varin[i,:])
-        print varout[i],mu0,mu,varin[i,:]
     return varout
 
 # Main function
@@ -47,12 +44,15 @@ def main(**kwargs):
     everg = 1.6021772e-12
     nu = 0.5*(xfaces[1:]+xfaces[:-1])*everg/h
     mumid = 0.5*(spectrum['mufaces'][1:]+spectrum['mufaces'][:-1])
-    print mumid
 
-    # read in feautier solution
     fnorm = kwargs.pop('fnorm')
-    feaut.transfer(nd=128,na=32,nu=nu)
-    nuf,muf,intensf,polf = feaut.read_feautrier("feautrier.out")
+    ffile = kwargs.pop('ffile')
+    if ffile is None:
+        # Compute feautrier solution
+        feaut.transfer(nd=128,na=32,nu=nu)
+        ffile = "feautrier.out"
+    # read in feautier solution
+    nuf,muf,intensf,polf = feaut.read_feautrier(ffile)
     evf = nuf*h/everg
 
     def imu_handler(imu):
@@ -61,12 +61,12 @@ def main(**kwargs):
             slist = imu.strip(('[]')).split(",")
             ilist = [int(i) for i in slist]
         else:
-            ilist = [imu]
+            ilist = [int(imu)]
         return ilist
 
     # Get imu or imus for plotting different polar angles
     ilist = imu_handler(kwargs.pop('imu'))
-
+    
     # plot spectrum
     if kwargs['yunit'] == 'specfrac':
         kwargs.pop('yunit')
@@ -77,20 +77,24 @@ def main(**kwargs):
         kwargs1['yscale'] = 'log'
         kwargs1['yunit'] = 'nulnu'
         for imu in ilist:
-            finterp = interp_feaut(mumid[imu],muf,intensf)
             x, nu, ax1 = mcspec.plot_spectrum(spectrum,imu,ax1,**kwargs1)
             ax1.tick_params(labelbottom=False)
             ax1.set_xlabel("")
-            ax1.plot(evf,nuf*finterp*fnorm)
+            iinterp = interp_feaut(mumid[imu],muf,intensf)
+            ax1.plot(evf,nuf*iinterp*fnorm)
 
         ax2 = fig.add_subplot(gs[3:5,0])
         kwargs2 = dict(kwargs)
-        kwargs2['yunit'] = 'frac'
+        kwargs2['yunit'] = 'q'
         kwargs2.pop('ymin','ymax')
-        kwargs2['ymin'] = 0
         for imu in ilist:
             x, nu, ax2 = mcspec.plot_polarization(spectrum,imu,ax2,**kwargs2)
-            plt.tight_layout()
+            pinterp = interp_feaut(mumid[imu],muf,polf)
+            
+            ax2.plot(evf,pinterp*100)
+
+        plt.tight_layout()
+
     else:
         fig = plt.figure()
         ax = fig.add_subplot(1,1,1)
@@ -145,6 +149,9 @@ if __name__ == '__main__':
         type = float,
         default = 1.,
         help='feautrier area normalization')
+    parser.add_argument('--ffile',
+        default = None,
+        help='feautrier input file')
     parser.add_argument('--outfile',
         default=None,
         help='output filename for spectrum')
