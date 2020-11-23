@@ -192,6 +192,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
        pcoord = new MCBoyerLindquist(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
                                      acceleration);
        pcoord->SetSpin(pin->GetReal("coord", "a"));
+       pcoord->SetMass(pin->GetReal("coord", "m"));
      }
     } else {
       if (pmb != NULL)
@@ -200,6 +201,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
         pcoord = new MCKerrSchild(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
                                   acceleration);
         pcoord->SetSpin(pin->GetReal("coord", "a"));
+        pcoord->SetMass(pin->GetReal("coord", "m"));
       }
     }
   } else if (COORDINATE_SYSTEM == "minkowski") {
@@ -345,16 +347,14 @@ void MonteCarloBlock::RayTracePhotons(int nphot) {
   
       // user definied photon initialization
       InitializePhoton(pphoton);
-  
+ 
       // Photon initialized in coordinate frame
       // move photon until  stopping condition
       pmover->Move(pphoton);
       if (ptraj != NULL) ptraj->CompleteTrajectory();
+      // User defined completion work
+      FinalizePhoton(pphoton);
       if (pphoton->status == ESCAPED) {
-        // User defined completion work
-        FinalizePhoton(pphoton);
-        // Transform to orthonormal frame
-
 	// loop over spectra and update
 	Spectrum *pspect = pspec;
 	while (pspect != NULL) {

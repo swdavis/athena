@@ -24,7 +24,6 @@
 //#define VERBOSE
 
 // GR headers
-#define n_array 4
 #define tolerance 1.e-5
 #define max_iteration 2
 #define epsilon 1.e-40
@@ -73,10 +72,10 @@ void GeneralMover::Move(Photon *pphot) {
 
   
   // SWD: this should get moved to photon initialization 
-  pphot->dk[IMC0] = 0.;
-  pphot->dk[IMC1] = 0.;
-  pphot->dk[IMC2] = 0.;
-  pphot->dk[IMC3] = 0.;
+  //pphot->dk[IMC0] = 0.;
+  //pphot->dk[IMC1] = 0.;
+  //pphot->dk[IMC2] = 0.;
+  //pphot->dk[IMC3] = 0.;
 
   Real step = StepSize(pphot);
 
@@ -118,12 +117,12 @@ void GeneralMover::Move(Photon *pphot) {
    if (TauRemaining > chi * step) {
      VerletStep(pphot,step);
      if (pmy_mcb->pmy_mc->polarized)
-       PropogatePolarization(pphot);
+       PropogatePolarization(pphot,step);
    } else {
      step = TauRemaining / chi;
      VerletStep(pphot,step);
      if (pmy_mcb->pmy_mc->polarized)
-       PropogatePolarization(pphot);
+       PropogatePolarization(pphot,step);
    }
    cth = cos(pphot->x[1]);
    sth = sqrt(1. - SQR(cth));
@@ -398,15 +397,6 @@ void GeneralMover::VerletStep(Photon *pphot, Real step) {
     pphot->x[i] += (pphot->k[i])*step + 0.5*(pphot->dk[i])*SQR(step);
     k_n1[i] = (pphot->k[i]) + (pphot->dk[i])*step;
   }
-
-  // SWD: This should be removed
-  for (i=0;i<NCOORD;i++) {
-    for (j=0;j<NCOORD;j++) {
-      for (k=0;k<NCOORD;k++) {
-	gamma[i][j][k] = 0.;
-      }
-    }
-  }
   
   pcoord->Connect(pphot->x, gamma);
   n_iteration = 0;
@@ -459,26 +449,29 @@ void GeneralMover::VerletStep(Photon *pphot, Real step) {
 }
 
 
-void GeneralMover::PropogatePolarization(Photon *pphot) {
+void GeneralMover::PropogatePolarization(Photon *pphot, Real step) {
 
   Real gamma[NCOORD][NCOORD][NCOORD];
-
+  // Store gamma in Coord to prevent recalculation
   pcoord->Connect(pphot->x, gamma);
 
   int i, j, k, l;
-  std::complex<Real> Ni[NCOORD][NCOORD];
+  std::complex<Real> ptcopy[NCOORD][NCOORD];
 
   for (int i = 0; i < 4; i++)
     for (int j = 0; j < 4; j++)
-      Ni[i][j] = pphot->polten[i][j];
+      ptcopy[i][j] = pphot->polten[i][j];
 
-  for (int i = 0; i < 4; i++)
-    for (int j = 0; j < 4; j++)
-      for (int k = 0; k < 4; k++)
-	for (int l = 0; l < 4; l++)
-	  pphot->polten[i][j] += -(gamma[i][k][l] * Ni[k][j] * pphot->k[l] +
-				   gamma[j][k][l] * Ni[i][k] * pphot->k[l]);
-
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      for (int k = 0; k < 4; k++) {
+	for (int l = 0; l < 4; l++) {
+          pphot->polten[i][j] += -(gamma[i][k][l] * ptcopy[k][j] +
+          			   gamma[j][k][l] * ptcopy[i][k]) * 
+           pphot->k[l] * step;
+        }}
+      //printf("%d %d %g %g %g %g %g\n",i,j,pphot->polten[i][j].real(),pphot->polten[i][j].real()-ptcopy[i][j].real(),pphot->k[0],step,pphot->x[0]);//,gamma[0][i][j],gamma[1][i][j],,gamma[2][i][j],,gamma[3][i][j]);
+    }}
 }
 
 

@@ -128,7 +128,7 @@ public:
   void UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb);
   bool UpdateZone(Photon *pphot);
   void VerletStep(Photon *pphot, Real step);
-  void PropogatePolarization(Photon *nphot);
+  void PropogatePolarization(Photon *nphot, Real step);
   Real StepSize(Photon *pphot);
 
 };

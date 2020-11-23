@@ -104,7 +104,7 @@ def write_list(filename,phtraj):
     outfile.write(bin)
     outfile.close()
 
-def plot_trajectory_projection(traj,axs=None):
+def plot_trajectory_projection(traj,axs=None,l0=1.):
 
     if (axs is None):
         # Create figure, axes
@@ -130,11 +130,21 @@ def plot_trajectory_projection(traj,axs=None):
                 x[j] = r*sth*cph
                 y[j] = r*sth*sph
                 z[j] = r*cth
+        if (traj['coord'] == 'kerr-schild'):
+            for j in range(n):
+                r = traj['list'][i,j,0]
+                cth = np.cos(traj['list'][i,j,1])
+                sth = np.sin(traj['list'][i,j,1])            
+                cph = np.cos(traj['list'][i,j,2])
+                sph = np.sin(traj['list'][i,j,2])
+                x[j] = r*sth*cph
+                y[j] = r*sth*sph
+                z[j] = r*cth
 
         axs[0].plot(x,y,'r.', markersize=1.0)
         axs[1].plot(x,z,'r.', markersize=1.0)
         axs[2].plot(y,z,'r.', markersize=1.0)
-        l0=1.e11
+        
         axs[0].set_xlim([-l0,l0])
         axs[1].set_xlim([-l0,l0])
         axs[2].set_xlim([-l0,l0])

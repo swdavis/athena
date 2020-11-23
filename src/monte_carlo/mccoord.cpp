@@ -353,6 +353,13 @@ void MCKerrSchild::InverseMetric(Real x[NCOORD], Real gcon[NCOORD][NCOORD]) {
 
 void MCKerrSchild::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]){
 
+  for(int i = 0; i < NCOORD; i++) {
+    for(int j = 0; j < NCOORD; j++) {
+      for(int k = 0; k < NCOORD; k++) {
+	gamma[i][j][k]=0;
+      }
+    }
+  }
 
   Real a = bh_spin_;
   Real r = x[IMC1];
@@ -505,7 +512,6 @@ void MCBoyerLindquist::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
   Real m = bh_mass_;
 
   Real r = x[IMC1];
-  Real th = x[IMC2];
   Real sth = sin(x[IMC2]);
   Real cth = cos(x[IMC2]);
   Real cth2 = SQR(cth);
@@ -515,7 +521,7 @@ void MCBoyerLindquist::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
   Real a2 = SQR(a);
   Real rho2 = r2 + a2*cth2;
   Real delta = r2 - 2. * m* r + a2;
-
+ 
   gcov[IMC0][IMC0] = (-1. + 2.*m*r/rho2);
   gcov[IMC1][IMC1] = rho2/delta;
   gcov[IMC2][IMC2] = rho2;
@@ -523,6 +529,7 @@ void MCBoyerLindquist::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
 
   gcov[IMC0][IMC3] = -2.*m*a*r*sth2/rho2;
   gcov[IMC3][IMC0] = gcov[IMC0][IMC3];
+
 
 }
 
@@ -578,7 +585,6 @@ void MCBoyerLindquist::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD
   Real a = bh_spin_;
   Real m = bh_mass_;
   Real r = x[IMC1];
-
   Real j = a*m;
 
   Real sth = sin(x[IMC2]);

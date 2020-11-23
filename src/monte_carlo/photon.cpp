@@ -95,6 +95,19 @@ void Photon::PrintPhoton() {
 	    << "stokes: " << stokes[0] << " " << stokes[1] << " "
 	    << stokes[2] << std::endl
 	    << "opacity: " << sct_coef << " " << abs_coef << std::endl;
+  if (nuser_var > 0) {
+    std::cout << "User vars:";
+      for (int i=0; i<nuser_var; i++) {
+        std::cout << " " << user_var[i];
+      }
+      std::cout << std::endl;
+  }
+  if (status == EVOLVING)
+    std::cout << "EVOLVING" << std::endl;
+  else if (status == ESCAPED)
+    std::cout << "ESCAPED" << std::endl;
+  else if (status == DESTROYED)
+    std::cout << "DESTROYED" << std::endl;
 }
 
 //----------------------------------------------------------------------------------------

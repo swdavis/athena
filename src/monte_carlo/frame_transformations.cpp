@@ -96,11 +96,88 @@ void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD],
       } 
     }
     printf("sum: %g  index: %d\n",sum, i);
+
+
   }
   printf("--------------------------------------------------\n");
 #endif
 
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void ConstructTetrad(Real ucon[NCOORD], Real kcon[NCOORD], 
+//                              Real gcov[NCOORD][NCOORD],
+//                              Real ecov[NCOORD][NCOORD], Real econ[NCOORD][NCOORD]
+//  \brief construct an orthonormal tetrad using the fluid frame vector ucon and defining
+//         e^mu_(3) = k^\mu 
+
+
+void ConstructTetrad(Real ucon[NCOORD], Real kcon[NCOORD], Real gcov[NCOORD][NCOORD], 
+                     Real econ[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD]) {
+
+ // make a trial tetrad where time component is parallel to fluid, the first spatial
+  // coordinate is from the magnetic field and the last two are diagonal
+  for (int i = 0; i < NCOORD; i++) {
+    for (int j = 0; j < NCOORD; j++) {
+      if (i == IMC0)
+        econ[IMC0][j] = ucon[j]; // time component parallel to fluid frame
+      else if (i == IMC3)
+        econ[IMC3][j] = kcon[j]; // set by k vector
+      else
+        econ[i][j] = static_cast<Real>(KroneckerDelta(i,j)); // diagonal trial 
+    }
+  }
+
+  // begin constructing contravariant tetrad
+  NormalizeVec(econ[IMC0], gcov);
+
+  ProjectVecSub(econ[IMC3], econ[IMC0], gcov);
+  NormalizeVec(econ[IMC3], gcov);
+
+  ProjectVecSub(econ[IMC1], econ[IMC0], gcov);
+  ProjectVecSub(econ[IMC1], econ[IMC3], gcov);
+  NormalizeVec(econ[IMC1], gcov);
+
+  ProjectVecSub(econ[IMC2], econ[IMC0], gcov);
+  ProjectVecSub(econ[IMC2], econ[IMC3], gcov);
+  ProjectVecSub(econ[IMC2], econ[IMC1], gcov);
+  NormalizeVec(econ[IMC2], gcov);
+  // contravariant tetrad construction complete
+
+  // begin construction covariant tetrad
+  for (int i = 0; i < NCOORD; i++) {
+    ConToCov(econ[i], ecov[i], gcov);
+    if (i == IMC0) {
+      for (int j = 0; j < NCOORD; j++) ecov[IMC0][j] *= -1;
+    }
+  }
+#ifdef DEBUG
+  Real sum;
+  for (int i = 0; i < NCOORD; i++) {
+    for (int j = 0; j < NCOORD; j++) {
+      sum = 0.;
+      for (int k = 0; k < NCOORD; k++) {
+	sum += econ[i][k] * ecov[j][k];
+      } 
+    }
+    printf("sum: %g  index: %d\n",sum, i);
+  }
+  printf("Othonormality check:\n");
+  printf("econ[IMC0]: %g %g %g %g\n", econ[IMC0][IMC0], econ[IMC0][IMC1], econ[IMC0][IMC2], econ[IMC0][IMC3]);
+  printf("econ[IMC1]: %g %g %g %g\n", econ[IMC1][IMC0], econ[IMC1][IMC1], econ[IMC1][IMC2], econ[IMC1][IMC3]);
+  printf("econ[IMC2]: %g %g %g %g\n", econ[IMC2][IMC0], econ[IMC2][IMC1], econ[IMC2][IMC2], econ[IMC2][IMC3]);
+  printf("econ[IMC3]: %g %g %g %g\n", econ[IMC3][IMC0], econ[IMC3][IMC1], econ[IMC3][IMC2], econ[IMC3][IMC3]);
+  printf("ecov[IMC0]: %g %g %g %g\n", ecov[IMC0][IMC0], ecov[IMC0][IMC1], ecov[IMC0][IMC2], ecov[IMC0][IMC3]);
+  printf("ecov[IMC1]: %g %g %g %g\n", ecov[IMC1][IMC0], ecov[IMC1][IMC1], ecov[IMC1][IMC2], ecov[IMC1][IMC3]);
+  printf("ecov[IMC2]: %g %g %g %g\n", ecov[IMC2][IMC0], ecov[IMC2][IMC1], ecov[IMC2][IMC2], ecov[IMC2][IMC3]);
+  printf("ecov[IMC3]: %g %g %g %g\n", ecov[IMC3][IMC0], ecov[IMC3][IMC1], ecov[IMC3][IMC2], ecov[IMC3][IMC3]);
+  printf("gcov[IMC0]: %g %g %g %g\n", gcov[IMC0][IMC0], gcov[IMC0][IMC1], gcov[IMC0][IMC2], gcov[IMC0][IMC3]);
+  printf("gcov[IMC1]: %g %g %g %g\n", gcov[IMC1][IMC0], gcov[IMC1][IMC1], gcov[IMC1][IMC2], gcov[IMC1][IMC3]);
+  printf("gcov[IMC2]: %g %g %g %g\n", gcov[IMC2][IMC0], gcov[IMC2][IMC1], gcov[IMC2][IMC2], gcov[IMC2][IMC3]);
+  printf("gcov[IMC3]: %g %g %g %g\n", gcov[IMC3][IMC0], gcov[IMC3][IMC1], gcov[IMC3][IMC2], gcov[IMC3][IMC3]);
+#endif
+}
+
 
 //----------------------------------------------------------------------------------------
 //! \fn int KroneckerDelta(int i, int j)
@@ -236,6 +313,7 @@ void TetradToCoordinate(Real utet[NCOORD], Real ucoord[NCOORD],
 
 }
 
+// SWD: make purely real version for linear polarization
 //----------------------------------------------------------------------------------------
 //! \fn void StokesToTensor(Real stokes[NCOORD],std::complex<Real> tensor[NCOORD][NCOORD])
 //  \brief transform stokes vector invariant polarization tensor
@@ -248,11 +326,15 @@ void StokesToTensor(Real stokes[NCOORD], std::complex<Real> tensor[NCOORD][NCOOR
     for (int j = 0; j < NCOORD; j++)
       tensor[i][j] = std::complex<Real>(0.,0.);
 
-  tensor[1][1] = (stokes[0] + stokes[1]);
-  tensor[1][2] = (stokes[2] - I * stokes[3]);
-  tensor[2][1] = (stokes[2] + I * stokes[3]);
-  tensor[2][2] = (stokes[0] - stokes[1]);
-
+  //tensor[IMC2][IMC2] = (stokes[0] + stokes[1]);
+  //tensor[IMC2][IMC3] = (stokes[2] - I * stokes[3]);
+  //tensor[IMC3][IMC2] = (stokes[2] + I * stokes[3]);
+  //tensor[IMC3][IMC3] = (stokes[0] - stokes[1]);
+  // SWD general for tetrad in MC18
+  tensor[IMC1][IMC1] = (stokes[0] + stokes[1]);
+  tensor[IMC1][IMC2] = (stokes[2] - I * stokes[3]);
+  tensor[IMC2][IMC1] = (stokes[2] + I * stokes[3]);
+  tensor[IMC2][IMC2] = (stokes[0] - stokes[1]);
 }
 
 //----------------------------------------------------------------------------------------
@@ -261,11 +343,15 @@ void StokesToTensor(Real stokes[NCOORD], std::complex<Real> tensor[NCOORD][NCOOR
 
 void TensorToStokes(std::complex<Real> tensor[NCOORD][NCOORD], Real stokes[NCOORD]) {
 
-  //divide by two to agree with the above
-  stokes[0] = 0.5 * (tensor[1][1] + tensor[2][2]).real();
-  stokes[1] = 0.5 * (tensor[1][1] - tensor[2][2]).real();
-  stokes[2] = 0.5 * (tensor[1][2] + tensor[2][1]).real();
-  stokes[3] = 0.5 * (tensor[2][1] - tensor[1][2]).imag();
+  //stokes[0] = 0.5 * (tensor[IMC2][IMC2] + tensor[IMC3][IMC3]).real();
+  //stokes[1] = 0.5 * (tensor[IMC2][IMC2] - tensor[IMC3][IMC3]).real();
+  //stokes[2] = 0.5 * (tensor[IMC2][IMC3] + tensor[IMC3][IMC2]).real();
+  //stokes[3] = 0.5 * (tensor[IMC3][IMC2] - tensor[IMC2][IMC3]).imag();
+  //SWD general for tetrad in MC18
+  stokes[0] = 0.5 * (tensor[IMC1][IMC1] + tensor[IMC2][IMC2]).real();
+  stokes[1] = 0.5 * (tensor[IMC1][IMC1] - tensor[IMC2][IMC2]).real();
+  stokes[2] = 0.5 * (tensor[IMC1][IMC2] + tensor[IMC2][IMC1]).real();
+  stokes[3] = 0.5 * (tensor[IMC2][IMC1] - tensor[IMC1][IMC2]).imag();
 
   Real norm = stokes[0];
   for (int i = 0; i < NCOORD; i++)

@@ -96,6 +96,8 @@ void GetZonePositionCylindricalGR(Photon *pphot, MCRandom *pran, MCCoord *pcoord
 // SWD:  Add these to MCCoord class, utils, keep here?
 void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD],
 		      Real econ[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD]);
+void ConstructTetrad(Real ucon[NCOORD], Real kcon[NCOORD], Real gcov[NCOORD][NCOORD], 
+                     Real econ[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD]);
 int KroneckerDelta(int i, int j);
 void ProjectVecSub(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD]);
 Real DotVec(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD]);
