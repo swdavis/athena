@@ -523,6 +523,43 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       }
     }
   }
+
+  if (PARTICLES) {
+    ParticleMesh *ppm = pmb->ppar->ppm;
+
+    // particle number density
+    if (output_params.variable.compare("np") == 0) {
+      pod = new OutputData;
+      pod->type = "SCALARS";
+      pod->name = "np";
+      pod->data.InitWithShallowSlice(ppm->weight, 4, 0, 1);
+      AppendOutputDataNode(pod);
+      num_vars_++;
+    }
+
+    // particle velocity field
+    if (output_params.variable.compare("vp") == 0 ||
+        output_params.variable.compare("prim") == 0) {
+      pod = new OutputData;
+      pod->type = "VECTORS";
+      pod->name = "vp";
+      pod->data = pmb->ppar->GetVelocityField();
+      AppendOutputDataNode(pod);
+      num_vars_ += 3;
+    }
+
+    // particle mass density
+    if (output_params.variable.compare("rhop") == 0 ||
+        output_params.variable.compare("prim") == 0) {
+      pod = new OutputData;
+      pod->type = "SCALARS";
+      pod->name = "rhop";
+      pod->data = pmb->ppar->GetMassDensity();
+      AppendOutputDataNode(pod);
+      num_vars_++;
+    }
+  }
+
   // note, the Bcc variables are stored in a separate HDF5 dataset from the above Output
   // nodes, and it must come after those nodes in the linked list
   if (MAGNETIC_FIELDS_ENABLED) {
@@ -604,42 +641,6 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       num_vars_++;
     }
   } // endif (MAGNETIC_FIELDS_ENABLED)
-
-  if (PARTICLES) {
-    ParticleMesh *ppm = pmb->ppar->ppm;
-
-    // particle number density
-    if (output_params.variable.compare("np") == 0) {
-      pod = new OutputData;
-      pod->type = "SCALARS";
-      pod->name = "np";
-      pod->data.InitWithShallowSlice(ppm->weight, 4, 0, 1);
-      AppendOutputDataNode(pod);
-      num_vars_++;
-    }
-
-    // particle velocity field
-    if (output_params.variable.compare("vp") == 0 ||
-        output_params.variable.compare("prim") == 0) {
-      pod = new OutputData;
-      pod->type = "VECTORS";
-      pod->name = "vp";
-      pod->data = pmb->ppar->GetVelocityField();
-      AppendOutputDataNode(pod);
-      num_vars_ += 3;
-    }
-
-    // particle mass density
-    if (output_params.variable.compare("rhop") == 0 ||
-        output_params.variable.compare("prim") == 0) {
-      pod = new OutputData;
-      pod->type = "SCALARS";
-      pod->name = "rhop";
-      pod->data = pmb->ppar->GetMassDensity();
-      AppendOutputDataNode(pod);
-      num_vars_++;
-    }
-  }
 
   if (output_params.variable.compare(0, 3, "uov") == 0
       || output_params.variable.compare(0, 12, "user_out_var") == 0) {
