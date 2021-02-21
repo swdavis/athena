@@ -175,10 +175,11 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
  
   iphot++;
 
-  pphot->k[IMC0] = pphot->energy;
-  pphot->k[IMC1] = pphot->energy*sth*sin(phi);
-  pphot->k[IMC2] = pphot->energy*cth;
-  pphot->k[IMC3] = pphot->energy*sth*cos(phi);
+  Real ktet[NCOORD];
+  ktet[IMC0] = pphot->energy;
+  ktet[IMC1] = pphot->energy*sth*sin(phi);
+  ktet[IMC2] = pphot->energy*cth;
+  ktet[IMC3] = pphot->energy*sth*cos(phi);
 
   // Initialize Stokes vector as unpolarized
   pphot->stokes[0] = 1.0;
@@ -195,16 +196,15 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
   Real ucon[NCOORD];
   Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
-  Real kcopy[NCOORD];
   Real gcov[NCOORD][NCOORD];
   pco->Metric(pphot->x, gcov);
 
   Real r = pphot->x[IMC1];
   Real a = pco->GetSpin();
   Real omega = 1.0/(pow(r, 3./2.) + a); // circular velocity 
-  // SWD: Eric used for both coordinates -- probably only correct for BL?
-  ucon[IMC0] = sqrt(-1.0/(gcov[IMC0][IMC0] + 2.*gcov[IMC0][IMC3]*omega +
-                          SQR(omega)*gcov[IMC3][IMC3]));
+
+  ucon[IMC0] = sqrt(-1.0/(gcov0[IMC0][IMC0] + 2.*gcov0[IMC0][IMC3]*omega +
+                          SQR(omega)*gcov0[IMC3][IMC3]));
   ucon[IMC1] = 0.;
   ucon[IMC2] = 0.;
   ucon[IMC3] = (ucon[IMC0])*omega;
@@ -212,12 +212,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   // create tetrad basis
   ConstructTetrad(ucon, gcov, econ, ecov);
 
-  // Transform to tetrad frame
-  for (int i = 0; i < NCOORD; i++)
-    kcopy[i] = pphot->k[i];
-
   // Transform k
-  TetradToCoordinate(kcopy, pphot->k, econ);
+  TetradToCoordinate(ktet, pphot->k, econ);
 
   //  Initialize dK
   Real gamma[NCOORD][NCOORD][NCOORD];
@@ -229,7 +225,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
       -2.*(pphot->k[0]*(gamma[i][IMC0][IMC1]*pphot->k[IMC1]+gamma[i][IMC0][IMC2]*pphot->k[IMC2]+
                         gamma[i][IMC0][IMC3]*pphot->k[IMC3])+
            pphot->k[IMC1]*(gamma[i][IMC1][IMC2]*pphot->k[IMC2]+gamma[i][IMC1][IMC3]*pphot->k[IMC3])+
-           ppot->k[IMC2]*gamma[i][IMC2][IMC3]*pphot->k[IMC3])-
+           pphot->k[IMC2]*gamma[i][IMC2][IMC3]*pphot->k[IMC3])-
       (gamma[i][IMC0][IMC0]*pphot->k[IMC0]*pphot->k[IMC0]+gamma[i][IMC1][IMC1]*pphot->k[IMC1]*pphot->k[IMC1]+
        gamma[i][IMC2][IMC2]*pphot->k[IMC2]*pphot->k[IMC2]+gamma[i][IMC3][IMC3]*pphot->k[IMC3]*pphot->k[IMC3]);
   }

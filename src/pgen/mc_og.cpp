@@ -296,6 +296,9 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   pphot->energy = pphot->k[IMC0];
   pphot->weight = 1.0;
   pphot->eweight = 1.0;
+  for (int i=0; i<4; i++)
+    pphot->dk[i] = 0.;
+  //pphot->PrintPhoton();
 
   // Set plane crossing flag to zero
   plane_cross = 0;
@@ -323,6 +326,9 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
 
  // check if photon has crossed midplane and whether to terminate or keep integrating
+
+  //if (iphot == 2)
+  //  pphot->PrintPhoton();
 
   if (pphot->status == DESTROYED) {
      pphot->status = ESCAPED;
@@ -433,6 +439,7 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot) {
       kcopy[i] = pphot->k[i];
 
     CoordinateToTetrad(kcopy, pphot->k, ecov);
+    printf("final: %g \n",pphot->x[0]);
   } 
 }
 

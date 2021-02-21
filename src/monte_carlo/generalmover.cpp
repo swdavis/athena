@@ -12,24 +12,17 @@
 #include "photonmover.hpp"
 #include "../mesh/mesh.hpp"
 #include "debug.hpp"
-//#include "montecarlo.hpp"
+
+
+// SWD: remove all of these
 #define MAXITER 1e8
-//#define MAXITER 100
-//#define DEBUG
-//#define OUTTEST_GK
-//#define OUTTEST_TF
 #define NBUFFER 1000
 #define NCOORD 4
-
 //#define VERBOSE
 
 // GR headers
 #define tolerance 1.e-5
 #define max_iteration 2
-#define epsilon 1.e-40
-#define tt IMC0
-#define slope 1
-#define R0 0
 
 // Implementation of general photon mover
 
@@ -70,15 +63,7 @@ void GeneralMover::Move(Photon *pphot) {
   debug_t db[NBUFFER];
 #endif
 
-  
-  // SWD: this should get moved to photon initialization 
-  //pphot->dk[IMC0] = 0.;
-  //pphot->dk[IMC1] = 0.;
-  //pphot->dk[IMC2] = 0.;
-  //pphot->dk[IMC3] = 0.;
-
   Real step = StepSize(pphot);
-
   int count = 0;
   int iter = 0;
   int zone_counter = 0;
@@ -124,21 +109,21 @@ void GeneralMover::Move(Photon *pphot) {
      if (pmy_mcb->pmy_mc->polarized)
        PropogatePolarization(pphot,step);
    }
-   cth = cos(pphot->x[1]);
+   /*cth = cos(pphot->x[1]);
    sth = sqrt(1. - SQR(cth));
    cph = cos(pphot->x[2]);
-   sph = sin(pphot->x[2]);
+   sph = sin(pphot->x[2]);*/
    // Compute cartesian
-   Real kx = pphot->k[0]*sth*cph + pphot->k[1]*cth*cph - pphot->k[2]*sph;
+   /*Real kx = pphot->k[0]*sth*cph + pphot->k[1]*cth*cph - pphot->k[2]*sph;
    Real ky  = pphot->k[0]*sth*sph + pphot->k[1]*cth*sph + pphot->k[2]*cph;
    Real kz = pphot->k[0]*cth - pphot->k[1]*sth;
    x = pphot->x[0]*sth*cph;
    y = pphot->x[0]*sth*sph;
-   z = pphot->x[0]*cth;
+   z = pphot->x[0]*cth;*/
    //printf("ks: %g %g %g %g %g %g\n",pphot->kcart[0],kx,pphot->kcart[1],ky,pphot->kcart[2],kz);
-   x0 += step*pphot->kcart[0];
+   /*x0 += step*pphot->kcart[0];
    y0 += step*pphot->kcart[1];
-   z0 += step*pphot->kcart[2];
+   z0 += step*pphot->kcart[2];*/
    //printf("xs: %g %g %g %g %g %g\n",x0,x,y0,y,z0,z,step);
    TauRemaining -= chi * step;
 
@@ -485,9 +470,9 @@ Real GeneralMover::StepSize(Photon *pphot) {
 
   Real small = 1.e-20;
   
-  Real kx1 = (fabs(pphot->k[IMC1]) > epsilon) ? fabs(pphot->k[IMC1]) : small; 
-  Real kx2 = (fabs(pphot->k[IMC2]) > epsilon) ? fabs(pphot->k[IMC2]) : small;
-  Real kx3 = (fabs(pphot->k[IMC3]) > epsilon) ? fabs(pphot->k[IMC3]) : small;
+  Real kx1 = (fabs(pphot->k[IMC1]) > small) ? fabs(pphot->k[IMC1]) : small; 
+  Real kx2 = (fabs(pphot->k[IMC2]) > small) ? fabs(pphot->k[IMC2]) : small;
+  Real kx3 = (fabs(pphot->k[IMC3]) > small) ? fabs(pphot->k[IMC3]) : small;
 
   // SWD: May want to store as dx1, etc.
   Real stepx1 = ((pcoord->x1f(pphot->i1 + 1) - pcoord->x1f(pphot->i1)) / kx1);

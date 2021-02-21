@@ -20,6 +20,7 @@
 #include "../hydro/hydro.hpp"
 #include "../globals.hpp"
 
+// SWD: Eliminate these
 #define MINWEIGHT 1.0e-30
 #define MAXSCAT 10000
 //#define MINWEIGHT 1.0e-30

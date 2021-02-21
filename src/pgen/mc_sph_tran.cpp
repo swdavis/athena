@@ -27,12 +27,16 @@
 #error "This problem generator does not support magnetic fields"
 #endif
 
-static Real rfp,thfp, phfp;
-static Real error_sum = 0.;
-static int nerror = 0;
+namespace {
 
 void FinalPositionSphericalPolar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot,
 				 Real &rf, Real &thf, Real &phf);
+
+// Global variables
+static Real rfp,thfp, phfp;
+static Real error_sum = 0.;
+static int nerror = 0;
+} // namespace
 
 //========================================================================================
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
@@ -169,6 +173,7 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot) {
 }
 
 
+namespace {
 void FinalPositionSphericalPolar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot,
 				 Real &rf, Real &thf, Real &phf) {
 
@@ -223,5 +228,6 @@ void FinalPositionSphericalPolar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pp
   phf = atan2(yf,xf);
   if (phf < 0.0)
     phf += 2.*PI;
-
 }
+
+} // namespace 
