@@ -619,6 +619,16 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       AppendOutputDataNode(pod);
       num_vars_++;
     }
+    // monte carlo netcooling
+    if (output_params.variable.compare("mcmom") == 0 || 
+        output_params.variable.compare("Cooling") == 0) {
+      pod = new OutputData;
+      pod->type = "SCALARS";
+      pod->name = "Cooling";
+      if (pmb != NULL) pod->data.InitWithShallowSlice(pmcb->moments,4,MCNET,1);
+      AppendOutputDataNode(pod);
+      num_vars_++;
+    }
   }
 
   if (pmb != NULL) {

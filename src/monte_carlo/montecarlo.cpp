@@ -713,7 +713,7 @@ void MonteCarlo::SendMoments(int dest) {
   // Send data for each block
   MonteCarloBlock *pmcb = pblock;
   Real *send_buf;
-  int size = 11 * (pmcb->nx1*pmcb->nx2*pmcb->nx3);
+  int size = 12 * (pmcb->nx1*pmcb->nx2*pmcb->nx3);
   send_buf = new Real[size];
   MPI_Request send_rq;
   unsigned int tag = 1000; // temporary
@@ -737,7 +737,7 @@ void MonteCarlo::ReceiveMoments(int source, bool sum_moments) {
   // Receive data from each block
   MonteCarloBlock *pmcb=pblock;
   Real *recv_buf;
-  int size = 11 * (pmcb->nx1*pmcb->nx2*pmcb->nx3);
+  int size = 12 * (pmcb->nx1*pmcb->nx2*pmcb->nx3);
   recv_buf = new Real[size];
   MPI_Request recv_rq;
   unsigned int tag = 1000; //temporary

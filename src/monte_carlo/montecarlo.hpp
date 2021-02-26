@@ -47,9 +47,8 @@ enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY
                      MC_BLOCK_BNDRY = 6};
 // Array indices for monte carlo radiation moments
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
-      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCIEN = 10, MCIPR21=11, MCIPR31=12, 
-      MCIPR32=13};
-
+      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCIEN = 10, MCNET = 11, MCIPR21=12, 
+      MCIPR31=13, MCIPR32=14};
 //----------------------------------------------------------------------------------------
 // function pointer prototypes for user-defined modules set at runtime
 typedef void (*EmisFunc_t)(MonteCarloBlock *pmcb);
@@ -96,7 +95,7 @@ void GetZonePositionCylindricalGR(Photon *pphot, MCRandom *pran, MCCoord *pcoord
 // SWD:  Add these to MCCoord class, utils, keep here?
 void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD],
 		      Real econ[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD]);
-void ConstructTetrad(Real ucon[NCOORD], Real kcon[NCOORD], Real gcov[NCOORD][NCOORD], 
+void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD], 
                      Real econ[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD]);
 int KroneckerDelta(int i, int j);
 void ProjectVecSub(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD]);
@@ -313,6 +312,7 @@ public:
   void UpdateMoments(Photon *pphot, Real dl);
   void NormalizeMoments(bool normalize);
   void ResetMoments();
+  void UpdateCooling(Photon *pphot, Real energy0, Real weight0);
   //void GetPhotonsFromNeighbors();
   //void SendPhotonsToNeighbors();
   void EnrollUserWorkInMove(UserMoveFunc_t userfunc);

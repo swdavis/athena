@@ -105,14 +105,13 @@ void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD],
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ConstructTetrad(Real ucon[NCOORD], Real kcon[NCOORD], 
-//                              Real gcov[NCOORD][NCOORD],
+//! \fn void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD],
 //                              Real ecov[NCOORD][NCOORD], Real econ[NCOORD][NCOORD]
 //  \brief construct an orthonormal tetrad using the fluid frame vector ucon and defining
 //         e^mu_(3) = k^\mu 
 
 
-void ConstructTetrad(Real ucon[NCOORD], Real kcon[NCOORD], Real gcov[NCOORD][NCOORD], 
+void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD], 
                      Real econ[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD]) {
 
  // make a trial tetrad where time component is parallel to fluid, the first spatial
@@ -122,28 +121,31 @@ void ConstructTetrad(Real ucon[NCOORD], Real kcon[NCOORD], Real gcov[NCOORD][NCO
       if (i == IMC0)
         econ[IMC0][j] = ucon[j]; // time component parallel to fluid frame
       else if (i == IMC3)
-        econ[IMC3][j] = kcon[j]; // set by k vector
-      else
-        econ[i][j] = static_cast<Real>(KroneckerDelta(i,j)); // diagonal trial 
+        econ[IMC3][j] = vcon[j]; // set by v vector (choice specified in call)
+      else {
+        econ[i][j] = static_cast<Real>(KroneckerDelta(i,j)); // diagonal trial
+      }
     }
   }
+  // SWD: kludge for now
+  for (int j = 0; j < NCOORD; j++) 
+    econ[IMC2][j] = 0.;
+  econ[IMC2][IMC3] = 1.;
+
 
   // begin constructing contravariant tetrad
   NormalizeVec(econ[IMC0], gcov);
 
   ProjectVecSub(econ[IMC3], econ[IMC0], gcov);
   NormalizeVec(econ[IMC3], gcov);
-
   ProjectVecSub(econ[IMC1], econ[IMC0], gcov);
   ProjectVecSub(econ[IMC1], econ[IMC3], gcov);
   NormalizeVec(econ[IMC1], gcov);
-
   ProjectVecSub(econ[IMC2], econ[IMC0], gcov);
   ProjectVecSub(econ[IMC2], econ[IMC3], gcov);
   ProjectVecSub(econ[IMC2], econ[IMC1], gcov);
   NormalizeVec(econ[IMC2], gcov);
   // contravariant tetrad construction complete
-
   // begin construction covariant tetrad
   for (int i = 0; i < NCOORD; i++) {
     ConToCov(econ[i], ecov[i], gcov);
@@ -244,6 +246,7 @@ void NormalizeVec(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD]) {
 
   if (mag < SMALL_NUMBER) {
     printf("Warning: attempted to normalize a zero vector. Vector left as is.\n");
+    printf("ucon: %g %g %g %g\n",ucon[IMC0],ucon[IMC1],ucon[IMC2],ucon[IMC3]);
     return;
   }
 

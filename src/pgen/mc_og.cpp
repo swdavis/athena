@@ -233,7 +233,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
     }
     // Transform from tetrad frame to comoving frame
     // Construct the orthonormal tetrad
-    Real ucon[NCOORD];
+    Real ucon[NCOORD], vcon[NCOORD];
     Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
     Real kcopy[NCOORD];
     Real gcov[NCOORD][NCOORD];
@@ -245,15 +245,19 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
     Real r = pphot->x[IMC1];
     Real a = pcoord->GetSpin();
     Real omega = 1.0/(pow(r, 3./2.) + a); // circular velocity 
-    
+    // Initialize ucon and vcon (= z unit vector in symmetry plane)
     ucon[IMC0] = sqrt(-1.0/(gcov[IMC0][IMC0] + 2.*gcov[IMC0][IMC3]*omega +
                             SQR(omega)*gcov[IMC3][IMC3]));
     ucon[IMC1] = 0.;
     ucon[IMC2] = 0.;
     ucon[IMC3] = (ucon[IMC0])*omega;
-    
+
+    vcon[IMC0] = 0.;
+    vcon[IMC1] = 0.;
+    vcon[IMC2] = 1./pphot->x[IMC1];
+    vcon[IMC3] = 0.;
     // create tetrad basis
-    ConstructTetrad(ucon, gcov, econ, ecov);
+    ConstructTetrad(ucon, vcon, gcov, econ, ecov);
 
     // Transform to tetrad frame
     for (int i = 0; i < NCOORD; i++) 
@@ -399,7 +403,14 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot) {
     
     // create tetrad basis
     pcoord->Metric(pphot->x, gcov);
-    ConstructTetrad(ucon, pphot->k, gcov, econ, ecov);
+
+    Real vcon[NCOORD];
+    vcon[IMC0] = 0.;
+    vcon[IMC1] = 0.;
+    vcon[IMC2] = 1./pphot->x[IMC1];
+    vcon[IMC3] = 0.;
+
+    ConstructTetrad(ucon, vcon, gcov, econ, ecov);
     std::complex<Real> tcopy[NCOORD][NCOORD];
     //printf("%g %g %g %g\n",pphot->polten[IMC1][IMC1],pphot->polten[IMC1][IMC2],pphot->polten[IMC2][IMC1],
     //       pphot->polten[IMC2][IMC2]);
@@ -409,7 +420,7 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot) {
     //       tcopy[IMC2][IMC2]);
   } else {
     // Construct the orthonormal tetrad
-    Real ucon[NCOORD];
+    Real ucon[NCOORD], vcon[NCOORD];
     Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
     Real kcopy[NCOORD];
     Real gcov[NCOORD][NCOORD];
@@ -426,9 +437,12 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot) {
     ucon[IMC1] = 0.;
     ucon[IMC2] = 0.;
     ucon[IMC3] = (ucon[IMC0])*omega;
-    
+    vcon[IMC0] = 0.;
+    vcon[IMC1] = 0.;
+    vcon[IMC2] = 1./pphot->x[IMC1];
+    vcon[IMC3] = 0.;
     // create tetrad basis
-    ConstructTetrad(ucon, gcov, econ, ecov);
+    ConstructTetrad(ucon, vcon, gcov, econ, ecov);
 
     // Transform to tetrad frame
     for (int i = 0; i < NCOORD; i++) 
@@ -439,7 +453,7 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot) {
       kcopy[i] = pphot->k[i];
 
     CoordinateToTetrad(kcopy, pphot->k, ecov);
-    printf("final: %g \n",pphot->x[0]);
+    //printf("final: %g \n",pphot->x[0]);
   } 
 }
 

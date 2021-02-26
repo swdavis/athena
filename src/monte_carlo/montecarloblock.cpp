@@ -279,7 +279,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   rho.NewAthenaArray(ncells3,ncells2,ncells1);
   tgas.NewAthenaArray(ncells3,ncells2,ncells1);
   if (boosts) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
-  if (moments_flag) moments.NewAthenaArray(14,ncells3,ncells2,ncells1);
+  // moments is 1 (Er) + 3 (Fr) + 9 (Pr) + 1 (Eave) + 1 (net cool)
+  if (moments_flag) moments.NewAthenaArray(15,ncells3,ncells2,ncells1);
   if (emission_array_flag) emission.NewAthenaArray(ncells3,ncells2,ncells1);
   if (acceleration && !(coherent_scattering)) {
     planck_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
@@ -402,6 +403,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
         LorentzTransform(pphoton,to_eulr);
       }
     }
+    UpdateCooling(pphoton,0.,0.);
 
     // move photon to next scattering/absorption or to boundary
     pmover->Move(pphoton);
@@ -409,6 +411,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
     while (pphoton->status == EVOLVING) {
       
       // Account for absorption
+      Real weight0 = pphoton->weight;
       if (weighted_absorption) {
         pphoton->weight *= (pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef));
         if(pphoton->weight <= MINWEIGHT)
@@ -417,9 +420,11 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
         if (pran->uniform() > (pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef)) )
           pphoton->status = DESTROYED;
       }
-      
+      UpdateCooling(pphoton,0.,weight0);
+   
       // Scatter the photon packet
       if (pphoton->status == EVOLVING) {
+        Real e_pre_scat = pphoton->energy;
 	// Lorentz transform to comoving frame for scattering
 	if (boosts) {
           if (orthotet_flag) {
@@ -454,6 +459,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
             TetradTransform(pphoton, to_eulr);
           }
         }
+        UpdateCooling(pphoton,e_pre_scat,0.);
       }
 
       // move photon to next scattering/absorption or to boundary
@@ -762,11 +768,13 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
 
   if (normalize) {
     // Normalize moments
-    for (int n=0; n<11; ++n) {
+    for (int n=0; n<12; ++n) {
       //Real norm = static_cast<Real>(nphdone)*pmy_mc->normalization;
       Real norm = static_cast<Real>(nphdone);
       if ((n == 0) || (n >= 4))
 	norm *= 2.9979e10;
+      if (n == 11)
+        norm /= 2.9979e10;
       for (int k=ks; k<=ke; ++k) {
 	for (int j=js; j<=je; ++j) {
 	  for (int i=is; i<=ie; ++i) {
@@ -783,11 +791,13 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
 	}}}
   } else {
     // Undo normalization for continuing evolution
-    for (int n=0; n<11; ++n) {
+    for (int n=0; n<12; ++n) {
       //Real norm = static_cast<Real>(nphdone)*pmy_mc->normalization;
       Real norm = static_cast<Real>(nphdone);
       if ((n == 0) || (n >= 4))
 	norm *= 2.9979e10;
+      if (n == 11)
+        norm /= 2.9979e10;
       for (int k=ks; k<=ke; ++k) {
 	for (int j=js; j<=je; ++j) {
 	  for (int i=is; i<=ie; ++i) {
@@ -814,7 +824,24 @@ void MonteCarloBlock::ResetMoments() {
 
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::UpdateCooling(Photon *pphot, Real energy0, Real weight0)
+//  \brief compute net photon cooling rate
 
+void MonteCarloBlock::UpdateCooling(Photon *pphot, Real energy0, Real weight0) {
+  
+  Real cool = pphot->eweight * (pphot->weight - weight0) * 
+                (pphot->energy - energy0);
+  if ((isinf(cool)) || (isnan(cool))) {
+    std::cout << "Warning: UpdateCooling cooling is : " << cool << std::endl;
+  } else {
+    int i = pphot->i1;
+    int j = pphot->i2;
+    int k = pphot->i3;
+    moments(MCNET,k,j,i) -= cool;
+  }
+
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs)
