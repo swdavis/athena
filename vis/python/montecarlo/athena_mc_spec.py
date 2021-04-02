@@ -617,7 +617,7 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     xfaces = build_bins(xmin,xmax,nx,logx)
     spectrum['nx'] = nx
     spectrum['xfaces'] = xfaces
-
+    
     # Get x bins
     xbins = get_bins(xphots,xfaces,nx,log=True)
 

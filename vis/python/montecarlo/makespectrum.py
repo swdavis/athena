@@ -23,7 +23,7 @@ def main(**kwargs):
     # Read photon list
     phlist = mclist.read_list(infile)
     phots = photons(phlist)
-
+    
     # Generate spectrum from phots
     nx = kwargs.pop('nx')
     xmin = kwargs.pop('xmin')

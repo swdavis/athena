@@ -719,7 +719,7 @@ void MonteCarlo::SendMoments(int dest) {
   unsigned int tag = 1000; // temporary
   while (pmcb != NULL) {
     int p=0;
-    BufferUtility::Pack4DData(pmcb->moments,send_buf,0,10,pmcb->is,pmcb->ie,pmcb->js,pmcb->je,pmcb->ks,pmcb->ke,p);
+    BufferUtility::Pack4DData(pmcb->moments,send_buf,0,11,pmcb->is,pmcb->ie,pmcb->js,pmcb->je,pmcb->ks,pmcb->ke,p);
     MPI_Isend(send_buf,size,MPI_ATHENA_REAL,dest,tag,MPI_COMM_WORLD,&send_rq);
     MPI_Wait(&send_rq, MPI_STATUS_IGNORE);
     pmcb=pmcb->next;
@@ -746,10 +746,10 @@ void MonteCarlo::ReceiveMoments(int source, bool sum_moments) {
     MPI_Wait(&recv_rq, MPI_STATUS_IGNORE);
     int p=0;
     if (sum_moments) 
-      BufferUtility::Unpack4DDataSum(recv_buf, pmcb->moments,0,10,pmcb->is,pmcb->ie,pmcb->js, 
+      BufferUtility::Unpack4DDataSum(recv_buf, pmcb->moments,0,11,pmcb->is,pmcb->ie,pmcb->js, 
                                      pmcb->je,pmcb->ks,pmcb->ke,p);
     else 
-      BufferUtility::Unpack4DData(recv_buf, pmcb->moments,0,10,pmcb->is,pmcb->ie,pmcb->js, 
+      BufferUtility::Unpack4DData(recv_buf, pmcb->moments,0,11,pmcb->is,pmcb->ie,pmcb->js, 
       pmcb->je,pmcb->ks,pmcb->ke,p);
     pmcb=pmcb->next;
   }

@@ -97,7 +97,12 @@ void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD],
 		      Real econ[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD]);
 void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD], 
                      Real econ[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD]);
-int KroneckerDelta(int i, int j);
+void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real wcon[NCOORD],
+                     Real gcov[NCOORD][NCOORD], Real econ[NCOORD][NCOORD], 
+                     Real ecov[NCOORD][NCOORD]);
+void InitializeLeviCivita(Real levi[NCOORD][NCOORD][NCOORD][NCOORD]);
+void ImposeRightHanded(Real econ[NCOORD][NCOORD], Real gcov[NCOORD][NCOORD]);
+Real KroneckerDelta(int i, int j);
 void ProjectVecSub(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD]);
 Real DotVec(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD]);
 void NormalizeVec(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD]);

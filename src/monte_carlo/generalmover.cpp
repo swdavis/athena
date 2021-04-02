@@ -451,11 +451,23 @@ void GeneralMover::PropogatePolarization(Photon *pphot, Real step) {
     for (int j = 0; j < 4; j++) {
       for (int k = 0; k < 4; k++) {
 	for (int l = 0; l < 4; l++) {
+          // eq. 16 of Moscibrodzka & Gammie in vacuum
           pphot->polten[i][j] += -(gamma[i][k][l] * ptcopy[k][j] +
           			   gamma[j][k][l] * ptcopy[i][k]) * 
-           pphot->k[l] * step;
+                                 pphot->k[l] * step;
         }}
-      //printf("%d %d %g %g %g %g %g\n",i,j,pphot->polten[i][j].real(),pphot->polten[i][j].real()-ptcopy[i][j].real(),pphot->k[0],step,pphot->x[0]);//,gamma[0][i][j],gamma[1][i][j],,gamma[2][i][j],,gamma[3][i][j]);
+      if ((i == IMC2) && (j == IMC2)) {
+        Real tc02 = ptcopy[IMC0][IMC2].real();
+        Real tc12 = ptcopy[IMC1][IMC2].real();
+        Real tc22 = ptcopy[IMC2][IMC2].real();
+        Real tc32 = ptcopy[IMC3][IMC2].real();
+        //printf("%d %d %g %g %g %g %g %g %g %g %g %g %g\n",i,j,pphot->polten[i][j].real(),(pphot->polten[i][j].real()-ptcopy[i][j].real())/2/step,pphot->x[IMC1],pphot->k[IMC3]*gamma[IMC2][IMC3][IMC3]*tc32,pphot->k[IMC3],gamma[IMC2][IMC3][IMC3],-sin(pphot->x[IMC2])*cos(pphot->x[IMC2]),
+        //      pphot->k[IMC2]*gamma[IMC2][IMC1][IMC2]*tc12,pphot->k[IMC2],gamma[IMC2][IMC1][IMC2],1./pphot->x[IMC1]);
+               //    pphot->k[IMC0]*gamma[IMC2][IMC1][IMC0]*tc12,pphot->k[IMC1]*gamma[IMC2][IMC1][IMC1]*tc12,pphot->k[IMC2]*gamma[IMC2][IMC1][IMC2]*tc12,pphot->k[IMC3]*gamma[IMC2][IMC1][IMC3]*tc12,
+               //   pphot->k[IMC0]*gamma[IMC2][IMC3][IMC0]*tc32,pphot->k[IMC1]*gamma[IMC2][IMC3][IMC1]*tc32,pphot->k[IMC2]*gamma[IMC2][IMC3][IMC2]*tc32,pphot->k[IMC3]*gamma[IMC2][IMC3][IMC3]*tc32);
+        //pphot->k[IMC0]*gamma[IMC2][IMC0][IMC0]*tc02,pphot->k[IMC1]*gamma[IMC2][IMC0][IMC1]*tc02,pphot->k[IMC2]*gamma[IMC2][IMC0][IMC2]*tc02,pphot->k[IMC3]*gamma[IMC2][IMC0][IMC3]*tc02);
+               //pphot->k[IMC0]*gamma[IMC2][IMC2][IMC0]*tc22,pphot->k[IMC1]*gamma[IMC2][IMC2][IMC1]*tc22,pphot->k[IMC2]*gamma[IMC2][IMC2][IMC2]*tc22,pphot->k[IMC3]*gamma[IMC2][IMC2][IMC3]*tc22);
+      }
     }}
 }
 

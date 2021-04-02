@@ -510,7 +510,8 @@ void MCBoyerLindquist::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
 
   Real a = bh_spin_;
   Real m = bh_mass_;
-
+  // a in input file is dimensionless spin
+  a *= m;
   Real r = x[IMC1];
   Real sth = sin(x[IMC2]);
   Real cth = cos(x[IMC2]);
@@ -527,7 +528,8 @@ void MCBoyerLindquist::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
   gcov[IMC2][IMC2] = rho2;
   gcov[IMC3][IMC3] = (r2 + a2 + 2.*m*r*a2*sth2/rho2)*sth2;
 
-  gcov[IMC0][IMC3] = -2.*m*a*r*sth2/rho2;
+  //gcov[IMC0][IMC3] = -2.*m*a*r*sth2/rho2; SWD <- old, think m is superfluous with a=m*a_*
+  gcov[IMC0][IMC3] = -2.*a*r*sth2/rho2;
   gcov[IMC3][IMC0] = gcov[IMC0][IMC3];
 
 
@@ -547,6 +549,9 @@ void MCBoyerLindquist::InverseMetric(Real x[NCOORD], Real gcon[NCOORD][NCOORD]) 
 
 
   Real a = bh_spin_;
+  Real m = bh_mass_;
+  // a in input file is dimensionless spin
+  a *= m;
   Real r = x[IMC1];
   Real sth = sin(x[IMC2]);
   Real cth = cos(x[IMC2]);
@@ -556,14 +561,14 @@ void MCBoyerLindquist::InverseMetric(Real x[NCOORD], Real gcon[NCOORD][NCOORD]) 
   Real r2 = SQR(r);
   Real a2 = SQR(a);
   Real rho2 = r2 + a2 * cth2;
-  Real delta = r2 - 2. * r + a2;
+  Real delta = r2 - 2. * m * r + a2;
 
-  gcon[IMC0][IMC0] = -1. / delta * (r2 + a2 + 2. * r * a2 * sth2 / rho2);
+  gcon[IMC0][IMC0] = -1. / delta * (r2 + a2 + 2. * r * m * a2 * sth2 / rho2);
   gcon[IMC1][IMC1] = delta / rho2;
   gcon[IMC2][IMC2] = 1. / rho2;
   gcon[IMC3][IMC3] = (delta - a2 * sth2) / (rho2 * delta * sth2);
 
-  gcon[IMC0][IMC3] = -2. * r * a / (rho2 * delta);
+  gcon[IMC0][IMC3] = -2. * m * r * a / (rho2 * delta);
   gcon[IMC3][IMC0] = gcon[IMC0][IMC3];
 
 }
@@ -584,6 +589,8 @@ void MCBoyerLindquist::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD
   // SWD: Clean this one up
   Real a = bh_spin_;
   Real m = bh_mass_;
+  // a has units of mass in Frutos-Alfaro
+  a *= m; 
   Real r = x[IMC1];
   Real j = a*m;
 
@@ -606,9 +613,11 @@ void MCBoyerLindquist::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD
   gamma[IMC0][IMC0][IMC1] = rs/(2.*rho4*delta)*(r2+a2)*(2.*r2-rho2);
   gamma[IMC0][IMC0][IMC2] = -2.*a*j*r/rho4*sth*cth;
   
+  gamma[IMC0][IMC1][IMC0] = gamma[IMC0][IMC0][IMC1];
   gamma[IMC0][IMC1][IMC3] = -j*sth2/(rho4*delta)*(rho2*(r2-a2)+2.*r2*(r2+a2));
 
   gamma[IMC0][IMC2][IMC3] = 2.*a2*j*r/rho4*cth*sth2*sth;
+  gamma[IMC0][IMC3][IMC2] = gamma[IMC0][IMC2][IMC3];
 
   gamma[IMC1][IMC0][IMC0] = rs*delta/(2.*rho6)*(2.*r2-rho2);
   gamma[IMC1][IMC0][IMC3] = -j*delta/rho6*(2.*r2-rho2)*sth2;
@@ -616,8 +625,10 @@ void MCBoyerLindquist::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD
   gamma[IMC1][IMC1][IMC1] = 1./(rho2*delta)*(rho2*(rs/2.-r)+r*delta);
   gamma[IMC1][IMC1][IMC2] = -a2/rho2*sth*cth;
   
+  gamma[IMC1][IMC2][IMC1] = gamma[IMC1][IMC1][IMC2];
   gamma[IMC1][IMC2][IMC2] = -r*delta/rho2;
 
+  gamma[IMC1][IMC3][IMC0] = gamma[IMC1][IMC0][IMC3];
   gamma[IMC1][IMC3][IMC3] = -delta*sth2/rho6*(r*rho4-a*j*(2.*r2-rho2)*sth2);
   
   gamma[IMC2][IMC0][IMC0] = -2.*a*j*r/rho6*sth*cth;
@@ -626,18 +637,24 @@ void MCBoyerLindquist::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD
   gamma[IMC2][IMC1][IMC1] = a2/(rho2*delta)*sth*cth;
   gamma[IMC2][IMC1][IMC2] = r/rho2;
  
+  gamma[IMC2][IMC2][IMC1] = gamma[IMC2][IMC1][IMC2];
   gamma[IMC2][IMC2][IMC2] = gamma[IMC1][IMC1][IMC2];
 
+  gamma[IMC2][IMC3][IMC0] = gamma[IMC2][IMC0][IMC3];
   gamma[IMC2][IMC3][IMC3] = -sth*cth/rho6*(rho4*delta+rs*r*SQR(r2+a2));
   //gamma[IMC2][IMC2][IMC3] = -sth*cth/rho6*(A*rho2+(r2+a2)*a2*r*rs*sth2);
 
   gamma[IMC3][IMC0][IMC1] = j/(rho4*delta)*(2.*r2-rho2);
   gamma[IMC3][IMC0][IMC2] = -2.*j*r*cth/(rho4*sth);
 
+  gamma[IMC3][IMC1][IMC3] = gamma[IMC3][IMC0][IMC1];
   gamma[IMC3][IMC1][IMC3] = 1./(rho4*delta)*(r*rho2*(rho2-rs*r)-a*j*sth2*(2.*r2-rho2));
 
+  gamma[IMC3][IMC2][IMC0] = gamma[IMC3][IMC0][IMC2];
   gamma[IMC3][IMC2][IMC3] = cth/(rho4*sth)*(rho4+2.*a*j*r*sth2);
-  
+
+  gamma[IMC3][IMC3][IMC1] = gamma[IMC3][IMC1][IMC3];
+  gamma[IMC3][IMC3][IMC2] = gamma[IMC3][IMC2][IMC3];
 }
 
 // constructor
