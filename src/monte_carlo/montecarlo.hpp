@@ -37,6 +37,7 @@ class MCCoord;
 
 // SWD: Make into a general MACRO set by configure?
 #define NCOORD 4
+#define NMOM 16
 
 // Flags for controlling monte carlo emission, scattering, absorption, bcs
 enum EmissionFlag {EMISUSER = 0, EMISFF = 1};
@@ -47,8 +48,8 @@ enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY
                      MC_BLOCK_BNDRY = 6};
 // Array indices for monte carlo radiation moments
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
-      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCIEN = 10, MCNET = 11, MCIPR21=12, 
-      MCIPR31=13, MCIPR32=14};
+      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCINET = 10, MCIEN = 11, MCIKJ = 12, MCIPR21=13, 
+      MCIPR31=14, MCIPR32=15};
 //----------------------------------------------------------------------------------------
 // function pointer prototypes for user-defined modules set at runtime
 typedef void (*EmisFunc_t)(MonteCarloBlock *pmcb);

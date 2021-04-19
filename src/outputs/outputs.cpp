@@ -609,7 +609,17 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       AppendOutputDataNode(pod);
       num_vars_ += 9;
     }
-    // monte carlo mean energy * energy density
+    // monte carlo netcooling
+    if (output_params.variable.compare("mcmom") == 0 || 
+        output_params.variable.compare("Cooling") == 0) {
+      pod = new OutputData;
+      pod->type = "SCALARS";
+      pod->name = "Cooling";
+      if (pmb != NULL) pod->data.InitWithShallowSlice(pmcb->moments,4,MCINET,1);
+      AppendOutputDataNode(pod);
+      num_vars_++;
+    }
+    // monte carlo mean energy
     if (output_params.variable.compare("mcmom") == 0 || 
         output_params.variable.compare("Eavemc") == 0) {
       pod = new OutputData;
@@ -619,13 +629,13 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       AppendOutputDataNode(pod);
       num_vars_++;
     }
-    // monte carlo netcooling
+    // monte carlo J mean opacity
     if (output_params.variable.compare("mcmom") == 0 || 
-        output_params.variable.compare("Cooling") == 0) {
+        output_params.variable.compare("kapjmc") == 0) {
       pod = new OutputData;
       pod->type = "SCALARS";
-      pod->name = "Cooling";
-      if (pmb != NULL) pod->data.InitWithShallowSlice(pmcb->moments,4,MCNET,1);
+      pod->name = "kapjmc";
+      if (pmb != NULL) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIKJ,1);
       AppendOutputDataNode(pod);
       num_vars_++;
     }

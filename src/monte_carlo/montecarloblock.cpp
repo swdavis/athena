@@ -280,7 +280,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   tgas.NewAthenaArray(ncells3,ncells2,ncells1);
   if (boosts) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
   // moments is 1 (Er) + 3 (Fr) + 9 (Pr) + 1 (Eave) + 1 (net cool)
-  if (moments_flag) moments.NewAthenaArray(15,ncells3,ncells2,ncells1);
+  if (moments_flag) moments.NewAthenaArray(NMOM,ncells3,ncells2,ncells1);
   if (emission_array_flag) emission.NewAthenaArray(ncells3,ncells2,ncells1);
   if (acceleration && !(coherent_scattering)) {
     planck_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
@@ -756,6 +756,8 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
     moments(MCIPR23,k,j,i) += weightp;
     // Photon mean energy
     moments(MCIEN,k,j,i) += weight * pphot->energy;
+    // Jmean opacity
+    moments(MCIKJ,k,j,i) += weight * pphot->abs_coef;
   }
 
 }
@@ -766,22 +768,33 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
 
 void MonteCarloBlock::NormalizeMoments(bool normalize) {
 
+  Real normall = static_cast<Real>(nphdone);
+  // SWD: Add user normalization?
+  //Real normall = static_cast<Real>(nphdone)*pmy_mc->normalization;
   if (normalize) {
-    // Normalize moments
-    for (int n=0; n<12; ++n) {
-      //Real norm = static_cast<Real>(nphdone)*pmy_mc->normalization;
-      Real norm = static_cast<Real>(nphdone);
+   // Normalize energy density weighted averages first
+    for (int k=ks; k<=ke; ++k) {
+      for (int j=js; j<=je; ++j) {
+        for (int i=is; i<=ie; ++i) {
+          if (moments(MCIER,k,j,i) != 0.) {
+            moments(MCIKJ,k,j,i) /= moments(MCIER,k,j,i);
+            moments(MCIEN,k,j,i) /= moments(MCIER,k,j,i);
+          }
+        }}}
+    // Normalize remaining moments by volume and global norm (counts)
+    for (int n=0; n<11; ++n) {
+      Real norm = normall;
       if ((n == 0) || (n >= 4))
-	norm *= 2.9979e10;
-      if (n == 11)
-        norm /= 2.9979e10;
+        norm *= 2.9979e10;
+     if (n == MCINET)
+       norm = normall;
       for (int k=ks; k<=ke; ++k) {
 	for (int j=js; j<=je; ++j) {
 	  for (int i=is; i<=ie; ++i) {
 	    moments(n,k,j,i) /= (pcoord->vol(k,j,i) * norm);
 	  }}}
     }
-    // Copy noramilzed moments to symmetric elements
+    // Copy normalized moments to symmetric elements
     for (int k=ks; k<=ke; ++k) {
       for (int j=js; j<=je; ++j) {
 	for (int i=is; i<=ie; ++i) {
@@ -791,20 +804,28 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
 	}}}
   } else {
     // Undo normalization for continuing evolution
-    for (int n=0; n<12; ++n) {
-      //Real norm = static_cast<Real>(nphdone)*pmy_mc->normalization;
-      Real norm = static_cast<Real>(nphdone);
+    for (int n=0; n<11; ++n) {
+      Real norm = normall;
       if ((n == 0) || (n >= 4))
-	norm *= 2.9979e10;
-      if (n == 11)
-        norm /= 2.9979e10;
+        norm *= 2.9979e10;
+      if (n == MCINET)
+        norm = normall;
       for (int k=ks; k<=ke; ++k) {
 	for (int j=js; j<=je; ++j) {
 	  for (int i=is; i<=ie; ++i) {
 	    moments(n,k,j,i) *= (pcoord->vol(k,j,i) * norm);
 	  }}}
     }
-  }
+    // Unnormalize energy density weighted averages after moments
+    for (int k=ks; k<=ke; ++k) {
+      for (int j=js; j<=je; ++j) {
+        for (int i=is; i<=ie; ++i) {
+          if (moments(MCIER,k,j,i) != 0.) {
+            moments(MCIKJ,k,j,i) *= moments(MCIER,k,j,i);
+            moments(MCIEN,k,j,i) *= moments(MCIER,k,j,i);
+          }
+        }}}
+ }
 }
 
 //----------------------------------------------------------------------------------------
@@ -838,7 +859,7 @@ void MonteCarloBlock::UpdateCooling(Photon *pphot, Real energy0, Real weight0) {
     int i = pphot->i1;
     int j = pphot->i2;
     int k = pphot->i3;
-    moments(MCNET,k,j,i) -= cool;
+    moments(MCINET,k,j,i) -= cool;
   }
 
 }

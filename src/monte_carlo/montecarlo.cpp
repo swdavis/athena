@@ -713,13 +713,13 @@ void MonteCarlo::SendMoments(int dest) {
   // Send data for each block
   MonteCarloBlock *pmcb = pblock;
   Real *send_buf;
-  int size = 12 * (pmcb->nx1*pmcb->nx2*pmcb->nx3);
+  int size = (NMOM-3) * (pmcb->nx1*pmcb->nx2*pmcb->nx3);
   send_buf = new Real[size];
   MPI_Request send_rq;
   unsigned int tag = 1000; // temporary
   while (pmcb != NULL) {
     int p=0;
-    BufferUtility::Pack4DData(pmcb->moments,send_buf,0,11,pmcb->is,pmcb->ie,pmcb->js,pmcb->je,pmcb->ks,pmcb->ke,p);
+    BufferUtility::Pack4DData(pmcb->moments,send_buf,0,(NMOM-4),pmcb->is,pmcb->ie,pmcb->js,pmcb->je,pmcb->ks,pmcb->ke,p);
     MPI_Isend(send_buf,size,MPI_ATHENA_REAL,dest,tag,MPI_COMM_WORLD,&send_rq);
     MPI_Wait(&send_rq, MPI_STATUS_IGNORE);
     pmcb=pmcb->next;
@@ -737,7 +737,7 @@ void MonteCarlo::ReceiveMoments(int source, bool sum_moments) {
   // Receive data from each block
   MonteCarloBlock *pmcb=pblock;
   Real *recv_buf;
-  int size = 12 * (pmcb->nx1*pmcb->nx2*pmcb->nx3);
+  int size = (NMOM-3) * (pmcb->nx1*pmcb->nx2*pmcb->nx3);
   recv_buf = new Real[size];
   MPI_Request recv_rq;
   unsigned int tag = 1000; //temporary
@@ -746,10 +746,10 @@ void MonteCarlo::ReceiveMoments(int source, bool sum_moments) {
     MPI_Wait(&recv_rq, MPI_STATUS_IGNORE);
     int p=0;
     if (sum_moments) 
-      BufferUtility::Unpack4DDataSum(recv_buf, pmcb->moments,0,11,pmcb->is,pmcb->ie,pmcb->js, 
+      BufferUtility::Unpack4DDataSum(recv_buf, pmcb->moments,0,(NMOM-4),pmcb->is,pmcb->ie,pmcb->js, 
                                      pmcb->je,pmcb->ks,pmcb->ke,p);
     else 
-      BufferUtility::Unpack4DData(recv_buf, pmcb->moments,0,11,pmcb->is,pmcb->ie,pmcb->js, 
+      BufferUtility::Unpack4DData(recv_buf, pmcb->moments,0,(NMOM-4),pmcb->is,pmcb->ie,pmcb->js, 
       pmcb->je,pmcb->ks,pmcb->ke,p);
     pmcb=pmcb->next;
   }

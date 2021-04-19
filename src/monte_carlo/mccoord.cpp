@@ -29,6 +29,10 @@ MCCoord::MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb) {
   if (GENERAL_RELATIVITY) {
     bh_mass_ = pcoord->GetMass();
     bh_spin_ = pcoord->GetSpin();
+  } else {
+    // initialize to 0 for flat spacetimes
+    bh_mass_ = 0.;
+    bh_mass_ = 0.;
   }
 
   // Allocate volume array
@@ -202,12 +206,12 @@ void MCSphericalPolar::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD
   gamma[IMC1][IMC2][IMC2] = -x[IMC1];
   gamma[IMC1][IMC3][IMC3] = -x[IMC1]*sth*sth;
   gamma[IMC2][IMC1][IMC2] = 1./x[IMC1];
-  gamma[IMC2][IMC2][IMC1] = 1./x[IMC1];
+  gamma[IMC2][IMC2][IMC1] = gamma[IMC2][IMC1][IMC2];
   gamma[IMC2][IMC3][IMC3] = -sth*cth;
   gamma[IMC3][IMC1][IMC3] = 1./x[IMC1];
   gamma[IMC3][IMC2][IMC3] = cth/sth;
-  gamma[IMC3][IMC3][IMC1] = 1./x[IMC1];
-  gamma[IMC3][IMC3][IMC2] = cth/sth;
+  gamma[IMC3][IMC3][IMC1] = gamma[IMC3][IMC1][IMC3];
+  gamma[IMC3][IMC3][IMC2] = gamma[IMC3][IMC2][IMC3];
 
 }
 

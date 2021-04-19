@@ -41,6 +41,7 @@ static Real spsi,cpsi,szet,czet;
 // User function definitions
 void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover);
 void GetMCDirection(Photon *pphot, Real alpha, Real beta);
+void GetDirectionTetrad(Photon *pphot, Real alpha, Real beta);
 
 //========================================================================================
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
@@ -292,7 +293,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
     ComplexTetradToCoordinate(tcopy,pphot->polten,econ);
  
-    
+#ifdef DEBUG
     printf("init: %d\n",iphot-1);
     Real cphi, sphi;
     Real sth, cth;
@@ -352,7 +353,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
     printf("econ[IMC1]: %e %e %e %e\n", econ[IMC1][IMC0], econ[IMC1][IMC1], econ[IMC1][IMC2], econ[IMC1][IMC3]);
     printf("econ[IMC2]: %e %e %e %e\n", econ[IMC2][IMC0], econ[IMC2][IMC1], econ[IMC2][IMC2], econ[IMC2][IMC3]);
     printf("econ[IMC3]: %e %e %e %e\n", econ[IMC3][IMC0], econ[IMC3][IMC1], econ[IMC3][IMC2], econ[IMC3][IMC3]);
-    
+#endif
   } else {
     // Initialize Stokes vector as unpolarized
     pphot->stokes[0] = 1.0;
@@ -360,7 +361,10 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
     pphot->stokes[2] = 0.0;
     pphot->stokes[3] = 0.0;
     // SWD: Replace with general tetrad tranformation
-    GetMCDirection(pphot, alpha0, beta0);
+    //GetMCDirection(pphot, alpha0, beta0);
+    //printf("korig: %e %e %e %e\n",pphot->k[IMC0],pphot->k[IMC1],pphot->k[IMC2],pphot->k[IMC3]);
+    GetDirectionTetrad(pphot, alpha0, beta0);
+    printf("ktet: %e %e %e %e\n",pphot->k[IMC0],pphot->k[IMC1],pphot->k[IMC2],pphot->k[IMC3]);   
   }
   pphot->energy = pphot->k[IMC0];
   pphot->weight = 1.0;
@@ -487,7 +491,7 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot) {
     ComplexCoordinateToTetrad(pphot->polten,tcopy,ecov);
     TensorToStokes(tcopy,pphot->stokes);
  
-    
+#ifdef DEBUG
     printf("final: %d\n",iphot-1);
     Real cosi = cos(pphot->x[IMC2]);
     Real pI = SQR(cpsi)+SQR(spsi*cosi);
@@ -540,7 +544,7 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot) {
     printf("ecov[IMC2]: %e %e %e %e\n", ecov[IMC2][IMC0], ecov[IMC2][IMC1], ecov[IMC2][IMC2], ecov[IMC2][IMC3]);
     printf("ecov[IMC3]: %e %e %e %e\n", ecov[IMC3][IMC0], ecov[IMC3][IMC1], ecov[IMC3][IMC2], ecov[IMC3][IMC3]);
     printf("gcon: %e %e %e %e\n",gcon[IMC0][IMC0],gcon[IMC1][IMC1],gcon[IMC2][IMC2],gcon[IMC3][IMC3]);
-    
+#endif
       
   } else {
     // Construct the orthonormal tetrad
@@ -581,7 +585,7 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot) {
 }
 
 // Given initial position x^alpha, alpha, beta, determine the initial photon direction
-// Uses alpha, beta from Cunningham & Bardeen (1973)
+// Uses alpha, beta definitions from Cunningham & Bardeen (1973)
 void GetMCDirection(Photon *pphot, Real alpha, Real beta) {
   
   MonteCarloBlock *pmcb = pphot->pmy_mcb;
@@ -645,8 +649,8 @@ void GetMCDirection(Photon *pphot, Real alpha, Real beta) {
   
   
 // Given initial position x^alpha, alpha, beta, determine the initial photon direction
-// Uses alpha, beta from Cunningham & Bardeen (1973)
-void GetMCDirectionTetrad(Photon *pphot, Real alpha, Real beta) {
+// Equivalent to Cunningham & Bardeen implementation up to minus signs in alpha, beta
+void GetDirectionTetrad(Photon *pphot, Real alpha, Real beta) {
   
   // Set metric components
   MCCoord *pcoord = pphot->pmy_mcb->pcoord;
@@ -656,7 +660,7 @@ void GetMCDirectionTetrad(Photon *pphot, Real alpha, Real beta) {
 
   // Set tetrad vector for camera
   Real ucon[NCOORD] = {0.,0.,0.,1.}; // Static observer
-  Real wcon[NCOORD] = {0,1.,0.,0.}; // Q=1 points along projected BH symmetry axis 
+  Real wcon[NCOORD] = {0,-1.,0.,0.}; // Q=1 points along projected BH symmetry axis 
   Real vcov[NCOORD] = {1.,0.,0.,1.};// Make image center point away from origin
   Real vcon[NCOORD];       
   CovToCon(vcov,vcon,gcon);
@@ -665,9 +669,16 @@ void GetMCDirectionTetrad(Photon *pphot, Real alpha, Real beta) {
   Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
   ConstructTetrad(ucon, vcon, wcon, gcov, econ, ecov);
 
-  // assumes initial radius r_0 >> alpha, beta 
-  Real kcon[NCOORD],kcov[NCOORD];
-
-
+  // Construct k in the tetrad
+  Real ktet[NCOORD];
+  Real kx = alpha / pphot->x[IMC1];
+  Real ky = beta / pphot->x[IMC1];
+  Real knorm = sqrt(1.+SQR(kx)+SQR(ky));
+  ktet[IMC0] = 1.;
+  ktet[IMC1] = kx / knorm;
+  ktet[IMC2] = ky / knorm;
+  ktet[IMC3] = -1. / knorm; // points along radial direction
+    
+  TetradToCoordinate(ktet,pphot->k,econ);
 
 }

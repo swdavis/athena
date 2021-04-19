@@ -22,6 +22,7 @@
 #include "../coordinates/coordinates.hpp"
 #include "../field/field.hpp"
 #include "../hydro/hydro.hpp"
+#include "../monte_carlo/montecarlo.hpp"
 #include "outputs.hpp"
 
 // Only proceed if HDF5 output enabled
@@ -130,7 +131,7 @@ void ATHDF5Output::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
     num_datasets = 1;
     num_variables = new int[num_datasets];
     int n_dataset = 0;
-    num_variables[n_dataset++] = 17;
+    num_variables[n_dataset++] = NMOM+2;
   } else {
     num_datasets = 1;
     num_variables = new int[num_datasets];

@@ -20,10 +20,12 @@
 void InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
 
   Real heabund = 0.09; // Should have more general EOS functions
+  Real kb = 1.3807e-16;
   Real mp = 1.6726e-24;
   Real eta0 = 1.032521e-11;
-  Real g = 1.0;
+  Real g = 1.0; // Gaunt factor
 
+  
   //eta0 *= 12.;  // Added to match the Athena++ prescription
 
   Real ncells = static_cast<Real>(pmcb->pmy_mc->ncells);
@@ -33,15 +35,16 @@ void InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
 
   Real emm_min = SQR(HUGE_NUMBER);
   Real emm_max = -HUGE_NUMBER;
+
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
       for (int i=il; i<=iu; ++i) {
         Real temp = pmcb->tgas(k,j,i);
-        Real nhii = pmcb->rho(k,j,i)/mp/(1.0+4.0*heabund);
-        Real ne = (1.0+2.0*heabund) * nhii;
+        Real nh = pmcb->rho(k,j,i)/mp/(1.+4.*heabund);
+        Real nhe = nh*heabund;
+        Real ne = (1.+2.*heabund) * nh;
         Real vol = pmcb->pcoord->vol(k,j,i);
-        //std::cout << vol << std::endl;
-        pmcb->emission(k,j,i) = eta0/sqrt(temp)*ne*nhii*g*vol*ncells;
+        pmcb->emission(k,j,i) = eta0/sqrt(temp)*ne*(nh+4.*nhe)*g*vol*ncells;
 	if (pmcb->emission(k,j,i) > emm_max) emm_max = pmcb->emission(k,j,i);
 	if (pmcb->emission(k,j,i) < emm_min) emm_min = pmcb->emission(k,j,i); 
       }}}
