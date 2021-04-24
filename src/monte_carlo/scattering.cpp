@@ -223,7 +223,7 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot) {
     // Update curvalinear k vectors
   pmover->CartesianToCurvalinear(pphot);
     //}
-  
+ 
 }
 
 

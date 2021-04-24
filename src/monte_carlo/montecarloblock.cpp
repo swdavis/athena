@@ -434,7 +434,6 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
           }
 	}
         Scatter(this,pphoton);
-
 	iscat++;
 	if (iscat %  MAXSCAT == 0) {
 	  // Check for possible infinite loop due to NaN in photon
@@ -454,9 +453,9 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
 	// Lorentz transform to Eulerian frame and shift opacities
 	if (boosts) {
           if (orthotet_flag) {
-            LorentzTransform(pphoton,to_eulr);
-          } else {
             TetradTransform(pphoton, to_eulr);
+          } else {
+            LorentzTransform(pphoton,to_eulr);
           }
         }
         UpdateCooling(pphoton,e_pre_scat,0.);
@@ -855,6 +854,7 @@ void MonteCarloBlock::UpdateCooling(Photon *pphot, Real energy0, Real weight0) {
                 (pphot->energy - energy0);
   if ((isinf(cool)) || (isnan(cool))) {
     std::cout << "Warning: UpdateCooling cooling is : " << cool << std::endl;
+    pphot->PrintPhoton();
   } else {
     int i = pphot->i1;
     int j = pphot->i2;
