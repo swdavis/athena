@@ -88,7 +88,7 @@ void GeneralMover::Move(Photon *pphot) {
 
     iter++;
     count++;
-
+    //printf("%g ",pphot->x[IMC1]);
     /*Real cth = cos(pphot->x[1]);
     Real sth = sqrt(1. - SQR(cth));
     Real cph = cos(pphot->x[2]);
@@ -127,6 +127,7 @@ void GeneralMover::Move(Photon *pphot) {
    //printf("xs: %g %g %g %g %g %g\n",x0,x,y0,y,z0,z,step);
    TauRemaining -= chi * step;
 
+   // SWD: Clean up these checks
    // Check if photon changed zones
    if (UpdateZone(pphot)) {
      UpdateOpacities(pphot, pmcb);
@@ -137,22 +138,24 @@ void GeneralMover::Move(Photon *pphot) {
    if (pphot->status == DESTROYED) {
      pphot->PrintPhoton();
    }
+
    // Update moments
    if (pmcb->moments_flag) {
      pmcb->UpdateMoments(pphot,step);
    }
-   
+ 
    if ((isnan(pphot->k[IMC0])) or (pphot->IsNanPhoton())) {
      pphot->PrintPhoton();
      pphot->status = DESTROYED;
    }
 
-    step = StepSize(pphot);
-
-    // Perform any user work
-    if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this);
-    // SWD: put here for now, may need additional flag
-    if (ptraj != NULL) ptraj->AddToTrajectory(pphot);
+   step = StepSize(pphot);
+ 
+   // Perform any user work
+   if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this);
+   // SWD: put here for now, may need additional flag
+   if (ptraj != NULL) ptraj->AddToTrajectory(pphot);
+ 
   } // end of photon integration
 
   // SWD: Try to remove this
@@ -362,6 +365,7 @@ bool GeneralMover::UpdateZone(Photon *pphot) {
 	break;
     }
   }
+
   // Returns true if zone changes, false otherwise
   return update;
 
@@ -423,8 +427,9 @@ void GeneralMover::VerletStep(Photon *pphot, Real step) {
   //printf("%g %g %g %g %g %g %g %g %g\n", step, pphot->k[IMC0], pphot->k[IMC1],
   // pphot->k[IMC2], pphot->k[IMC3], k_n1[IMC0], k_n1[IMC1], k_n1[IMC2], k_n1[IMC3]);
 
+  // SWD probably should not do this here
   // update photon energy due to evolving k_t (coordinate frame)
-  pphot->energy *= k_n1[IMC0]/(pphot->k[IMC0]); 
+  //pphot->energy *= k_n1[IMC0]/(pphot->k[IMC0]); 
   
   for (i=0;i<NCOORD;i++) {
     pphot->k[i] = k_n1[i];

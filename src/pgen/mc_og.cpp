@@ -28,6 +28,7 @@ static int nrays;
 static int nalpha, nbeta;
 static Real *alpha,*beta;
 static Real rcam,thcam,phcam; 
+static Real r_outer;
 static int plane_cross;
 static bool backward_integration;
 static FILE *input;
@@ -42,6 +43,8 @@ static Real spsi,cpsi,szet,czet;
 void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover);
 void GetMCDirection(Photon *pphot, Real alpha, Real beta);
 void GetDirectionTetrad(Photon *pphot, Real alpha, Real beta);
+void TransformPhotonAtDisk(MonteCarloBlock *pmcb, Photon *pphot);
+void TransformPhotonAtGridEdge(MonteCarloBlock *pmcb, Photon *pphot);
 
 //========================================================================================
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
@@ -86,68 +89,56 @@ void MonteCarloBlock::InitUserMonteCarloBlockData(ParameterInput *pin){
     //  myn += ntot % (nranks-1);
     printf("iphot: %d %d %d\n",rank,iphot,myn);
     //nphremain = cadence = myn;
-    if (backward_integration) {
-      // Read in only parts covered by current rank
-      Real dum;
-      for(int i=0; i<iphot; i++) {
-        fscanf(input, "%lf %lf %lf %lf %lf %lf %lf %lf %lf\n", &dum, &dum, &dum, 
-               &dum, &dum, &dum, &dum, &dum, &dum);
-      //printf("dum: %f\n",dum);
-      }
-    }
   }
 #else
   iphot = 0;
 #endif
 
-  if (!backward_integration)
-    EnrollUserWorkInMove(MidplaneCrossing);
+  // Set r_outer
+  Real abh = pcoord->GetSpin();
+  Real mbh = pcoord->GetMass();
+  r_outer = 1.0 + sqrt(1.0 - SQR(abh));
+  EnrollUserWorkInMove(MidplaneCrossing);
 
 }
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 
 
-  nuser_var = 2;
+  nuser_var = 4;
 
   nrays = pin->GetInteger("montecarlo", "nphot");
   nalpha = nbeta = static_cast<int>(sqrt(static_cast<Real>(nrays)));
   backward_integration = pin->GetOrAddBoolean("problem","backward",false);
 
-  if (backward_integration) {
-    // Read input.dat
-    input = fopen("input.dat", "r"); //should include starting polarization vectors
-
-  } else {
-    Real alpha_min = pin->GetOrAddReal("problem", "alpha_min", -10.);
-    Real alpha_max = pin->GetOrAddReal("problem", "alpha_max", 10.);
-    Real alpha_range = (alpha_max - alpha_min);
-    Real beta_min = pin->GetOrAddReal("problem", "beta_min", -10.);
-    Real beta_max = pin->GetOrAddReal("problem", "beta_max", 10.);
-    Real beta_range = (beta_max - beta_min);
-    alpha = new Real[nalpha];
-    beta = new Real[nbeta];
-    if (nalpha == 1) 
-      alpha[0] = alpha_min;
-    else {
-      for (int i = 0; i<nalpha; i++) {
-        alpha[i] = alpha_min+(static_cast<Real>(i)/static_cast<Real>(nalpha-1))*alpha_range;
-        if (fabs(alpha[i]) < 1.e-5) alpha[i] = 1.e-1;
-      }
+  Real alpha_min = pin->GetOrAddReal("problem", "alpha_min", -10.);
+  Real alpha_max = pin->GetOrAddReal("problem", "alpha_max", 10.);
+  Real alpha_range = (alpha_max - alpha_min);
+  Real beta_min = pin->GetOrAddReal("problem", "beta_min", -10.);
+  Real beta_max = pin->GetOrAddReal("problem", "beta_max", 10.);
+  Real beta_range = (beta_max - beta_min);
+  alpha = new Real[nalpha];
+  beta = new Real[nbeta];
+  if (nalpha == 1) 
+    alpha[0] = alpha_min;
+  else {
+    for (int i = 0; i<nalpha; i++) {
+      alpha[i] = alpha_min+(static_cast<Real>(i)/static_cast<Real>(nalpha-1))*alpha_range;
+      if (fabs(alpha[i]) < 1.e-5) alpha[i] = 1.e-1;
     }
-    if (nbeta == 1)
-      beta[0] = beta_min;
-    else {
-      for (int i = 0; i<nbeta; i++) {
-        beta[i] = beta_min+(static_cast<Real>(i)/static_cast<Real>(nbeta-1))*beta_range;
-        if (fabs(beta[i]) < 1.0e-5) beta[i] = 1.0e-1;
-      }
-    }
-    rcam = pin->GetOrAddReal("problem", "rcam", pin->GetReal("mesh","x1max"));
-    thcam = pin->GetOrAddReal("problem", "thcam", 45.) * M_PI / 180.;
-    phcam = pin->GetOrAddReal("problem", "phcam", 90.) * M_PI / 180.;
-
   }
+  if (nbeta == 1)
+    beta[0] = beta_min;
+  else {
+    for (int i = 0; i<nbeta; i++) {
+      beta[i] = beta_min+(static_cast<Real>(i)/static_cast<Real>(nbeta-1))*beta_range;
+      if (fabs(beta[i]) < 1.0e-5) beta[i] = 1.0e-1;
+    }
+  }
+  rcam = pin->GetOrAddReal("problem", "rcam", pin->GetReal("mesh","x1max"));
+  thcam = pin->GetOrAddReal("problem", "thcam", 45.) * M_PI / 180.;
+  phcam = pin->GetOrAddReal("problem", "phcam", 90.) * M_PI / 180.;
+  
 }
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot) {
@@ -166,19 +157,17 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
   Real r, theta, phi, kt, kr, kth, kphi, alpha0, beta0;
   int ia,ib;
-  if (backward_integration) {
-    fscanf(input, "%lf %lf %lf %lf %lf %lf %lf %lf %lf\n", &r, &theta, &phi, &kt, &kr, &kth, &kphi, &alpha0, &beta0);
-  } else {
-    r = rcam * 0.999999;
-    theta = thcam;
-    phi = phcam + 1.0e-3;
-    // Set alpha, beta by either iterating over photons
-    ia = iphot / nalpha;
-    ib = iphot % nalpha;
-    alpha0 = alpha[ia];
-    beta0 = beta[ib];
-  }
-  pphot->x[IMC0] = 1.0;
+
+  r = rcam * 0.999999;
+  theta = thcam;
+  phi = phcam + 1.0e-3;
+  // Set alpha, beta by either iterating over photons
+  ia = iphot / nalpha;
+  ib = iphot % nalpha;
+  alpha0 = alpha[ia];
+  beta0 = beta[ib];
+  
+  pphot->x[IMC0] = 0.0;
   pphot->x[IMC1] = r;
   pphot->x[IMC2] = theta;
   pphot->x[IMC3] = phi;
@@ -224,148 +213,16 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   iphot++;
 
   // Set the initial photon direction using alpha, beta and the position
-  if (backward_integration) {
-    pphot->k[IMC0] = kt;
-    pphot->k[IMC1] = kr;
-    pphot->k[IMC2] = kth;
-    pphot->k[IMC3] = kphi;
-    pphot->stokes[0] = 1.0;
-    pphot->stokes[1] = 1.0;
-    pphot->stokes[2] = 0.0;
-    pphot->stokes[3] = 0.0;
-    if (pphot->IsNanPhoton()) {
-      //printf("\n\n\n\n\n\n\n\n");
-      pphot->status = ESCAPED;
-    }
-    // Transform from tetrad frame to comoving frame
-    // Construct the orthonormal tetrad
-    Real ucon[NCOORD], vcon[NCOORD];
-    Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
-    Real kcopy[NCOORD];
-    Real gcov[NCOORD][NCOORD];
-    Real energy_shift;
-    Real kdotu = 0.;
-  
-    pcoord->Metric(pphot->x, gcov);
-
-    Real r = pphot->x[IMC1];
-    Real a = pcoord->GetSpin();
-    Real mbh = pcoord->GetMass();
-    Real omega = pow(mbh,0.5)/(pow(r, 3./2.) + a*pow(mbh,3./2.)); // circular velocity 
-    // Initialize ucon and vcon (= z unit vector in symmetry plane)
-    ucon[IMC0] = sqrt(-1.0/(gcov[IMC0][IMC0] + 2.*gcov[IMC0][IMC3]*omega +
-                            SQR(omega)*gcov[IMC3][IMC3]));
-    ucon[IMC1] = 0.;
-    ucon[IMC2] = 0.;
-    ucon[IMC3] = (ucon[IMC0])*omega;
-
-    vcon[IMC0] = 0.;
-    vcon[IMC1] = 0.;
-    vcon[IMC2] = -1.;
-    vcon[IMC3] = 0.;
-    // create tetrad basis
-    ConstructTetrad(ucon, gcov, econ, ecov); // matches finalize photon for forward
-
-    // Transform to tetrad frame
-    for (int i = 0; i < NCOORD; i++) 
-      kdotu += pphot->k[i] * ucon[i]; // pphot->k in coordinate frame
-    energy_shift = - pphot->k[IMC0] / kdotu; 
-
-    for (int i = 0; i < NCOORD; i++)
-      kcopy[i] = pphot->k[i];
-
-    // Transform k
-    TetradToCoordinate(kcopy, pphot->k, econ);
-    // Invert k to reverse integration
-    pphot->k[IMC1] *= -1.;
-    pphot->k[IMC2] *= -1.;
-    pphot->k[IMC3] *= -1.;
-    // construct new tetrad to define stokes parameters
-    ConstructTetrad(ucon, pphot->k, vcon, gcov, econ, ecov);
-   
-    // Initialize and transform Stokes vector
-    pphot->stokes[0] = 1.0;
-    pphot->stokes[1] = 1.0;
-    pphot->stokes[2] = 0.0;
-    pphot->stokes[3] = 0.0;
-    std::complex<Real> tcopy[NCOORD][NCOORD];
-    StokesToTensor(pphot->stokes,tcopy);
-
-    ComplexTetradToCoordinate(tcopy,pphot->polten,econ);
  
-#ifdef DEBUG
-    printf("init: %d\n",iphot-1);
-    Real cphi, sphi;
-    Real sth, cth;
-    cth = cos(pphot->x[IMC2]);
-    sth = sin(pphot->x[IMC2]);
-    cphi = cos(pphot->x[IMC3]);
-    sphi = sin(pphot->x[IMC3]);
-    czet = pphot->k[IMC1]*cth-sth*r*pphot->k[IMC2];
-    szet = sqrt(1.-SQR(czet));
-    spsi = (sphi*(pphot->k[IMC1]*sth+pphot->k[IMC2]*r*cth)+r*pphot->k[IMC3]*sth*cphi)/szet;
-    cpsi = (cphi*(pphot->k[IMC1]*sth+pphot->k[IMC2]*r*cth)-r*pphot->k[IMC3]*sth*sphi)/szet;
-    //cpsi = (pphot->k[IMC1]*cphi-r*pphot->k[IMC3]*sin(pphot->x[IMC3]))/szet;
-    printf("psi: %e %e\n",spsi,cpsi);
-    printf("zeta: %e %e\n",szet,czet);
-    printf("th: %e %e\n",cth,sth);
-    //printf("k: %e %e %e\n",szet*(cpsi*cphi+spsi*sphi),-czet/r,szet/r*(spsi*cphi-cpsi*sphi));
-    //printf("e1: %e %e %e\n",-spsi,cpsi,0.);
-    //printf("e2: %e %e %e\n",-czet*cpsi,czet*spsi,szet);
-    //printf("e3: %e %e %e\n",szet*cpsi,szet*spsi,czet);
-    Real kr = szet*sth*(cpsi*cphi+spsi*sphi)+czet*cth;
-    Real kth = szet*cth/r*(cpsi*cphi+spsi*sphi)-czet*sth/r;
-    Real kph = szet/(r*sth)*(spsi*cphi-cpsi*sphi);
-    printf("k: %e %e %e\n",kr,kth,kph);
-    Real Nrr = 2.*SQR(sth)*SQR(spsi*cphi-cpsi*sphi);
-    Real Nrth = 2*sth*cth/r*SQR(spsi*cphi-cpsi*sphi);
-    Real Nrph = 2./r*((SQR(cpsi)-SQR(spsi))*sphi*cphi-(SQR(cphi)-SQR(sphi))*spsi*cpsi);
-    Real Nthth = 2.*SQR(cth/r)*SQR(spsi*cphi-cpsi*sphi);
-    Real Nthph = -2.*cth/SQR(r)/sth*((SQR(cpsi)-SQR(spsi))*sphi*cphi-(SQR(cphi)-SQR(sphi))*spsi*cpsi);
-    Real Nphph = 2./SQR(r*sth)*SQR(sphi*spsi+cphi*cpsi);
-    printf("Nr: %e %e %e\n",Nrr,Nrth,Nrph);
-    printf("Nth: %e %e\n",Nthth,Nthph);
-    printf("Nph: %e\n",Nphph);
-    printf("prod: %e %e %e %e %e\n",spsi*cphi-cpsi*sphi,cphi,sphi,cpsi,spsi);
-    printf("x: %g %g %g %g %g %g\n",pphot->x[IMC0],pphot->x[IMC1],pphot->x[IMC2],pphot->x[IMC3],pphot->x[IMC1]*cos(pphot->x[IMC3]),pphot->x[IMC1]*sin(pphot->x[IMC3]));
-    printf("k: %g %g %g %g\n",pphot->k[IMC0],pphot->k[IMC1],pphot->k[IMC2],pphot->k[IMC3]);
-    printf("ttet[IMC0]: %e %e %e %e\n", tcopy[IMC0][IMC0].real(), tcopy[IMC0][IMC1].real(), tcopy[IMC0][IMC2].real(), tcopy[IMC0][IMC3].real());
-    printf("ttet[IMC1]: %e %e %e %e\n", tcopy[IMC1][IMC0].real(), tcopy[IMC1][IMC1].real(), tcopy[IMC1][IMC2].real(), tcopy[IMC1][IMC3].real());
-    printf("ttet[IMC2]: %e %e %e %e\n", tcopy[IMC2][IMC0].real(), tcopy[IMC2][IMC1].real(), tcopy[IMC2][IMC2].real(), tcopy[IMC2][IMC3].real());
-    printf("ttet[IMC3]: %e %e %e %e\n", tcopy[IMC3][IMC0].real(), tcopy[IMC3][IMC1].real(), tcopy[IMC3][IMC2].real(), tcopy[IMC3][IMC3].real());
-    printf("ttet[11]: %e\n",tcopy[IMC1][IMC1].real());
-    printf("tcord[IMC0]: %e %e %e %e\n", pphot->polten[IMC0][IMC0].real(), pphot->polten[IMC0][IMC1].real(), pphot->polten[IMC0][IMC2].real(), pphot->polten[IMC0][IMC3].real());
-    printf("tcord[IMC1]: %e %e %e %e\n", pphot->polten[IMC1][IMC0].real(), pphot->polten[IMC1][IMC1].real(), pphot->polten[IMC1][IMC2].real(), pphot->polten[IMC1][IMC3].real());
-    printf("tcord[IMC2]: %e %e %e %e\n", pphot->polten[IMC2][IMC0].real(), pphot->polten[IMC2][IMC1].real(), pphot->polten[IMC2][IMC2].real(), pphot->polten[IMC2][IMC3].real());
-    printf("tcord[IMC3]: %e %e %e %e\n", pphot->polten[IMC3][IMC0].real(), pphot->polten[IMC3][IMC1].real(), pphot->polten[IMC3][IMC2].real(), pphot->polten[IMC3][IMC3].real());
-    //printf("pphot: %e %e %e %e %e\n",pphot->polten[IMC1][IMC1].real(),pphot->polten[IMC1][IMC2].real(),pphot->polten[IMC2][IMC1].real(),
-    //printf("gcov[IMC0]: %e %e %e %e\n", gcov[IMC0][IMC0], gcov[IMC0][IMC1], gcov[IMC0][IMC2], gcov[IMC0][IMC3]);
-    //printf("gcov[IMC1]: %e %e %e %e\n", gcov[IMC1][IMC0], gcov[IMC1][IMC1], gcov[IMC1][IMC2], gcov[IMC1][IMC3]);
-    //printf("gcov[IMC2]: %e %e %e %e\n", gcov[IMC2][IMC0], gcov[IMC2][IMC1], gcov[IMC2][IMC2], gcov[IMC2][IMC3]);
-    //printf("gcov[IMC3]: %e %e %e %e\n", gcov[IMC3][IMC0], gcov[IMC3][IMC1], gcov[IMC3][IMC2], gcov[IMC3][IMC3]);
-    //Real gcon[4][4];
-    //pcoord->InverseMetric(pphot->x,gcon);
-    //printf("gcon[IMC0]: %e %e %e %e\n", gcon[IMC0][IMC0], gcon[IMC0][IMC1], gcon[IMC0][IMC2], gcon[IMC0][IMC3]);
-    //printf("gcon[IMC1]: %e %e %e %e\n", gcon[IMC1][IMC0], gcon[IMC1][IMC1], gcon[IMC1][IMC2], gcon[IMC1][IMC3]);
-    //printf("gcon[IMC2]: %e %e %e %e\n", gcon[IMC2][IMC0], gcon[IMC2][IMC1], gcon[IMC2][IMC2], gcon[IMC2][IMC3]);
-    //printf("gcon[IMC3]: %e %e %e %e\n", gcon[IMC3][IMC0], gcon[IMC3][IMC1], gcon[IMC3][IMC2], gcon[IMC3][IMC3]);
-    printf("econ[IMC0]: %e %e %e %e\n", econ[IMC0][IMC0], econ[IMC0][IMC1], econ[IMC0][IMC2], econ[IMC0][IMC3]);
-    printf("econ[IMC1]: %e %e %e %e\n", econ[IMC1][IMC0], econ[IMC1][IMC1], econ[IMC1][IMC2], econ[IMC1][IMC3]);
-    printf("econ[IMC2]: %e %e %e %e\n", econ[IMC2][IMC0], econ[IMC2][IMC1], econ[IMC2][IMC2], econ[IMC2][IMC3]);
-    printf("econ[IMC3]: %e %e %e %e\n", econ[IMC3][IMC0], econ[IMC3][IMC1], econ[IMC3][IMC2], econ[IMC3][IMC3]);
-#endif
-  } else {
-    // Initialize Stokes vector as unpolarized
-    pphot->stokes[0] = 1.0;
-    pphot->stokes[1] = 0.0;
-    pphot->stokes[2] = 0.0;
-    pphot->stokes[3] = 0.0;
-    // SWD: Replace with general tetrad tranformation
-    //GetMCDirection(pphot, alpha0, beta0);
-    //printf("korig: %e %e %e %e\n",pphot->k[IMC0],pphot->k[IMC1],pphot->k[IMC2],pphot->k[IMC3]);
-    GetDirectionTetrad(pphot, alpha0, beta0);
-    printf("ktet: %e %e %e %e\n",pphot->k[IMC0],pphot->k[IMC1],pphot->k[IMC2],pphot->k[IMC3]);   
-  }
+  // Initialize Stokes vector as unpolarized
+  pphot->stokes[0] = 1.0;
+  pphot->stokes[1] = 0.0;
+  pphot->stokes[2] = 0.0;
+  pphot->stokes[3] = 0.0;
+ 
+  GetDirectionTetrad(pphot, alpha0, beta0);
+  //printf("ktet: %e %e %e %e\n",pphot->k[IMC0],pphot->k[IMC1],pphot->k[IMC2],pphot->k[IMC3]);   
+  
   pphot->energy = pphot->k[IMC0];
   pphot->weight = 1.0;
   pphot->eweight = 1.0;
@@ -377,18 +234,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   plane_cross = 0;
 
   if (pphot->weight < 0.0) pphot->status = DESTROYED;
-  if (backward_integration) {
- 
-    Real a = pcoord->GetSpin();
-    Real r_outer = 1.0 + sqrt(1.0 - SQR(a)) + 1.0e-3;
-    if ((pphot->x[IMC1] < r_outer) || (pphot->IsNanPhoton())) {
-      pphot->status = ESCAPED;
-      pphot->stokes[0] = 0.;
-      pphot->stokes[1] = 0.;
-      pphot->stokes[2] = 0.;
-      pphot->stokes[3] = 0.;
-    }
-  }
+
   // Initialize the absorption and scattering extinction coefficients
   // to the values appropriate in the emitted zone
   pphot->abs_coef = 0.;
@@ -396,193 +242,163 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   
 }
 
-void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
-
- // check if photon has crossed midplane and whether to terminate or keep integrating
-
-  //if (iphot == 2)
-  //  pphot->PrintPhoton();
-
-  if (pphot->status == DESTROYED) {
-     pphot->status = ESCAPED;
-     return;
-  }
-
-  Real rdisk = 1.0e10; // outer radius of accretion disk for plotting
-  if (plane_cross == 0) { // photon has not yet crossed the plane
-      if (pphot->x[IMC2] >= (M_PI / 2.0)) { // photon has crossed plane for the first time
-	if (pphot->x[IMC1] <= rdisk) { // photon is "close" to BH
-	  Real step = -(pphot->x[IMC2] - M_PI/2.0) / pphot->k[IMC2];
-	  for (int i = 0; i < NCOORD; i++) 
-	    pphot->x[i] += pphot->k[i] * step;
-	  /*photon_step(pphot, file_output);
-	  for (int i=0; i < NCOORD; i++) 
-	  pphot->k[i] *= -1;*/
-	  pphot->status = ESCAPED;
-	  plane_cross++;
-	} else { // photon far away -> keep integrating
-	  plane_cross++;
-	}
-      } 
-    } else if ((plane_cross % 2) == 1) { // photon has crossed plane an odd number
-      if (pphot->x[IMC2] <= (M_PI / 2.0)) { 
-	if (pphot->x[IMC1] <= rdisk) {
-	  pphot->status = ESCAPED;
-	} else {
-	  plane_cross++;
-	}
-      }
-    } else if ((plane_cross % 2) == 0) { // photon has crossed plane an even number
-      if (pphot->x[IMC2] >= (M_PI / 2.0)) {
-	if (pphot->x[IMC1] <= rdisk) {
-	  pphot->status = ESCAPED;
-	} else {
-	  plane_cross++;
-	}
-      }
-    }
-}
-
 void MonteCarloBlock::FinalizePhoton(Photon *pphot) {
   
-  Real a = pcoord->GetSpin();
-  Real mbh = pcoord->GetMass();
-  Real r_outer = 1.0 + sqrt(1.0 - SQR(a)) + 1.0e-3;
-
+  
   if (pphot->status == DESTROYED) {
     pphot->status = ESCAPED;
-    pphot->PrintPhoton();
     return;
   }
-
-  // r is outside ISCO, transform into comoving frame tetrad, assuming
-  // circular flow velocity
-  if (pphot->x[IMC1] < r_outer + 1.0e-5) {
-    pphot->status = ESCAPED;
-    return;
-  }
-  
-  if (backward_integration) {
-    // Construct the orthonormal tetrad
-    Real ucon[NCOORD];
-    Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
-    Real gcov[NCOORD][NCOORD], gcon[NCOORD][NCOORD];
-    ucon[IMC0] = 1.;
-    ucon[IMC1] = 0.;
-    ucon[IMC2] = 0.;
-    ucon[IMC3] = 0.;
-    
-    // create tetrad basis
-    pcoord->Metric(pphot->x, gcov);
-    pcoord->InverseMetric(pphot->x,gcon);
-    Real wcon[NCOORD] = {0,1.,0.,0.}; // Q=1 points along projected BH symmetry axis 
-    Real vcov[NCOORD] = {1.,0.,0.,1.};// Make image center point away from origin
-    Real vcon[NCOORD]; 
-      
-    CovToCon(vcov,vcon,gcon);
-    //printf("vcon: %e %e %e %e\n",vcon[IMC0],vcon[IMC1],vcon[IMC2],vcon[IMC3]);
-    //printf("wcon: %e %e %e %e\n",wcon[IMC0],wcon[IMC1],wcon[IMC2],wcon[IMC3]);
-   
-    //ConstructTetrad(ucon, pphot->k, gcov, econ, ecov);
-    //ConstructTetrad(ucon, pphot->k, vcon, gcov, econ, ecov);
-    ConstructTetrad(ucon, vcon, wcon, gcov, econ, ecov);
-    std::complex<Real> tcopy[NCOORD][NCOORD];
-  
-    ComplexCoordinateToTetrad(pphot->polten,tcopy,ecov);
-    TensorToStokes(tcopy,pphot->stokes);
  
-#ifdef DEBUG
-    printf("final: %d\n",iphot-1);
-    Real cosi = cos(pphot->x[IMC2]);
-    Real pI = SQR(cpsi)+SQR(spsi*cosi);
-    Real pQ = SQR(cpsi)-SQR(spsi*cosi);
-    Real pU = 2*spsi*cpsi*cosi;
-    Real cphi, sphi;
-    cphi = cos(pphot->x[IMC3]);
-    sphi = sin(pphot->x[IMC3]);
-    Real sth, cth, r;
-    r = pphot->x[IMC1];
-    cth = cos(pphot->x[IMC2]);
-    sth = sin(pphot->x[IMC2]);
-    printf("prod: %e %e %e %e %e\n",spsi*cphi-cpsi*sphi,cphi,sphi,cpsi,spsi);
-    Real Nrr = 2.*SQR(sth)*SQR(spsi*cphi-cpsi*sphi);
-    Real Nrth = 2*sth*cth/r*SQR(spsi*cphi-cpsi*sphi);
-    Real Nrph = 2./r*((SQR(cpsi)-SQR(spsi))*sphi*cphi-(SQR(cphi)-SQR(sphi))*spsi*cpsi);
-    Real Nthth = 2.*SQR(cth/r)*SQR(spsi*cphi-cpsi*sphi);
-    Real Nthph = -2.*cth/SQR(r)/sth*((SQR(cpsi)-SQR(spsi))*sphi*cphi-(SQR(cphi)-SQR(sphi))*spsi*cpsi);
-    Real Nphph = 2./SQR(r*sth)*SQR(sphi*spsi+cphi*cpsi);
-    printf("Nr: %e %e %e\n",Nrr,Nrth,Nrph);
-    printf("Nth: %e %e\n",Nthth,Nthph);
-    printf("Nph: %e\n",Nphph);
-    Real kr = szet*sth*(cpsi*cphi+spsi*sphi)+czet*cth;
-    Real kth = szet*cth/r*(cpsi*cphi+spsi*sphi)-czet*sth/r;
-    Real kph = szet/(r*sth)*(spsi*cphi-cpsi*sphi);
-    printf("k: %e %e %e\n",kr,kth,kph);
-    printf("K: %e %e %e\n",pphot->k[IMC1],pphot->k[IMC2],pphot->k[IMC3]);
-    printf("psif: %e %e %e %e %e\n",pI,pQ,pU,pQ/pI,pU/pI);
-    printf("x: %g %g %g %g %g %g\n",pphot->x[IMC0],pphot->x[IMC1],pphot->x[IMC2],pphot->x[IMC3],pphot->x[IMC1]*cos(pphot->x[IMC3]),pphot->x[IMC1]*sin(pphot->x[IMC3]));
-    //printf("pphot: %e %e %e %e %e\n",pphot->polten[IMC1][IMC1].real(),pphot->polten[IMC1][IMC2].real(),pphot->polten[IMC2][IMC1].real(),
-    //         pphot->polten[IMC2][IMC2].real(),pphot->polten[IMC3][IMC3].real());
-    printf("tcord[IMC0]: %e %e %e %e\n", pphot->polten[IMC0][IMC0].real(), pphot->polten[IMC0][IMC1].real(), pphot->polten[IMC0][IMC2].real(), pphot->polten[IMC0][IMC3].real());
-    printf("tcord[IMC1]: %e %e %e %e\n", pphot->polten[IMC1][IMC0].real(), pphot->polten[IMC1][IMC1].real(), pphot->polten[IMC1][IMC2].real(), pphot->polten[IMC1][IMC3].real());
-    printf("tcord[IMC2]: %e %e %e %e\n", pphot->polten[IMC2][IMC0].real(), pphot->polten[IMC2][IMC1].real(), pphot->polten[IMC2][IMC2].real(), pphot->polten[IMC2][IMC3].real());
-    printf("tcord[IMC3]: %e %e %e %e\n", pphot->polten[IMC3][IMC0].real(), pphot->polten[IMC3][IMC1].real(), pphot->polten[IMC3][IMC2].real(), pphot->polten[IMC3][IMC3].real());
-    printf("ttet[IMC0]: %e %e %e %e\n", tcopy[IMC0][IMC0].real(), tcopy[IMC0][IMC1].real(), tcopy[IMC0][IMC2].real(), tcopy[IMC0][IMC3].real());
-    printf("ttet[IMC1]: %e %e %e %e\n", tcopy[IMC1][IMC0].real(), tcopy[IMC1][IMC1].real(), tcopy[IMC1][IMC2].real(), tcopy[IMC1][IMC3].real());
-    printf("ttet[IMC2]: %e %e %e %e\n", tcopy[IMC2][IMC0].real(), tcopy[IMC2][IMC1].real(), tcopy[IMC2][IMC2].real(), tcopy[IMC2][IMC3].real());
-    printf("ttet[IMC3]: %e %e %e %e\n", tcopy[IMC3][IMC0].real(), tcopy[IMC3][IMC1].real(), tcopy[IMC3][IMC2].real(), tcopy[IMC3][IMC3].real());
-    //printf("ttet[11]: %e \n",tcopy[IMC1][IMC1].real());
-    Real cosd = spsi*sphi+cpsi*cphi;
-    Real sind = spsi*cphi-cpsi*sphi;
-    Real I = SQR(cosd)+SQR(sind*cth);
-    Real Q = SQR(cosd)-SQR(sind*cth);
-    Real U = 2*cth*cosd*sind;
-    printf("stopre: %e %e\n",Q/I,U/I);
-    printf("stokes: %e %e\n",pphot->stokes[1],pphot->stokes[2]);
-    printf("ecov[IMC0]: %e %e %e %e\n", ecov[IMC0][IMC0], ecov[IMC0][IMC1], ecov[IMC0][IMC2], ecov[IMC0][IMC3]);
-    printf("ecov[IMC1]: %e %e %e %e\n", ecov[IMC1][IMC0], ecov[IMC1][IMC1], ecov[IMC1][IMC2], ecov[IMC1][IMC3]);
-    printf("ecov[IMC2]: %e %e %e %e\n", ecov[IMC2][IMC0], ecov[IMC2][IMC1], ecov[IMC2][IMC2], ecov[IMC2][IMC3]);
-    printf("ecov[IMC3]: %e %e %e %e\n", ecov[IMC3][IMC0], ecov[IMC3][IMC1], ecov[IMC3][IMC2], ecov[IMC3][IMC3]);
-    printf("gcon: %e %e %e %e\n",gcon[IMC0][IMC0],gcon[IMC1][IMC1],gcon[IMC2][IMC2],gcon[IMC3][IMC3]);
-#endif
-      
+  if (backward_integration) {
+    TransformPhotonAtGridEdge(this,pphot);
   } else {
-    // Construct the orthonormal tetrad
-    Real ucon[NCOORD], vcon[NCOORD];
-    Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
-    Real kcopy[NCOORD];
-    Real gcov[NCOORD][NCOORD];
-    Real energy_shift;
-    Real kdotu = 0.;
-
-    pcoord->Metric(pphot->x, gcov);
-
-    Real r = pphot->x[IMC1];
-    Real omega = pow(mbh,0.5)/(pow(r, 3./2.) + a*pow(mbh,3./2.)); // circular velocity 
-    
-    ucon[IMC0] = sqrt(-1.0/(gcov[IMC0][IMC0] + 2.*gcov[IMC0][IMC3]*omega +
-                            SQR(omega)*gcov[IMC3][IMC3]));
-    ucon[IMC1] = 0.;
-    ucon[IMC2] = 0.;
-    ucon[IMC3] = (ucon[IMC0])*omega;
-    //vcon[IMC0] = 0.;
-    // vcon[IMC1] = 0.;
-    //vcon[IMC2] = 1./pphot->x[IMC1];
-    //vcon[IMC3] = 0.;
-    // create tetrad basis
-    ConstructTetrad(ucon, gcov, econ, ecov);
-
-    // Transform to tetrad frame
-    for (int i = 0; i < NCOORD; i++) 
-      kdotu += pphot->k[i] * ucon[i]; // pphot->k in coordinate frame
-    energy_shift = - pphot->k[IMC0] / kdotu; 
-
-    for (int i = 0; i < NCOORD; i++)
-      kcopy[i] = pphot->k[i];
-
-    CoordinateToTetrad(kcopy, pphot->k, ecov);
+    TransformPhotonAtDisk(this,pphot);
   } 
 }
+
+void TransformPhotonAtDisk(MonteCarloBlock *pmcb, Photon *pphot) {
+
+  // If r is inside ISCO, do not attempt to transform and instead mark
+  // as escaped
+  if (pphot->x[IMC1] < r_outer + 1.0e-5) {
+    pphot->status = ESCAPED;
+    pphot->user_var[2] = 0.;
+    pphot->user_var[3] = r_outer;
+    return;
+  }
+
+  // SWD may not need full tetrad here unless presribed angular dependence
+  // to intensity
+
+  // Construct the orthonormal tetrad in comoving frame of circular orbit
+
+  Real gcov[NCOORD][NCOORD];
+  pmcb->pcoord->Metric(pphot->x, gcov);
+
+  Real abh = pmcb->pcoord->GetSpin();
+  Real mbh = pmcb->pcoord->GetMass();
+  Real r = pphot->x[IMC1];
+  Real omega = pow(mbh,0.5)/(pow(r, 3./2.) + abh*pow(mbh,3./2.)); // circular velocity 
+  Real ucon[NCOORD];
+  ucon[IMC0] = sqrt(-1.0/(gcov[IMC0][IMC0] + 2.*gcov[IMC0][IMC3]*omega +
+                            SQR(omega)*gcov[IMC3][IMC3]));
+  ucon[IMC1] = 0.;
+  ucon[IMC2] = 0.;
+  ucon[IMC3] = (ucon[IMC0])*omega;
+
+  // create tetrad basis
+  Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
+  ConstructTetrad(ucon, gcov, econ, ecov);
+
+  // Reverse photon direction to get properties of photon that was emitted
+  for (int i = 0; i < NCOORD; i++)
+    pphot->k[i] *= -1.;
+
+  //  Transform to comoving tetrad
+  Real kcopy[NCOORD];
+  for (int i = 0; i < NCOORD; i++)
+    kcopy[i] = pphot->k[i];
+  CoordinateToTetrad(kcopy, pphot->k, ecov);
+  pphot->user_var[2] = pphot->k[IMC0];
+    // Get radius at disk crossing
+  pphot->user_var[3] = pphot->x[IMC1];
+
+}
+
+void TransformPhotonAtGridEdge(MonteCarloBlock *pmcb, Photon *pphot) {
+
+  // Construct the orthonormal tetrad at edge of simulation grid
+  Real ucon[NCOORD];
+  Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
+  Real gcov[NCOORD][NCOORD], gcon[NCOORD][NCOORD];
+  ucon[IMC0] = 1.;
+  ucon[IMC1] = 0.;
+  ucon[IMC2] = 0.;
+  ucon[IMC3] = 0.;
+    
+  // create tetrad basis
+  pmcb->pcoord->Metric(pphot->x, gcov);
+  pmcb->pcoord->InverseMetric(pphot->x,gcon);
+  Real wcon[NCOORD] = {0,1.,0.,0.}; // Q=1 points along projected BH symmetry axis 
+  Real vcov[NCOORD] = {1.,0.,0.,1.};// Make image center point away from origin
+  Real vcon[NCOORD]; 
+      
+  CovToCon(vcov,vcon,gcon);
+  //printf("vcon: %e %e %e %e\n",vcon[IMC0],vcon[IMC1],vcon[IMC2],vcon[IMC3]);
+  //printf("wcon: %e %e %e %e\n",wcon[IMC0],wcon[IMC1],wcon[IMC2],wcon[IMC3]);
+   
+  //ConstructTetrad(ucon, pphot->k, gcov, econ, ecov);
+  //ConstructTetrad(ucon, pphot->k, vcon, gcov, econ, ecov);
+  ConstructTetrad(ucon, vcon, wcon, gcov, econ, ecov);
+  std::complex<Real> tcopy[NCOORD][NCOORD];
+  
+  ComplexCoordinateToTetrad(pphot->polten,tcopy,ecov);
+  TensorToStokes(tcopy,pphot->stokes);
+ 
+#ifdef DEBUG
+  printf("final: %d\n",iphot-1);
+  Real cosi = cos(pphot->x[IMC2]);
+  Real pI = SQR(cpsi)+SQR(spsi*cosi);
+  Real pQ = SQR(cpsi)-SQR(spsi*cosi);
+  Real pU = 2*spsi*cpsi*cosi;
+  Real cphi, sphi;
+  cphi = cos(pphot->x[IMC3]);
+  sphi = sin(pphot->x[IMC3]);
+  Real sth, cth, r;
+  r = pphot->x[IMC1];
+  cth = cos(pphot->x[IMC2]);
+  sth = sin(pphot->x[IMC2]);
+  printf("prod: %e %e %e %e %e\n",spsi*cphi-cpsi*sphi,cphi,sphi,cpsi,spsi);
+  Real Nrr = 2.*SQR(sth)*SQR(spsi*cphi-cpsi*sphi);
+  Real Nrth = 2*sth*cth/r*SQR(spsi*cphi-cpsi*sphi);
+  Real Nrph = 2./r*((SQR(cpsi)-SQR(spsi))*sphi*cphi-(SQR(cphi)-SQR(sphi))*spsi*cpsi);
+  Real Nthth = 2.*SQR(cth/r)*SQR(spsi*cphi-cpsi*sphi);
+  Real Nthph = -2.*cth/SQR(r)/sth*((SQR(cpsi)-SQR(spsi))*sphi*cphi-(SQR(cphi)-SQR(sphi))*spsi*cpsi);
+  Real Nphph = 2./SQR(r*sth)*SQR(sphi*spsi+cphi*cpsi);
+  printf("Nr: %e %e %e\n",Nrr,Nrth,Nrph);
+  printf("Nth: %e %e\n",Nthth,Nthph);
+  printf("Nph: %e\n",Nphph);
+  Real kr = szet*sth*(cpsi*cphi+spsi*sphi)+czet*cth;
+  Real kth = szet*cth/r*(cpsi*cphi+spsi*sphi)-czet*sth/r;
+  Real kph = szet/(r*sth)*(spsi*cphi-cpsi*sphi);
+  printf("k: %e %e %e\n",kr,kth,kph);
+  printf("K: %e %e %e\n",pphot->k[IMC1],pphot->k[IMC2],pphot->k[IMC3]);
+  printf("psif: %e %e %e %e %e\n",pI,pQ,pU,pQ/pI,pU/pI);
+  printf("x: %g %g %g %g %g %g\n",pphot->x[IMC0],pphot->x[IMC1],pphot->x[IMC2],pphot->x[IMC3],pphot->x[IMC1]*cos(pphot->x[IMC3]),pphot->x[IMC1]*sin(pphot->x[IMC3]));
+  //printf("pphot: %e %e %e %e %e\n",pphot->polten[IMC1][IMC1].real(),pphot->polten[IMC1][IMC2].real(),pphot->polten[IMC2][IMC1].real(),
+  //         pphot->polten[IMC2][IMC2].real(),pphot->polten[IMC3][IMC3].real());
+  printf("tcord[IMC0]: %e %e %e %e\n", pphot->polten[IMC0][IMC0].real(), pphot->polten[IMC0][IMC1].real(), pphot->polten[IMC0][IMC2].real(), pphot->polten[IMC0][IMC3].real());
+  printf("tcord[IMC1]: %e %e %e %e\n", pphot->polten[IMC1][IMC0].real(), pphot->polten[IMC1][IMC1].real(), pphot->polten[IMC1][IMC2].real(), pphot->polten[IMC1][IMC3].real());
+  printf("tcord[IMC2]: %e %e %e %e\n", pphot->polten[IMC2][IMC0].real(), pphot->polten[IMC2][IMC1].real(), pphot->polten[IMC2][IMC2].real(), pphot->polten[IMC2][IMC3].real());
+  printf("tcord[IMC3]: %e %e %e %e\n", pphot->polten[IMC3][IMC0].real(), pphot->polten[IMC3][IMC1].real(), pphot->polten[IMC3][IMC2].real(), pphot->polten[IMC3][IMC3].real());
+  printf("ttet[IMC0]: %e %e %e %e\n", tcopy[IMC0][IMC0].real(), tcopy[IMC0][IMC1].real(), tcopy[IMC0][IMC2].real(), tcopy[IMC0][IMC3].real());
+  printf("ttet[IMC1]: %e %e %e %e\n", tcopy[IMC1][IMC0].real(), tcopy[IMC1][IMC1].real(), tcopy[IMC1][IMC2].real(), tcopy[IMC1][IMC3].real());
+  printf("ttet[IMC2]: %e %e %e %e\n", tcopy[IMC2][IMC0].real(), tcopy[IMC2][IMC1].real(), tcopy[IMC2][IMC2].real(), tcopy[IMC2][IMC3].real());
+  printf("ttet[IMC3]: %e %e %e %e\n", tcopy[IMC3][IMC0].real(), tcopy[IMC3][IMC1].real(), tcopy[IMC3][IMC2].real(), tcopy[IMC3][IMC3].real());
+  //printf("ttet[11]: %e \n",tcopy[IMC1][IMC1].real());
+  Real cosd = spsi*sphi+cpsi*cphi;
+  Real sind = spsi*cphi-cpsi*sphi;
+  Real I = SQR(cosd)+SQR(sind*cth);
+  Real Q = SQR(cosd)-SQR(sind*cth);
+  Real U = 2*cth*cosd*sind;
+  printf("stopre: %e %e\n",Q/I,U/I);
+  printf("stokes: %e %e\n",pphot->stokes[1],pphot->stokes[2]);
+  printf("ecov[IMC0]: %e %e %e %e\n", ecov[IMC0][IMC0], ecov[IMC0][IMC1], ecov[IMC0][IMC2], ecov[IMC0][IMC3]);
+  printf("ecov[IMC1]: %e %e %e %e\n", ecov[IMC1][IMC0], ecov[IMC1][IMC1], ecov[IMC1][IMC2], ecov[IMC1][IMC3]);
+  printf("ecov[IMC2]: %e %e %e %e\n", ecov[IMC2][IMC0], ecov[IMC2][IMC1], ecov[IMC2][IMC2], ecov[IMC2][IMC3]);
+  printf("ecov[IMC3]: %e %e %e %e\n", ecov[IMC3][IMC0], ecov[IMC3][IMC1], ecov[IMC3][IMC2], ecov[IMC3][IMC3]);
+  printf("gcon: %e %e %e %e\n",gcon[IMC0][IMC0],gcon[IMC1][IMC1],gcon[IMC2][IMC2],gcon[IMC3][IMC3]);
+#endif
+    
+  //printf("x: %g %g %g %g\n",pphot->x[IMC0],pphot->x[IMC1],pphot->x[IMC2],pphot->x[IMC3]);
+
+}
+
+//void LaunchPhotonAtDisk(MonteCarloBlock *pmcb, Photon *pphot) {
+//
+// 
+//}
 
 // Given initial position x^alpha, alpha, beta, determine the initial photon direction
 // Uses alpha, beta definitions from Cunningham & Bardeen (1973)
@@ -674,11 +490,183 @@ void GetDirectionTetrad(Photon *pphot, Real alpha, Real beta) {
   Real kx = alpha / pphot->x[IMC1];
   Real ky = beta / pphot->x[IMC1];
   Real knorm = sqrt(1.+SQR(kx)+SQR(ky));
-  ktet[IMC0] = 1.;
+  ktet[IMC0] = -1.; // Photon is moving backward in time
   ktet[IMC1] = kx / knorm;
   ktet[IMC2] = ky / knorm;
   ktet[IMC3] = -1. / knorm; // points along radial direction
     
   TetradToCoordinate(ktet,pphot->k,econ);
 
+}
+
+void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
+
+ // check if photon has crossed midplane and whether to terminate or keep integrating
+
+  //if (iphot == 2)
+  //  pphot->PrintPhoton();
+
+  if (pphot->x[IMC1] < r_outer + 1.0e-5) {
+    pphot->status = DESTROYED;
+    pphot->user_var[2] = 0.;
+    pphot->user_var[3] = r_outer;
+    pphot->stokes[1] = 0.;
+    pphot->stokes[2] = 0.;
+    return;
+  }
+
+  bool reverse = false;
+
+  Real rdisk = 1.0e10; // outer radius of accretion disk for plotting
+  if (plane_cross == 0) { // photon has not yet crossed the plane
+      if (pphot->x[IMC2] >= (M_PI / 2.0)) { // photon has crossed plane for the first time
+	if (pphot->x[IMC1] <= rdisk) { // photon is "close" to BH
+	  Real step = -(pphot->x[IMC2] - M_PI/2.0) / pphot->k[IMC2];
+	  for (int i = 0; i < NCOORD; i++) 
+	    pphot->x[i] += pphot->k[i] * step;
+	  /*photon_step(pphot, file_output);
+	  for (int i=0; i < NCOORD; i++) 
+	  pphot->k[i] *= -1;*/
+          if (backward_integration)
+            reverse = true;
+          else
+            pphot->status = ESCAPED;
+	  plane_cross++;
+	} else { // photon far away -> keep integrating
+	  plane_cross++;
+	}
+      } 
+    } else if ((plane_cross % 2) == 1) { // photon has crossed plane an odd number
+      if (pphot->x[IMC2] <= (M_PI / 2.0)) { 
+	if (pphot->x[IMC1] <= rdisk) {
+	  pphot->status = ESCAPED;
+	} else {
+	  plane_cross++;
+	}
+      }
+    } else if ((plane_cross % 2) == 0) { // photon has crossed plane an even number
+      if (pphot->x[IMC2] >= (M_PI / 2.0)) {
+	if (pphot->x[IMC1] <= rdisk) {
+	  pphot->status = ESCAPED;
+	} else {
+	  plane_cross++;
+	}
+      }
+    }
+
+  if (reverse) {
+
+    // Transform from tetrad frame to comoving frame, initialize stokes, and record
+    // emission energy of photon in comoving frame
+
+    Real gcov[NCOORD][NCOORD];
+    pmcb->pcoord->Metric(pphot->x, gcov);
+
+    Real r = pphot->x[IMC1];
+    Real a = pmcb->pcoord->GetSpin();
+    Real mbh = pmcb->pcoord->GetMass();
+    Real omega = pow(mbh,0.5)/(pow(r, 3./2.) + a*pow(mbh,3./2.)); // circular velocity 
+    // Initialize ucon and vcon (= z unit vector in symmetry plane)
+    Real ucon[NCOORD];
+    ucon[IMC0] = sqrt(-1.0/(gcov[IMC0][IMC0] + 2.*gcov[IMC0][IMC3]*omega +
+                            SQR(omega)*gcov[IMC3][IMC3]));
+    ucon[IMC1] = 0.;
+    ucon[IMC2] = 0.;
+    ucon[IMC3] = (ucon[IMC0])*omega;
+    Real vcon[NCOORD];
+    vcon[IMC0] = 0.;
+    vcon[IMC1] = 0.;
+    vcon[IMC2] = -1.;
+    vcon[IMC3] = 0.;
+
+    // Reverse photon direction
+    for (int i = 0; i < NCOORD; i++) {
+      pphot->k[i] *= -1;
+      pphot->dk[i] *= -1;
+    }
+
+    // create tetrad basis
+    Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
+    ConstructTetrad(ucon, pphot->k, vcon, gcov, econ, ecov);
+
+    // Initialize and transform Stokes vector
+    pphot->stokes[0] = 1.0;
+    pphot->stokes[1] = 1.0;
+    pphot->stokes[2] = 0.0;
+    pphot->stokes[3] = 0.0;
+    std::complex<Real> tcopy[NCOORD][NCOORD];
+    StokesToTensor(pphot->stokes,tcopy);
+    ComplexTetradToCoordinate(tcopy,pphot->polten,econ);
+
+    // Get photon energy in rest frame
+    Real kcopy[NCOORD];
+    CoordinateToTetrad(pphot->k, kcopy, ecov);
+    pphot->user_var[2] = kcopy[IMC0];
+    // Get radius at disk crossing
+    pphot->user_var[3] = pphot->x[IMC1];
+    // set plane crossing to zero
+    plane_cross = 0;
+
+#ifdef DEBUG
+    printf("init: %d\n",iphot-1);
+    Real cphi, sphi;
+    Real sth, cth;
+    cth = cos(pphot->x[IMC2]);
+    sth = sin(pphot->x[IMC2]);
+    cphi = cos(pphot->x[IMC3]);
+    sphi = sin(pphot->x[IMC3]);
+    czet = pphot->k[IMC1]*cth-sth*r*pphot->k[IMC2];
+    szet = sqrt(1.-SQR(czet));
+    spsi = (sphi*(pphot->k[IMC1]*sth+pphot->k[IMC2]*r*cth)+r*pphot->k[IMC3]*sth*cphi)/szet;
+    cpsi = (cphi*(pphot->k[IMC1]*sth+pphot->k[IMC2]*r*cth)-r*pphot->k[IMC3]*sth*sphi)/szet;
+    //cpsi = (pphot->k[IMC1]*cphi-r*pphot->k[IMC3]*sin(pphot->x[IMC3]))/szet;
+    printf("psi: %e %e\n",spsi,cpsi);
+    printf("zeta: %e %e\n",szet,czet);
+    printf("th: %e %e\n",cth,sth);
+    //printf("k: %e %e %e\n",szet*(cpsi*cphi+spsi*sphi),-czet/r,szet/r*(spsi*cphi-cpsi*sphi));
+    //printf("e1: %e %e %e\n",-spsi,cpsi,0.);
+    //printf("e2: %e %e %e\n",-czet*cpsi,czet*spsi,szet);
+    //printf("e3: %e %e %e\n",szet*cpsi,szet*spsi,czet);
+    Real kr = szet*sth*(cpsi*cphi+spsi*sphi)+czet*cth;
+    Real kth = szet*cth/r*(cpsi*cphi+spsi*sphi)-czet*sth/r;
+    Real kph = szet/(r*sth)*(spsi*cphi-cpsi*sphi);
+    printf("k: %e %e %e\n",kr,kth,kph);
+    Real Nrr = 2.*SQR(sth)*SQR(spsi*cphi-cpsi*sphi);
+    Real Nrth = 2*sth*cth/r*SQR(spsi*cphi-cpsi*sphi);
+    Real Nrph = 2./r*((SQR(cpsi)-SQR(spsi))*sphi*cphi-(SQR(cphi)-SQR(sphi))*spsi*cpsi);
+    Real Nthth = 2.*SQR(cth/r)*SQR(spsi*cphi-cpsi*sphi);
+    Real Nthph = -2.*cth/SQR(r)/sth*((SQR(cpsi)-SQR(spsi))*sphi*cphi-(SQR(cphi)-SQR(sphi))*spsi*cpsi);
+    Real Nphph = 2./SQR(r*sth)*SQR(sphi*spsi+cphi*cpsi);
+    printf("Nr: %e %e %e\n",Nrr,Nrth,Nrph);
+    printf("Nth: %e %e\n",Nthth,Nthph);
+    printf("Nph: %e\n",Nphph);
+    printf("prod: %e %e %e %e %e\n",spsi*cphi-cpsi*sphi,cphi,sphi,cpsi,spsi);
+    printf("x: %g %g %g %g %g %g\n",pphot->x[IMC0],pphot->x[IMC1],pphot->x[IMC2],pphot->x[IMC3],pphot->x[IMC1]*cos(pphot->x[IMC3]),pphot->x[IMC1]*sin(pphot->x[IMC3]));
+    printf("k: %g %g %g %g\n",pphot->k[IMC0],pphot->k[IMC1],pphot->k[IMC2],pphot->k[IMC3]);
+    printf("ttet[IMC0]: %e %e %e %e\n", tcopy[IMC0][IMC0].real(), tcopy[IMC0][IMC1].real(), tcopy[IMC0][IMC2].real(), tcopy[IMC0][IMC3].real());
+    printf("ttet[IMC1]: %e %e %e %e\n", tcopy[IMC1][IMC0].real(), tcopy[IMC1][IMC1].real(), tcopy[IMC1][IMC2].real(), tcopy[IMC1][IMC3].real());
+    printf("ttet[IMC2]: %e %e %e %e\n", tcopy[IMC2][IMC0].real(), tcopy[IMC2][IMC1].real(), tcopy[IMC2][IMC2].real(), tcopy[IMC2][IMC3].real());
+    printf("ttet[IMC3]: %e %e %e %e\n", tcopy[IMC3][IMC0].real(), tcopy[IMC3][IMC1].real(), tcopy[IMC3][IMC2].real(), tcopy[IMC3][IMC3].real());
+    printf("ttet[11]: %e\n",tcopy[IMC1][IMC1].real());
+    printf("tcord[IMC0]: %e %e %e %e\n", pphot->polten[IMC0][IMC0].real(), pphot->polten[IMC0][IMC1].real(), pphot->polten[IMC0][IMC2].real(), pphot->polten[IMC0][IMC3].real());
+    printf("tcord[IMC1]: %e %e %e %e\n", pphot->polten[IMC1][IMC0].real(), pphot->polten[IMC1][IMC1].real(), pphot->polten[IMC1][IMC2].real(), pphot->polten[IMC1][IMC3].real());
+    printf("tcord[IMC2]: %e %e %e %e\n", pphot->polten[IMC2][IMC0].real(), pphot->polten[IMC2][IMC1].real(), pphot->polten[IMC2][IMC2].real(), pphot->polten[IMC2][IMC3].real());
+    printf("tcord[IMC3]: %e %e %e %e\n", pphot->polten[IMC3][IMC0].real(), pphot->polten[IMC3][IMC1].real(), pphot->polten[IMC3][IMC2].real(), pphot->polten[IMC3][IMC3].real());
+    //printf("pphot: %e %e %e %e %e\n",pphot->polten[IMC1][IMC1].real(),pphot->polten[IMC1][IMC2].real(),pphot->polten[IMC2][IMC1].real(),
+    //printf("gcov[IMC0]: %e %e %e %e\n", gcov[IMC0][IMC0], gcov[IMC0][IMC1], gcov[IMC0][IMC2], gcov[IMC0][IMC3]);
+    //printf("gcov[IMC1]: %e %e %e %e\n", gcov[IMC1][IMC0], gcov[IMC1][IMC1], gcov[IMC1][IMC2], gcov[IMC1][IMC3]);
+    //printf("gcov[IMC2]: %e %e %e %e\n", gcov[IMC2][IMC0], gcov[IMC2][IMC1], gcov[IMC2][IMC2], gcov[IMC2][IMC3]);
+    //printf("gcov[IMC3]: %e %e %e %e\n", gcov[IMC3][IMC0], gcov[IMC3][IMC1], gcov[IMC3][IMC2], gcov[IMC3][IMC3]);
+    //Real gcon[4][4];
+    //pcoord->InverseMetric(pphot->x,gcon);
+    //printf("gcon[IMC0]: %e %e %e %e\n", gcon[IMC0][IMC0], gcon[IMC0][IMC1], gcon[IMC0][IMC2], gcon[IMC0][IMC3]);
+    //printf("gcon[IMC1]: %e %e %e %e\n", gcon[IMC1][IMC0], gcon[IMC1][IMC1], gcon[IMC1][IMC2], gcon[IMC1][IMC3]);
+    //printf("gcon[IMC2]: %e %e %e %e\n", gcon[IMC2][IMC0], gcon[IMC2][IMC1], gcon[IMC2][IMC2], gcon[IMC2][IMC3]);
+    //printf("gcon[IMC3]: %e %e %e %e\n", gcon[IMC3][IMC0], gcon[IMC3][IMC1], gcon[IMC3][IMC2], gcon[IMC3][IMC3]);
+    printf("econ[IMC0]: %e %e %e %e\n", econ[IMC0][IMC0], econ[IMC0][IMC1], econ[IMC0][IMC2], econ[IMC0][IMC3]);
+    printf("econ[IMC1]: %e %e %e %e\n", econ[IMC1][IMC0], econ[IMC1][IMC1], econ[IMC1][IMC2], econ[IMC1][IMC3]);
+    printf("econ[IMC2]: %e %e %e %e\n", econ[IMC2][IMC0], econ[IMC2][IMC1], econ[IMC2][IMC2], econ[IMC2][IMC3]);
+    printf("econ[IMC3]: %e %e %e %e\n", econ[IMC3][IMC0], econ[IMC3][IMC1], econ[IMC3][IMC2], econ[IMC3][IMC3]);
+#endif
+  }
 }

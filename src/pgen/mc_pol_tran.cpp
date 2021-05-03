@@ -231,13 +231,21 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
     // Use tetrad basis vectors
     fp[i] = econ[IMC1][i]*cos(polang)+econ[IMC2][i]*sin(polang);
   }
+  Real fp0 = fp[IMC0];
+  for (int i; i< NCOORD; ++i)  {
+    // Use tetrad basis vectors
+    fp[i] -= pphot->k[i]*fp0/pphot->k[IMC0];
+  }
   printf("f: %e %e %e %e\n",fp[IMC0],fp[IMC1],fp[IMC2],fp[IMC3]);
   //generate_stokes_to_polarization(takes stokes and k, returns f)
-  printf("tet: %e\n",DotVec(fp,pphot->k,gcov));
+  printf("fnorm: %e\n",DotVec(fp,fp,gcov));
+  printf("f.k: %e\n",DotVec(fp,pphot->k,gcov));
   Real abh = pcoord->GetSpin();
   Compute_K(pphot, fp, abh, Kp);
   printf("K1, K2: %e %e\n", Kp[0], Kp[1]);
-
+  Compute_f(pphot, gcov, Kp, abh, fp);
+  printf("f2: %e %e %e %e\n",fp[IMC0],fp[IMC1],fp[IMC2],fp[IMC3]);
+  printf("f2.k: %e\n",DotVec(fp,pphot->k,gcov));
   if (outsphere) {
     Real czett = pphot->k[IMC1]*cth-sth*r*pphot->k[IMC2];
     Real szett = sqrt(1.-SQR(czet));
@@ -304,7 +312,7 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot) {
   // create tetrad basis
   pcoord->Metric(pphot->x, gcov);
   pcoord->InverseMetric(pphot->x,gcon);
-  Real wcon[NCOORD] = {0,1.,0.,0.}; // Q=1 points along projected BH symmetry axis 
+  Real wcon[NCOORD] = {0,-1.,0.,0.}; // Q=1 points along projected BH symmetry axis 
   Real vcov[NCOORD] = {1.,0.,0.,1.};// Make image center point away from origin
   Real vcon[NCOORD]; 
   
@@ -329,15 +337,16 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot) {
   Real fdotk = DotVec(fp,pphot->k,gcov);
   Real cosb1 = DotVec(fp,econ[IMC1],gcov);
   Real cosb2 = DotVec(fp,econ[IMC2],gcov);
-  Real sinb2 = sqrt(1.-SQR(cosb2));
-  if (cosb1 > 0.)
-    sinb2 *= -1.;
-  Real sin2xb = 2.*sinb2*cosb2;
-  Real cos2xb = 2.*SQR(cosb2)-1.;
+  Real sinb1 = sqrt(1.-SQR(cosb1));
+  if (cosb2 < 0.)
+    sinb1 *= -1.;
+  Real sin2x = 2.*sinb1*cosb1;
+  Real cos2x = 2.*SQR(cosb1)-1.;
   Real norm = DotVec(fp,fp,gcov);
   printf("f: %e %e %e %e\n",fp[IMC0],fp[IMC1],fp[IMC2],fp[IMC3]);
-  printf("norm f: %e %e\n",norm);
+  printf("norm f: %e \n",norm);
   printf("k.f: %e\n",fdotk);
+  printf("k.k: %e\n",DotVec(fp,pphot->k,gcov));
   printf("fp.e1, fp.e2: %e %e\n",cosb1,cosb2);
   //printf("cos2b,sin2b: %e %e\n",cos2xb,sin2xb);
   if (outsphere) {
@@ -387,7 +396,7 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot) {
 
 
   printf("stokes actual: %e %e\n",pphot->stokes[1],pphot->stokes[2]);
-  printf("stokes from fp: %e %e\n",cos2xb,sin2xb);
+  printf("stokes from fp: %e %e\n",cos2x,sin2x);
   //printf("ecov[IMC0]: %e %e %e %e\n", ecov[IMC0][IMC0], ecov[IMC0][IMC1], ecov[IMC0][IMC2], ecov[IMC0][IMC3]);
   //printf("ecov[IMC1]: %e %e %e %e\n", ecov[IMC1][IMC0], ecov[IMC1][IMC1], ecov[IMC1][IMC2], ecov[IMC1][IMC3]);
   //printf("ecov[IMC2]: %e %e %e %e\n", ecov[IMC2][IMC0], ecov[IMC2][IMC1], ecov[IMC2][IMC2], ecov[IMC2][IMC3]);
@@ -406,10 +415,10 @@ void compute_delta_gamma(Photon *pphot, Real a, Real delta[3], Real gamma[3]){
   Real& k_theta = pphot->k[IMC2];
   Real& k_phi = pphot->k[IMC3];
 
-  delta[0] = r*k_t - r*a*sin(theta)*sin(theta)*k_phi;
+  delta[0] = r*k_t - r*a*SQR(sin(theta))*k_phi;
   delta[1] = a*a*sin(theta)*cos(theta)*k_t - a*cos(theta)*sin(theta)*(r*r+a*a)*k_phi;
-  delta[2] = r*a*sin(theta)*sin(theta)*k_r + a*cos(theta)*sin(theta)*(r*r+a*a)*k_theta;
-  gamma[0] = a*cos(theta)*k_t - a*a*cos(theta)*sin(theta)*sin(theta)*k_phi;
+  delta[2] = r*a*SQR(sin(theta))*k_r + a*cos(theta)*sin(theta)*(r*r+a*a)*k_theta;
+  gamma[0] = a*cos(theta)*k_t - a*a*cos(theta)*SQR(sin(theta))*k_phi;
   gamma[1] = r*(r*r+a*a)*sin(theta)*k_phi - a*r*sin(theta)*k_t;
   gamma[2] = a*a*cos(theta)*sin(theta)*sin(theta)*k_r - r*(r*r+a*a)*sin(theta)*k_theta;
 
@@ -452,8 +461,9 @@ void Compute_f(Photon *pphot, Real gcov[4][4], Real K[2], Real a, Real f[4]){
   f[IMC2] = -((gamma[0]*K[0]-delta[0]*K[1])*(g_phiphi*k_phi + g_phit*k_t)-(gamma[2]*K[0]-delta[2]*K[1])*g_rr*k_r)/N;
   f[IMC3] = ((gamma[0]*K[0]-delta[0]*K[1])*g_thetatheta*k_theta-(gamma[1]*K[0] - delta[1]*K[1])*g_rr*k_r)/N;
 
-  Real normf = DotVec(f,f,gcov);
-
+  //Real normf = DotVec(f,f,gcov);
+  //for (int i; i< NCOORD; ++i)  
+  //  f[i] /= sqrt(normf);
 }
 
 Real dot(Real a[4], Real b[4]){

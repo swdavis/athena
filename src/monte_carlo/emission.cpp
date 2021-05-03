@@ -40,6 +40,7 @@ void InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
     for (int j=jl; j<=ju; ++j) {
       for (int i=il; i<=iu; ++i) {
         Real temp = pmcb->tgas(k,j,i);
+        printf("%g \n",temp);
         Real nh = pmcb->rho(k,j,i)/mp/(1.+4.*heabund);
         Real nhe = nh*heabund;
         Real ne = (1.+2.*heabund) * nh;

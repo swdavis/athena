@@ -134,6 +134,38 @@ private:
 
 };
 
+//----------------------------------------------------------------------------------------
+//! \class Image
+//  \brief Image created using ray traced photons
+
+class Image {
+public:
+  Image(int list_mem_size, bool pol, bool rel, int nuser);
+  ~Image();
+
+  std::string base_name;
+
+  int nx; // number of horizontal pixels
+  int ny; // number of vertical pixels
+  Real xcam[4]; // position of camera (tetrad)
+  Real kcam[4]; // Camera direction
+  Real xmin, xmax; // horizontal angular extent of image
+  Real ymin, ymax; // vertical angular extent of image
+  int nparams; // number of properties stored for each pixel
+  int output_number;// current output number
+  int nuser_out;
+  bool polarized;
+  bool relativistic;
+  AthenaArray<Real> image;  // pixel array
+
+  //functions
+  void WriteImage(std::string filename);
+
+  //private:
+
+
+};
+
 
 //----------------------------------------------------------------------------------------
 //! \class MCOutput
