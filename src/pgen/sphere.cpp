@@ -190,9 +190,9 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
       while (x <= 0.)
         x = pran->uniform();
       Real dev = pran->uniform();
-      //while (sin(PI*x)*x < dev) {
+      while (sin(PI*x)*x < 0.57923*dev) {
       // Yields nearly exponential escape time distribution
-      while (sin(PI*x)/(x*PI) < dev) {
+      //while (sin(PI*x)/(x*PI) < dev) {
         x = pran->uniform();
         while (x <= 0.)
           x = pran->uniform();
@@ -206,9 +206,9 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
       
       Real cth = 2. * pran->uniform() - 1.;
       Real sth = sqrt(1. - SQR(cth));
-      pphot->x[0] += r0*sth*cphi;
-      pphot->x[1] += r0*sth*sphi;
-      pphot->x[2] += r0*cth;
+      pphot->x[0] = r0*sth*cphi;
+      pphot->x[1] = r0*sth*sphi;
+      pphot->x[2] = r0*cth;
     } else {
       // Initialize photon at the origin
       pphot->x[0] = 0.;
@@ -263,7 +263,7 @@ void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) 
     Real dr = r-rad0;
     pphot->user_var[0] -= dr;
     for (int i=0; i<3; i++) {
-      // assume cartesian for now
+      // assumes cartesian for now
       pphot->x[i] -= pphot->k[i]*dr;
     }
     pphot->status = ESCAPED;
@@ -282,12 +282,12 @@ void TimedEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
   // First check radius condition
   Real r = sqrt(SQR(pphot->x[0])+SQR(pphot->x[1])+SQR(pphot->x[2]));
   if (r >= rad0) {
-    Real dr = r-rad0;
-    pphot->user_var[0] -= dr;
-    for (int i=0; i<3; i++) {
-      // assume cartesian for now
-      pphot->x[i] -= pphot->k[i]*dr;
-    }
+    //Real dr = r-rad0;
+    //pphot->user_var[0] -= dr;
+    //for (int i=0; i<3; i++) {
+    //  // assume cartesian for now
+    //  pphot->x[i] -= pphot->k[i]*dr;
+    //}
     pphot->status = ESCAPED;
     pphot->face = FACE_UNDEF;
   }

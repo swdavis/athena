@@ -862,7 +862,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
       std::string type = pin->GetString(pib->block_name,"file_type");
 
       if (type.compare("spec") == 0) {
-	// set momentum range and polarization, logarithmic flags for spectrum constructor
+        // set momentum range and polarization, logarithmic flags for spectrum constructor
         MomentumRange range;
         range.ne = pin->GetInteger(pib->block_name,"ne");
 	// Use monte carlos emin/emax for defaults
@@ -1004,6 +1004,11 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         if (var.compare("mcmom") == 0 || var.compare("Ermc") == 0 ||
             var.compare("Frmc") == 0 || var.compare("Prmc") == 0) {
           moments = true;
+          std::string var = pin->GetOrAddString(pib->block_name,"frame","eulerian");
+          if (var.compare("comoving") == 0)
+            moments_comoving = true;
+          else
+            moments_comoving = false;
         }
       }
     }

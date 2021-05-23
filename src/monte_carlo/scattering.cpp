@@ -498,6 +498,68 @@ void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot) {
 }
 
 
+//----------------------------------------------------------------------------
+//! \fn void ScatterResonanceLine((MonteCarloBlock *pmcb, Photon *pphot)
+//  \brief Implements resonance line scattering
+//
+
+void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot) {
+
+  MCRandom *pran = pmcb->pran;
+  // SWD: Assumes k is Cartesian
+  Real &kx = pphot->k[0];
+  Real &ky = pphot->k[1];
+  Real &kz = pphot->k[2];
+
+  // Compute atom thermal velocity
+  Real kb = 1.3806504e-16;
+  Real mass = 1.660538782e-24;
+  Real tgas = pmcb->tgas(pphot->i3, pphot->i2, pphot->i1);
+  Real vth = sqrt( 2 * kb * tgas / mass );
+
+  // Compute a and x
+  Real nu0 = 2.468e15;
+  Real c = 2.997924589e10;
+  Real doppwidth = nu0 * vth / c;
+  Real lorwidth = 6.265e8/(4.*PI);
+  Real a = lorwidth / doppwidth;
+  Real h = 6.6260755e-27;
+  Real nu = pphot->energy / h;
+  Real x = (nu - nu0) / doppwidth;
+  
+  //Parallel and perpendicular velocities
+  Real vperp = vth * sqrt(-log(pran->uniform())) * cos(2.*PI*pran->uniform());
+  Real vpar = vth * SampleVelocityParallel(a, x, pran);
+  
+  //Compute incoming angles
+  Real sth_in = sqrt(1. - SQR(kz));
+  Real phi_in = atan2(ky , kx);
+ 
+  // Sample outgoing angles
+  Real cth,sth,phi,cgam;
+  do {
+    // sample uniform in cos theta
+    cth = 2. * pran->uniform() - 1.;
+    sth = sqrt(1. - SQR(cth));
+  
+    // sample uniform phi
+    phi = 2. * PI * pran->uniform();
+
+    // evaluate scattering angle
+    cgam = sth_in * sth * cos(phi_in - phi) + cth * kz;
+   
+  } while (pran->uniform()*2. > (1.+SQR(cgam))); 
+
+  kx = sth * cos(phi);
+  ky = sth * sin(phi);
+  kz = cth;
+  
+  // Evaluate outgoing photon energy
+  Real sgam = sqrt(1. - SQR(cgam));
+  pphot->energy = h * (nu + nu0 * ( (cgam - 1.) * vpar + sgam * vperp ) / c);
+  //printf("nu: %g %g %g %g %g %g\n", pphot->energy/h, nu, cgam, vpar, vperp, vth);
+
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn Real Bigy(Real x, Real xp)
@@ -533,7 +595,7 @@ Real SigmaHat(Real x)
 //
 //  Method is from Pozdnyakov et al. page 317 for low temperaure electrons
 
-Real ElectronDistOld(Real tgas, MCRandom *pran) {
+Real ElectronDistPozdnyakov(Real tgas, MCRandom *pran) {
 
   Real kmec2 = 1.68638e-10;
   Real ktgmec2 = kmec2 * tgas;
@@ -614,4 +676,100 @@ Real ElectronDist(Real tgas, MCRandom *pran) {
   Real beta = sqrt(1.-1./SQR(gamma));
   return beta*gamma;
 
+}
+
+//----------------------------------------------------------------------------
+//! \fn void SampleDipole(Real theta_in, Real phi_in, Real *theta_out, Real *phi_out, MCRandom *pran)
+//  \brief Sample angular distribution dipole scattering
+//
+// SWD: ported from Phil's code -- not used and should be removed
+void SampleDipole(Real theta_in, Real phi_in, Real &theta_out, Real &phi_out, MCRandom *pran){
+
+  // theta_out -> (*theta_out);
+  Real f;  
+
+  int it = 0;
+  do{
+    it++;
+    // sample theta_out from uniform in mu
+    Real x = 2. * pran->uniform() - 1.;
+    theta_out = acos( x );
+
+    // sample phi_out from uniform
+    phi_out = 2. * PI * pran->uniform();
+
+    // compute distribution
+    Real cosgam = sin(theta_in)*sin(theta_out)*cos(phi_in-phi_out) + cos(theta_in)*cos(theta_out);
+    f = 1. + SQR(cosgam);
+
+    // test if ok to accept
+    if (2. <= f){ 
+      printf("max not big enough\n");
+    }
+   
+  } while (pran->uniform()*2. > f); 
+   
+}
+
+//----------------------------------------------------------------------------
+//! \fn Real SampleVelocityParallel(Real a, Real x_in, MCRandom *pran)
+//  \brief Return parallel velocity for scattering atom
+//
+
+Real SampleVelocityParallelOld(Real a, Real x_in, MCRandom *pran) {
+
+  Real x = abs(x_in);                     // switch sign at end
+  Real u0 = 0.96 * x;
+  Real th0 = atan((u0-x) / a);
+  Real p = (th0 + PI/2.) / (th0 + PI/2. + exp(-SQR(u0)) * (PI/2. - th0));
+  Real u, th;
+
+  int nit = 0;
+  do {
+    nit++;
+    if (pran->uniform()<=p) {
+      th = -PI/2. + (th0+PI/2.)*pran->uniform();
+      u = x + a*tan(th);
+      u0 = 0.;
+    }
+    //if (r3<exp(-SQR(u)) exit;
+    else {
+      //printf("h");
+      u0 = 0.96 * x;
+      th = th0 + (PI/2.-th0)*pran->uniform();
+      u = x + a*tan(th);
+    }
+    // if (r3<exp(SQR(u0)-SQR(u))) exit
+    //endif
+    //printf("u, u0, x, th0, p: %g %g %g %g %g\n",u,u0,x,th0,p);
+  } while (pran->uniform() >= exp(SQR(u0)-SQR(u)));
+
+  if (x_in < 0.)
+    u = - u;
+  return u;
+}
+
+Real SampleVelocityParallel(Real a, Real x_in, MCRandom *pran) {
+
+  Real x = fabs(x_in);                     // switch sign at end
+  Real u0 = 0.96 * x;
+  Real th0 = atan((u0-x) / a);
+  Real p = (th0 + PI/2.) / (th0 + PI/2. + exp(-SQR(u0)) * (PI/2. - th0));
+
+  Real u,comp;
+  do {
+    if (pran->uniform()<=p) {
+      Real th = -PI/2. + (th0+PI/2.)*pran->uniform();
+      u = x + a*tan(th);
+      comp = exp(-SQR(u));
+    } else {
+      Real th = th0 + (PI/2.-th0)*pran->uniform();
+      u = x + a*tan(th);
+      comp = exp(SQR(u0)-SQR(u));
+    }
+  } while (pran->uniform() >= comp);
+
+  if (x_in < 0.)
+    u = - u;
+  return u;
 }

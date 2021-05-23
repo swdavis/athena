@@ -182,6 +182,7 @@ public:
   PhotonTrajectoryList *ptraj;
 
   bool moments;
+  bool moments_comoving;
 
   //functions
   void CollectSpectrum(MonteCarlo *pmc);

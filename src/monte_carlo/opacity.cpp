@@ -48,8 +48,9 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
 
   //ffnrm *= 12.;  // Added to match the Athena++ prescription
 
-  Real nhii = pmcb->rho(pphot->i3,pphot->i2,pphot->i1) / (mp*(1.+4.*heabund));
-  Real ne = (1. + 2.*heabund) * nhii;
+  Real nh = pmcb->rho(pphot->i3,pphot->i2,pphot->i1) / (mp*(1.+4.*heabund));
+  Real nhe = nh*heabund;
+  Real ne = nh + 2.*nhe;
 
   Real nu = pphot->energy / h;
   Real temp = pmcb->tgas(pphot->i3,pphot->i2,pphot->i1);
@@ -57,7 +58,7 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
 
   Real aff = ffnrm/sqrt(temp)/pow(nu,3);
   //printf("opac: %g %g %g %g\n",temp,pmcb->rho(pphot->i3,pphot->i2,pphot->i1),nhii,aff);
-  return ne * nhii * aff * (1. - ehnu);
+  return ne * (nh + 4. * nhe) * aff * (1. - ehnu);
 
 }
 
@@ -126,6 +127,21 @@ Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
 
 }
 
+//------------------------------------------------------------------------
+//! \fn Real ResonanceLineOpacity(MonteCarloBlock *pmcb, Photon *pphot)
+//  \brief 
+//
+Real ResonanceLineOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
+
+  Real h = 6.6260755e-27;
+  Real tgas = pmcb->tgas(pphot->i3, pphot->i2, pphot->i1);
+  Real mass = 1.660538782e-24;
+
+  Real kappa = XsecVoigt(pphot->energy / h, tgas) / mass;
+
+  return kappa * pmcb->rho(pphot->i3,pphot->i2,pphot->i1);
+
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn void GenerateComptonTable(int io)
@@ -325,5 +341,90 @@ void InitializeAccelerationOpacity(MonteCarloBlock *pmcb)
      //double nhii=dens/(mp*(1.0+4.0*heabund));
      //double ne=(1.0+2.0*heabund)*nhii;
      //double alphacomp = ffnrm*ne*nhii*15.*pow(h/kb,3)/pow(temp,3.5)/pow(pi,4);
+}
+
+// SWD: Useful to retain ability to do different lines but 
+// should ensure computation only occurs once
+//----------------------------------------------------------------------------
+//! \fn Real ResLinePre()
+//  \brief Species dependent prefactor
+
+Real ResLinePre() {
+  
+  Real charge = 4.80320427e-10;
+  Real melectron = 9.10938215e-28;
+  Real clight = 2.997924589e10;
+  Real osc_strength = 0.4164;
+  
+  return PI*charge*charge / (melectron*clight) * osc_strength;
+}
+
+//----------------------------------------------------------------------------
+//! \fn Real xsec_lorentzian(Real nu)
+//  \brief 
+//
+Real XsecLorentzian(Real nu) {
+
+  Real lorwidth = 6.265e8/(4.*PI);
+  Real nu0 = 2.468e15;
+  
+  Real lineprofile = lorwidth/ PI / ( SQR(nu-nu0) + SQR(lorwidth) );
+  Real sigmatot = ResLinePre() * lineprofile;
+
+  return sigmatot;
+}
+//-------------------------------------------------------------------------
+//! \fn Real XsecDoppler(Real nu, Real tgas)
+//  \brief Doppler cross section, used for testing
+
+Real XsecDoppler(Real nu, Real tgas) {
+
+  Real kb = 1.3806504e-16;
+  Real mass = 1.660538782e-24;
+  Real vth = sqrt( 2. * kb * tgas / mass);
+
+  Real clight = 2.997924589e10;
+  Real lorwidth = 6.265e8/(4.*PI);
+  Real nu0 = 2.468e15;
+
+  Real doppwidth = nu0 * vth / clight;
+  Real x = (nu-nu0)/doppwidth;
+  Real lineprofile = exp(-x*-x) / sqrt(PI) / doppwidth;
+
+  Real sigmatot = ResLinePre() * lineprofile;
+
+  return sigmatot;
+
+}
+
+//------------------------------------------------------------
+//! \fn Real XsecVoigt(Real nu, Real tgas)
+//  \brief Voigt cross section
+
+Real XsecVoigt(Real nu, Real tgas) {
+
+  Real kboltz=1.3806504e-16;
+  Real mass = 1.660538782e-24;
+  Real vth = sqrt( 2. * kboltz * tgas / mass);
+
+  Real lorwidth = 6.265e8/(4.*PI);
+  Real nu0 = 2.468e15;
+
+  Real clight = 2.997924589e10;
+
+  Real doppwidth = nu0 * vth / clight;
+  Real a = lorwidth / doppwidth;
+  Real x = (nu-nu0)/doppwidth;
+
+  std::complex<double> z(x, a);
+  std::complex<double> f = ZetaVoigt(z);
+
+  Real H = f.imag() / sqrt(PI);
+
+  Real lineprofile = H / sqrt(PI) / doppwidth;
+  //printf("%e %e %e %e %e %e\n",tgas,x,a,H,doppwidth,lineprofile);
+  Real sigmatot = ResLinePre() * lineprofile;
+
+  return sigmatot;
 }
 

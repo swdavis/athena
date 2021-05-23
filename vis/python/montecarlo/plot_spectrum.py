@@ -49,6 +49,7 @@ def main(**kwargs):
     for imu in ilist:
         x, nu, ax = mcspec.plot_spectrum(spectrum,imu,ax,**kwargs)
  
+    print("lumin: ",mcspec.get_luminosity(spectrum))
     if bbtemp is not None:
         if bbnorm is None:
             bbnorm = 1.

@@ -239,6 +239,8 @@ enum ScatteringFlag GetScatteringFlag(std::string input_string) {
     return SCATTHOM;
   } else if (input_string == "compton") {
     return SCATCOMP;
+  } else if (input_string == "resonance") {
+    return SCATRES;
   } else {
     std::stringstream msg;
     msg << "### FATAL ERROR in GetAbsorptionFlag" << std::endl

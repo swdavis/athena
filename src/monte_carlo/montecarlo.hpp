@@ -42,7 +42,8 @@ class MCCoord;
 // Flags for controlling monte carlo emission, scattering, absorption, bcs
 enum EmissionFlag {EMISUSER = 0, EMISFF = 1};
 enum AbsorptionFlag {ABSUSER = 0, ABSNONE = 1, ABSFF = 2};
-enum ScatteringFlag {SCATUSER = 0, SCATNONE =1, SCATISO = 2, SCATTHOM = 3, SCATCOMP =4};
+enum ScatteringFlag {SCATUSER = 0, SCATNONE =1, SCATISO = 2, SCATTHOM = 3, SCATCOMP =4,
+                     SCATRES = 5};
 enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY = 2,
                      MC_POLAR_BNDRY = 3, MC_REFLECT_BNDRY = 4, MC_USER_BNDRY = 5,
                      MC_BLOCK_BNDRY = 6};
@@ -67,10 +68,15 @@ Real NoOpacity(MonteCarloBlock *pmcb, Photon *pphot);
 Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot);
 Real ThomsonOpacity(MonteCarloBlock *pmcb, Photon *pphot);
 Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot);
+Real ResonanceLineOpacity(MonteCarloBlock *pmcb, Photon *pphot);
 void GenerateComptonTable(int io);
 Real ComptonCrossSection(Real energy, Real theta);
 Real Maxwell(Real theta, Real gamma);
 Real KleinNishina(Real x);
+Real ResLinePre();
+Real XsecLorentzian(Real nu);
+Real XsecDoppler(Real nu, Real tgas);
+Real XsecVoigt(Real nu, Real tgas);
 void InitializeAccelerationOpacity(MonteCarloBlock *pmcb);
 //--------------------- prototypes for scatter.cpp functions -----------------------------
 void NoScatter(MonteCarloBlock *pmcb, Photon *pphot);
@@ -79,10 +85,13 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot);
 void ScatterThomsonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot);
 void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot);
 void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot);
+void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot);
 Real Bigy(Real x, Real xp);
 Real SigmaHat(Real x);
-Real ElectronDistOld(Real tgas, MCRandom *pran);
+Real ElectronDistPozdnyakov(Real tgas, MCRandom *pran);
 Real ElectronDist(Real tgas, MCRandom *pran);
+void SampleDipole(Real theta_in, Real phi_in, Real &theta_out, Real &phi_out, MCRandom *pran);
+Real SampleVelocityParallel(Real a, Real x_in, MCRandom *pran);
 //--------------------- prototypes for emission.cpp functions ----------------------------
 void InitializeEmissionFreeFree(MonteCarloBlock *pmcb);
 void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot);
@@ -274,6 +283,7 @@ public:
   bool zone_weight_flag; // flag for zone weighting
   bool weighted_absorption; // flag controling how absorption is handled
   bool moments_flag; // Compute/output moments
+  bool moments_comoving; // Compute in comoving frame
   bool emission_array_flag;  // Compute and save zone emissivities
   bool boosts;  // Compute lorentz transformations
   bool coherent_scattering; // photon does notchange energy after scattering

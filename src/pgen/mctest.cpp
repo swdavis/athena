@@ -165,6 +165,5 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   pphot->abs_coef = AbsorptionOpacity(this,pphot);
   pphot->sct_coef = ScatteringOpacity(this,pphot);
 
-
 }
 

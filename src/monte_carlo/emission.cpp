@@ -40,10 +40,9 @@ void InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
     for (int j=jl; j<=ju; ++j) {
       for (int i=il; i<=iu; ++i) {
         Real temp = pmcb->tgas(k,j,i);
-        printf("%g \n",temp);
         Real nh = pmcb->rho(k,j,i)/mp/(1.+4.*heabund);
         Real nhe = nh*heabund;
-        Real ne = (1.+2.*heabund) * nh;
+        Real ne = nh + 2.*nhe;
         Real vol = pmcb->pcoord->vol(k,j,i);
         pmcb->emission(k,j,i) = eta0/sqrt(temp)*ne*(nh+4.*nhe)*g*vol*ncells;
 	if (pmcb->emission(k,j,i) > emm_max) emm_max = pmcb->emission(k,j,i);

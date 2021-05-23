@@ -257,12 +257,14 @@ def plot_spectrum(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='nulnu',
     if (yunit == 'lnu'):
         ylabel = r"$L_\nu {\rm (erg/s/Hz)}$"
         y = intensity
-        yerr = errors
+        if ploterr:
+            yerr = errors
     if (yunit == 'counts'):
         ylabel = r"$N_\nu {\rm (counts/s/Hz)}$"
         h = 6.6262e-27
         y = intensity/(h*nu)
-        yerr = errors/(h*nu)
+        if ploterr:
+            yerr = errors/(h*nu)
     ax.set_ylabel(ylabel)
 
     if (ploterr):
@@ -462,7 +464,7 @@ def get_luminosity(spec):
     h = 6.6262e-27
     everg = 1.6021772e-12
     c = 2.99792e10
-    xaxis = spec['xaxis']
+    xaxis = spec['units']
     xfaces = spec['xfaces']
     if (xaxis == 'kev'):
         dnu = (xfaces[1:]-xfaces[:-1])*1000.*everg/h
@@ -504,12 +506,15 @@ def get_bins(xphots,xfaces,nx,uniform=True,log=True):
             xwidth = xlfaces[nx]-xlfaces[0]
             for i,xphot in enumerate(xphots):
                 xbins[i] = int((np.log10(xphot)-xlfaces[0])/xwidth*float(nx))
-                if ((xbins[i] < 0) or (xbins[i] > nx)):
+                if ((xbins[i] < 0) or (xbins[i] >= nx)):
                     xbins[i] = -1
         else:
             xwidth = xfaces[nx]-xfaces[0]
             for i,xphot in enumerate(xphots):
-                xbins[i] = int((xphot-xfaces[0])/xwidth*float(nx))
+                if np.isinf(xphot):
+                    xbins[i] = -1
+                else:
+                    xbins[i] = int((xphot-xfaces[0])/xwidth*float(nx))
                 if ((xbins[i] < 0) or (xbins[i] >= nx)):
                     xbins[i] = -1
         return xbins
@@ -542,7 +547,7 @@ def get_angle_bins_cartesian(photons,nmu,mufaces,nphi,phifaces):
         skipphi = False
 
     if (skipmu and skipphi):
-        return np.zeros(photons.nphot),np.zeros(photons.nphot)
+        return np.zeros(photons.nphot,dtype=int),np.zeros(photons.nphot,dtype=int)
 
     if photons.coord == 'spherical':
         kr = photon.k1
@@ -566,14 +571,14 @@ def get_angle_bins_cartesian(photons,nmu,mufaces,nphi,phifaces):
 
     if (skipmu):
         # return 0
-        mubins = np.zeros(photons.nphot)
+        mubins = np.zeros(photons.nphot,dtype=int)
     else:
         # Bin based on k . z
         mu = abs(kz)
         mubins = get_bins(mu,mufaces,nmu,log=False)
     if (skipphi):
         # return 0
-        phibins = np.zeros(photons.nphot)
+        phibins = np.zeros(photons.nphot,dtype=int)
     else:
         if (skipmu):
             mu = abs(kz)
@@ -619,7 +624,7 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     spectrum['xfaces'] = xfaces
     
     # Get x bins
-    xbins = get_bins(xphots,xfaces,nx,log=True)
+    xbins = get_bins(xphots,xfaces,nx,log=logx)
 
     # Get angle bins
     spectrum['nmu'] = nmu
@@ -647,13 +652,16 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     for i in range(phots.nphot):
         if ((xbins[i] >= 0) and (mubins[i] >= 0) and (phibins[i] >= 0)):
             wght = phots.weight[i]
+            #print phibins[i],mubins[i],xbins[i]
             intensity[0,phibins[i],mubins[i],xbins[i]] += wght
-            intensity[1,phibins[i],mubins[i],xbins[i]] += wght*phots.q[i]
-            intensity[2,phibins[i],mubins[i],xbins[i]] += wght*phots.u[i]
+            if phots.polarized:
+                intensity[1,phibins[i],mubins[i],xbins[i]] += wght*phots.q[i]
+                intensity[2,phibins[i],mubins[i],xbins[i]] += wght*phots.u[i]
             if yerror:
                 errors[0,phibins[i],mubins[i],xbins[i]] += (wght)**2
-                errors[1,phibins[i],mubins[i],xbins[i]] += (wght*phots.q[i])**2
-                errors[2,phibins[i],mubins[i],xbins[i]] += (wght*phots.u[i])**2
+                if phots.polarized:
+                    errors[1,phibins[i],mubins[i],xbins[i]] += (wght*phots.q[i])**2
+                    errors[2,phibins[i],mubins[i],xbins[i]] += (wght*phots.u[i])**2
 
     # Compute frequency width and mean energy (in erg) of bins
     h = 6.6262e-27

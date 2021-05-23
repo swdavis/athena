@@ -73,6 +73,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   boosts = pmy_mc->boosts;
   emission_array_flag = pmy_mc->emission_array_flag;
   moments_flag = pmy_mc->pmcout->moments; // set in mcoutput
+  moments_comoving = pmy_mc->pmcout->moments_comoving;
   acceleration = pmy_mc->acceleration;
   time_acc = pmy_mc->time_acc;
 
@@ -269,7 +270,20 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
       Scatter = ScatterComptonUnpolarized;
     }
     coherent_scattering = false;
+  } else if (scattering_meth == SCATRES) {
+    ScatteringOpacity = ResonanceLineOpacity;
+    if (pmy_mc->polarized) {
+      std::stringstream msg;
+      msg << "### ERROR in MonteCarloBlock constructor" << std::endl
+          << "Lyman alpha scattering not suppored for polarized = " 
+	  << pmy_mc->polarized << std::endl;
+      throw std::runtime_error(msg.str().c_str());
+    } else {
+      Scatter = ScatterResonanceLine;
+      coherent_scattering = false;
+    }
   }
+
 
   // Allocate (/initialize) variable arrays needed for evolution/output
   int ncells1 = nx1 + 2*(NGHOST);
@@ -403,11 +417,13 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
         LorentzTransform(pphoton,to_eulr);
       }
     }
-    UpdateCooling(pphoton,0.,0.);
+    if (moments_flag)
+      UpdateCooling(pphoton,0.,0.);
 
     // move photon to next scattering/absorption or to boundary
     pmover->Move(pphoton);
     int iscat = 0;
+    Real xmax = 0.;
     while (pphoton->status == EVOLVING) {
       
       // Account for absorption
@@ -420,7 +436,8 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
         if (pran->uniform() > (pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef)) )
           pphoton->status = DESTROYED;
       }
-      UpdateCooling(pphoton,0.,weight0);
+      if (moments_flag)
+        UpdateCooling(pphoton,0.,weight0);
    
       // Scatter the photon packet
       if (pphoton->status == EVOLVING) {
@@ -435,6 +452,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
 	}
         Scatter(this,pphoton);
 	iscat++;
+      
 	if (iscat %  MAXSCAT == 0) {
 	  // Check for possible infinite loop due to NaN in photon
 	  if (pphoton->IsNanPhoton()) {
@@ -458,7 +476,8 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
             LorentzTransform(pphoton,to_eulr);
           }
         }
-        UpdateCooling(pphoton,e_pre_scat,0.);
+        if (moments_flag)
+          UpdateCooling(pphoton,e_pre_scat,0.);
       }
 
       // move photon to next scattering/absorption or to boundary
@@ -515,6 +534,7 @@ void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign) {
   Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
 
   if(beta2 > 0.) {
+    // SWD: pretabulate gamma for each zone?
     Real gamma = 1. / sqrt(1. - beta2); // assumes v^2 < c^2 checked elsewhere
     Real bdk = k1 * beta[0] + k2 * beta[1] + k3 * beta[2];
     Real gonembdk = gamma * (1. - bdk);
@@ -718,6 +738,92 @@ Real MonteCarloBlock::TetradTransformFrequencyShift(Photon *pphot) {
 
 void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
   
+
+  Real k1,k2,k3;
+  Real energy, abs_coef, step;
+  if (moments_comoving) {
+    // boost relevant quanitities to comoving frame
+    k1 = pphot->k[0];
+    k2 = pphot->k[1];
+    k3 = pphot->k[2];
+    energy = pphot->energy;
+    int i1 = pphot->i1, i2 = pphot->i2, i3 = pphot->i3;
+    Real beta[3];
+    for (int i=0; i<3; ++i) {
+      beta[i] = vel(i,i3,i2,i1) / 2.9979e10;
+    }
+    Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
+    
+    if(beta2 > 0.) {
+      Real gamma = 1. / sqrt(1. - beta2); // assumes v^2 < c^2 checked elsewhere
+      Real bdk = k1 * beta[0] + k2 * beta[1] + k3 * beta[2];
+      Real gonembdk = gamma * (1. - bdk);
+      Real aber = gamma*(1.-gamma*bdk/(gamma+1.));
+    
+      energy *= gonembdk;
+      k1 = (k1 - aber * beta[0]) / gonembdk;
+      k2 = (k2 - aber * beta[1]) / gonembdk;
+      k3 = (k3 - aber * beta[2]) / gonembdk;
+      abs_coef = pphot->abs_coef /= gonembdk;
+      step = dl * gonembdk;
+    }
+  } else {
+    // Use eulerian values
+    k1 = pphot->k[0];
+    k2 = pphot->k[1];
+    k3 = pphot->k[2];
+    energy = pphot->energy;
+    abs_coef = pphot->abs_coef;
+    step = dl;
+  }
+
+  Real weight = pphot->eweight * pphot->weight * energy * step;
+  if ((isinf(weight)) || (isnan(weight))) {
+    std::cout << "Warning: UpdateMoments weight is : " << weight << std::endl;
+  } else {
+    // Higher order moments are weighted by curvalinear coorindates k
+    Real weight1 = weight * k1;
+    Real weight2 = weight * k2;
+    Real weight3 = weight * k3;
+
+    int i = pphot->i1;
+    int j = pphot->i2;
+    int k = pphot->i3;
+
+    // Add contribution to corresponding moments
+    // Energy density
+    // SWD: Modify this appropriately
+    //if (general_mover_flag) 
+    //  weight *= pphot->k[IMC0];
+    moments(MCIER,k,j,i) += weight;
+    // Flux
+    moments(MCIFR1,k,j,i) += weight1;
+    moments(MCIFR2,k,j,i) += weight2;
+    moments(MCIFR3,k,j,i) += weight3;
+    // Radiation Pressure
+    //Real weightp = weight1 * pphot->k[0];
+    Real weightp = weight1;
+    moments(MCIPR11,k,j,i) += weightp;
+    weightp = weight2 * k2;
+    moments(MCIPR22,k,j,i) += weightp;
+    weightp = weight3 * k3;
+    moments(MCIPR33,k,j,i) += weightp;
+    weightp = weight1 * k2;
+    moments(MCIPR12,k,j,i) += weightp;
+    weightp = weight1 * k3;
+    moments(MCIPR13,k,j,i)  += weightp;
+    weightp = weight2 * k3;
+    moments(MCIPR23,k,j,i) += weightp;
+    // Photon mean energy
+    moments(MCIEN,k,j,i) += weight * energy;
+    // Jmean opacity
+    moments(MCIKJ,k,j,i) += weight * abs_coef;
+  }
+
+}
+
+void MonteCarloBlock::UpdateMomentsNew(Photon *pphot, Real dl) {
+  
   Real weight = pphot->eweight * pphot->weight * pphot->energy * dl;
   if ((isinf(weight)) || (isnan(weight))) {
     std::cout << "Warning: UpdateMoments weight is : " << weight << std::endl;
@@ -757,6 +863,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
     moments(MCIEN,k,j,i) += weight * pphot->energy;
     // Jmean opacity
     moments(MCIKJ,k,j,i) += weight * pphot->abs_coef;
+    //printf("%e ",dl*pphot->abs_coef);
   }
 
 }
