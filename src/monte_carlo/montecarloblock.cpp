@@ -822,51 +822,6 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
 
 }
 
-void MonteCarloBlock::UpdateMomentsNew(Photon *pphot, Real dl) {
-  
-  Real weight = pphot->eweight * pphot->weight * pphot->energy * dl;
-  if ((isinf(weight)) || (isnan(weight))) {
-    std::cout << "Warning: UpdateMoments weight is : " << weight << std::endl;
-  } else {
-    // Higher order moments are weighted by curvalinear coorindates k
-    Real weight1 = weight * pphot->k[0];
-    Real weight2 = weight * pphot->k[1];
-    Real weight3 = weight * pphot->k[2];
-
-    int i = pphot->i1;
-    int j = pphot->i2;
-    int k = pphot->i3;
-
-    // Add contribution to corresponding moments
-    // Energy density
-    if (general_mover_flag) 
-      weight *= pphot->k[IMC0];
-    moments(MCIER,k,j,i) += weight;
-    // Flux
-    moments(MCIFR1,k,j,i) += weight1;
-    moments(MCIFR2,k,j,i) += weight2;
-    moments(MCIFR3,k,j,i) += weight3;
-    // Radiation Pressure
-    Real weightp = weight1 * pphot->k[0];
-    moments(MCIPR11,k,j,i) += weightp;
-    weightp = weight2 * pphot->k[1];
-    moments(MCIPR22,k,j,i) += weightp;
-    weightp = weight3 * pphot->k[2];
-    moments(MCIPR33,k,j,i) += weightp;
-    weightp = weight1 * pphot->k[1];
-    moments(MCIPR12,k,j,i) += weightp;
-    weightp = weight1 * pphot->k[2];
-    moments(MCIPR13,k,j,i)  += weightp;
-    weightp = weight2 * pphot->k[2];
-    moments(MCIPR23,k,j,i) += weightp;
-    // Photon mean energy
-    moments(MCIEN,k,j,i) += weight * pphot->energy;
-    // Jmean opacity
-    moments(MCIKJ,k,j,i) += weight * pphot->abs_coef;
-    //printf("%e ",dl*pphot->abs_coef);
-  }
-
-}
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::NormalizeMoments(bool normalize)
