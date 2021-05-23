@@ -84,9 +84,9 @@ def write_athinput(iseed,nphot,step,file='athinput.sphtran'):
 
 
 def get_blackbody(temp,nu):
-    c = 2.9979246e+10
-    kb = 1.3806580e-16
-    h = 6.6262e-27
+    c = 2.99792458e10
+    kb = 1.380649e-16
+    h = 6.62607015e-27
     return 2*h/c**2*nu**3/(np.exp(h*nu/(kb*temp)) - 1.0)
 
 # Main function

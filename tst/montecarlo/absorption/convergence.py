@@ -87,9 +87,9 @@ def write_athinput(iseed,nphot,nen,emin,emax,file='athinput.mctest'):
     outfile.close()
 
 def get_blackbody(temp,nu):
-    c = 2.9979246e+10
-    kb = 1.3806580e-16
-    h = 6.6262e-27
+    c = 2.99792458e10
+    kb = 1.380649e-16
+    h = 6.62607015e-27
     return 2*h/c**2*nu**3/(np.exp(h*nu/(kb*temp)) - 1.0)
 
 # Main function
@@ -118,7 +118,7 @@ def main(**kwargs):
         spectrum = mcspec.read_spectrum("MCTest.out1.00000.spec")
         # compute bin center frequencies on which spectrum is tabulated
         xfaces = spectrum['xfaces']
-        h = 6.6262e-27
+        h = 6.62607015e-27
         everg = 1.6021772e-12
         nu = 0.5*(xfaces[1:]+xfaces[:-1])*everg/h
         # compute blackbody comparison function at bin centers

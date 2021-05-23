@@ -49,7 +49,7 @@ void TimedEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover);
 void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
   Real rideal = 8.314e7;
-  Real c = 2.997924589e10;
+  Real c = 2.99792458e10;
   Real temp = pin->GetReal("problem","temp");
   Real tau = pin->GetReal("problem","tau");
   Real rad0 = pin->GetReal("problem","radius");
@@ -57,7 +57,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   Real gamma = peos->GetGamma();
   vel *= c;
 
-  Real kb = 1.3806504e-16;
+  Real kb = 1.380649e-16;
   Real mass = 1.660538782e-24;
   Real vth = sqrt(2.*kb*temp/mass);
   Real nu0 = 2.468e15;
@@ -95,15 +95,15 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
   if (emission_meth == EMISUSER) {
     Real x0 = pin->GetReal("problem","x0");
     Real temp = pin->GetReal("problem","temp");
-    Real kb = 1.3806504e-16;
+    Real kb = 1.380649e-16;
     Real mass = 1.660538782e-24;
     Real vth = sqrt( 2. * kb * temp / mass);
-    Real c = 2.997924589e10;
+    Real c = 2.99792458e10;
     Real nu0 = 2.468e15;
     Real dopw = nu0 * vth / c;
     Real lorw = 6.265e8/(4.*PI);
     printf("dop, lor, a: %e %e %e\n",dopw,lorw,lorw/dopw);
-    Real h = 6.6260755e-27;
+    Real h = 6.62607015e-27;
     energy0 = h * (nu0 + dopw * x0);
 
   }

@@ -34,7 +34,7 @@
 void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
   Real rideal = 8.314e7;
-  Real c = 2.9979e10;
+  Real c = 2.99792458e10;;
   Real temp = pin->GetReal("problem","temp");
   bool constdens = pin->GetOrAddBoolean("problem","constdens",false);
   Real rho, taumin, taumax;

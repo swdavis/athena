@@ -512,18 +512,18 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot) {
   Real &kz = pphot->k[2];
 
   // Compute atom thermal velocity
-  Real kb = 1.3806504e-16;
+  Real kb = 1.380649e-16;
   Real mass = 1.660538782e-24;
   Real tgas = pmcb->tgas(pphot->i3, pphot->i2, pphot->i1);
   Real vth = sqrt( 2 * kb * tgas / mass );
 
   // Compute a and x
   Real nu0 = 2.468e15;
-  Real c = 2.997924589e10;
+  Real c = 2.99792458e10;
   Real doppwidth = nu0 * vth / c;
   Real lorwidth = 6.265e8/(4.*PI);
   Real a = lorwidth / doppwidth;
-  Real h = 6.6260755e-27;
+  Real h = 6.62607015e-27;
   Real nu = pphot->energy / h;
   Real x = (nu - nu0) / doppwidth;
   

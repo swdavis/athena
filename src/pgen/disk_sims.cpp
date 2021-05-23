@@ -189,7 +189,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     }
   }
   float fdat;
-  Real c = 2.9979e10;
+  Real c = 2.99792458e10;
   //Real c = 0.;
   printf("\n%s %s %s\n",type,variable,format);
   if(strcmp(type, "SCALARS") == 0){

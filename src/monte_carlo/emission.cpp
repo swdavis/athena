@@ -20,7 +20,7 @@
 void InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
 
   Real heabund = 0.09; // Should have more general EOS functions
-  Real kb = 1.3807e-16;
+  Real kb = 1.380649e-16;
   Real mp = 1.6726e-24;
   Real eta0 = 1.032521e-11;
   Real g = 1.0; // Gaunt factor
@@ -61,7 +61,7 @@ void InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
 
 void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot)
 {
-  Real kb = 1.3807e-16;
+  Real kb = 1.380649e-16;
   MCRandom *pran = pmcb->pran;
 
   // Scheme in which packets are drawn from a uniform distribution in log E
@@ -151,7 +151,7 @@ Real PlanckDist(Real temp, MCRandom *pran)
     sum = sum + 1.0 / (alpha * alpha * alpha);
   }
 
-  Real kb = 1.3807e-16;
+  Real kb = 1.380649e-16;
   return -kb * temp * log(x2 * x3 * x4) / ((Real)alpha);
 
 }

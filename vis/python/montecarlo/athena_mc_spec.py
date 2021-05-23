@@ -156,7 +156,7 @@ def read_spectrum(filename):
 # Retrun xmid, nu for desired units
 def convert_xaxis(baseunit,newunit,spectrum):
 
-    h = 6.6262e-27
+    h = 6.62607015e-27
     everg = 1.6021772e-12
     c = 2.99792e10
 
@@ -261,7 +261,7 @@ def plot_spectrum(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='nulnu',
             yerr = errors
     if (yunit == 'counts'):
         ylabel = r"$N_\nu {\rm (counts/s/Hz)}$"
-        h = 6.6262e-27
+        h = 6.62607015e-27
         y = intensity/(h*nu)
         if ploterr:
             yerr = errors/(h*nu)
@@ -461,7 +461,7 @@ def get_luminosity(spec):
     mumid = 0.5*(spec['mufaces'][1:]+spec['mufaces'][:-1])
 
     # Compute frequency width and mean energy (in ergs) of bins
-    h = 6.6262e-27
+    h = 6.62607015e-27
     everg = 1.6021772e-12
     c = 2.99792e10
     xaxis = spec['units']
@@ -605,7 +605,7 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     spectrum['ntot'] = phots.ntot
 
     # Set x binning variable
-    h = 6.6262e-27
+    h = 6.62607015e-27
     everg = 1.6021772e-12
     c = 2.99792e10
     spectrum['xaxis'] = xaxis
@@ -664,7 +664,7 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
                     errors[2,phibins[i],mubins[i],xbins[i]] += (wght*phots.u[i])**2
 
     # Compute frequency width and mean energy (in erg) of bins
-    h = 6.6262e-27
+    h = 6.62607015e-27
     everg = 1.6021772e-12
     c = 2.99792e10
     if (xaxis == 'kev'):

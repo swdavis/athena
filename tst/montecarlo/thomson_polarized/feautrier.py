@@ -17,8 +17,8 @@ def transfer(tconst=1.e5,trange=[1e-3,1.0e4],l0=1.e11,nd=64,na=8,nf=96,
     """
             
     # physical constants
-    h = 6.6262e-27
-    kb = 1.3807e-16
+    h = 6.62607015e-27
+    kb = 1.380649e-16
     sigmab = 5.6703e-5
 
     grid = {}
@@ -126,10 +126,10 @@ def feautrier(grid,rad,heabund=0.09):
     """
 
     # physical constants
-    h=6.6262e-27
-    kb=1.3807e-16
+    h = 6.62607015e-27
+    kb = 1.380649e-16
+    c = 2.99792458e10
     mp = 1.6726e-24
-    c = 2.9979e10
     sigmat = 6.65248e-25
 
     nf = rad['nf']
@@ -341,8 +341,8 @@ def plot_feautrier(imu,infile="feautrier.out",xlim=None,ylim=None,
   
     plt.rc('text',usetex=True)
     plt.rc('font', **{'family' :"serif"})
-    
-    h=6.6262e-27
+
+    h = 6.62607015e-27
 
     plt.yscale('log')
     plt.xscale('log')

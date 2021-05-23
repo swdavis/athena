@@ -27,8 +27,8 @@ def blackbody(teff, nu):
     Calculates blackbody spectrum
     """
 
-    h = 6.626e-27 # planck constant [cgs]
-    kb = 1.380e-16 # bolztmann constant [cgs]
+    h = 6.62607015e-27; # planck constant [cgs]
+    kb = 1.380649e-16 # bolztmann constant [cgs]
     c = 2.998e10 # speed of light [cgs]
     efact = np.exp(h*nu/(kb*teff))
     bnu = 2.*h*nu**3/(c**2*(efact - 1.)) # [cgs] = [erg s^-1 cm^-2 Hz^-1]

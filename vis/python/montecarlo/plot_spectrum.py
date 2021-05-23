@@ -56,9 +56,9 @@ def main(**kwargs):
         else:
             bbtemp = float(bbtemp)
             bbnorm = float(bbnorm)
-            c = 2.9979246e+10
-            kb = 1.3806580e-16
-            h = 6.6262e-27
+            c = 2.99792458e10
+            kb = 1.380649e-16
+            h = 6.62607015e-27
             ybb = bbnorm*2*h/c**2*nu**3/(np.exp(h*nu/(kb*bbtemp)) - 1.0)
             if kwargs['yunit'] == 'nulnu':
                 plt.plot(x,ybb*nu,linestyle=':')

@@ -43,8 +43,8 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
   Real ffnrm = 3.692146e8;
   Real heabund = 0.09; //hardcode for now (should be parameter)
   Real mp = 1.6726e-24; 
-  Real h =  6.6262e-27;
-  Real kb = 1.3807e-16;
+  Real h = 6.62607015e-27;
+  Real kb = 1.380649e-16;
 
   //ffnrm *= 12.;  // Added to match the Athena++ prescription
 
@@ -133,7 +133,7 @@ Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
 //
 Real ResonanceLineOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
 
-  Real h = 6.6260755e-27;
+  Real h = 6.62607015e-27;
   Real tgas = pmcb->tgas(pphot->i3, pphot->i2, pphot->i1);
   Real mass = 1.660538782e-24;
 
@@ -310,7 +310,7 @@ void InitializeAccelerationOpacity(MonteCarloBlock *pmcb)
   int kl = pmcb->ks; int ku = pmcb->ke;
 
   Photon phot(pmcb,0.); // to pass to opacity functions
-  Real kb = 1.3807e-16;
+  Real kb = 1.380649e-16;
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
       for (int i=il; i<=iu+1; ++i) {
@@ -353,7 +353,7 @@ Real ResLinePre() {
   
   Real charge = 4.80320427e-10;
   Real melectron = 9.10938215e-28;
-  Real clight = 2.997924589e10;
+  Real clight = 2.99792458e10;
   Real osc_strength = 0.4164;
   
   return PI*charge*charge / (melectron*clight) * osc_strength;
@@ -379,11 +379,11 @@ Real XsecLorentzian(Real nu) {
 
 Real XsecDoppler(Real nu, Real tgas) {
 
-  Real kb = 1.3806504e-16;
+  Real kb = 1.380649e-16;
   Real mass = 1.660538782e-24;
   Real vth = sqrt( 2. * kb * tgas / mass);
 
-  Real clight = 2.997924589e10;
+  Real clight = 2.99792458e10;
   Real lorwidth = 6.265e8/(4.*PI);
   Real nu0 = 2.468e15;
 
@@ -403,14 +403,14 @@ Real XsecDoppler(Real nu, Real tgas) {
 
 Real XsecVoigt(Real nu, Real tgas) {
 
-  Real kboltz=1.3806504e-16;
+  Real kb = 1.380649e-16;
   Real mass = 1.660538782e-24;
-  Real vth = sqrt( 2. * kboltz * tgas / mass);
+  Real vth = sqrt( 2. * kb * tgas / mass);
 
   Real lorwidth = 6.265e8/(4.*PI);
   Real nu0 = 2.468e15;
 
-  Real clight = 2.997924589e10;
+  Real clight = 2.99792458e10;
 
   Real doppwidth = nu0 * vth / clight;
   Real a = lorwidth / doppwidth;

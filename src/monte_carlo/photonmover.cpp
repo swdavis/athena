@@ -93,9 +93,9 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
   Real beta[3], beta2, gamma, gonembdk;
   if (boosts) {
     // tranform relevant quanitites to comoving frame
-    beta[0] = pmcb->vel(0,pphot->i3,pphot->i2,pphot->i1) / 2.9979e10;
-    beta[1] = pmcb->vel(1,pphot->i3,pphot->i2,pphot->i1) / 2.9979e10;
-    beta[2] = pmcb->vel(2,pphot->i3,pphot->i2,pphot->i1) / 2.9979e10;
+    beta[0] = pmcb->vel(0,pphot->i3,pphot->i2,pphot->i1) / 2.99792458e10;
+    beta[1] = pmcb->vel(1,pphot->i3,pphot->i2,pphot->i1) / 2.99792458e10;
+    beta[2] = pmcb->vel(2,pphot->i3,pphot->i2,pphot->i1) / 2.99792458e10;
     beta2 = SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
     gamma = 1./sqrt(1.-beta2);
     Real bdk = (pphot->k[0] * beta[0] + pphot->k[1] * beta[1] + pphot->k[2] * beta[2]);
@@ -160,8 +160,8 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
       //tauabs = ct*pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1);
       //tauabs = ct*pphot->abs_coef;
       Real opaci = pphot->abs_coef;
-      Real c = 2.9979246e+10;
-      Real kb = 1.3806580e-16;
+      Real c = 2.99792458e10;
+      Real kb = 1.380649e-16;
       Real me = 9.1093897e-28;
       Real temp = pmcb->tgas(pphot->i3,pphot->i2,pphot->i1);
       Real xi = pphot->energy  / (kb *temp);

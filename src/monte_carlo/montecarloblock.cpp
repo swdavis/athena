@@ -750,7 +750,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
     int i1 = pphot->i1, i2 = pphot->i2, i3 = pphot->i3;
     Real beta[3];
     for (int i=0; i<3; ++i) {
-      beta[i] = vel(i,i3,i2,i1) / 2.9979e10;
+      beta[i] = vel(i,i3,i2,i1) / 2.99792458e10;
     }
     Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
     
@@ -846,7 +846,7 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
     for (int n=0; n<11; ++n) {
       Real norm = normall;
       if ((n == 0) || (n >= 4))
-        norm *= 2.9979e10;
+        norm *= 2.99792458e10;
      if (n == MCINET)
        norm = normall;
       for (int k=ks; k<=ke; ++k) {
@@ -868,7 +868,7 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
     for (int n=0; n<11; ++n) {
       Real norm = normall;
       if ((n == 0) || (n >= 4))
-        norm *= 2.9979e10;
+        norm *= 2.99792458e10;
       if (n == MCINET)
         norm = normall;
       for (int k=ks; k<=ke; ++k) {

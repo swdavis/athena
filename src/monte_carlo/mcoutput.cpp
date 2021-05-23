@@ -868,7 +868,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
 	// Use monte carlos emin/emax for defaults
 	Real emin = pin->GetReal("montecarlo","emin");
         Real emax = pin->GetReal("montecarlo","emax");
-        Real everg = 1.6021772e-12;
+        Real everg = 1.602176634e-12;
         range.emin = everg * pin->GetOrAddReal(pib->block_name,"emin",emin);
         range.emax = everg * pin->GetOrAddReal(pib->block_name,"emax",emax);
         range.nphi = pin->GetOrAddInteger(pib->block_name,"nphi",8);
@@ -1040,7 +1040,7 @@ void Spectrum::WriteSpectrumLegacy(std::string filename, Real norm) {
   }
    
   // Write header information
-  Real everg = 1.6021772e-12;  
+  Real everg = 1.602176634e-12;
   Real emin = range.emin / everg; // output in eV
   Real emax = range.emax / everg; // output in eV
   fprintf(pfile,"%d %d %d %g\n",range.ne,range.ncth,range.nphi,norm);
@@ -1079,7 +1079,7 @@ void Spectrum::WriteSpectrum(std::string fname, int nphot) {
     throw std::runtime_error(msg.str().c_str());
   }
   // Write header information
-  Real everg = 1.6021772e-12;  
+  Real everg = 1.602176634e-12;
   Real emin = range.emin / everg; // output in eV
   Real emax = range.emax / everg; // output in eV
   int ne = range.ne;
@@ -1104,7 +1104,7 @@ void Spectrum::WriteSpectrum(std::string fname, int nphot) {
   nface = (nface > nphi+1) ? nface : nphi+1;
   double *faces;
   faces = new double[nface];
-  everg = 1.6021772e-12;
+  everg = 1.602176634e-12;
   for (int i=0; i<ne+1; ++i)
     faces[i] = static_cast<double>(energies(i)/everg);
   if (!bigend) {for (int i=0; i<ne+1; ++i) mcoutput::Swap8Bytes(&faces[i]);}
@@ -1122,7 +1122,7 @@ void Spectrum::WriteSpectrum(std::string fname, int nphot) {
   Real *emid, *dnu;
   emid = new double[ne];
   dnu = new double[ne];
-  Real h = 6.6262e-27;
+  Real h = 6.62607015e-27;
   for(int i=0; i<ne; ++i) { 
     emid[i] = 0.5*(energies(i)+energies(i+1));
     dnu[i] = (energies(i+1)-energies(i))/h;

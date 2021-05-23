@@ -40,7 +40,7 @@ def main(**kwargs):
     spectrum = mcspec.read_spectrum(infile)
     # compute nu, assuming spectrum stored as ev
     xfaces = spectrum['xfaces']
-    h = 6.6262e-27
+    h = 6.62607015e-27
     everg = 1.6021772e-12
     nu = 0.5*(xfaces[1:]+xfaces[:-1])*everg/h
     mumid = 0.5*(spectrum['mufaces'][1:]+spectrum['mufaces'][:-1])
