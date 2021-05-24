@@ -21,7 +21,7 @@ void InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
 
   Real heabund = 0.09; // Should have more general EOS functions
   Real kb = 1.380649e-16;
-  Real mp = 1.6726e-24;
+  Real mp = 1.67262192369e-24;
   Real eta0 = 1.032521e-11;
   Real g = 1.0; // Gaunt factor
 

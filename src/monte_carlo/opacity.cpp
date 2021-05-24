@@ -42,7 +42,7 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
 
   Real ffnrm = 3.692146e8;
   Real heabund = 0.09; //hardcode for now (should be parameter)
-  Real mp = 1.6726e-24; 
+  Real mp = 1.67262192369e-24;
   Real h = 6.62607015e-27;
   Real kb = 1.380649e-16;
 
@@ -53,11 +53,11 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
   Real ne = nh + 2.*nhe;
 
   Real nu = pphot->energy / h;
-  Real temp = pmcb->tgas(pphot->i3,pphot->i2,pphot->i1);
-  Real ehnu = exp(-pphot->energy / (kb * temp) );
+  Real tgas = pmcb->tgas(pphot->i3,pphot->i2,pphot->i1);
+  Real ehnu = exp(-pphot->energy / (kb * tgas) );
 
-  Real aff = ffnrm/sqrt(temp)/pow(nu,3);
-  //printf("opac: %g %g %g %g\n",temp,pmcb->rho(pphot->i3,pphot->i2,pphot->i1),nhii,aff);
+  Real aff = ffnrm/sqrt(tgas)/pow(nu,3);
+
   return ne * (nh + 4. * nhe) * aff * (1. - ehnu);
 
 }
@@ -69,7 +69,7 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
 Real ThomsonOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
   
   Real heabund = 0.09; //hardcode for now (should be parameter)
-  Real mp = 1.6726e-24; 
+  Real mp = 1.67262192369e-24;
   Real sigmat = 6.65248e-25;
 
   Real kappaes = sigmat * (1. + 2.*heabund) / (mp * (1.+4.*heabund) );
@@ -83,7 +83,7 @@ Real ThomsonOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
 Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
   
   Real heabund = 0.09; //hardcode for now (should be parameter)
-  Real mp = 1.6726e-24; 
+  Real mp = 1.67262192369e-24;
   Real sigmat = 6.65248e-25;
   Real kmec2 = 1.68638e-10;
   Real mec2 = 8.18711e-7;
@@ -427,4 +427,3 @@ Real XsecVoigt(Real nu, Real tgas) {
 
   return sigmatot;
 }
-

@@ -30,6 +30,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   InitEmission=NULL;
   GetTemperature=NULL;
 
+  // SWD: Change to general prescription for distributed emission
   // Set flags that control emission, absorption and scattering
   emission_meth = GetEmissionFlag(pin->GetOrAddString("montecarlo","emission","error"));
   if (emission_meth == EMISUSER) {

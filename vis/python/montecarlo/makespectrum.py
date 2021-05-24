@@ -57,11 +57,11 @@ if __name__ == '__main__':
     parser.add_argument('--mumin',
         type=float,
         default=0.,
-        help='minimum cos(theta)')
+        help='minimum cos polar angle')
     parser.add_argument('--mumax',
         type=float,
         default=1.,
-        help='maximum cos(theta)')
+        help='maximum cos polar angle')
     parser.add_argument('--nphi',
         type=int,
         default=1,
@@ -86,7 +86,7 @@ if __name__ == '__main__':
     parser.add_argument('--yerror',
         action='store_true',
         help='compute intensity errors')
-    
+
     args = parser.parse_args()
     main(**vars(args))
 

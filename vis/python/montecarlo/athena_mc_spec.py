@@ -271,7 +271,7 @@ def plot_spectrum(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='nulnu',
         ax.errorbar(x,y,yerr=yerr,fmt='.',**kwargs)
     else:
         ax.plot(x,y,'.',**kwargs)
-
+        
     # Set axis scales
     ax.set_xscale(xscale)
     ax.set_yscale(yscale)
@@ -593,7 +593,7 @@ def get_angle_bins_cartesian(photons,nmu,mufaces,nphi,phifaces):
 
 
 def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1.,
-                  nphi=1,phimin=0,phimax=2.*np.pi,yerror=True):
+                  nphi=1,phimin=0,phimax=2.*np.pi,yerror=True,mask=None):
     """
     Makes spectrum (dict) from photon object
     """
@@ -636,7 +636,7 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     spectrum['phifaces'] = phifaces
 
     mubins, phibins = get_angle_bins_cartesian(phots,nmu,mufaces,nphi,phifaces)
-
+ 
     # Create intensity grid and loop over photons to add contribution
     nintens = 1
     if phots.polarized:
@@ -649,6 +649,10 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     intensity = np.zeros((nintens,nphi,nmu,nx))
     if yerror:
         errors = np.zeros((nintens,nphi,nmu,nx))
+
+    if (mask is not None):
+        xbins[mask] = -1
+
     for i in range(phots.nphot):
         if ((xbins[i] >= 0) and (mubins[i] >= 0) and (phibins[i] >= 0)):
             wght = phots.weight[i]
