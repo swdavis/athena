@@ -45,8 +45,8 @@ enum AbsorptionFlag {ABSUSER = 0, ABSNONE = 1, ABSFF = 2};
 enum ScatteringFlag {SCATUSER = 0, SCATNONE =1, SCATISO = 2, SCATTHOM = 3, SCATCOMP =4,
                      SCATRES = 5};
 enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY = 2,
-                     MC_POLAR_BNDRY = 3, MC_REFLECT_BNDRY = 4, MC_USER_BNDRY = 5,
-                     MC_BLOCK_BNDRY = 6};
+                     MC_POLAR_BNDRY = 3, MC_REFLECT_BNDRY = 4, 
+                     MC_USER_BNDRY = 5, MC_BLOCK_BNDRY = 6};
 // Array indices for monte carlo radiation moments
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
       MCIPR12=7, MCIPR13=8, MCIPR23=9, MCINET = 10, MCIEN = 11, MCIKJ = 12, MCIPR21=13, 

@@ -46,14 +46,14 @@ void CartesianMover::Move(Photon *pphot) {
 #ifdef DEBUG
   Real xf,yf,zf,dl0;
   Real xi,yi,zi;
-  xi = pphot->x[0]; yi = pphot->x[1]; zi = pphot->x[2];
+  xi = pphot->x[IMC1]; yi = pphot->x[IMC2]; zi = pphot->x[IMC3];
   FinalPositionCartesian(pmcb,pco,pphot,xf,yf,zf,dl0);
 #endif
 
   CurvalinearToCartesian(pphot);
-  Real& kx = pphot->kcart[0];
-  Real& ky = pphot->kcart[1];
-  Real& kz = pphot->kcart[2];
+  Real& kx = pphot->k[IMC1];
+  Real& ky = pphot->k[IMC2];
+  Real& kz = pphot->k[IMC3];
 
   int iter = 0;
   // calculate distances to nearest faces
@@ -66,10 +66,10 @@ void CartesianMover::Move(Photon *pphot) {
     Real dlx, dly, dlz;
     bool ascend[3];
     if(kx > 0.0) {
-      dlx = (pco->x1f(pphot->i1+1) - pphot->x[0]) / kx;
+      dlx = (pco->x1f(pphot->i1+1) - pphot->x[IMC1]) / kx;
       ascend[0] = true;
     } else if(kx < 0.0) {
-      dlx = (pco->x1f(pphot->i1) - pphot->x[0]) / kx;
+      dlx = (pco->x1f(pphot->i1) - pphot->x[IMC1]) / kx;
       ascend[0] = false;
     } else {
       dlx = HUGE_NUMBER;
@@ -77,10 +77,10 @@ void CartesianMover::Move(Photon *pphot) {
     }
 
     if(ky > 0.0) {
-      dly = (pco->x2f(pphot->i2+1)  - pphot->x[1]) / ky;
+      dly = (pco->x2f(pphot->i2+1)  - pphot->x[IMC2]) / ky;
       ascend[1] = true;
     } else if(ky < 0.0) {
-      dly = (pco->x2f(pphot->i2) - pphot->x[1]) / ky;
+      dly = (pco->x2f(pphot->i2) - pphot->x[IMC2]) / ky;
       ascend[1] = false;
     } else {
       dly = HUGE_NUMBER;
@@ -88,10 +88,10 @@ void CartesianMover::Move(Photon *pphot) {
     }
     
     if(kz > 0.0) {
-      dlz = (pco->x3f(pphot->i3+1) - pphot->x[2]) / kz;
+      dlz = (pco->x3f(pphot->i3+1) - pphot->x[IMC3]) / kz;
       ascend[2] = true;
     } else if(kz < 0.0) {
-      dlz = (pco->x3f(pphot->i3) - pphot->x[2]) / kz;
+      dlz = (pco->x3f(pphot->i3) - pphot->x[IMC3]) / kz;
       ascend[2] = false;
     } else {
       dlz = HUGE_NUMBER;
@@ -135,7 +135,7 @@ void CartesianMover::Move(Photon *pphot) {
         }
         // update position
         for (int i=0; i<3; ++i)
-          pphot->x[i] += pphot->kcart[i] * dl;
+          pphot->x[i] += pphot->k[i] * dl;
       }
       // Perform any user work
       if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this);
@@ -147,7 +147,7 @@ void CartesianMover::Move(Photon *pphot) {
       }      
       // update position
       for (int i=0; i<3; ++i)
-	pphot->x[i] += pphot->kcart[i] * dl;
+	pphot->x[i] += pphot->k[i] * dl;
       tauremaining -= chi * dl;
 
       // Perform any user work
@@ -166,12 +166,13 @@ void CartesianMover::Move(Photon *pphot) {
   }
 
 #ifdef DEBUG
-  Real delta = sqrt(SQR(xf-pphot->x[0])+SQR(yf-pphot->x[1])+SQR(zf-pphot->x[2]));
+  Real delta = sqrt(SQR(xf-pphot->x[IMC1])+SQR(yf-pphot->x[IMC2])+SQR(zf-pphot->x[IMC3]));
   Real dmax = 1.e-6*(pco->x3f(pmcb->ke+1)-pco->x3f(pmcb->ks));
   if ((delta > dmax)&&(iter < MAXITER)) {
     std::cout << "-----------------------" << std::endl;
     std::cout << delta <<  ' ' << iter << std::endl;
-    std::cout << "k: " << pphot->k[0] << ' ' << pphot->k[1] << ' ' << pphot->k[2] << std::endl;
+    std::cout << "k: " << pphot->k[IMC1] << ' ' << pphot->k[IMC2] << ' ' << pphot->k[IMC3] 
+              << std::endl;
     std::cout << "xi: " << xi << ' ' << yi << ' ' << zi << std::endl;
     std::cout << "xf: " << xf << ' ' << yf << ' ' << zf << ' ' << dl0 << std::endl;
     std::cout << "xp: " << pphot->x[0] << ' ' <<  pphot->x[1] << ' ' <<  pphot->x[2] << std::endl;
@@ -181,12 +182,12 @@ void CartesianMover::Move(Photon *pphot) {
 
 Real DistanceToNearestFace(MCCoord *pco, Photon *pphot) {
 
-  Real dx1p = pco->x1f(pphot->i1+1) - pphot->x[0];
-  Real dx1m = pphot->x[0] - pco->x1f(pphot->i1);
-  Real dx2p = pco->x2f(pphot->i2+1) - pphot->x[1];
-  Real dx2m = pphot->x[1] - pco->x2f(pphot->i2);
-  Real dx3p = pco->x3f(pphot->i3+1) - pphot->x[2];
-  Real dx3m = pphot->x[2] - pco->x3f(pphot->i3);
+  Real dx1p = pco->x1f(pphot->i1+1) - pphot->x[IMC1];
+  Real dx1m = pphot->x[IMC1] - pco->x1f(pphot->i1);
+  Real dx2p = pco->x2f(pphot->i2+1) - pphot->x[IMC2];
+  Real dx2m = pphot->x[IMC2] - pco->x2f(pphot->i2);
+  Real dx3p = pco->x3f(pphot->i3+1) - pphot->x[IMC3];
+  Real dx3m = pphot->x[IMC3] - pco->x3f(pphot->i3);
   dx1p = (dx1p < dx1m) ? dx1p : dx1m;
   dx2p = (dx2p < dx2m) ? dx2p : dx2m;
   dx3p = (dx3p < dx3m) ? dx3p : dx3m;

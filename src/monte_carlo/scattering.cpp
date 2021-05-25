@@ -61,10 +61,8 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot) {
   for(int i=0; i<3; ++i) {
     stokes[i] = pphot->stokes[i] / norm;
   }
-  //if (COORDINATE_SYSTEM != "cartesian") {
-    // Compute cartesian k vectors
-    pmover->CurvalinearToCartesian(pphot);
-    //}
+
+  pmover->CurvalinearToCartesian(pphot);
 
   // Polarized scattering must be computed relative to cartesian bases due to definition of
   // stokes vectors
@@ -219,10 +217,8 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot) {
   kx = sthetap * cos(phip);
   ky = sthetap * sin(phip);
   kz = mup;
-  //if (COORDINATE_SYSTEM != "cartesian") {
-    // Update curvalinear k vectors
+
   pmover->CartesianToCurvalinear(pphot);
-    //}
  
 }
 
@@ -351,10 +347,9 @@ void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot) {
   for(int i=0; i<3; ++i) {
     stokes[i] = pphot->stokes[i] / norms;
   }
-  if (COORDINATE_SYSTEM != "cartesian") {
-    // Compute cartesian k vectors
-    pmover->CurvalinearToCartesian(pphot);
-  }
+
+  pmover->CurvalinearToCartesian(pphot);
+
   // Polarized scattering must be computed relative to cartesian bases due to definition of
   // stokes vectors
   Real &kx = pphot->kcart[0];
@@ -491,10 +486,9 @@ void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot) {
   kx = k1p;
   ky = k2p;
   kz = k3p;
-  if (COORDINATE_SYSTEM != "cartesian") {
-    // Update curvalinear k vectors
-    pmover->CartesianToCurvalinear(pphot);
-  }
+
+  pmover->CartesianToCurvalinear(pphot);
+  
 }
 
 

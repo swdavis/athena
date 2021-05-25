@@ -32,6 +32,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
     case MC_POLAR_BNDRY:
       BoundaryFunction_[INNER_X1] = Polar;
       break;
+    case MC_REFLECT_BNDRY:
+      BoundaryFunction_[INNER_X1] = ReflectMCInnerX1;
+      break;
     case MC_USER_BNDRY:
       BoundaryFunction_[INNER_X1] = pmcb->pmy_mc->BoundaryFunction_[INNER_X1];
       break;
@@ -54,6 +57,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
       break;
     case MC_POLAR_BNDRY:
       BoundaryFunction_[OUTER_X1] = Polar;
+      break;
+    case MC_REFLECT_BNDRY:
+      BoundaryFunction_[OUTER_X1] = ReflectMCOuterX1;
       break;
     case MC_USER_BNDRY:
       BoundaryFunction_[OUTER_X1] = pmcb->pmy_mc->BoundaryFunction_[OUTER_X1];
@@ -78,6 +84,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
     case MC_POLAR_BNDRY:
       BoundaryFunction_[INNER_X2] = Polar;
       break;
+    case MC_REFLECT_BNDRY:
+      BoundaryFunction_[INNER_X2] = ReflectMCInnerX2;
+      break;
     case MC_USER_BNDRY:
       BoundaryFunction_[INNER_X2] = pmcb->pmy_mc->BoundaryFunction_[INNER_X2];
       break;
@@ -100,6 +109,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
       break;
     case MC_POLAR_BNDRY:
       BoundaryFunction_[OUTER_X2] = Polar;
+      break;
+    case MC_REFLECT_BNDRY:
+      BoundaryFunction_[OUTER_X2] = ReflectMCOuterX2;
       break;
     case MC_USER_BNDRY:
       BoundaryFunction_[OUTER_X2] = pmcb->pmy_mc->BoundaryFunction_[OUTER_X2];
@@ -124,6 +136,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
     case MC_POLAR_BNDRY:
       BoundaryFunction_[INNER_X3] = Polar;
       break;
+    case MC_REFLECT_BNDRY:
+      BoundaryFunction_[INNER_X3] = ReflectMCInnerX3;
+      break;
     case MC_USER_BNDRY:
       BoundaryFunction_[OUTER_X3] = pmcb->pmy_mc->BoundaryFunction_[OUTER_X3];
       break;
@@ -147,6 +162,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
     case MC_POLAR_BNDRY:
       BoundaryFunction_[OUTER_X3] = Polar;
       break;
+    case MC_REFLECT_BNDRY:
+      BoundaryFunction_[OUTER_X3] = ReflectMCOuterX3;
+      break;
     case MC_USER_BNDRY:
       BoundaryFunction_[OUTER_X3] = pmcb->pmy_mc->BoundaryFunction_[OUTER_X3];
       break;
@@ -167,7 +185,7 @@ MCBoundaryValues::~MCBoundaryValues() {
 }
 
 
-// Currently assumes single block -- ***will need to be changed***
+// SWD: Currently assumes single block -- ***will need to be changed***
 
 //----------------------------------------------------------------------------------------
 //! \fn void PeriodicInnerX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
@@ -176,7 +194,7 @@ MCBoundaryValues::~MCBoundaryValues() {
 void PeriodicInnerX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
   pphot->i1 = pmcb->ie;
-  pphot->x[0] = pco->x1f(pphot->i1+1);
+  pphot->x[IMC1] = pco->x1f(pphot->i1+1);
 
 }
 
@@ -187,7 +205,7 @@ void PeriodicInnerX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 void PeriodicOuterX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
   pphot->i1 = pmcb->is;
-  pphot->x[0] = pco->x1f(pphot->i1);
+  pphot->x[IMC1] = pco->x1f(pphot->i1);
 
 }
 
@@ -198,7 +216,7 @@ void PeriodicOuterX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 void PeriodicInnerX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
   pphot->i2 = pmcb->je;
-  pphot->x[1] = pco->x2f(pphot->i2+1);
+  pphot->x[IMC2] = pco->x2f(pphot->i2+1);
 
 }
 
@@ -209,7 +227,7 @@ void PeriodicInnerX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 void PeriodicOuterX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
   pphot->i2 = pmcb->js;
-  pphot->x[1] = pco->x2f(pphot->i2);
+  pphot->x[IMC2] = pco->x2f(pphot->i2);
 
 }
 
@@ -220,7 +238,7 @@ void PeriodicOuterX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 void PeriodicInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
   pphot->i3 = pmcb->ke;
-  pphot->x[2] = pco->x3f(pphot->i3+1);
+  pphot->x[IMC3] = pco->x3f(pphot->i3+1);
 
 }
 
@@ -231,7 +249,80 @@ void PeriodicInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 void PeriodicOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
   pphot->i3 = pmcb->ks;
-  pphot->x[2] = pco->x3f(pphot->i3);
+  pphot->x[IMC3] = pco->x3f(pphot->i3);
+
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void ReflectMCInnerX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
+//  \brief periodic boundary conditions, inner x1 boundary
+
+void ReflectMCInnerX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
+
+  pphot->k[IMC1] = -pphot->k[IMC1];
+  pphot->i1++;
+  pphot->x[IMC1] = pco->x1f(pphot->i1);
+ 
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ReflectMCOuterX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
+//  \brief periodic boundary conditions, outer x1 boundary
+
+void ReflectMCOuterX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
+  
+  pphot->k[IMC1] = -pphot->k[IMC1];
+  pphot->i1--;
+  pphot->x[IMC1] = pco->x1f(pphot->i1+1);
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ReflectMCInnerX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
+//  \brief periodic boundary conditions, inner x2 boundary
+
+void ReflectMCInnerX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
+
+  pphot->k[IMC2] = -pphot->k[IMC2];
+  pphot->i2++;
+  pphot->x[IMC2] = pco->x1f(pphot->i2);
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ReflectMCOuterX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
+//  \brief periodic boundary conditions, outer x2 boundary
+
+void ReflectMCOuterX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
+
+  pphot->k[IMC2] = -pphot->k[IMC2];
+  pphot->i2--;
+  pphot->x[IMC2] = pco->x1f(pphot->i2+1);
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ReflectMCInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
+//  \brief periodic boundary conditions, inner x3 boundary
+
+void ReflectMCInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
+
+  pphot->k[IMC3] = -pphot->k[IMC3];
+  pphot->i3++;
+  pphot->x[IMC3] = pco->x1f(pphot->i3);
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ReflectMCOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
+//  \brief periodic boundary conditions, outer x3 boundary
+
+void ReflectMCOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
+
+  pphot->k[IMC3] = -pphot->k[IMC3];
+  pphot->i3--;
+  pphot->x[IMC3] = pco->x1f(pphot->i3+1);
 
 }
 

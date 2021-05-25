@@ -389,7 +389,7 @@ void PhotonMover::MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
     if (ascend[0]) {
       pphot->i1++;
       if(pphot->i1 <= pmcb->ie)
-        pphot->x[0] = pco->x1f(pphot->i1);
+        pphot->x[IMC1] = pco->x1f(pphot->i1);
       else {
         pmcb->pbval->BoundaryFunction_[OUTER_X1](pmcb,pco,pphot);
         if (pphot->status == ESCAPED) {
@@ -399,7 +399,7 @@ void PhotonMover::MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
     } else {
       pphot->i1--;
       if(pphot->i1 >= pmcb->is)
-        pphot->x[0] = pco->x1f(pphot->i1+1);
+        pphot->x[IMC1] = pco->x1f(pphot->i1+1);
       else {
         pmcb->pbval->BoundaryFunction_[INNER_X1](pmcb,pco,pphot);
         if (pphot->status == ESCAPED) {
@@ -412,7 +412,7 @@ void PhotonMover::MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
     if (ascend[1]) {
       pphot->i2++;
       if(pphot->i2 <= pmcb->je)
-        pphot->x[1] = pco->x2f(pphot->i2);
+        pphot->x[IMC2] = pco->x2f(pphot->i2);
       else {
         pmcb->pbval->BoundaryFunction_[OUTER_X2](pmcb,pco,pphot);
         if (pphot->status == ESCAPED) {
@@ -422,7 +422,7 @@ void PhotonMover::MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
     } else {
       pphot->i2--;
       if(pphot->i2 >= pmcb->js)
-        pphot->x[1] = pco->x2f(pphot->i2+1);
+        pphot->x[IMC2] = pco->x2f(pphot->i2+1);
       else {
         pmcb->pbval->BoundaryFunction_[INNER_X2](pmcb,pco,pphot);
         if (pphot->status == ESCAPED) {
@@ -435,7 +435,7 @@ void PhotonMover::MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
     if (ascend[2]) {
       pphot->i3++;
       if(pphot->i3 <= pmcb->ke)
-        pphot->x[2] = pco->x3f(pphot->i3);
+        pphot->x[IMC3] = pco->x3f(pphot->i3);
       else {
         pmcb->pbval->BoundaryFunction_[OUTER_X3](pmcb,pco,pphot);
         if (pphot->status == ESCAPED) {
@@ -445,7 +445,7 @@ void PhotonMover::MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
     } else {
       pphot->i3--;
       if(pphot->i3 >= pmcb->ks)
-        pphot->x[2] = pco->x3f(pphot->i3+1);
+        pphot->x[IMC3] = pco->x3f(pphot->i3+1);
       else {
         pmcb->pbval->BoundaryFunction_[INNER_X3](pmcb,pco,pphot);
         if (pphot->status == ESCAPED) {
@@ -492,9 +492,9 @@ bool PhotonMover::UpdateZone(Photon *pphot) {
   MCCoord *pco = pmcb->pcoord;
   bool update = false;
 
-  if (pphot->x[0] >= pco->x1f(pphot->i1+1)) {
+  if (pphot->x[IMC1] >= pco->x1f(pphot->i1+1)) {
     update = true;
-    while (pphot->x[0] >= pco->x1f(pphot->i1+1)) {
+    while (pphot->x[IMC1] >= pco->x1f(pphot->i1+1)) {
       pphot->i1++;
       if(pphot->i1 > pmcb->ie)
 	pmcb->pbval->BoundaryFunction_[OUTER_X1](pmcb,pco,pphot);
@@ -505,9 +505,9 @@ bool PhotonMover::UpdateZone(Photon *pphot) {
       if (pphot->status == DESTROYED)
 	break;
     }
-  } else if (pphot->x[0] < pco->x1f(pphot->i1)) {
+  } else if (pphot->x[IMC1] < pco->x1f(pphot->i1)) {
     update = true;
-    while (pphot->x[0] < pco->x1f(pphot->i1)) {
+    while (pphot->x[IMC1] < pco->x1f(pphot->i1)) {
       pphot->i1--;
       if(pphot->i1 < pmcb->is)
 	pmcb->pbval->BoundaryFunction_[INNER_X1](pmcb,pco,pphot);
@@ -519,9 +519,9 @@ bool PhotonMover::UpdateZone(Photon *pphot) {
 	break;
     }
   }
-  if (pphot->x[1] >= pco->x2f(pphot->i2+1)) {
+  if (pphot->x[IMC2] >= pco->x2f(pphot->i2+1)) {
     update = true;
-    while (pphot->x[1] >= pco->x2f(pphot->i2+1)) {
+    while (pphot->x[IMC2] >= pco->x2f(pphot->i2+1)) {
       pphot->i2++;
       if(pphot->i2 > pmcb->je)
 	pmcb->pbval->BoundaryFunction_[OUTER_X2](pmcb,pco,pphot);
@@ -532,9 +532,9 @@ bool PhotonMover::UpdateZone(Photon *pphot) {
       if (pphot->status == DESTROYED)
 	break;
     }
-  } else if (pphot->x[1] < pco->x2f(pphot->i2)) {
+  } else if (pphot->x[IMC2] < pco->x2f(pphot->i2)) {
     update = true;
-    while (pphot->x[1] < pco->x2f(pphot->i2)) {
+    while (pphot->x[IMC2] < pco->x2f(pphot->i2)) {
       pphot->i2--;
       if(pphot->i2 < pmcb->js)
 	pmcb->pbval->BoundaryFunction_[INNER_X2](pmcb,pco,pphot);
@@ -546,9 +546,9 @@ bool PhotonMover::UpdateZone(Photon *pphot) {
 	break;
     }
   }
-  if (pphot->x[2] >= pco->x3f(pphot->i3+1)) {
+  if (pphot->x[IMC3] >= pco->x3f(pphot->i3+1)) {
     update = true;
-    while (pphot->x[2] >= pco->x3f(pphot->i3+1)) {
+    while (pphot->x[IMC3] >= pco->x3f(pphot->i3+1)) {
       pphot->i3++;
       if(pphot->i3 > pmcb->ke)
 	pmcb->pbval->BoundaryFunction_[OUTER_X3](pmcb,pco,pphot);
@@ -559,9 +559,9 @@ bool PhotonMover::UpdateZone(Photon *pphot) {
       if (pphot->status == DESTROYED)
 	break;
     }
-  } else if (pphot->x[2] < pco->x3f(pphot->i3)) {
+  } else if (pphot->x[IMC3] < pco->x3f(pphot->i3)) {
     update = true;
-    while (pphot->x[2] < pco->x3f(pphot->i3)) {
+    while (pphot->x[IMC3] < pco->x3f(pphot->i3)) {
       pphot->i3--;
       if(pphot->i3 < pmcb->ks)
 	pmcb->pbval->BoundaryFunction_[INNER_X3](pmcb,pco,pphot);

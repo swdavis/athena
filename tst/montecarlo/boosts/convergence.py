@@ -27,38 +27,6 @@ def bnu_int(en,tgas):
         return (en**3*np.log(1.-x)-3.*kt*en**2*polylog(2,x)
                 -6.*en*kt**2*polylog(3,x)-6*kt**3*polylog(4,x))
 
-def eta_kappap_ff(rho,tgas,emin,emax):
-    """
-    Computes the frequency integrated emmisivity for a gas of completely ionized
-    H and He over an energy range extending from emin to emax, where theose energies
-    are measured in eV
-    """
-    kb = 1.380649e-16
-    mp = 1.67e-24
-    me = 9.109e-28
-    ec = 4.8032e-10
-    c = 2.99792458e10
-    h = 6.62607015e-27
-    everg = 1.602176634e-12
-    
-    # efac accoutns for integration limits that are not 0, infinity
-    efac = np.exp(-emin*everg/(kb*tgas))-np.exp(-emax*everg/(kb*tgas))
-    ef0 = 32.*np.pi*ec**6/(3.*me*h*c**3)*(2.*np.pi*kb/(3.*me))**0.5*efac
-
-    heabund = 0.09
-    nh = rho/mp/(1.+4.*heabund)
-    nhe = nh*heabund
-    nel = nh+2.*nhe
-
-    eta = ef0*nel*(nh+4.*nhe)*tgas**0.5
-
-    # Integrates plank function yields sigma*T^4/pi in limit that
-    # emin -> 0 and emax -> infinity
-    planck_int = 2.*kb*tgas/h**3/c**2*(bnu_int(emax*everg,tgas)-
-                                       bnu_int(emin*everg,tgas))
-    kap = eta/(planck_int*4.*np.pi*rho)
-    return eta, kap
-
 def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,file='athinput.mctest'):
     """
     Write the remainder of the athinput file for convergence test
@@ -167,7 +135,7 @@ def main(**kwargs):
     emin /= everg
     emax /= everg
 
-    er0 = 4.*np.pi*planck_int/c
+    er0 = float(4.*np.pi*planck_int/c)
     fr0 = 0.
 
     if ((kwargs['vel'] is not None) and (kwargs['frame'] == 'eulerian')):
@@ -183,15 +151,16 @@ def main(**kwargs):
     for i in range(nstep-1):
         nphots.append(nphots[i]*step)
     iseed = kwargs['iseed']
+
     # Set up array to store norm for convergence evaluation
-    output = np.zeros((nstep,10))
+    output = np.zeros((nstep,12))
     for i,nphot in enumerate(nphots):            
         write_athinput(iseed+99*i,nphot,kwargs['vel'],kwargs['frame'],dens,tgas,emin,emax,file=infile)
         com="mpirun -np {:d} ".format(mcranks+1)+athena_path+"/athena -i "+infile
         print com
         system(com)
         # read hdf5 output
-        data = athena_read.athdf("MCTest.out1.00001.athdf",quantities=['Ermc','Frmc1','Frmc2','Frmc3','Cooling','kapjmc'])
+        data = athena_read.athdf("MCTest.out1.00001.athdf",quantities=['Ermc','Frmc1','Frmc2','Frmc3'])
         output[i,0] = float(nphot)
         output[i,1] = er0
         output[i,2] = er
@@ -200,8 +169,10 @@ def main(**kwargs):
         output[i,5] = np.average(data['Frmc1'])
         output[i,6] = np.average(data['Frmc2'])
         output[i,7] = np.average(data['Frmc3'])
-        output[i,8] = np.average(data['Cooling'])
-        output[i,9] = np.average(data['kapjmc'])/dens
+        output[i,8] = np.average(abs(data['Ermc']-er))
+        output[i,9] = np.average(abs(data['Frmc1']))
+        output[i,10] = np.average(abs(data['Frmc2']))
+        output[i,11] = np.average(abs(data['Frmc3']-fr))
 
     # save plot to outfile
     np.savetxt(kwargs['outfile'],output)
@@ -211,8 +182,6 @@ def main(**kwargs):
     plt.yscale('log')
     plt.savefig("conv.pdf")
     print(output)
-    eta, kappap = eta_kappap_ff(dens,tgas,emin,emax)
-    print kappap,output[-1,9]/kappap
 
 # Execute main function
 if __name__ == '__main__':
