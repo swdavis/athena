@@ -710,38 +710,6 @@ void SampleDipole(Real theta_in, Real phi_in, Real &theta_out, Real &phi_out, MC
 //  \brief Return parallel velocity for scattering atom
 //
 
-Real SampleVelocityParallelOld(Real a, Real x_in, MCRandom *pran) {
-
-  Real x = abs(x_in);                     // switch sign at end
-  Real u0 = 0.96 * x;
-  Real th0 = atan((u0-x) / a);
-  Real p = (th0 + PI/2.) / (th0 + PI/2. + exp(-SQR(u0)) * (PI/2. - th0));
-  Real u, th;
-
-  int nit = 0;
-  do {
-    nit++;
-    if (pran->uniform()<=p) {
-      th = -PI/2. + (th0+PI/2.)*pran->uniform();
-      u = x + a*tan(th);
-      u0 = 0.;
-    }
-    //if (r3<exp(-SQR(u)) exit;
-    else {
-      //printf("h");
-      u0 = 0.96 * x;
-      th = th0 + (PI/2.-th0)*pran->uniform();
-      u = x + a*tan(th);
-    }
-    // if (r3<exp(SQR(u0)-SQR(u))) exit
-    //endif
-    //printf("u, u0, x, th0, p: %g %g %g %g %g\n",u,u0,x,th0,p);
-  } while (pran->uniform() >= exp(SQR(u0)-SQR(u)));
-
-  if (x_in < 0.)
-    u = - u;
-  return u;
-}
 
 Real SampleVelocityParallel(Real a, Real x_in, MCRandom *pran) {
 

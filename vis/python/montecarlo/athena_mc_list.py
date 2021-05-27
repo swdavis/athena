@@ -6,6 +6,7 @@ Support for manipulating Monce Carlo photon lists
 import numpy as np
 import struct
 
+#SWD: Maybe should be rewritten as dictionary
 class photons:
     """
     Class for storing photon list data

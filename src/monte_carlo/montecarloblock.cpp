@@ -59,13 +59,6 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 
   next=NULL;
 
-  // Set energy range in ergs (input assumed in eV)
-  Real everg = 1.6021772e-12;
-  emin = everg * pin->GetReal("montecarlo","emin");
-  emax = everg * pin->GetReal("montecarlo","emax");
-  elog = log10(emax/emin);
-  eminlog = log10(emin);
-
   // Set flags (initialized in MonteCarlo class)
   emission_meth = pmy_mc->emission_meth;
   absorption_meth = pmy_mc->absorption_meth;
@@ -77,7 +70,17 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   acceleration = pmy_mc->acceleration;
   time_acc = pmy_mc->time_acc;
 
-  // *currently** assumes all block boundaries are physical
+
+  if (emission_meth == EMISFF) {
+    // Set energy range in ergs (input assumed in eV)
+    Real everg = 1.6021772e-12;
+    emin = everg * pin->GetReal("montecarlo","emin");
+    emax = everg * pin->GetReal("montecarlo","emax");
+    elog = log10(emax/emin);
+    eminlog = log10(emin);
+  }
+
+  // *currently* assumes all block boundaries are physical
   SetBoundaryValues(pmy_mc->mc_bcs);
 
   // Initialize pbval after mcb_bcs is set
@@ -830,7 +833,9 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
 void MonteCarloBlock::NormalizeMoments(bool normalize) {
 
   Real normall = static_cast<Real>(nphdone);
-  // SWD: Add user normalization?
+  // SWD: This should be modified so that a normalize function is specified for
+  // freefree emissivity and a user provided alternative can be used when freefree
+  // is not used.
   //Real normall = static_cast<Real>(nphdone)*pmy_mc->normalization;
   if (normalize) {
    // Normalize energy density weighted averages first

@@ -8,10 +8,10 @@ into single file
 # python standard modules
 import argparse
 import numpy as np
+from os import system
 
 # Athena++ modules
 import athena_mc_list as mclist
-from os import system
 
 # Main function
 def main(**kwargs):

@@ -206,15 +206,19 @@ public:
   TempFunc_t GetTemperature;
 
   // functions
+  // SWD: some of these functions could/should be private
   void RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput *pinput);
   void RunStaticMonteCarloNew(void);
   void InitUserMonteCarloData(ParameterInput *pin);
+  // Enroll User functions
+  void EnrollUserMCBoundaryFunction(enum BoundaryFace dir, MCBValFunc_t my_bc);
   void EnrollUserEmissionInitialization(EmisFunc_t emissfunc);
   void EnrollUserGetTemperature(TempFunc_t tempfunc);
+  void EnrollUserWorkInMove(UserMoveFunc_t userfunc);
+
   void SendMonteCarloSpectra(int dest);
   void ReceiveMonteCarloSpectra(int source);
   void CollectMoments(void);
-  void EnrollUserMCBoundaryFunction(enum BoundaryFace dir, MCBValFunc_t my_bc);
 
 private:
 
@@ -287,7 +291,6 @@ public:
   bool emission_array_flag;  // Compute and save zone emissivities
   bool boosts;  // Compute lorentz transformations
   bool coherent_scattering; // photon does notchange energy after scattering
-  //bool polarized; // track photon polarization
   bool acceleration;  // use MRW acceleration
   bool time_acc;  // use MRW acceleration with time limit
 
@@ -295,7 +298,6 @@ public:
   // SWD some of these should be eliminated others moved to MonteCarlo
   bool general_mover_flag; // use general integration (default for all but
                            // cartesian, spherical
-  bool kerrschild_flag; // use KerrSchild coordinates and BH test
   bool boyerlindquist_flag; // use Boyer-Lindquist coordinates 
   bool orthotet_flag; // use orthonormal tetrad for TransferPhotons()
   bool varystep_flag; // use variable (true) or constant (false) step

@@ -291,6 +291,41 @@ void MonteCarlo::EnrollUserMCBoundaryFunction(enum BoundaryFace dir, MCBValFunc_
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::EnrollUserEmissionInitialization(EmisFunc_t emissfunc)
+//  \brief Enroll a user-defined function for initializing emission methods
+
+void MonteCarlo::EnrollUserEmissionInitialization(EmisFunc_t emissfunc) {
+
+  InitEmission = emissfunc;
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::EnrollUserGetTemperature(TempFunc_t tempfunc)
+//  \brief Enroll a user-defined function for computing temperature
+
+void MonteCarlo::EnrollUserGetTemperature(TempFunc_t tempfunc) {
+
+  GetTemperature = tempfunc;
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::EnrollUserWorkInMove(UserMoveFunc_t userfunc)
+//  \brief Enroll a user-defined condition to be called during photon moves
+
+void MonteCarlo::EnrollUserWorkInMove(UserMoveFunc_t userfunc) {
+
+  // Enroll function for PhotonMover on each MonteCarloBlock on this process
+  MonteCarloBlock *pmcb = pblock;
+  while (pmcb != NULL) {
+    pmcb->pmover->UserWorkInMove = userfunc;
+    pmcb = pmcb->next;
+  }
+
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string)
 //  \brief set boundary flag
 
@@ -364,7 +399,7 @@ void MonteCarlo::GetVelocity(MonteCarloBlock *pmcb) {
 //----------------------------------------------------------------------------------------
 //! \fn void DefaultGetTemperature(MonteCarloBlock *pmcb)
 //  \brief default function for computing temperature if no user function provided.
-//  Assumes that code values correspond to cgs with simple equation of state.
+//  Assumes that code values correspond to cgs with EOS of from P=RTd.
 
 void DefaultGetTemperature(MonteCarloBlock *pmcb) {
 
@@ -383,22 +418,6 @@ void DefaultGetTemperature(MonteCarloBlock *pmcb) {
 
       }}}
 
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void MonteCarlo::EnrollUserEmissionInitialization(EmisFunc_t emissfunc)
-//  \brief Enroll a user-defined function for initializing emission methods
-
-void MonteCarlo::EnrollUserEmissionInitialization(EmisFunc_t emissfunc) {
-  InitEmission = emissfunc;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void MonteCarlo::EnrollUserGetTemperature(TempFunc_t tempfunc)
-//  \brief Enroll a user-defined function for computing temperature
-
-void MonteCarlo::EnrollUserGetTemperature(TempFunc_t tempfunc) {
-  GetTemperature = tempfunc;
 }
 
 //----------------------------------------------------------------------------------------
