@@ -15,7 +15,7 @@
 
 //----------------------------------------------------------------------------------------
 //! \fn void InitializeEmissionFreefree(MonteCarloBlock *pmcb)
-//  \brief Initialize emission array for static monte carlo calculation
+//  \brief Initialize emission array for steady state monte carlo calculation
 
 void InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
 
@@ -55,24 +55,24 @@ void InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PhotonInitFreeFree(MonteCarloBlock *pmcb, Photon *pphot)
+//! \fn void PhotonInitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, 
+//                              Real lemax))
 //  \brief initialize energy, direction, polarization and weight of the photon
 //         consistent with free-free emission
 
-void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot)
+void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real lemax)
 {
   Real kb = 1.380649e-16;
   MCRandom *pran = pmcb->pran;
 
   // Scheme in which packets are drawn from a uniform distribution in log E
   // requires weight = exp(-x) note log(10)=2.30258509299
-  Real dev = exp(2.30258509299*(pmcb->elog*pran->uniform()+pmcb->eminlog));  
-
+  Real dev = exp((lemax-lemin)*pran->uniform()+lemin);
   pphot->energy = dev;
   Real x = dev / (kb * pmcb->tgas(pphot->i3,pphot->i2,pphot->i1));
 
   // Initialize weight
-  pphot->weight *= exp(-x) * 2.30258509299 * pmcb->elog;
+  pphot->weight *= exp(-x) * (lemax-lemin);
 
   // Initialize Stokes vector
   pphot->stokes[0] = 1.0;

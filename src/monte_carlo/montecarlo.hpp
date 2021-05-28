@@ -40,7 +40,7 @@ class MCCoord;
 #define NMOM 16
 
 // Flags for controlling monte carlo emission, scattering, absorption, bcs
-enum EmissionFlag {EMISUSER = 0, EMISFF = 1};
+enum EmissionFlag {EMISUSER = 0, EMISNONE = 1, EMISFF = 2};
 enum AbsorptionFlag {ABSUSER = 0, ABSNONE = 1, ABSFF = 2};
 enum ScatteringFlag {SCATUSER = 0, SCATNONE =1, SCATISO = 2, SCATTHOM = 3, SCATCOMP =4,
                      SCATRES = 5};
@@ -94,7 +94,7 @@ void SampleDipole(Real theta_in, Real phi_in, Real &theta_out, Real &phi_out, MC
 Real SampleVelocityParallel(Real a, Real x_in, MCRandom *pran);
 //--------------------- prototypes for emission.cpp functions ----------------------------
 void InitializeEmissionFreeFree(MonteCarloBlock *pmcb);
-void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot);
+void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real lemax);
 Real PlanckDist(Real temp,MCRandom *pran);
 void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pco);
 void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pco);
@@ -202,6 +202,8 @@ public:
   bool time_acc;  // use MRW acceleration with time limit
   bool raytrace_flag; // Will trace photons rather than scatter
 
+  // function pointers
+  UserMoveFunc_t UserWorkInMove;
   EmisFunc_t InitEmission;
   TempFunc_t GetTemperature;
 
@@ -251,7 +253,8 @@ public:
 
   // data
   MonteCarlo* pmy_mc; // MonteCarlo
-  MeshBlock* pmy_block;    // MeshBlock corresponding to this MonteCarlo
+  MeshBlock* pmy_block;    // MeshBlock corresponding to this MonteCarloBlock
+  MonteCarloBlock *next;
   MCCoord *pcoord;
 
   Photon* pphoton; // ptr to photon packet
@@ -262,8 +265,6 @@ public:
   Spectrum *pspec; // ptr to spectrum
   PhotonList *pphlist; // ptr to photon list
   PhotonTrajectoryList *ptraj;
-
-  MonteCarloBlock *next;
 
   enum EmissionFlag emission_meth;
   enum AbsorptionFlag absorption_meth;
@@ -284,7 +285,6 @@ public:
   int nfreq, nmu, nphi, nsurf;
   int cadence;
 
-  bool zone_weight_flag; // flag for zone weighting
   bool weighted_absorption; // flag controling how absorption is handled
   bool moments_flag; // Compute/output moments
   bool moments_comoving; // Compute in comoving frame
@@ -303,10 +303,6 @@ public:
   bool varystep_flag; // use variable (true) or constant (false) step
 
   Real codetocgs_rho, codetoc_vel;
-  // SWD: these are problem dependent -- not needed if using single
-  // emission energy
-  Real emin, emax, elog, eminlog;
-  // SWD: used by general mover, move/eliminate 
   Real stepsize, velocity;
 
   AthenaArray<Real> emission;
@@ -319,7 +315,6 @@ public:
 
   // functions
   void InitUserMonteCarloBlockData(ParameterInput *pin);
-  void MonteCarloProblemGenerator(ParameterInput *pin);
   void RayTracePhotons(int nphtot); // Ray trace photon on this block
   void TransferPhotons(int nphtot); // Transfer photons on this block
   void LorentzTransform(Photon *pphot, const Real sign);

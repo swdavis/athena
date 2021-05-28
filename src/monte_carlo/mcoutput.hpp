@@ -166,7 +166,7 @@ public:
 
 };
 
-
+// SWD: Maybe should be made to better mirror Athena++ Output structure
 //----------------------------------------------------------------------------------------
 //! \class MCOutput
 //  \brief class for handling monte carlo specific spectral outputs

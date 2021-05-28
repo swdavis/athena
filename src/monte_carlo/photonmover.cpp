@@ -21,7 +21,7 @@ PhotonMover::PhotonMover(MonteCarloBlock *pmcb) {
 
   pmy_mcb = pmcb;
   pcoord = NULL;
-  UserWorkInMove = NULL;
+  UserWorkInMove = pmcb->pmy_mc->UserWorkInMove;
 
   // MRW acceleration
   acceleration = pmcb->acceleration;

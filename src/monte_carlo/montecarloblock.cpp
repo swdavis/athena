@@ -48,7 +48,6 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   pcoord = NULL;
 
   // Initialize input parameters and flags
-  zone_weight_flag = pin->GetOrAddBoolean("montecarlo","zone_weight",true);
   weighted_absorption = pin->GetOrAddBoolean("montecarlo","abs_weight",true);
   //polarized = pin->GetOrAddBoolean("montecarlo","polarized",false);
 
@@ -69,16 +68,6 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   moments_comoving = pmy_mc->pmcout->moments_comoving;
   acceleration = pmy_mc->acceleration;
   time_acc = pmy_mc->time_acc;
-
-
-  if (emission_meth == EMISFF) {
-    // Set energy range in ergs (input assumed in eV)
-    Real everg = 1.6021772e-12;
-    emin = everg * pin->GetReal("montecarlo","emin");
-    emax = everg * pin->GetReal("montecarlo","emax");
-    elog = log10(emax/emin);
-    eminlog = log10(emin);
-  }
 
   // *currently* assumes all block boundaries are physical
   SetBoundaryValues(pmy_mc->mc_bcs);
@@ -434,10 +423,10 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
       if (weighted_absorption) {
         pphoton->weight *= (pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef));
         if(pphoton->weight <= MINWEIGHT)
-          pphoton->status = DESTROYED;
+          pphoton->status = ABSORBED;
       } else {
         if (pran->uniform() > (pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef)) )
-          pphoton->status = DESTROYED;
+          pphoton->status = ABSORBED;
       }
       if (moments_flag)
         UpdateCooling(pphoton,0.,weight0);
@@ -994,12 +983,3 @@ void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
   }
   }*/
 
-//----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::EnrollUserWorkInMove(UserMoveFunc_t userfunc)
-//  \brief Enroll a user-defined condition to be called during photon moves
-
-void MonteCarloBlock::EnrollUserWorkInMove(UserMoveFunc_t userfunc) {
-
-  pmover->UserWorkInMove = userfunc;
-
-}

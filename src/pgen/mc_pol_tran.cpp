@@ -134,12 +134,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   if (pphot->weight < 0)
     pphot->status = DESTROYED;
 
-  // cweight is a constant weighting factor which accounts for the
-  // emissivity of the grid zone in which the photon was emitted
-  if (zone_weight_flag) {
-    pphot->eweight = 1.;
-    pphot->weight = 1.;
-  }
+  pphot->eweight = 1.;
+  pphot->weight = 1.;
 
   // Initialize the absorption and scattering extinction coefficients
   // to the values appropriate in the emitted zone

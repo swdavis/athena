@@ -101,15 +101,6 @@ void __attribute__((weak)) MonteCarloBlock::InitUserMonteCarloBlockData(Paramete
 }
 
 //========================================================================================
-//! \fn void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin)
-//  \brief Analogous to problem generator -- not currently used
-//========================================================================================
-
-void __attribute__((weak)) MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin){
-
-}
-
-//========================================================================================
 //! \fn void MonteCarloBlock::InitializePhoton(Photon *pphot)
 //  \brief Initializes Photon packets before integration
 //========================================================================================

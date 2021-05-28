@@ -42,12 +42,12 @@ typedef struct Domain_s{
 static VTK_Domain *domain_1d;
 static int grid_version; /* fixed or flexible grids */
 static int nrmax, nrmin;
-
 static void strip_trail_white(char *pc);
 static inline void Swap4Bytes2(void *vdat);
 static void init_domain_1d(void);
 int IsBigEndian2(void);
 
+static Real logemin, logemax;
 
 //========================================================================================
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
@@ -319,18 +319,17 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 
-  
-}
-
-void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin){
-
-  // Set codetocgs here
-  //EnrollUserEmissionFunction();
   int nx1 = pin->GetInteger("mesh","nx1");
   nrmax = pin->GetOrAddInteger("problem","nrmax",nx1);
   nrmin = pin->GetOrAddInteger("problem","nrmin",0);
 
+  // Set the energy boundaries for free-free emission
+  Real everg = 1.6021772e-12;
+  logemin = log(everg*pin->GetReal("problem", "emin"));
+  logemax = log(everg*pin->GetReal("problem", "emax"));
+
 }
+
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
@@ -358,14 +357,10 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
   // cweight is a constant weighting factor which accounts for the
   // emissivity of the grid zone in which the photon was emitted
-  if (zone_weight_flag) {
-    pphot->eweight = emission(pphot->i3,pphot->i2,pphot->i1);
-    Real ratio = nx1/static_cast<Real>(nrmax-nrmin);
-    pphot->eweight *= ratio;
-   
-    //pphot->weight = pphot->eweight;
-    pphot->weight = 1.0;
-  }
+  pphot->eweight = emission(pphot->i3,pphot->i2,pphot->i1);
+  Real ratio = nx1/static_cast<Real>(nrmax-nrmin);
+  pphot->eweight *= ratio;
+  pphot->weight = 1.0;
 
   //std::cout << "test: " << pphot->weight << ' ' << pphot->i1 << ' ' 
   //          << pphot->i2 << ' ' << pphot->i3 << std::endl;
@@ -377,7 +372,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
   // Obtain intitial energy, polarization, direction and weight
   // Utilize free-free emission function in emission.cpp
-  PhotonEmitFreeFree(this,pphot);
+  PhotonEmitFreeFree(this,pphot,logemin,logemax);
   // initialize kcart
   //pmover->CurvalinearToCartesian(pphot);
 

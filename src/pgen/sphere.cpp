@@ -31,11 +31,12 @@
 
 namespace {
   // Global variables
-  static Real rad0,path0;
-  static Real energy0;
-  static bool srcdist;
-  static bool first = true;
-  static int i1start,i2start,i3start;
+  Real rad0,path0;
+  Real energy0;
+  bool srcdist;
+  bool first = true;
+  int i1start,i2start,i3start;
+  Real logemin, logemax;
 }
 
 // function headers
@@ -96,13 +97,11 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
     Real temp = pin->GetReal("problem","temp");
     Real kb = 1.380649e-16;
     energy0 = kb*temp*x0;
-
+    // Set the energy boundaries for free-free emission
+    Real everg = 1.6021772e-12;
+    logemin = log(everg*pin->GetReal("problem", "emin"));
+    logemax = log(everg*pin->GetReal("problem", "emax"));
   }
-
-}
-
-void MonteCarloBlock::InitUserMonteCarloBlockData(ParameterInput *pin){
-
   // Set variables 
   srcdist =pin->GetOrAddBoolean("problem","srcdist",false);
 
@@ -117,9 +116,6 @@ void MonteCarloBlock::InitUserMonteCarloBlockData(ParameterInput *pin){
 
 }
 
-void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin){
-  
-}
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
@@ -219,7 +215,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   } else if (pmy_mc->emission_meth == EMISFF) {
     pphot->eweight = emission(pphot->i3,pphot->i2,pphot->i1);
     pphot->weight = 1.;
-    PhotonEmitFreeFree(this,pphot);
+    PhotonEmitFreeFree(this,pphot,logemin,logemax);
     Real r0 = pow(pran->uniform()*rad0*rad0*rad0,1./3.);
     Real phi = 2. * PI * pran->uniform();
     Real cphi = cos(phi);

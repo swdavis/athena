@@ -27,6 +27,11 @@
 #error "This problem generator does not support magnetic fields"
 #endif
 
+namespace {
+  // Global variables
+  Real logemin, logemax;
+}
+
 /* This stores the domain information of each vtk file */
 typedef struct Domain_s{
   char *fname;
@@ -320,13 +325,11 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 
-}
+  // Set the energy boundaries for free-free emission
+  Real everg = 1.6021772e-12;
+  logemin = log(everg*pin->GetReal("problem", "emin"));
+  logemax = log(everg*pin->GetReal("problem", "emax"));
 
-void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin){
-
-  // Set codetocgs here
-  //EnrollUserEmissionFunction();
-  
 }
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot) {
@@ -350,11 +353,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
   // cweight is a constant weighting factor which accounts for the
   // emissivity of the grid zone in which the photon was emitted
-  if (zone_weight_flag) {
-    pphot->eweight = emission(pphot->i3,pphot->i2,pphot->i1);
-    //pphot->weight = pphot->eweight;
-    pphot->weight = 1.0;
-  }
+  pphot->eweight = emission(pphot->i3,pphot->i2,pphot->i1);
+  pphot->weight = 1.0;
 
   //std::cout << "test: " << pphot->weight << ' ' << pphot->i1 << ' ' 
   //          << pphot->i2 << ' ' << pphot->i3 << std::endl;
@@ -366,7 +366,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
   // Obtain intitial energy, polarization, direction and weight
   // Utilize free-free emission function in emission.cpp
-  PhotonEmitFreeFree(this,pphot);
+  PhotonEmitFreeFree(this,pphot,logemin,logemax);
   // initialize kcart
   //pmover->CurvalinearToCartesian(pphot);
 

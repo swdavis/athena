@@ -57,7 +57,6 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
   Real ehnu = exp(-pphot->energy / (kb * tgas) );
 
   Real aff = ffnrm/sqrt(tgas)/pow(nu,3);
-
   return ne * (nh + 4. * nhe) * aff * (1. - ehnu);
 
 }

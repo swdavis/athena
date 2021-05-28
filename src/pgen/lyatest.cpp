@@ -31,10 +31,10 @@
 
 namespace {
   // Global variables
-  static Real rad0,path0;
-  static Real energy0;
-  static bool first = true;
-  static int i1start,i2start,i3start;
+  Real rad0,path0;
+  Real energy0;
+  bool first = true;
+  int i1start,i2start,i3start;
 }
 
 // function headers
@@ -107,24 +107,16 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
     energy0 = h * (nu0 + dopw * x0);
 
   }
-
-}
-
-void MonteCarloBlock::InitUserMonteCarloBlockData(ParameterInput *pin){
-
-  // enroll function to cease photon propogation based on escape radius
-  // or total integration time
   rad0 = pin->GetReal("problem","radius");
   path0 = pin->GetOrAddReal("problem","path",-1.);
+  // enroll function to cease photon propogation based on escape radius
+  // or total integration time
+
   if (path0 > 0.) {
     EnrollUserWorkInMove(TimedEscape);
   } else
     EnrollUserWorkInMove(SphericalEscape);
 
-}
-
-void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin){
-  
 }
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot) {

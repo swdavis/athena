@@ -27,17 +27,22 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
 
   pmy_mesh = pmesh;
 
+  UserWorkInMove=NULL;
   InitEmission=NULL;
   GetTemperature=NULL;
 
   // SWD: Change to general prescription for distributed emission
   // Set flags that control emission, absorption and scattering
-  emission_meth = GetEmissionFlag(pin->GetOrAddString("montecarlo","emission","error"));
-  if (emission_meth == EMISUSER) {
-    emission_array_flag = pin->GetOrAddBoolean("montecarlo","emiss_array",false);
+  emission_meth = GetEmissionFlag(pin->GetOrAddString("montecarlo","emission","none"));
+  if (emission_meth == EMISNONE) {
+    InitEmission = NULL; // left unset
+    emission_array_flag = false; // do not allocate memory for array
+  } else if (emission_meth ==  EMISUSER) {
+    InitEmission = NULL; // must be set in InitUserMonteCarloData
+    emission_array_flag = true; // allocate memory for array
   } else if (emission_meth ==  EMISFF) {
     InitEmission = InitializeEmissionFreeFree;
-    emission_array_flag = true;
+    emission_array_flag = true; // allocate memory for array
   }
   absorption_meth = GetAbsorptionFlag(pin->GetOrAddString("montecarlo","absorption",
                                                           "error"));
@@ -62,8 +67,6 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   raytrace_flag = pin->GetOrAddBoolean("montecarlo", "raytrace", false);
 
   nuser_var = 0; // Initialize photon user variables to zero
-  // Create user monte carlo data
-  InitUserMonteCarloData(pin);
 
   // Set photon numbers
   nphtot = pin->GetInteger("montecarlo","nphot");
@@ -74,6 +77,11 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
 #else
   max_list_size = cadence;
 #endif
+
+  // Initialize user MonteCarlo data before initializing MonteCarloBlocks
+  // Should be caleld before Output constuctor
+  InitUserMonteCarloData(pin);
+
   // Initialize output
   pmcout = new MCOutput(this,pin);
 
@@ -102,7 +110,6 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
     //pblock->myblockid = myblockid;
     //pblock->nphremain = nphlist[myblockid++]; 
     pfirst = pblock;
-    pblock->MonteCarloProblemGenerator(pin);
     pmb = pmb->next;
     while (pmb != NULL)  {
       pblock->next = new MonteCarloBlock(pmb, NULL, this, pin);
@@ -110,7 +117,6 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
       //pblock->nphremain = nphlist[myblockid++]; 
       pblock = pblock->next;
       pmb=pmb->next;
-      pblock->MonteCarloProblemGenerator(pin);
     }
     pblock = pfirst;
     // set list of destination processes
@@ -180,6 +186,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
     pmcb->myblockid = myblockid;
     // allocates an even number of photons per monte carlo block
     //pmcb->nphremain = nphlist[myblockid++]/(nranks[my_mesh_rank]);//oldold
+    // SWD: should be modified to allow block to have different amounts of photons
 #ifdef MPI_PARALLEL
     pmcb->nphremain = nphlist[myblockid++]/(nranks[my_mesh_rank]-1);//somewhatold
 #else
@@ -256,7 +263,10 @@ enum ScatteringFlag GetScatteringFlag(std::string input_string) {
 //  \brief set emission flag
 
 enum EmissionFlag GetEmissionFlag(std::string input_string) {
-  if (input_string == "user") {
+
+  if (input_string == "none") {
+    return EMISNONE;
+  } else if (input_string == "user") {
     return EMISUSER;
   } else if (input_string == "freefree") {
     return EMISFF;
@@ -316,12 +326,7 @@ void MonteCarlo::EnrollUserGetTemperature(TempFunc_t tempfunc) {
 
 void MonteCarlo::EnrollUserWorkInMove(UserMoveFunc_t userfunc) {
 
-  // Enroll function for PhotonMover on each MonteCarloBlock on this process
-  MonteCarloBlock *pmcb = pblock;
-  while (pmcb != NULL) {
-    pmcb->pmover->UserWorkInMove = userfunc;
-    pmcb = pmcb->next;
-  }
+  UserWorkInMove = userfunc;
 
 }
 
@@ -487,7 +492,6 @@ void MonteCarlo::ReceiveMonteCarloBlocks(ParameterInput *pin, int source) {
  
   for(int i=0; i<blcnt; ++i) {
     pblock = new MonteCarloBlock(NULL, &blocksize, this, pin);
-    pblock->MonteCarloProblemGenerator(pin);
     if (plast == NULL) 
       pfirst = pblock;
     else 

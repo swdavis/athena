@@ -8,7 +8,8 @@
 //
 //========================================================================================
 
-#include <iostream> // temporary for testing
+// C++ headers
+#include <iostream> // SWD: temporary for testing
 
 // Athena++ headers
 #include "../athena.hpp"
@@ -25,6 +26,13 @@
 #if MAGNETIC_FIELDS_ENABLED
 #error "This problem generator does not support magnetic fields"
 #endif
+
+namespace {
+  // Global variables
+  Real logemin, logemax;
+}
+
+void InitializeEmissionUserFreeFree(MonteCarloBlock *pmcb);
 
 //========================================================================================
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
@@ -146,17 +154,15 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
   // eweight is a constant weighting factor which accounts for the
   // emissivity of the grid zone in which the photon was emitted
-  if (zone_weight_flag) {
-    pphot->eweight = emission(pphot->i3,pphot->i2,pphot->i1);
-    pphot->weight = 1.0;
-  }
+  pphot->eweight = emission(pphot->i3,pphot->i2,pphot->i1);
+  pphot->weight = 1.0;
 
   // Obtain initial position within zone
   GetZonePosition(pphot,pran,pcoord);
 
   // Obtain intitial energy, polarization, direction and weight
   // Utilize free-free emission function in emission.cpp
-  PhotonEmitFreeFree(this,pphot);
+  PhotonEmitFreeFree(this,pphot,logemin,logemax);
   
   if (pphot->weight < 0.0) pphot->status = DESTROYED;
 
@@ -164,6 +170,15 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   // to the values appropriate in the emitted zone
   pphot->abs_coef = AbsorptionOpacity(this,pphot);
   pphot->sct_coef = ScatteringOpacity(this,pphot);
+
+}
+
+void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
+
+  // Set the energy boundaries for free-free emission
+  Real everg = 1.6021772e-12;
+  logemin = log(everg*pin->GetReal("problem", "emin"));
+  logemax = log(everg*pin->GetReal("problem", "emax"));
 
 }
 

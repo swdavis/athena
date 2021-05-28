@@ -94,22 +94,20 @@ void MonteCarloBlock::InitUserMonteCarloBlockData(ParameterInput *pin){
   iphot = 0;
 #endif
 
-  // Set r_outer
-  Real abh = pcoord->GetSpin();
-  Real mbh = pcoord->GetMass();
-  r_outer = 1.0 + sqrt(1.0 - SQR(abh));
-  EnrollUserWorkInMove(MidplaneCrossing);
-
 }
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
-
 
   nuser_var = 4;
 
   nrays = pin->GetInteger("montecarlo", "nphot");
   nalpha = nbeta = static_cast<int>(sqrt(static_cast<Real>(nrays)));
   backward_integration = pin->GetOrAddBoolean("problem","backward",false);
+
+  // Set r_outer
+  Real abh = pcoord->GetSpin();
+  Real mbh = pcoord->GetMass();
+  r_outer = 1.0 + sqrt(1.0 - SQR(abh));
 
   Real alpha_min = pin->GetOrAddReal("problem", "alpha_min", -10.);
   Real alpha_max = pin->GetOrAddReal("problem", "alpha_max", 10.);
@@ -139,6 +137,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
   thcam = pin->GetOrAddReal("problem", "thcam", 45.) * M_PI / 180.;
   phcam = pin->GetOrAddReal("problem", "phcam", 90.) * M_PI / 180.;
   
+  EnrollUserWorkInMove(MidplaneCrossing);
 }
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot) {
@@ -197,12 +196,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   if (pphot->weight < 0)
     pphot->status = DESTROYED;
 
-  // cweight is a constant weighting factor which accounts for the
-  // emissivity of the grid zone in which the photon was emitted
-  if (zone_weight_flag) {
-    pphot->eweight = 1.;
-    pphot->weight = 1.;
-  }
+  pphot->eweight = 1.;
+  pphot->weight = 1.;
 
   pphot->user_var[0] = alpha0;
   pphot->user_var[1] = beta0;

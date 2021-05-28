@@ -83,14 +83,6 @@ void MonteCarloBlock::InitUserMonteCarloBlockData(ParameterInput *pin){
   iphot = 0;
 #endif
 
-  MCCoord *pcobl = new MCBoyerLindquist(1,1,1,false);
-  Real x[4];
-  x[IMC0] = 1.; x[IMC1] = r0; x[IMC2] = th0; x[IMC3] = phi0;
-  pcobl->SetSpin(pin->GetReal("coord","a"));
-  pcobl->SetMass(pin->GetReal("coord","m"));
-  pcobl->Metric(x,gcov0);
-
-  EnrollUserWorkInMove(TurningPointCheck);
 }
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
@@ -102,9 +94,10 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
   else
     signa = -1.;
 
-  Real a = pin->GetReal("coord", "a");
-  Real a2 = a*a;
-  Real z1 = 1.0 + pow(1.0 - a2, 1./3.) * (pow(1. + a, 1./3.) + pow(1.0-a,1./3.));
+  Real abh = pin->GetReal("coord", "a");
+  Real mbh = pin->GetReal("coord","m")
+  Real a2 = abh*abh;
+  Real z1 = 1.0 + pow(1.0 - a2, 1./3.) * (pow(1. + abh, 1./3.) + pow(1.0-abh,1./3.));
   Real z2 = sqrt(3.*a2 + z1*z1);
   Real risco = 3.0 + z2 - signa * sqrt((3.0 - z1) * (3.0 + z1 + 2.0 * z2)) + 1.0e-3;
   r0 = pin->GetReal("problem", "radius")*risco;
@@ -113,6 +106,16 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
   muk = pin->GetOrAddReal("problem", "muk",-0.8);
   phik = pin->GetOrAddReal("problem", "phik", 0.4);
 
+  // Initialize gcov0
+  MCCoord *pcobl = new MCBoyerLindquist(1,1,1,false);
+  Real x[4];
+  x[IMC0] = 1.; x[IMC1] = r0; x[IMC2] = th0; x[IMC3] = phi0;
+  pcobl->SetSpin(abh);
+  pcobl->SetMass(mbh);
+  pcobl->Metric(x,gcov0);
+
+  // Enroll user work in move function
+  EnrollUserWorkInMove(TurningPointCheck);
 }
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot) {

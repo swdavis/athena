@@ -865,12 +865,9 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         // set momentum range and polarization, logarithmic flags for spectrum constructor
         MomentumRange range;
         range.ne = pin->GetInteger(pib->block_name,"ne");
-	// Use monte carlos emin/emax for defaults
-	Real emin = pin->GetReal("montecarlo","emin");
-        Real emax = pin->GetReal("montecarlo","emax");
         Real everg = 1.602176634e-12;
-        range.emin = everg * pin->GetOrAddReal(pib->block_name,"emin",emin);
-        range.emax = everg * pin->GetOrAddReal(pib->block_name,"emax",emax);
+        range.emin = everg * pin->GetReal(pib->block_name,"emin");
+        range.emax = everg * pin->GetReal(pib->block_name,"emax");
         range.nphi = pin->GetOrAddInteger(pib->block_name,"nphi",8);
         range.phimin = pin->GetOrAddReal(pib->block_name,"phimin",0.);
         range.phimax = pin->GetOrAddReal(pib->block_name,"phimax",2.*PI);

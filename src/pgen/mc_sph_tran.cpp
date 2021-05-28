@@ -90,13 +90,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   pphot->i2 = static_cast<int>(pran->uniform()*nx2)+js;
   pphot->i3 = static_cast<int>(pran->uniform()*nx3)+ks;
 
-  // cweight is a constant weighting factor which accounts for the
-  // emissivity of the grid zone in which the photon was emitted
-  if (zone_weight_flag) {
-    pphot->eweight = 1.0;
-    pphot->weight = 1.0;
-  }
-
+  pphot->eweight = 1.0;
+  pphot->weight = 1.0;
 
   // Obtain initial position within zone
   GetZonePosition(pphot,pran,pcoord);

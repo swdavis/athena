@@ -376,7 +376,7 @@ void Escape(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
 void Absorb(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
-  pphot->status = DESTROYED;
+  pphot->status = ABSORBED;
 
 }
 

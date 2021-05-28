@@ -17,7 +17,7 @@
 class MonteCarloBlock;
 
 // photon status identifiers
-enum PhotonStatus {EVOLVING = 0, ESCAPED = 1, DESTROYED = 2};
+enum PhotonStatus {EVOLVING = 0, ESCAPED = 1, ABSORBED = 2, DESTROYED = 3};
 enum {IMC1 = 0, IMC2 = 1, IMC3 = 2, IMC0 = 3};
 
 //! \class Photon
