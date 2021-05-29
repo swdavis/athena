@@ -196,7 +196,6 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   if (pphot->weight < 0)
     pphot->status = DESTROYED;
 
-  pphot->eweight = 1.;
   pphot->weight = 1.;
 
   pphot->user_var[0] = alpha0;
@@ -220,7 +219,6 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   
   pphot->energy = pphot->k[IMC0];
   pphot->weight = 1.0;
-  pphot->eweight = 1.0;
   for (int i=0; i<4; i++)
     pphot->dk[i] = 0.;
   //pphot->PrintPhoton();

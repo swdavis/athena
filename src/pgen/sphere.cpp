@@ -92,11 +92,12 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
   nuser_var = 1;
-  if (emission_meth == EMISUSER) {
+  if (emission_meth == EMISNONE) {
     Real x0 = pin->GetReal("problem","x0");
     Real temp = pin->GetReal("problem","temp");
     Real kb = 1.380649e-16;
     energy0 = kb*temp*x0;
+  } else if (emission_meth == EMISFF) {
     // Set the energy boundaries for free-free emission
     Real everg = 1.6021772e-12;
     logemin = log(everg*pin->GetReal("problem", "emin"));
@@ -125,8 +126,10 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
   pphot->user_var[0] = 0.;
 
+  // Would be better elsewhere but issue is initialization of
+  // MonteCarloBlocks after creation
   if (first) {
-    // Deterime zone of initial photon -- asssumed to be zone that includes origin
+    // Deterime cell of initial photon -- asssumed to include origin
   
     i1start = -1;
     for(int i=is; i<=ie; i++) {
@@ -147,7 +150,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
     }
     if ((i1start < 0) || (i2start < 0) || (i3start < 0)) {
       std::stringstream msg;
-      msg << "### FATAL ERROR in InitUserMonteCarloBlockData" << std::endl
+      msg << "### FATAL ERROR in InitializePhoton" << std::endl
           << "Origin not found within domain." << std::endl;
       throw std::runtime_error(msg.str().c_str());
     }
@@ -157,8 +160,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   pphot->i3 = i3start;
 
   // Initialize Photon weights, energy, direction, polarization
-  if (pmy_mc->emission_meth == EMISUSER) {
-    pphot->eweight = 1.0;
+  if (pmy_mc->emission_meth == EMISNONE) {
     pphot->weight = 1.0;
     pphot->energy = energy0;
     // Initialize Stokes vector
@@ -213,8 +215,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
     }
 
   } else if (pmy_mc->emission_meth == EMISFF) {
-    pphot->eweight = emission(pphot->i3,pphot->i2,pphot->i1);
-    pphot->weight = 1.;
+    pphot->weight = emission(pphot->i3,pphot->i2,pphot->i1);
     PhotonEmitFreeFree(this,pphot,logemin,logemax);
     Real r0 = pow(pran->uniform()*rad0*rad0*rad0,1./3.);
     Real phi = 2. * PI * pran->uniform();

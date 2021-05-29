@@ -31,7 +31,6 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   InitEmission=NULL;
   GetTemperature=NULL;
 
-  // SWD: Change to general prescription for distributed emission
   // Set flags that control emission, absorption and scattering
   emission_meth = GetEmissionFlag(pin->GetOrAddString("montecarlo","emission","none"));
   if (emission_meth == EMISNONE) {
@@ -45,9 +44,9 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
     emission_array_flag = true; // allocate memory for array
   }
   absorption_meth = GetAbsorptionFlag(pin->GetOrAddString("montecarlo","absorption",
-                                                          "error"));
+                                                          "none"));
   scattering_meth = GetScatteringFlag(pin->GetOrAddString("montecarlo","scattering",
-                                                          "error"));
+                                                          "none"));
 
   // read bc flags for each of the 6 boundaries.
   mc_bcs[INNER_X1] = GetMCBoundaryFlag(pin->GetOrAddString("mesh","ix1_mc_bc","escape"));
@@ -331,6 +330,28 @@ void MonteCarlo::EnrollUserWorkInMove(UserMoveFunc_t userfunc) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::EnrollUserScatteringFunction(ScatFunc_t scatfunc)
+//  \brief Enroll a user-defined scattering function
+
+void MonteCarlo::EnrollUserScatteringFunction(ScatFunc_t scatfunc) {
+
+  UserScattering = scatfunc;
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::EnrollUserOpacityFunction(OpacFunc_t opacfunc, bool abs)
+//  \brief Enroll a user-defined opacity function
+
+void MonteCarlo::EnrollUserOpacityFunction(OpacFunc_t opacfunc, bool abs) {
+
+  if (abs)
+    UserAbsorptionOpacity = opacfunc;
+  else
+    UserScatteringOpacity = opacfunc;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string)
 //  \brief set boundary flag
 
@@ -394,17 +415,16 @@ void MonteCarlo::GetVelocity(MonteCarloBlock *pmcb) {
     for (int j=jl; j<=ju; ++j) {
       for (int i=il; i<=iu+1; ++i) {
         Real rho = pmcb->pmy_block->phydro->u(IDN,k,j,i);
-        pmcb->vel(0,k,j,i) = pmcb->codetoc_vel*pmcb->pmy_block->phydro->u(IM1,k,j,i)/rho;
-        pmcb->vel(1,k,j,i) = pmcb->codetoc_vel*pmcb->pmy_block->phydro->u(IM2,k,j,i)/rho;
-        pmcb->vel(2,k,j,i) = pmcb->codetoc_vel*pmcb->pmy_block->phydro->u(IM3,k,j,i)/rho;     
-        // transform to cartesian if not cartesian
+        pmcb->vel(0,k,j,i) = pmcb->codetocgs_vel*pmcb->pmy_block->phydro->u(IM1,k,j,i)/rho;
+        pmcb->vel(1,k,j,i) = pmcb->codetocgs_vel*pmcb->pmy_block->phydro->u(IM2,k,j,i)/rho;
+        pmcb->vel(2,k,j,i) = pmcb->codetocgs_vel*pmcb->pmy_block->phydro->u(IM3,k,j,i)/rho;
       }}}
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void DefaultGetTemperature(MonteCarloBlock *pmcb)
 //  \brief default function for computing temperature if no user function provided.
-//  Assumes that code values correspond to cgs with EOS of from P=RTd.
+//  Assumes EOS of from P=RTd.
 
 void DefaultGetTemperature(MonteCarloBlock *pmcb) {
 
@@ -416,11 +436,12 @@ void DefaultGetTemperature(MonteCarloBlock *pmcb) {
   int jl = pmcb->js; int ju = pmcb->je;
   int kl = pmcb->ks; int ku = pmcb->ke;
 
+  // get pressure
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
       for (int i=il; i<=iu+1; ++i) {
-        pmcb->tgas(k,j,i) = phydro->w(IEN,k,j,i)/phydro->w(IDN,k,j,i)/rideal;
-
+        pmcb->tgas(k,j,i) = pmcb->codetocgs_tgas * phydro->w(IEN,k,j,i) / 
+                            phydro->w(IDN,k,j,i)/rideal;
       }}}
 
 }
@@ -487,7 +508,7 @@ void MonteCarlo::ReceiveMonteCarloBlocks(ParameterInput *pin, int source) {
   blocksize.ks = head_buf[8];
   blocksize.ke = head_buf[9];
 
-  // creat monte carlo blocks to receive data
+  // create monte carlo blocks to receive data
   MonteCarloBlock *pfirst, *plast=NULL;
  
   for(int i=0; i<blcnt; ++i) {
@@ -582,7 +603,8 @@ void MonteCarlo::ReceiveMonteCarloData(int source) {
     for (int i=pmcb->ks; i<=pmcb->ke+1; ++i) 
       pmcb->pcoord->x3f(i) = recv_buf[p++];
     // initialize emission array
-    if (InitEmission != NULL) InitEmission(pmcb);
+    if (InitEmission != NULL) 
+      pmcb->minweight *= InitEmission(pmcb);
     if (acceleration && !(pmcb->coherent_scattering)) 
       InitializeAccelerationOpacity(pmcb);
     pmcb=pmcb->next;

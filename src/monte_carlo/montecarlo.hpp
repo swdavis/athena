@@ -53,7 +53,7 @@ enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
       MCIPR31=14, MCIPR32=15};
 //----------------------------------------------------------------------------------------
 // function pointer prototypes for user-defined modules set at runtime
-typedef void (*EmisFunc_t)(MonteCarloBlock *pmcb);
+typedef Real (*EmisFunc_t)(MonteCarloBlock *pmcb);
 typedef void (*TempFunc_t)(MonteCarloBlock *pmcb);
 typedef void (*MCBValFunc_t)(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
 typedef Real (*OpacFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
@@ -93,7 +93,7 @@ Real ElectronDist(Real tgas, MCRandom *pran);
 void SampleDipole(Real theta_in, Real phi_in, Real &theta_out, Real &phi_out, MCRandom *pran);
 Real SampleVelocityParallel(Real a, Real x_in, MCRandom *pran);
 //--------------------- prototypes for emission.cpp functions ----------------------------
-void InitializeEmissionFreeFree(MonteCarloBlock *pmcb);
+Real InitializeEmissionFreeFree(MonteCarloBlock *pmcb);
 void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real lemax);
 Real PlanckDist(Real temp,MCRandom *pran);
 void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pco);
@@ -206,6 +206,9 @@ public:
   UserMoveFunc_t UserWorkInMove;
   EmisFunc_t InitEmission;
   TempFunc_t GetTemperature;
+  ScatFunc_t UserScattering;
+  OpacFunc_t UserScatteringOpacity;
+  OpacFunc_t UserAbsorptionOpacity;
 
   // functions
   // SWD: some of these functions could/should be private
@@ -217,7 +220,8 @@ public:
   void EnrollUserEmissionInitialization(EmisFunc_t emissfunc);
   void EnrollUserGetTemperature(TempFunc_t tempfunc);
   void EnrollUserWorkInMove(UserMoveFunc_t userfunc);
-
+  void EnrollUserOpacityFunction(OpacFunc_t opacfunc, bool abs);
+  void EnrollUserScatteringFunction(ScatFunc_t scatfunc);
   void SendMonteCarloSpectra(int dest);
   void ReceiveMonteCarloSpectra(int source);
   void CollectMoments(void);
@@ -302,8 +306,9 @@ public:
   bool orthotet_flag; // use orthonormal tetrad for TransferPhotons()
   bool varystep_flag; // use variable (true) or constant (false) step
 
-  Real codetocgs_rho, codetoc_vel;
-  Real stepsize, velocity;
+  Real codetocgs_rho, codetocgs_vel, codetocgs_tgas;
+  Real stepsize;
+  Real minweight;
 
   AthenaArray<Real> emission;
   AthenaArray<Real> moments;
@@ -319,18 +324,15 @@ public:
   void TransferPhotons(int nphtot); // Transfer photons on this block
   void LorentzTransform(Photon *pphot, const Real sign);
   Real LorentzTransformFrequencyShift(Photon *pphot);
+  void TetradTransform(Photon *pphot, const Real sign);
   void InitializePhoton(Photon *pphot);
   void FinalizePhoton(Photon *pphot);
-  //void DefaultGetTemperature();
   void UpdateMoments(Photon *pphot, Real dl);
   void NormalizeMoments(bool normalize);
   void ResetMoments();
   void UpdateCooling(Photon *pphot, Real energy0, Real weight0);
   //void GetPhotonsFromNeighbors();
   //void SendPhotonsToNeighbors();
-  void EnrollUserWorkInMove(UserMoveFunc_t userfunc);
-  void TetradTransform(Photon *pphot, const Real sign);
-  Real TetradTransformFrequencyShift(Photon *pphot);
 
 private:
    void SetBoundaryValues(enum MCBoundaryFlag *input_bcs);

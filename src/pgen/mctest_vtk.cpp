@@ -338,11 +338,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
   pphot->status = EVOLVING;
 
-  // Choose random intial position, weights, energy, and direction
-  // for photon emission.  In this version an equal number of photons
-  // is emitted in  each grid zone.  The relative emission from each grid 
-  // zone is then accounted for by a weighting factor cweight. 
-
+  // Choose a random cell for emission
   Real nx1 = static_cast<Real>(ie-is+1);
   Real nx2 = static_cast<Real>(je-js+1);
   Real nx3 = static_cast<Real>(ke-ks+1);
@@ -351,10 +347,9 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   pphot->i2 = static_cast<int>(pran->uniform()*nx2)+js;
   pphot->i3 = static_cast<int>(pran->uniform()*nx3)+ks;
 
-  // cweight is a constant weighting factor which accounts for the
-  // emissivity of the grid zone in which the photon was emitted
-  pphot->eweight = emission(pphot->i3,pphot->i2,pphot->i1);
-  pphot->weight = 1.0;
+  // Set weight according to the emission array, which is the relative number of photons
+  // per unit time emitted in each cell
+  pphot->weight = emission(pphot->i3,pphot->i2,pphot->i1);
 
   //std::cout << "test: " << pphot->weight << ' ' << pphot->i1 << ' ' 
   //          << pphot->i2 << ' ' << pphot->i3 << std::endl;

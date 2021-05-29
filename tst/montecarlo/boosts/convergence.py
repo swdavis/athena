@@ -88,8 +88,6 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,file='athinput.mcte
     outfile.write("<montecarlo>\n")
     outfile.write("nphot     = {:d}\n".format(nphot))
     outfile.write("iseed     = {:d}\n".format(iseed))
-    outfile.write("emin      = {:e}\n".format(emin))
-    outfile.write("emax      = {:e}\n".format(emax))
     outfile.write("scattering = none\n")
     outfile.write("emission   = freefree\n")
     outfile.write("absorption = freefree\n")
@@ -104,6 +102,8 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,file='athinput.mcte
     outfile.write("dens     = {:e}\n".format(dens))
     outfile.write("velocity = {:e}\n".format(vel))
     outfile.write("constdens = true\n")
+    outfile.write("emin      = {:e}\n".format(emin))
+    outfile.write("emax      = {:e}\n".format(emax))
     outfile.close()
 
 # Main function

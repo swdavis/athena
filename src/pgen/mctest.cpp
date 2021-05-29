@@ -32,7 +32,6 @@ namespace {
   Real logemin, logemax;
 }
 
-void InitializeEmissionUserFreeFree(MonteCarloBlock *pmcb);
 
 //========================================================================================
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
@@ -41,9 +40,7 @@ void InitializeEmissionUserFreeFree(MonteCarloBlock *pmcb);
 
 void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
-  Real rideal = 8.314e7;
-  Real c = 2.99792458e10;;
-  Real temp = pin->GetReal("problem","temp");
+  // Determine density via optical depth or constant density
   bool constdens = pin->GetOrAddBoolean("problem","constdens",false);
   Real rho, taumin, taumax;
   if (constdens) {
@@ -52,10 +49,6 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     taumin = pin->GetReal("problem","taumin");
     taumax = pin->GetReal("problem","taumax");
   }
-  Real vel = pin->GetOrAddReal("problem","velocity",0.);
-  Real gamma = peos->GetGamma();
-
-  vel *= c;
 
   AthenaArray<Real> tau1d,dens1d;
   if (!constdens) {
@@ -88,6 +81,15 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     }
   }
 
+  // Assume constant velocity provided as fraction of speed of light
+  Real vel = pin->GetOrAddReal("problem","velocity",0.);
+  Real c = 2.99792458e10;
+  vel *= c;
+
+  // Assume constant temperature and ideal gas
+  Real gamma = peos->GetGamma();
+  Real rideal = 8.314e7;
+  Real tgas = pin->GetReal("problem","temp");
   // Set initial conditions
   if (COORDINATE_SYSTEM == "cartesian") {
     // density varies in the z direction
@@ -99,7 +101,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 	  phydro->u(IM1,k,j,i) = 0.0;
 	  phydro->u(IM2,k,j,i) = 0.0;
 	  phydro->u(IM3,k,j,i) = rho*vel;
-	  phydro->u(IEN,k,j,i) = rideal*rho*temp/(gamma-1.0);
+	  phydro->u(IEN,k,j,i) = rideal*rho*tgas/(gamma-1.0);
 	}
       }
     }
@@ -116,7 +118,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 	    phydro->u(IM1,k,j,i) = rho*vel;
 	    phydro->u(IM2,k,j,i) = 0.0;
 	    phydro->u(IM3,k,j,i) = 0.0;
-	    phydro->u(IEN,k,j,i) = rideal*rho*temp/(gamma-1.0);
+	    phydro->u(IEN,k,j,i) = rideal*rho*tgas/(gamma-1.0);
 	  }
 	}
       }
@@ -139,11 +141,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
   pphot->status = EVOLVING;
 
-  // Choose random intial position, weights, energy, and direction
-  // for photon emission.  In this version an equal number of photons
-  // is emitted in  each grid zone.  The relative emission from each grid 
-  // zone is then accounted for by a weighting factor eweight. 
-
+  // Choose a random cell for emission
   Real nx1 = static_cast<Real>(ie-is+1);
   Real nx2 = static_cast<Real>(je-js+1);
   Real nx3 = static_cast<Real>(ke-ks+1);
@@ -152,10 +150,9 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   pphot->i2 = static_cast<int>(pran->uniform()*nx2)+js;
   pphot->i3 = static_cast<int>(pran->uniform()*nx3)+ks;
 
-  // eweight is a constant weighting factor which accounts for the
-  // emissivity of the grid zone in which the photon was emitted
-  pphot->eweight = emission(pphot->i3,pphot->i2,pphot->i1);
-  pphot->weight = 1.0;
+  // Set weight according to the emission array, which is the relative number of photons
+  // per unit time emitted in each cell
+  pphot->weight = emission(pphot->i3,pphot->i2,pphot->i1);
 
   // Obtain initial position within zone
   GetZonePosition(pphot,pran,pcoord);
@@ -175,6 +172,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 
+  //EnrollUserOpacityFunction(FreeFreeAbsorptionOpacityUser,true);
   // Set the energy boundaries for free-free emission
   Real everg = 1.6021772e-12;
   logemin = log(everg*pin->GetReal("problem", "emin"));

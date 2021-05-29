@@ -124,7 +124,6 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
   // Set status flag
   pphot->status = EVOLVING;
-  pphot->eweight = 1.;
   pphot->weight = 1.;
   
   // Emit photons from a large radius r >> 1 in units of [GM/c^2]. Ideally this would be 

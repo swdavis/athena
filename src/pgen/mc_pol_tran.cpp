@@ -134,7 +134,6 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   if (pphot->weight < 0)
     pphot->status = DESTROYED;
 
-  pphot->eweight = 1.;
   pphot->weight = 1.;
 
   // Initialize the absorption and scattering extinction coefficients

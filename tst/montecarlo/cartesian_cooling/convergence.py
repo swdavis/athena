@@ -159,8 +159,6 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,length,periodic,
     outfile.write("<montecarlo>\n")
     outfile.write("nphot     = {:d}\n".format(nphot))
     outfile.write("iseed     = {:d}\n".format(iseed))
-    outfile.write("emin      = {:e}\n".format(emin))
-    outfile.write("emax      = {:e}\n".format(emax))
     if (scattering):
         outfile.write("scattering = compton\n")
     else:
@@ -179,6 +177,8 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,length,periodic,
     outfile.write("dens     = {:e}\n".format(dens))
     outfile.write("velocity = {:e}\n".format(vel))
     outfile.write("constdens = true\n")
+    outfile.write("emin      = {:e}\n".format(emin))
+    outfile.write("emax      = {:e}\n".format(emax))
     outfile.close()
 
 # Main function

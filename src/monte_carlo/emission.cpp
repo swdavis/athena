@@ -14,10 +14,10 @@
 #include "../globals.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn void InitializeEmissionFreefree(MonteCarloBlock *pmcb)
-//  \brief Initialize emission array for steady state monte carlo calculation
+//! \fn Real InitializeEmissionFreefree(MonteCarloBlock *pmcb)
+//  \brief Initialize emission array and return minimum
 
-void InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
+Real InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
 
   Real heabund = 0.09; // Should have more general EOS functions
   Real kb = 1.380649e-16;
@@ -52,13 +52,14 @@ void InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
     std::cout << "Emission array range (min, max): " << emm_min << " " << emm_max
 	      << std::endl;
   }
+  return emm_min;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void PhotonInitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, 
 //                              Real lemax))
 //  \brief initialize energy, direction, polarization and weight of the photon
-//         consistent with free-free emission
+//         consistent with free-free emission, 
 
 void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real lemax)
 {

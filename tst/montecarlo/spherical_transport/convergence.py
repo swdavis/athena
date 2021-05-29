@@ -71,8 +71,6 @@ def write_athinput(iseed,nphot,step,file='athinput.sphtran'):
     outfile.write("<montecarlo>\n")
     outfile.write("nphot     = {:d}\n".format(nphot))
     outfile.write("iseed     = {:d}\n".format(iseed))
-    outfile.write("emin      = 1.0\n")
-    outfile.write("emax      = 100.\n")
     outfile.write("scattering = none\n")
     outfile.write("emission   = freefree\n")
     outfile.write("absorption = none\n")

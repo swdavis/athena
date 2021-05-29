@@ -189,7 +189,11 @@ TimeIntegratorTaskList::TimeIntegratorTaskList(ParameterInput *pin, Mesh *pm)
   }
 
   // Set cfl_number based on user input and time integrator CFL limit
-  Real cfl_number = pin->GetReal("time","cfl_number");
+  Real cfl_number;
+  if (MONTE_CARLO_STATIC)
+    cfl_number = 0.1;
+  else
+    cfl_number = pin->GetReal("time","cfl_number");
   if (cfl_number > cfl_limit) {
     std::cout << "### Warning in CreateTimeIntegrator" << std::endl
         << "User CFL number " << cfl_number << " must be smaller than " << cfl_limit

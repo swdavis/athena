@@ -90,7 +90,6 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   pphot->i2 = static_cast<int>(pran->uniform()*nx2)+js;
   pphot->i3 = static_cast<int>(pran->uniform()*nx3)+ks;
 
-  pphot->eweight = 1.0;
   pphot->weight = 1.0;
 
   // Obtain initial position within zone

@@ -51,7 +51,6 @@ void Photon::CopyPhoton(Photon *pphot) {
     stokes[i] = pphot->stokes[i];
   }
   weight = pphot->weight;
-  eweight = pphot->eweight;
   energy = pphot->energy;
   sct_coef = pphot->sct_coef;
   abs_coef = pphot->abs_coef;
@@ -65,7 +64,6 @@ void Photon::CopyPhoton(Photon *pphot) {
 bool Photon::IsNanPhoton() {
 
   if (isnan(weight)) return true;
-  if (isnan(eweight)) return true;
   if (isnan(energy)) return true;
   for (int i=0; i<3; ++i) {
     if (isnan(x[i])) return true;
@@ -85,8 +83,7 @@ bool Photon::IsNanPhoton() {
 void Photon::PrintPhoton() {
   // Used primarily for debugging
   std::cout << "----------------------------" << std::endl
-            << "Energy, weights: " << energy << " " << weight
-	    << " " << eweight << std::endl
+            << "Energy, weights: " << energy << " " << weight << std::endl
 	    << "i: " << i1 << " " << i2 << " " << i3 <<std::endl
 	    << "x: " << x[0] << " " << x[1] << " " << x[2] << " " << x[3] << std::endl
 	    << "k: " << k[0] << " " << k[1] << " " << k[2] << " " << k[3] << std::endl

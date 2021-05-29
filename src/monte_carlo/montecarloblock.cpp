@@ -21,9 +21,7 @@
 #include "../globals.hpp"
 
 // SWD: Eliminate these
-#define MINWEIGHT 1.0e-30
 #define MAXSCAT 10000
-//#define MINWEIGHT 1.0e-30
 
 // constructor, initializes data structures and parameters
 
@@ -120,12 +118,10 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     }
   }
 
-  codetocgs_rho = 1.0; codetoc_vel = 1.0;  // default cgs for code units
-
+  codetocgs_rho = 1.; codetocgs_vel = 1., codetocgs_tgas = 1.;  // default cgs for code units
+  // SWD:  stepsize control needs to be modified
   stepsize = pin->GetOrAddReal("montecarlo","stepsize",1.0e-3);
-  // SWD: a needs to go
-  velocity = pin->GetOrAddReal("problem", "velocity", 0.0);
-
+  minweight = pin->GetOrAddReal("montecarlo","minweight",1.0e-20);
 
   // Flags for handling photon movement
   general_mover_flag = pin->GetOrAddBoolean("montecarlo","general_mover",false);
@@ -218,7 +214,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   pmover->pcoord = pcoord;
   // Set absorption opacity
   if (absorption_meth == ABSUSER) {
-    AbsorptionOpacity = NULL;
+    AbsorptionOpacity = pmy_mc->UserAbsorptionOpacity;
   } else if (absorption_meth == ABSNONE) {
     AbsorptionOpacity = NoOpacity;
   } else if (absorption_meth == ABSFF) {
@@ -227,8 +223,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
  
   // Set scattering opacity and method
   if (scattering_meth == SCATUSER) {
-    ScatteringOpacity = NULL;
-    Scatter = NULL;
+    ScatteringOpacity = pmy_mc->UserScatteringOpacity;
+    Scatter = pmy_mc->UserScattering;
   } else if (scattering_meth == SCATNONE) {
     ScatteringOpacity = NoOpacity;
     Scatter = NoScatter;  // should not be called
@@ -402,7 +398,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
     
     // Lorentz transform E, k to Eulerian frame and update opacities.
     if (boosts) {
-      // SWD: Change this to a function pointer
+      // SWD: Change this to a function pointer ?
       if (orthotet_flag) {
         TetradTransform(pphoton, to_eulr);  
       } else {
@@ -422,8 +418,9 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
       Real weight0 = pphoton->weight;
       if (weighted_absorption) {
         pphoton->weight *= (pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef));
-        if(pphoton->weight <= MINWEIGHT)
+        if(pphoton->weight <= minweight) {
           pphoton->status = ABSORBED;
+        }
       } else {
         if (pran->uniform() > (pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef)) )
           pphoton->status = ABSORBED;
@@ -534,7 +531,7 @@ void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign) {
     Real aber = gamma*(1.-gamma*bdk/(gamma+1.));
     
     pphot->energy *= gonembdk;
-    //printf("%g %g %g %g %g\n",pphot->eweight,gonembdk,gamma,bdk,pphot->energy/1.6021772e-12);
+    //printf("%g %g %g %g\n",gonembdk,gamma,bdk,pphot->energy/1.6021772e-12);
     Real kz = k3;
     k1 = (k1 - aber * beta[0]) / gonembdk;
     k2 = (k2 - aber * beta[1]) / gonembdk;
@@ -581,8 +578,7 @@ Real MonteCarloBlock::LorentzTransformFrequencyShift(Photon *pphot) {
   
 }
 
-// SWD: The follwoing need to be modified to automatically use hydro velocities
-// could conceivable include functional form option at later date if needed
+// SWD: This is an untested modification of Eric's original method
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign)
 //  \brief Tetrad transform photon packet
@@ -595,81 +591,67 @@ Real MonteCarloBlock::LorentzTransformFrequencyShift(Photon *pphot) {
 
 void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign) {
 
-  // Construct the orthonormal tetrad
-  Real ucon[NCOORD];
-  Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
-  Real kcopy[NCOORD];
-  Real gcov[NCOORD][NCOORD];
-  Real energy_shift;
-  Real kdotu = 0.;
-  
-  pcoord->Metric(pphot->x, gcov);
-  Real a = pcoord->GetSpin();
-
-  Real beta2 = SQR(velocity);
+  // Get velocity of cell
+  int i1 = pphot->i1, i2 = pphot->i2, i3 = pphot->i3;
+  Real beta[3];
+  for (int i=0; i<3; ++i) {
+    beta[i] = sign * vel(i,i3,i2,i1) / 2.9979e10;
+  }
+  Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
   Real gamma = 1. / sqrt(1. - beta2);
-  
+
+  // Define velocity four vector for cell
+  Real ucon[NCOORD];
   ucon[IMC0] = gamma;
-  ucon[IMC1] = gamma * velocity;
-  ucon[IMC2] = 0.;
-  ucon[IMC3] = 0.;
+  ucon[IMC1] = gamma * beta[0];
+  ucon[IMC2] = gamma * beta[1];
+  ucon[IMC3] = gamma * beta[2];
   
-  //printf("ucon: %g %g %g %g\n", ucon[IMC0], ucon[IMC1], ucon[IMC2], ucon[IMC3]);
+
+  // get metric values for current position
+  Real gcov[NCOORD][NCOORD];
+  pcoord->Metric(pphot->x, gcov);
 
   // create tetrad basis
+  Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
   ConstructTetrad(ucon, gcov, econ, ecov);
 
   if (sign > 0) { // tranforming to comoving frame
 
+    // SWD: mirrors Lorentz transformation but redundant -> should use CoordinateToTetrad
+    Real kdotu;
     for (int i = 0; i < NCOORD; i++) 
       kdotu += pphot->k[i] * ucon[i]; // pphot->k in coordinate frame
+    Real energy_shift = - pphot->k[IMC0] / kdotu; 
 
-    energy_shift = - pphot->k[IMC0] / kdotu; 
 
+    Real kcopy[NCOORD];
     for (int i = 0; i < NCOORD; i++)
       kcopy[i] = pphot->k[i];
     CoordinateToTetrad(kcopy, pphot->k, ecov); // updates pphot->k 
 
-    Real klow[NCOORD];
-    ConToCov(kcopy,klow,gcov);
-    Real r = pphot->x[IMC1];
-    Real omega = 1.0/(pow(r, 3./2.) + a); // circular velocity 
-    Real del = SQR(r)+SQR(a)-2.*r;
-    Real aeq = SQR(r)+SQR(a);
-    aeq = SQR(aeq)-SQR(a)*del;
-    Real enu = sqrt(del/aeq)*r;
-    Real vg = (SQR(r)-2.*a*sqrt(r)+SQR(a))/sqrt(del)*omega;
-    Real gam = 1./sqrt(1.-SQR(vg));
-    Real comp1 = (1.+omega*klow[IMC3]/klow[IMC0])*gam/enu;
-    Real comp2 = -DotVec(kcopy,ucon,gcov);
-    //printf("kt: %g %g %g\n",pphot->k[IMC0],comp1,comp2);
-     
-    //  update pphot->energy and coefficients
-    pphot->energy *= energy_shift; // now in tetrad frame
+    // transform energy and extinction coefficients
+    pphot->energy *= energy_shift; 
     pphot->abs_coef *= energy_shift;
     pphot->sct_coef *= energy_shift;
-    //printf("energy_shift to comoving frame: %g\n", energy_shift);
+
 
   } else { // transforming to coordinate frame
 
+    Real kcopy[NCOORD];
+    for (int i = 0; i < NCOORD; i++)
+      kcopy[i] = pphot->k[i];
     TetradToCoordinate(kcopy, pphot->k, econ); // updates pphot->k
 
-    /*for (int i = 0; i < NCOORD; i++) 
-      kdotu += pphot->k[i] * ucon[i]; // pphot->k in coordinate frame*/
-    kdotu = DotVec(pphot->k, ucon, gcov);
-
+    // Eric's implementation -- needs to be updated
+    Real kdotu = DotVec(pphot->k, ucon, gcov);
     if (fabs(kdotu) < 1.0e-30) {
       printf("warning: kdotu = %g\n", kdotu);
       kdotu = 1.0e-30;
     }
-
-    //energy_shift = pphot->k[IMC0] / kdotu;
-    energy_shift = - kdotu / pphot->k[IMC0]; // new calculation
-    //printf("energy_shift to coordinate frame: %g\n", energy_shift);
-    /*printf("energy_shift: %g  k^t_tet = %g  k^t_coord = %g  tet/coord = %g\n",
-      energy_shift, kcopy[IMC0], pphot->k[IMC0], kcopy[IMC0]/pphot->k[IMC0]);*/
+    Real energy_shift = - kdotu / pphot->k[IMC0]; // new calculation
     
-    // update pphot->energy and opacities
+    // transform energy and opacities
     pphot->energy *= energy_shift;
     pphot->abs_coef *= energy_shift;
     pphot->sct_coef *= energy_shift;
@@ -679,58 +661,12 @@ void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real MonteCarloBlock::TetradTransformFrequencyShift(Photon *pphot)
-//  \brief return energy shift
-
-Real MonteCarloBlock::TetradTransformFrequencyShift(Photon *pphot) {
-
-  // Construct the orthonormal tetrad
-  Real r = pphot->x[IMC1];
-  Real ucon[NCOORD];
-  Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
-  Real kcopy[NCOORD];
-  Real gcov[NCOORD][NCOORD];
-  Real energy_shift;
-  Real omega;
-  Real kdotu = 0.;
-  Real gamma, beta2;
-
-  Real a = pcoord->GetSpin();
-  omega = 1.0/(pow(r, 3./2.) + a);
-  
-  pcoord->Metric(pphot->x, gcov);
- 
-  if (COORDINATE_SYSTEM == "spherical_polar") {
-    ucon[IMC0] = sqrt(-1.0/(gcov[IMC0][IMC0] + 2.*gcov[IMC0][IMC3]*omega +
-			    SQR(omega)*gcov[IMC3][IMC3]));
-    ucon[IMC1] = 0.;
-    ucon[IMC2] = 0.;
-    ucon[IMC3] = (ucon[IMC0])*omega;
-  } else if (COORDINATE_SYSTEM == "cartesian") {
-    beta2 = SQR(velocity);
-    gamma = 1. / sqrt(1. - velocity);
-    ucon[IMC0] = gamma;
-    ucon[IMC1] = gamma * velocity;
-    ucon[IMC2] = gamma * 0.;
-    ucon[IMC3] = gamma * 0.;
-  }
-  
-  for (int i = 0; i < NCOORD; i++) 
-    kdotu += pphot->k[i] * ucon[i];
-
-  energy_shift = kdotu / pphot->k[IMC0];
-
-  return energy_shift;
-
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl)
 //  \brief add contribution to radiation moments in current zone
 
 void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
   
-
+  // SWD: needs to be modifed for non Cartesian kvectors
   Real k1,k2,k3;
   Real energy, abs_coef, step;
   if (moments_comoving) {
@@ -769,7 +705,8 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
     step = dl;
   }
 
-  Real weight = pphot->eweight * pphot->weight * energy * step;
+  // Weight moments by time spent in domain
+  Real weight = pphot->weight * energy * step / 2.99792458e10;
   if ((isinf(weight)) || (isnan(weight))) {
     std::cout << "Warning: UpdateMoments weight is : " << weight << std::endl;
   } else {
@@ -789,12 +726,12 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
     //  weight *= pphot->k[IMC0];
     moments(MCIER,k,j,i) += weight;
     // Flux
-    moments(MCIFR1,k,j,i) += weight1;
-    moments(MCIFR2,k,j,i) += weight2;
-    moments(MCIFR3,k,j,i) += weight3;
+    moments(MCIFR1,k,j,i) += weight1 * 2.99792458e10;
+    moments(MCIFR2,k,j,i) += weight2 * 2.99792458e10;
+    moments(MCIFR3,k,j,i) += weight3 * 2.99792458e10;
     // Radiation Pressure
     //Real weightp = weight1 * pphot->k[0];
-    Real weightp = weight1;
+    Real weightp = weight1 * 2.99792458e10;
     moments(MCIPR11,k,j,i) += weightp;
     weightp = weight2 * k2;
     moments(MCIPR22,k,j,i) += weightp;
@@ -821,11 +758,9 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
 
 void MonteCarloBlock::NormalizeMoments(bool normalize) {
 
+  // Normalize all moments by number of photons emitted
   Real normall = static_cast<Real>(nphdone);
-  // SWD: This should be modified so that a normalize function is specified for
-  // freefree emissivity and a user provided alternative can be used when freefree
-  // is not used.
-  //Real normall = static_cast<Real>(nphdone)*pmy_mc->normalization;
+ 
   if (normalize) {
    // Normalize energy density weighted averages first
     for (int k=ks; k<=ke; ++k) {
@@ -839,10 +774,6 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
     // Normalize remaining moments by volume and global norm (counts)
     for (int n=0; n<11; ++n) {
       Real norm = normall;
-      if ((n == 0) || (n >= 4))
-        norm *= 2.99792458e10;
-     if (n == MCINET)
-       norm = normall;
       for (int k=ks; k<=ke; ++k) {
 	for (int j=js; j<=je; ++j) {
 	  for (int i=is; i<=ie; ++i) {
@@ -861,10 +792,6 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
     // Undo normalization for continuing evolution
     for (int n=0; n<11; ++n) {
       Real norm = normall;
-      if ((n == 0) || (n >= 4))
-        norm *= 2.99792458e10;
-      if (n == MCINET)
-        norm = normall;
       for (int k=ks; k<=ke; ++k) {
 	for (int j=js; j<=je; ++j) {
 	  for (int i=is; i<=ie; ++i) {
@@ -906,8 +833,7 @@ void MonteCarloBlock::ResetMoments() {
 
 void MonteCarloBlock::UpdateCooling(Photon *pphot, Real energy0, Real weight0) {
   
-  Real cool = pphot->eweight * (pphot->weight - weight0) * 
-                (pphot->energy - energy0);
+  Real cool = (pphot->weight - weight0) * (pphot->energy - energy0);
   if ((isinf(cool)) || (isnan(cool))) {
     std::cout << "Warning: UpdateCooling cooling is : " << cool << std::endl;
     pphot->PrintPhoton();

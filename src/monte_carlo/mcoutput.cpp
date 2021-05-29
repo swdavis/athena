@@ -80,7 +80,7 @@ Spectrum::Spectrum(Spectrum *pspec) {
   range = pspec->range;
   polarized = pspec->polarized;
   logarithmic = pspec->logarithmic;
-  cartesian_axis = pspec->cartesian_axis;
+  polar_axis = pspec->polar_axis;
   legacy = pspec->legacy;
   coordinates = pspec->coordinates;
   face = pspec->face;
@@ -259,20 +259,22 @@ bool Spectrum::AngleBinsCartesian(Photon *pphot, int &phibin, int &cthbin) {
 	phi = 2 * PI - phi;
     }
   }
-  if (ctheta < 0.0) {
-    printf("Warning: ctheta < 0\n");
-    pphot->PrintPhoton();
-    return false;
-  }
+
 
   // Get ctheta bin
   int ncth = range.ncth;
   cthbin = static_cast<int>(ctheta * static_cast<Real>(ncth) );
-  if(cthbin >= ncth) {
+  if (cthbin >= ncth) {
     std::cout << "Warning: cthbin > ncth (cthbin, mu, k1, k2, k3): " << cthbin << ' '
               << ctheta << ' ' << kx << ' ' << ky << ' ' << kz << std::endl;
-    cthbin = ncth-1;
+    return false;
   }
+  if (cthbin < 0.) {
+    std::cout << "Warning: cthbin < 0 (cthbin, mu, k1, k2, k3): " << cthbin << ' '
+              << ctheta << ' ' << kx << ' ' << ky << ' ' << kz << std::endl;
+    return false;
+  }
+
 
   // Get phi bin
   int nphi = range.nphi;
@@ -284,12 +286,12 @@ bool Spectrum::AngleBinsCartesian(Photon *pphot, int &phibin, int &cthbin) {
   if(phibin >= nphi) {
     std::cout << "Warning: phibin > nphi (phibin, phi, k1, k2, k3): " << phibin << ' '
               << phi << ' ' << kx << ' ' << ky << ' ' << kz << std::endl;
-    phibin = nphi-1;
+    return false;
   }
   if(phibin < 0) {
     std::cout << "Warning: phibin < 0 (phibin, phi, k1, k2, k3): " << phibin << ' '
               << phi << ' ' << kx << ' ' << ky << ' ' << kz << std::endl;
-    phibin = 0;
+    return false;
   }
 
   return true;
@@ -428,7 +430,6 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
     return;
 
   Real weight = pphot->weight;
-  weight *= pphot->eweight;
   if ((isinf(weight)) || (isnan(weight))) {
     std::cout << "Warning: weight is Nan or Inf: " << weight << std::endl;
   } else {
@@ -446,7 +447,7 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
   
     // Get angle bins
     int phibin, mubin;
-    if (cartesian_axis) {
+    if (polar_axis) {
       if (!AngleBinsCartesian(pphot,phibin,mubin))
 	return;
     } else {
@@ -612,7 +613,7 @@ void PhotonList::AddPhoton(Photon *pphot) {
     ResizeList(2*len_limit);
   }
   int n = 0;
-  photons(length,n++) = pphot->weight*pphot->eweight;
+  photons(length,n++) = pphot->weight;
   photons(length,n++) = pphot->energy;
   int nmax;
   if (relativistic) nmax = 4; else nmax = 3;
@@ -922,9 +923,9 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
 	}	  
 	// Set axis for determining output angles
 	if (COORDINATE_SYSTEM == "cartesian")
-	  pspec->cartesian_axis = true;
+	  pspec->polar_axis = true;
 	else
-	  pspec->cartesian_axis = pin->GetOrAddBoolean(pib->block_name,"cartesian_axis",false);
+	  pspec->polar_axis = pin->GetOrAddBoolean(pib->block_name,"polar_axis",false);
 	// Check for coordinate range
         if (pfirst == NULL)
           pfirst = pspec;

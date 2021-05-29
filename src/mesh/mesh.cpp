@@ -62,10 +62,16 @@ Mesh::Mesh(ParameterInput *pin, int mesh_test) {
 
   // read time and cycle limits from input file
   start_time = pin->GetOrAddReal("time","start_time",0.0);
-  tlim       = pin->GetReal("time","tlim");
-  cfl_number = pin->GetReal("time","cfl_number");
+  if (MONTE_CARLO_STATIC) {
+    tlim = FLT_MAX;
+    cfl_number = 0.1;
+  } else {
+    tlim       = pin->GetReal("time","tlim");
+    cfl_number = pin->GetReal("time","cfl_number");
+  }
   ncycle_out = pin->GetOrAddInteger("time","ncycle_out",1);
   time = start_time;
+
   dt   = (FLT_MAX*0.4);
   nbnew=0; nbdel=0;
 
@@ -90,7 +96,7 @@ Mesh::Mesh(ParameterInput *pin, int mesh_test) {
 
   // read number of grid cells in root level of mesh from input file.
   mesh_size.nx1 = pin->GetInteger("mesh","nx1");
-  if (mesh_size.nx1 < 4) {
+  if ((mesh_size.nx1 < 4) && (!MONTE_CARLO_STATIC)) {
     msg << "### FATAL ERROR in Mesh constructor" << std::endl
         << "In mesh block in input file nx1 must be >= 4, but nx1="
         << mesh_size.nx1 << std::endl;
@@ -183,8 +189,8 @@ Mesh::Mesh(ParameterInput *pin, int mesh_test) {
         << "the mesh must be evenly divisible by the meshblock" << std::endl;
     throw std::runtime_error(msg.str().c_str());
   }
-  if (block_size.nx1 <4 || (block_size.nx2<4 && dim>=2)
-     || (block_size.nx3<4 && dim==3)) {
+  if ((block_size.nx1 <4 || (block_size.nx2<4 && dim>=2)
+       || (block_size.nx3<4 && dim==3)) && (!MONTE_CARLO_STATIC)) {
     msg << "### FATAL ERROR in Mesh constructor" << std::endl
         << "block_size must be larger than or equal to 4 meshes." << std::endl;
     throw std::runtime_error(msg.str().c_str());

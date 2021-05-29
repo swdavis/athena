@@ -39,7 +39,7 @@ public:
   std::string base_name;
   MomentumRange range;
   bool polarized;
-  bool cartesian_axis;
+  bool polar_axis;
   bool coordinates;
   bool logarithmic;
   bool legacy; // Output format to be used (temporarily retained for testing)

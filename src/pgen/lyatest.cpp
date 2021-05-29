@@ -64,8 +64,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   Real dopw = nu0 * vth / c;
   Real kappa = ResLinePre() / (mass*sqrt(PI)*dopw);
   Real rho = tau / (kappa * rad0);
-  printf("kappa: %g %g %g\n",kappa,ResLinePre(),rho/mass);
-  printf("voigt: %g\n",XsecVoigt(nu0,temp));
+  //printf("kappa: %g %g %g\n",kappa,ResLinePre(),rho/mass);
+  //printf("voigt: %g\n",XsecVoigt(nu0,temp));
   //printf("rho: %g %g %g %g\n",rho,kappaes,rad0,tau);
   // density is non-zero only in sphere
   for (int k=ks; k<=ke; k++) {
@@ -92,21 +92,20 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
   nuser_var = 1;
-  if (emission_meth == EMISUSER) {
-    Real x0 = pin->GetReal("problem","x0");
-    Real temp = pin->GetReal("problem","temp");
-    Real kb = 1.380649e-16;
-    Real mass = 1.660538782e-24;
-    Real vth = sqrt( 2. * kb * temp / mass);
-    Real c = 2.99792458e10;
-    Real nu0 = 2.468e15;
-    Real dopw = nu0 * vth / c;
-    Real lorw = 6.265e8/(4.*PI);
-    printf("dop, lor, a: %e %e %e\n",dopw,lorw,lorw/dopw);
-    Real h = 6.62607015e-27;
-    energy0 = h * (nu0 + dopw * x0);
 
-  }
+  Real x0 = pin->GetReal("problem","x0");
+  Real temp = pin->GetReal("problem","temp");
+  Real kb = 1.380649e-16;
+  Real mass = 1.660538782e-24;
+  Real vth = sqrt( 2. * kb * temp / mass);
+  Real c = 2.99792458e10;
+  Real nu0 = 2.468e15;
+  Real dopw = nu0 * vth / c;
+  Real lorw = 6.265e8/(4.*PI);
+  //printf("dop, lor, a: %e %e %e\n",dopw,lorw,lorw/dopw);
+  Real h = 6.62607015e-27;
+  energy0 = h * (nu0 + dopw * x0);
+
   rad0 = pin->GetReal("problem","radius");
   path0 = pin->GetOrAddReal("problem","path",-1.);
   // enroll function to cease photon propogation based on escape radius
@@ -125,8 +124,10 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   // Set status flag
   pphot->status = EVOLVING;
 
+  // Would be better elsewhere but issue is initialization of
+  // MonteCarloBlocks after creation
   if (first) {
-    // Deterime zone of initial photon -- asssumed to be zone that includes origin
+    // Deterime cell of initial photon -- asssumed to include origin
   
     i1start = -1;
     for(int i=is; i<=ie; i++) {
@@ -157,36 +158,31 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   pphot->i3 = i3start;
 
   // Initialize Photon weights, energy, direction, polarization
-  if (pmy_mc->emission_meth == EMISUSER) {
-    pphot->eweight = 1.0;
-    pphot->weight = 1.0;
-    pphot->energy = energy0;
-    // Initialize Stokes vector
-    pphot->stokes[0] = 1.0;
-    pphot->stokes[1] = 0.0;
-    pphot->stokes[2] = 0.0;
-    
-    // Generate initial angle parameters
-    Real phi = 2. * PI * pran->uniform();
-    Real cphi = cos(phi);
-    Real sphi = sin(phi);
-    
-    Real cth = 2. * pran->uniform() - 1.;
-    Real sth = sqrt(1. - SQR(cth));
 
-    // Initialize wave vector with isotropic distribution
-    pphot->k[0] = sth*cphi;
-    pphot->k[1] = sth*sphi;
-    pphot->k[2] = cth;
- 
-    // Initialize photon at the origin
-    pphot->x[0] = 0.;
-    pphot->x[1] = 0.;
-    pphot->x[2] = 0.;
-    
-
-  }
-
+  pphot->weight = 1.0;
+  pphot->energy = energy0;
+  // Initialize Stokes vector
+  pphot->stokes[0] = 1.0;
+  pphot->stokes[1] = 0.0;
+  pphot->stokes[2] = 0.0;
+  
+  // Generate initial angle parameters
+  Real phi = 2. * PI * pran->uniform();
+  Real cphi = cos(phi);
+  Real sphi = sin(phi);
+  
+  Real cth = 2. * pran->uniform() - 1.;
+  Real sth = sqrt(1. - SQR(cth));
+  
+  // Initialize wave vector with isotropic distribution
+  pphot->k[0] = sth*cphi;
+  pphot->k[1] = sth*sphi;
+  pphot->k[2] = cth;
+  
+  // Initialize photon at the origin
+  pphot->x[0] = 0.;
+  pphot->x[1] = 0.;
+  pphot->x[2] = 0.;
   
   for (int i=0; i<pphot->nuser_var; i++)
     pphot->user_var[i] = 0.;
