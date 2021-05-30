@@ -26,8 +26,8 @@
 #include "../monte_carlo/photonmover.hpp"
 #include "../globals.hpp"
 
-#if MAGNETIC_FIELDS_ENABLED
-#error "This problem generator does not support magnetic fields"
+#if !MONTE_CARLO_STATIC
+#error "This problem requires monte carlo"
 #endif
 
 namespace {

@@ -23,6 +23,10 @@
 #include "../monte_carlo/photonmover.hpp"
 #include "../globals.hpp"
 
+#if !MONTE_CARLO_STATIC
+#error "This problem requires monte carlo"
+#endif
+
 static int iphot;
 static Real r0,th0,phi0;
 static Real gcov0[4][4];
@@ -30,9 +34,6 @@ static Real muk,phik;
 static Real rprev;
 static bool first;
 
-#if MAGNETIC_FIELDS_ENABLED
-#error "This problem generator does not support magnetic fields"
-#endif
 
 // User function definitions
 void TurningPointCheck(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover);

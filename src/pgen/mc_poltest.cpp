@@ -23,15 +23,14 @@
 #include "../monte_carlo/photonmover.hpp"
 #include "../globals.hpp"
 
+#if !MONTE_CARLO_STATIC
+#error "This problem requires monte carlo"
+#endif
 
 static Real r0,th0,ph0,rfin; 
 static Real spsi,cpsi,szet,czet;
 static Real Kp[2], polang;
 static bool outsphere;
-
-#if MAGNETIC_FIELDS_ENABLED
-#error "This problem generator does not support magnetic fields"
-#endif
 
 void Compute_f(Photon *pphot, Real gcov[4][4],Real K[2], Real a, Real f[4]);
 void Compute_K(Photon *pphot, Real f[4], Real a, Real K[2]);

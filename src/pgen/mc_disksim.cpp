@@ -23,8 +23,8 @@
 #include "../monte_carlo/photon.hpp"
 #include "../monte_carlo/photonmover.hpp"
 
-#if MAGNETIC_FIELDS_ENABLED
-#error "This problem generator does not support magnetic fields"
+#if !MONTE_CARLO_STATIC
+#error "This problem requires monte carlo"
 #endif
 
 /* This stores the domain information of each vtk file */
