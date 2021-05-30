@@ -1,10 +1,10 @@
 <comment>
 problem   =  monte carlo transfer through uniform isothermal sphere
 reference =
-configure = --prob=sphere -mc
+configure = --prob=mc_sphere_isoth -mc
 
 <job>
-problem_id = sph   # problem ID: basename of output filenames
+problem_id = sphiso   # problem ID: basename of output filenames
 
 <output1>
 file_type  = hdf5       # Binary data dump

@@ -3,8 +3,8 @@
 // Copyright(C) 2014 James M. Stone <jmstone@princeton.edu> and other code contributors
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
-//! \file mctest.cpp
-//  \brief Problem generator for simple monte carlo problem
+//! \file mc_vtk.cpp
+//  \brief Problem generator for reading in vtk grid and performing monte carlo tests
 //
 //========================================================================================
 

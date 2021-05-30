@@ -3,8 +3,8 @@
 // Copyright(C) 2014 James M. Stone <jmstone@princeton.edu> and other code contributors
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
-//! \file mctest.cpp
-//  \brief Test movement through spherical grid 
+//! \file mc_sph_tran.cpp
+//  \brief Test photon transport through spherical polar grid 
 //
 //========================================================================================
 

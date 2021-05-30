@@ -34,39 +34,27 @@ def write_athinput(iseed,nphot,step,file='athinput.sphtran'):
     outfile.write("relativistic = true\n")
     outfile.write("nuser     = 1\n")
     outfile.write("\n")
-    outfile.write("<time>\n")
-    outfile.write("cfl_number = 0.1      # The CFL Number\n")
-    outfile.write("nlim       = 1        # cycle limit\n")
-    outfile.write("tlim       = 1.0      # time limit\n")
-    outfile.write("\n")
     outfile.write("<mesh>\n")
     outfile.write("nx1        = 128       # Number of zones in X1-direction\n")
     outfile.write("x1min      = 0.01       # minimum value of X1\n")
     outfile.write("x1max      = 1.0e11     # maximum value of X1\n")
-    outfile.write("ix1_bc     = outflow  # inner-X1 boundary flag\n")
-    outfile.write("ox1_bc     = outflow  # outer-X1 boundary flag\n")
     outfile.write("ix1_mc_bc  = absorb  # inner-X1 boundary flag\n")
     outfile.write("ox1_mc_bc  = escape  # outer-X1 boundary flag\n")
     outfile.write("\n")
     outfile.write("nx2        = 64         # Number of zones in X2-direction\n")
     outfile.write("x2min      = 0.      # minimum value of X2\n")
     outfile.write("x2max      = 3.141592654   # maximum value of X2-\n")
-    outfile.write("ix2_bc     = polar  # inner-X2 boundary flag\n")
-    outfile.write("ox2_bc     = polar  # outer-X2 boundary flag\n")
     outfile.write("ix2_mc_bc  = polar  # inner-X2 boundary flag\n")
     outfile.write("ox2_mc_bc  = polar  # outer-X2 boundary flag\n")
     outfile.write("\n")
     outfile.write("nx3        = 64        # Number of zones in X3-direction\n")
     outfile.write("x3min      = 0.0       # minimum value of X3\n")
     outfile.write("x3max      = 6.2831853071 # maximum value of X3\n")
-    outfile.write("ix3_bc     = periodic  # inner-X3 boundary flag\n")
-    outfile.write("ox3_bc     = periodic  # outer-X3 boundary flag\n")
     outfile.write("ix3_mc_bc  = periodic  # inner-X3 boundary flag\n")
     outfile.write("ox3_mc_bc  = periodic  # outer-X3 boundary flag\n")
     outfile.write("\n")
     outfile.write("<hydro>\n")
     outfile.write("gamma = 1.666666666666667 # gamma = C_p/C_v\n")
-    outfile.write("iso_sound_speed = 1.0     # isothermal sound speed\n")
     outfile.write("\n")
     outfile.write("<montecarlo>\n")
     outfile.write("nphot     = {:d}\n".format(nphot))
@@ -90,7 +78,8 @@ def get_blackbody(temp,nu):
 # Main function
 def main(**kwargs):
 
-    athena_path="/home/swd8g/athena-swdavis/bin"
+    path =  kwargs.pop("path")
+    athena_path = path+"/bin"
 
     mcranks = kwargs['mcranks']
     
@@ -157,6 +146,9 @@ if __name__ == '__main__':
         type = int,
         default = 10,
         help='mpi ranks to use')
+    parser.add_argument('--path',
+        default = "/home/swd8g/athena-swdavis",
+        help='path to Athena++ distribution')
     parser.add_argument('--outfile',
         default="conv.out",
         help='output filename for storing convergence rate')

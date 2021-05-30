@@ -24,7 +24,7 @@ def interp_feaut(mu0,mu,varin):
         varout[i] = np.interp(mu0,mu,varin[i,:])
     return varout
 
-def write_athinput(iseed,nphot,nen,emin,emax,file='athinput.mctest'):
+def write_athinput(iseed,nphot,nen,emin,emax,file='athinput.mciso'):
     """
     Write the remainder of the athinput file for convergence test
     """
@@ -33,10 +33,10 @@ def write_athinput(iseed,nphot,nen,emin,emax,file='athinput.mctest'):
     outfile.write("<comment>\n")
     outfile.write("problem   =  Simple isothermal atmosphere\n")
     outfile.write("reference =\n")
-    outfile.write("configure = --prob=mctest -mc\n")
+    outfile.write("configure = --prob=mc_isoth -mc\n")
     outfile.write("\n")
     outfile.write("<job>\n")
-    outfile.write("problem_id = MCTest   # problem ID: basename of output filenames\n")
+    outfile.write("problem_id = mciso  # problem ID: basename of output filenames\n")
     outfile.write("\n")
     outfile.write("<output1>\n")
     outfile.write("file_type  = spec\n")
@@ -105,7 +105,9 @@ def get_blackbody(temp,nu):
 # Main function
 def main(**kwargs):
 
-    athena_path="/home/swd8g/athena-swdavis/bin"
+    path =  kwargs.pop("path")
+    athena_path = path+"/bin"
+
     area = 1.e22
 
     mcranks = kwargs['mcranks']
@@ -125,10 +127,10 @@ def main(**kwargs):
     # Run code multiple time to test convergence
     for i,nphot in enumerate(nphots):
         write_athinput(iseed+99*i,nphot,kwargs['nen'],kwargs['emin'],kwargs['emax'])
-        com="mpirun -np {:d} ".format(mcranks+1)+athena_path+"/athena -i athinput.mctest"
+        com="mpirun -np {:d} ".format(mcranks+1)+athena_path+"/athena -i athinput.mciso"
         system(com)
         # read spectrum as dict from infile
-        spectrum = mcspec.read_spectrum("MCTest.out1.00000.spec")
+        spectrum = mcspec.read_spectrum("mciso.out1.00000.spec")
         # evaluate midpoints of angle bins
         mumid = 0.5*(spectrum['mufaces'][1:]+spectrum['mufaces'][:-1])
         if intensf is None:
@@ -217,6 +219,9 @@ if __name__ == '__main__':
         type = float,
         default = 100.,
         help='maximum photon energy')
+    parser.add_argument('--path',
+        default = "/home/swd8g/athena-swdavis",
+        help='path to Athena++ distribution')  
     parser.add_argument('--outfile',
         default="conv.out",
         help='output filename for storing convergence rate')

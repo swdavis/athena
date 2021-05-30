@@ -1,10 +1,10 @@
 <comment>
 problem   =  Lyman alpha escape from uniform isothermal sphere
 reference =
-configure = --prob=lyatest -mc
+configure = --prob=mc_sphere_lya -mc
 
 <job>
-problem_id = lya   # problem ID: basename of output filenames
+problem_id = sphlya   # problem ID: basename of output filenames
 
 #<output1>
 #file_type  = hst       # History data dump

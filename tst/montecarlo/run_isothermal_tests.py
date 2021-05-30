@@ -23,8 +23,9 @@ def main(**kwargs):
     nphot = 10000
     nstep = 3
 
-    # set path to athena distribution
+    # set path to athena distribution tests
     path = kwargs.pop('path')
+    tstpath = path+"/tst/montecarlo"
 
     # change to rundir for running convergence tests
     curdir = getcwd()
@@ -33,43 +34,43 @@ def main(**kwargs):
     chdir("rundir")
 
     # Run convergence test towards blackbody spectrum
-    system("python "+path+"/absorption_spectrum/convergence.py {:d} {:d} {:d} 10".format(iseed,nphot,nstep))
+    system("python "+tstpath+"/absorption_spectrum/convergence.py {:d} {:d} {:d} 10".format(iseed,nphot,nstep)+" --path "+path)
     conv_abs = np.loadtxt("conv.out")
     system("rm conv.out")
 
     # Run convergence test of polarized Thomson scattering towards a feautrier
     # solution -- note that convergence will stall at higher number due to
     # slight mismatch between calculation methods
-    system("cp "+path+"/thomson_polarized_spectrum/feautrier.out .")
-    system("python "+path+"/thomson_polarized_spectrum/convergence.py {:d} {:d} {:d} 10 --ffile=feautrier.out".format(iseed,nphot*10,nstep))
+    system("cp "+tstpath+"/thomson_polarized_spectrum/feautrier.out .")
+    system("python "+tstpath+"/thomson_polarized_spectrum/convergence.py {:d} {:d} {:d} 10 --ffile=feautrier.out".format(iseed,nphot*10,nstep)+" --path "+path)
     conv_scat = np.loadtxt("conv.out")
     system("rm conv.out feautrier.out")
 
     # Run convergence test for estimate of radiation field without boosts
-    system("python "+path+"/boosts/convergence.py {:d} {:d} {:d} 10".format(iseed,nphot,nstep)) 
+    system("python "+tstpath+"/boosts/convergence.py {:d} {:d} {:d} 10".format(iseed,nphot,nstep)+" --path "+path) 
     conv_boost_off = np.loadtxt("conv.out")
     system("rm conv.out")
     
     # Run convergence test for estimate of radiation field in Eulerian frame
     # with boosts
-    system("python "+path+"/boosts/convergence.py {:d} {:d} {:d} 10 --vel=0.9".format(iseed,nphot,nstep)) 
+    system("python "+tstpath+"/boosts/convergence.py {:d} {:d} {:d} 10 --vel=0.9".format(iseed,nphot,nstep)+" --path "+path) 
     conv_boost_eul = np.loadtxt("conv.out")
     system("rm conv.out")
 
     # Run convergence test for estimate of radiation field in comoving frame
     # with boosts
-    system("python "+path+"/boosts/convergence.py {:d} {:d} {:d} 10 --vel=0.9 --frame=comoving".format(iseed,nphot,nstep)) 
+    system("python "+tstpath+"/boosts/convergence.py {:d} {:d} {:d} 10 --vel=0.9 --frame=comoving".format(iseed,nphot,nstep)) 
     conv_boost_com = np.loadtxt("conv.out")
     system("rm conv.out")
 
     # Run convergence test for cooling functions without compton scattering
-    system("python "+path+"/cartesian_cooling/convergence.py {:d} {:d} {:d} 10 --noscat".format(iseed,nphot,nstep+2)) 
+    system("python "+tstpath+"/cartesian_cooling/convergence.py {:d} {:d} {:d} 10 --noscat".format(iseed,nphot,nstep+2)+" --path "+path) 
     conv_cool_abs = np.loadtxt("conv.out")
     system("rm conv.out")
 
     # Run convergence test for cooling functions with compton scattering
-    system("cp "+path+"/cartesian_cooling/comptontable.out .")
-    system("python "+path+"/cartesian_cooling/convergence.py {:d} {:d} {:d} 10".format(iseed,nphot,nstep)) 
+    system("cp "+tstpath+"/cartesian_cooling/comptontable.out .")
+    system("python "+tstpath+"/cartesian_cooling/convergence.py {:d} {:d} {:d} 10".format(iseed,nphot,nstep)+" --path "+path) 
     conv_cool_sct = np.loadtxt("conv.out")
     system("rm conv.out comptontable.out")
 
@@ -108,7 +109,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--path',
         default = None,
-        help='path to athena Monte Carlo tests')
+        help='path to Athena++ distribution')
     parser.add_argument('--mcranks',
         type = int,
         default = 10,

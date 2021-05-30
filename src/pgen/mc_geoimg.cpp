@@ -3,8 +3,8 @@
 // Copyright(C) 2014 James M. Stone <jmstone@princeton.edu> and other code contributors
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
-//! \file mc_og.cpp
-//  \brief Problem generator for creating an observer grid near infinity 
+//! \file mc_geoimg.cpp
+//  \brief Problem generator for creating an image with geodesics in kerr spacteime
 //
 //========================================================================================
 

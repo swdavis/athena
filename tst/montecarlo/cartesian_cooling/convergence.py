@@ -86,7 +86,7 @@ def cooling(tgas,rho,Ermc,hnu,kapj,emin,emax,scatflag=True):
     return cool, coolderiv
 
 def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,length,periodic,
-                   scattering,file='athinput.mctest'):
+                   scattering,file='athinput.mciso'):
     """
     Write the remainder of the athinput file for convergence test
     """
@@ -99,10 +99,10 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,length,periodic,
     outfile.write("<comment>\n")
     outfile.write("problem   =  Uniform periodic box\n")
     outfile.write("reference =\n")
-    outfile.write("configure = --prob=mctest -mc\n")
+    outfile.write("configure = --prob=mc_isoth -mc\n")
     outfile.write("\n")
     outfile.write("<job>\n")
-    outfile.write("problem_id = MCTest   # problem ID: basename of output filenames\n")
+    outfile.write("problem_id = mciso   # problem ID: basename of output filenames\n")
     outfile.write("\n")
     outfile.write("<output1>\n")
     outfile.write("file_type  = hdf5\n")
@@ -174,8 +174,9 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,length,periodic,
 # Main function
 def main(**kwargs):
 
-    athena_path="/home/swd8g/athena-swdavis/bin"
-    infile = "athinput.mctest"
+    path =  kwargs.pop("path")
+    athena_path = path+"/bin"
+    infile = "athinput.mciso"
 
     mcranks = kwargs['mcranks']    
     nstep = kwargs['nstep']
@@ -234,7 +235,7 @@ def main(**kwargs):
         print com
         system(com)
         # read hdf5 output
-        data = athena_read.athdf("MCTest.out1.00001.athdf",quantities=['Ermc','Frmc1','Frmc2','Frmc3','Eavemc','Cooling','kapjmc','tgas','rho'])
+        data = athena_read.athdf("mciso.out1.00001.athdf",quantities=['Ermc','Frmc1','Frmc2','Frmc3','Eavemc','Cooling','kapjmc','tgas','rho'])
         output[i,0] = float(nphot)
         ermc = np.average(data['Ermc'])
         kapj = data['kapjmc']/dens
@@ -315,6 +316,9 @@ if __name__ == '__main__':
     parser.add_argument('--reflect',
         action = 'store_true',
         help='use reflecting boundaries')
+    parser.add_argument('--path',
+        default = "/home/swd8g/athena-swdavis",
+        help='path to Athena++ distribution') 
     parser.add_argument('--outfile',
         default="conv.out",
         help='output filename for storing convergence rate')

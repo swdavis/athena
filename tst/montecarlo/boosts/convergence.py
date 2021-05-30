@@ -27,7 +27,7 @@ def bnu_int(en,tgas):
         return (en**3*np.log(1.-x)-3.*kt*en**2*polylog(2,x)
                 -6.*en*kt**2*polylog(3,x)-6*kt**3*polylog(4,x))
 
-def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,file='athinput.mctest'):
+def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,file='athinput.mciso'):
     """
     Write the remainder of the athinput file for convergence test
     """
@@ -40,10 +40,10 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,file='athinput.mcte
     outfile.write("<comment>\n")
     outfile.write("problem   =  Uniform periodic box\n")
     outfile.write("reference =\n")
-    outfile.write("configure = --prob=mctest -mc\n")
+    outfile.write("configure = --prob=mc_isoth -mc\n")
     outfile.write("\n")
     outfile.write("<job>\n")
-    outfile.write("problem_id = MCTest   # problem ID: basename of output filenames\n")
+    outfile.write("problem_id = mciso # problem ID: basename of output filenames\n")
     outfile.write("\n")
     outfile.write("<output1>\n")
     outfile.write("file_type  = hdf5\n")
@@ -97,8 +97,10 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,file='athinput.mcte
 # Main function
 def main(**kwargs):
 
-    athena_path="/home/swd8g/athena-swdavis/bin"
-    infile = "athinput.mctest"
+    path =  kwargs.pop("path")
+    athena_path = path+"/bin"
+
+    infile = "athinput.mciso"
 
     mcranks = kwargs['mcranks']    
     nstep = kwargs['nstep']
@@ -150,7 +152,7 @@ def main(**kwargs):
         print com
         system(com)
         # read hdf5 outputs
-        data = athena_read.athdf("MCTest.out1.00001.athdf",quantities=['Ermc','Frmc1','Frmc2','Frmc3'])
+        data = athena_read.athdf("mciso.out1.00001.athdf",quantities=['Ermc','Frmc1','Frmc2','Frmc3'])
         results[i,0] = float(nphot)
         results[i,1] = er0
         results[i,2] = er
@@ -218,6 +220,9 @@ if __name__ == '__main__':
     parser.add_argument('--frame',
         default = "eulerian",
         help='boost velocity')
+    parser.add_argument('--path',
+        default = "/home/swd8g/athena-swdavis",
+        help='path to Athena++ distribution') 
     parser.add_argument('--outfile',
         default="conv.out",
         help='output filename for storing convergence rate')
