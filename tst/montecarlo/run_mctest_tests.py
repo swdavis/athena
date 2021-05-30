@@ -1,0 +1,118 @@
+#! /usr/bin/env python
+
+"""
+Script for running severarla tests of the Athena++ monte carlo module
+that can be performed by compiling with
+> python configure.py -mc --prob=mctest -mpi -hdf5
+> make clean
+> make all
+This script require mpi libraries are installed and in the user's path
+This is a temporary method until a more formal regression test suite
+is written
+"""
+
+# python standard modules
+import argparse
+import numpy as np
+from os import system,chdir,getcwd
+
+# Main function
+def main(**kwargs):
+
+    iseed = 121500
+    nphot = 10000
+    nstep = 3
+
+    # set path to athena distribution
+    path = kwargs.pop('path')
+
+    # change to rundir for running convergence tests
+    curdir = getcwd()
+    rundir = curdir+'/rundir'
+    system("mkdir -p "+rundir)
+    chdir("rundir")
+
+    # Run convergence test towards blackbody spectrum
+    system("python "+path+"/absorption_spectrum/convergence.py {:d} {:d} {:d} 10".format(iseed,nphot,nstep))
+    conv_abs = np.loadtxt("conv.out")
+    system("rm conv.out")
+
+    # Run convergence test of polarized Thomson scattering towards a feautrier
+    # solution -- note that convergence will stall at higher number due to
+    # slight mismatch between calculation methods
+    system("cp "+path+"/thomson_polarized_spectrum/feautrier.out .")
+    system("python "+path+"/thomson_polarized_spectrum/convergence.py {:d} {:d} {:d} 10 --ffile=feautrier.out".format(iseed,nphot*10,nstep))
+    conv_scat = np.loadtxt("conv.out")
+    system("rm conv.out feautrier.out")
+
+    # Run convergence test for estimate of radiation field without boosts
+    system("python "+path+"/boosts/convergence.py {:d} {:d} {:d} 10".format(iseed,nphot,nstep)) 
+    conv_boost_off = np.loadtxt("conv.out")
+    system("rm conv.out")
+    
+    # Run convergence test for estimate of radiation field in Eulerian frame
+    # with boosts
+    system("python "+path+"/boosts/convergence.py {:d} {:d} {:d} 10 --vel=0.9".format(iseed,nphot,nstep)) 
+    conv_boost_eul = np.loadtxt("conv.out")
+    system("rm conv.out")
+
+    # Run convergence test for estimate of radiation field in comoving frame
+    # with boosts
+    system("python "+path+"/boosts/convergence.py {:d} {:d} {:d} 10 --vel=0.9 --frame=comoving".format(iseed,nphot,nstep)) 
+    conv_boost_com = np.loadtxt("conv.out")
+    system("rm conv.out")
+
+    # Run convergence test for cooling functions without compton scattering
+    system("python "+path+"/cartesian_cooling/convergence.py {:d} {:d} {:d} 10 --noscat".format(iseed,nphot,nstep+2)) 
+    conv_cool_abs = np.loadtxt("conv.out")
+    system("rm conv.out")
+
+    # Run convergence test for cooling functions with compton scattering
+    system("cp "+path+"/cartesian_cooling/comptontable.out .")
+    system("python "+path+"/cartesian_cooling/convergence.py {:d} {:d} {:d} 10".format(iseed,nphot,nstep)) 
+    conv_cool_sct = np.loadtxt("conv.out")
+    system("rm conv.out comptontable.out")
+
+    chdir(curdir)
+    system("rm -rf rundir")
+
+    np.set_printoptions(linewidth=100) 
+    print("Results from the absorption spectrum test: ")
+    for i in range(nstep):
+        print(conv_abs[i,:])
+    print("Results from the scattering spectrum test: ")
+    for i in range(nstep):
+        print(conv_scat[i,:])
+    print("Results for Er, Fr without boosts: ")
+    for i in range(nstep):
+        print(conv_boost_off[i,:])
+    print("Results for Er, Fr with boosts in Eulerian frame: ")
+    for i in range(nstep):
+        print(conv_boost_eul[i,:])
+    print("Results for Er, Fr with boosts in comoving frame: ")
+    for i in range(nstep):
+        print(conv_boost_eul[i,:])
+    print("Results for cooling without scattering: ")
+    for i in range(nstep+2):
+        print(conv_cool_abs[i,:])
+    print("Results for cooling with scattering: ")
+    for i in range(nstep):
+        print(conv_cool_sct[i,:])
+
+    #print("Results from the cooling: ")
+    #for i in range(nstep+1):
+    #    print(conv_sphtrans[i,:])
+
+# Execute main function
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--path',
+        default = None,
+        help='path to athena Monte Carlo tests')
+    parser.add_argument('--mcranks',
+        type = int,
+        default = 10,
+        help='mpi ranks to use')
+
+    args = parser.parse_args()
+    main(**vars(args))

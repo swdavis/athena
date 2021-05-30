@@ -423,6 +423,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
         }
       } else {
         if (pran->uniform() > (pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef)) )
+          pphoton->weight = 0.;
           pphoton->status = ABSORBED;
       }
       if (moments_flag)

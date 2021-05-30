@@ -1,0 +1,60 @@
+<comment>
+problem   =  monte carlo transfer through uniform isothermal sphere
+reference =
+configure = --prob=sphere -mc
+
+<job>
+problem_id = sph   # problem ID: basename of output filenames
+
+<output1>
+file_type  = hdf5       # Binary data dump
+dt         = 1.0e-11       # time increment between outputs
+variable   = mcmom
+
+<output2>
+file_type = spec
+ne        = 150
+emin      = 0.75
+emax      = 7500.
+ncth      = 1
+nphi      = 1
+
+<output3>
+file_type = phlist
+nuser     = 1
+
+<mesh>
+nx1        = 1       # Number of zones in X1-direction
+x1min      = -5.0e10       # minimum value of X1
+x1max      = 5.0e10      # maximum value of X1
+ix1_mc_bc  = absorb  # inner-X1 boundary flag
+ox1_mc_bc  = absorb  # outer-X1 boundary flag
+
+nx2        = 1         # Number of zones in X2-direction
+x2min      = -5.0e10      # minimum value of X2
+x2max      = 5.0e10       # maximum value of X2
+ix2_mc_bc  = absorb  # inner-X2 boundary flag
+ox2_mc_bc  = absorb  # outer-X2 boundary flag
+
+nx3        = 1         # Number of zones in X3-direction
+x3min      = -5.0e10        # minimum value of X3
+x3max      = 5.0e10       # maximum value of X3
+ix3_mc_bc  = absorb  # inner-X3 boundary flag
+ox3_mc_bc  = absorb  # outer-X3 boundary flag
+
+<hydro>
+gamma = 1.666666666666667 # gamma = C_p/C_v
+
+<montecarlo>
+nphot     = 100000
+iseed     = 121500
+scattering = compton
+polarized = false
+
+<problem>
+temp      = 3.e6    # isothermal temperature
+tau       = 50.     # optical depth
+x0        = 0.1     # initial energy of photon in E/kT
+radius      = 1.e10   # escape radius
+#path    = 2e11
+srcdist  = true   # use S&T source distribution

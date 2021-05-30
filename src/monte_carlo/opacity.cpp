@@ -13,6 +13,7 @@
 #include "mcutils.hpp"
 #include "../globals.hpp"
 
+// SWD: remove or reconfigure
 // Lookup table parameters -- chosen to match GRMONTY (Dolence et al. 2009) defaults
 #define MINE 1.e-12
 #define MAXE 1.e6

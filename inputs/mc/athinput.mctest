@@ -1,0 +1,53 @@
+<comment>
+problem   =  Simple isothermal atmosphere
+reference =
+configure = --prob=mctest -mc
+
+<job>
+problem_id = MCTest   # problem ID: basename of output filenames
+
+<output1>
+file_type  = spec
+face      = outer_x3
+ne        = 100
+emin      = 1.000000e+00
+emax      = 1.000000e+02
+ncth      = 8
+nphi      = 8
+
+<mesh>
+nx1        = 64       # Number of zones in X1-direction
+x1min      = -5.0e10       # minimum value of X1
+x1max      = 5.0e10      # maximum value of X1
+ix1_mc_bc     = periodic  # inner-X1 boundary flag
+ox1_mc_bc     = periodic  # outer-X1 boundary flag
+
+nx2        = 64         # Number of zones in X2-direction
+x2min      = -5.0e10      # minimum value of X2
+x2max      = 5.0e10       # maximum value of X2
+ix2_mc_bc  = periodic  # inner-X2 boundary flag
+ox2_mc_bc  = periodic  # outer-X2 boundary flag
+
+nx3        = 128         # Number of zones in X3-direction
+x3min      = 0.0        # minimum value of X3
+x3max      = 1.0e11       # maximum value of X3
+ix3_mc_bc  = absorb  # inner-X3 boundary flag
+ox3_mc_bc  = escape  # outer-X3 boundary flag
+
+<hydro>
+gamma = 1.666666666666667 # gamma = C_p/C_v
+
+<montecarlo>
+nphot     = 1000000
+iseed     = 125787
+scattering = none
+emission   = freefree
+absorption = freefree
+polarized = false
+
+<problem>
+temp     = 1.0e5
+taumin   = 1.0e-3
+taumax   = 1.0e4
+emin      = 1.000000e+00
+emax      = 1.000000e+02

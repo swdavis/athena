@@ -51,39 +51,27 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,file='athinput.mcte
     outfile.write("variable   = mcmom\n")
     outfile.write("frame      = "+frame+"\n")
     outfile.write("\n")
-    outfile.write("<time>\n")
-    outfile.write("cfl_number = 0.1      # The CFL Number\n")
-    outfile.write("nlim       = 1        # cycle limit\n")
-    outfile.write("tlim       = 1.0      # time limit\n")
-    outfile.write("\n")
     outfile.write("<mesh>\n")
-    outfile.write("nx1        = 16       # Number of zones in X1-direction\n")
+    outfile.write("nx1        = 4       # Number of zones in X1-direction\n")
     outfile.write("x1min      = -5.0e10       # minimum value of X1\n")
     outfile.write("x1max      = 5.0e10      # maximum value of X1\n")
-    outfile.write("ix1_bc     = periodic  # inner-X1 boundary flag\n")
-    outfile.write("ox1_bc     = periodic  # outer-X1 boundary flag\n")
     outfile.write("ix1_mc_bc     = periodic  # inner-X1 boundary flag\n")
     outfile.write("ox1_mc_bc     = periodic  # outer-X1 boundary flag\n")
     outfile.write("\n")
-    outfile.write("nx2        = 16         # Number of zones in X2-direction\n")
+    outfile.write("nx2        = 4         # Number of zones in X2-direction\n")
     outfile.write("x2min      = -5.0e10      # minimum value of X2\n")
     outfile.write("x2max      = 5.0e10       # maximum value of X2\n")
-    outfile.write("ix2_bc     = periodic  # inner-X2 boundary flag\n")
-    outfile.write("ox2_bc     = periodic  # outer-X2 boundary flag\n")
     outfile.write("ix2_mc_bc  = periodic  # inner-X2 boundary flag\n")
     outfile.write("ox2_mc_bc  = periodic  # outer-X2 boundary flag\n")
     outfile.write("\n")
-    outfile.write("nx3        = 16         # Number of zones in X3-direction\n")
+    outfile.write("nx3        = 4         # Number of zones in X3-direction\n")
     outfile.write("x3min      = -5.0e10      # minimum value of X2\n")
     outfile.write("x3max      = 5.0e10       # maximum value of X2\n")
-    outfile.write("ix3_bc     = periodic  # inner-X3 boundary flag\n")
-    outfile.write("ox3_bc     = periodic  # outer-X3 boundary flag\n")
     outfile.write("ix3_mc_bc  = periodic  # inner-X3 boundary flag\n")
     outfile.write("ox3_mc_bc  = periodic  # outer-X3 boundary flag\n")
     outfile.write("\n")
     outfile.write("<hydro>\n")
     outfile.write("gamma = 1.666666666666667 # gamma = C_p/C_v\n")
-    outfile.write("iso_sound_speed = 1.0     # isothermal sound speed\n")
     outfile.write("\n")
     outfile.write("<montecarlo>\n")
     outfile.write("nphot     = {:d}\n".format(nphot))
@@ -143,9 +131,11 @@ def main(**kwargs):
         gamma=1./(1.-beta**2)**0.5
         er = er0*gamma**2*(1+beta**2/3.)
         fr = er0*beta*c*4./3.*gamma**2
+        boosted = True
     else:
         er = er0
         fr = fr0
+        boosted = False
 
     iseed = []
     for i in range(nstep-1):
@@ -153,35 +143,42 @@ def main(**kwargs):
     iseed = kwargs['iseed']
 
     # Set up array to store norm for convergence evaluation
-    output = np.zeros((nstep,12))
+    results = np.zeros((nstep,12))
     for i,nphot in enumerate(nphots):            
         write_athinput(iseed+99*i,nphot,kwargs['vel'],kwargs['frame'],dens,tgas,emin,emax,file=infile)
         com="mpirun -np {:d} ".format(mcranks+1)+athena_path+"/athena -i "+infile
         print com
         system(com)
-        # read hdf5 output
+        # read hdf5 outputs
         data = athena_read.athdf("MCTest.out1.00001.athdf",quantities=['Ermc','Frmc1','Frmc2','Frmc3'])
-        output[i,0] = float(nphot)
-        output[i,1] = er0
-        output[i,2] = er
-        output[i,3] = fr
-        output[i,4] = np.average(data['Ermc'])
-        output[i,5] = np.average(data['Frmc1'])
-        output[i,6] = np.average(data['Frmc2'])
-        output[i,7] = np.average(data['Frmc3'])
-        output[i,8] = np.average(abs(data['Ermc']-er))
-        output[i,9] = np.average(abs(data['Frmc1']))
-        output[i,10] = np.average(abs(data['Frmc2']))
-        output[i,11] = np.average(abs(data['Frmc3']-fr))
+        results[i,0] = float(nphot)
+        results[i,1] = er0
+        results[i,2] = er
+        results[i,3] = fr
+        results[i,4] = np.average(data['Ermc'])
+        results[i,5] = np.average(data['Frmc1'])
+        results[i,6] = np.average(data['Frmc2'])
+        results[i,7] = np.average(data['Frmc3'])
+        results[i,8] = np.average(abs(data['Ermc']-er))/er
+        results[i,9] = np.average(abs(data['Frmc1']))/(er*c)
+        results[i,10] = np.average(abs(data['Frmc2']))/(er*c)
+        if (boosted):
+            results[i,11] = np.average(abs(data['Frmc3']-fr))/fr
+        else:
+            results[i,11] = np.average(abs(data['Frmc3']-fr))/(er*c)
 
-    # save plot to outfile
+    # save subset of results to outfile
+    output = np.zeros((nstep,5))
+    output[:,0] = results[:,0]
+    output[:,1:5] = results[:,8:12]
     np.savetxt(kwargs['outfile'],output)
-    
+
+    # save plot to file
     plt.plot(output[:,0],abs(output[:,4]-output[:,1]),'r+')
     plt.xscale('log')
     plt.yscale('log')
     plt.savefig("conv.pdf")
-    print(output)
+    print(results)
 
 # Execute main function
 if __name__ == '__main__':

@@ -1,8 +1,8 @@
 #! /usr/bin/env python
 
 """
-Read in athena results to judge convergence towards blackbody emission
-as photon number increases
+Read in athena results to asses whether various radiation moments
+and cooling are being computed correctly
 """
 
 # python standard modules
@@ -94,7 +94,7 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,length,periodic,
         vel = 0.
         boosts = False
     else:
-        boosts = True        
+        boosts = True
     outfile = open(file,'w')
     outfile.write("<comment>\n")
     outfile.write("problem   =  Uniform periodic box\n")
@@ -110,17 +110,11 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,length,periodic,
     outfile.write("variable   = mcmom\n")
     outfile.write("frame      = "+frame+"\n")
     outfile.write("\n")
-    outfile.write("<time>\n")
-    outfile.write("cfl_number = 0.1      # The CFL Number\n")
-    outfile.write("nlim       = 1        # cycle limit\n")
-    outfile.write("tlim       = 1.0      # time limit\n")
     outfile.write("\n")
     outfile.write("<mesh>\n")
     outfile.write("nx1        = 4       # Number of zones in X1-direction\n")
-    outfile.write("x1min      = {:e}      # minimum value of X1\n".format(-length/2.))
-    outfile.write("x1max      = {:e}       # maximum value of X1\n".format(length/2.))
-    outfile.write("ix1_bc     = periodic  # inner-X1 boundary flag\n")
-    outfile.write("ox1_bc     = periodic  # outer-X1 boundary flag\n")
+    outfile.write("x1min      = {:e}    # minimum value of X1\n".format(-length/2.))
+    outfile.write("x1max      = {:e}    # maximum value of X1\n".format(length/2.))
     if (periodic):
         outfile.write("ix1_mc_bc     = periodic  # inner-X1 boundary flag\n")
         outfile.write("ox1_mc_bc     = periodic  # outer-X1 boundary flag\n")
@@ -130,9 +124,7 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,length,periodic,
     outfile.write("\n")
     outfile.write("nx2        = 4         # Number of zones in X2-direction\n")
     outfile.write("x2min      = {:e}      # minimum value of X2\n".format(-length/2.))
-    outfile.write("x2max      = {:e}       # maximum value of X2\n".format(length/2.))
-    outfile.write("ix2_bc     = periodic  # inner-X2 boundary flag\n")
-    outfile.write("ox2_bc     = periodic  # outer-X2 boundary flag\n")
+    outfile.write("x2max      = {:e}      # maximum value of X2\n".format(length/2.))
     if (periodic):
         outfile.write("ix2_mc_bc  = periodic  # inner-X2 boundary flag\n")
         outfile.write("ox2_mc_bc  = periodic  # outer-X2 boundary flag\n")
@@ -143,8 +135,6 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,length,periodic,
     outfile.write("nx3        = 4         # Number of zones in X3-direction\n")
     outfile.write("x3min      = {:e}      # minimum value of X3\n".format(-length/2.))
     outfile.write("x3max      = {:e}       # maximum value of X3\n".format(length/2.))
-    outfile.write("ix3_bc     = periodic  # inner-X3 boundary flag\n")
-    outfile.write("ox3_bc     = periodic  # outer-X3 boundary flag\n")
     if (periodic):
         outfile.write("ix3_mc_bc  = periodic  # inner-X3 boundary flag\n")
         outfile.write("ox3_mc_bc  = periodic  # outer-X3 boundary flag\n")
@@ -154,7 +144,6 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,length,periodic,
     outfile.write("\n")
     outfile.write("<hydro>\n")
     outfile.write("gamma = 1.666666666666667 # gamma = C_p/C_v\n")
-    outfile.write("iso_sound_speed = 1.0     # isothermal sound speed\n")
     outfile.write("\n")
     outfile.write("<montecarlo>\n")
     outfile.write("nphot     = {:d}\n".format(nphot))
@@ -171,6 +160,7 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,length,periodic,
         outfile.write("boosts     = true\n")
     else:
         outfile.write("boosts     = false\n")
+    #outfile.write("abs_weight = false\n")
     outfile.write("\n")
     outfile.write("<problem>\n")
     outfile.write("temp     = {:e}\n".format(tgas))
@@ -197,10 +187,10 @@ def main(**kwargs):
     dens = kwargs.pop("dens")
     length = kwargs.pop("length")
 
-    # set limits
+    # set energy limits based on temperature
     kb = 1.380649e-16
-    emin = 0.01*kb*tgas
-    emax = 30.*kb*tgas
+    emin = 0.001*kb*tgas
+    emax = 50.*kb*tgas
 
     c = 2.99792458e10
     h = 6.62607015e-27
@@ -214,6 +204,7 @@ def main(**kwargs):
     er0 = float(4.*np.pi*planck_int/c)
     fr0 = 0.
 
+    print kwargs['vel']
     if ((kwargs['vel'] is not None) and (kwargs['frame'] == 'eulerian')):
         beta = kwargs['vel']
         gamma=1./(1.-beta**2)**0.5
@@ -231,8 +222,11 @@ def main(**kwargs):
         nphots.append(nphots[i]*step)
     iseed = kwargs['iseed']
 
+    # Evaluate emissivity and Planck mean opacity
+    eta, kappap = eta_kappap_ff(dens,tgas,emin,emax)
+
     # Set up array to store norm for convergence evaluation
-    output = np.zeros((nstep,7))
+    output = np.zeros((nstep,6))
     for i,nphot in enumerate(nphots):            
         write_athinput(iseed+99*i,nphot,kwargs['vel'],kwargs['frame'],dens,tgas,emin,emax,length,
                        periodic,scatflag,file=infile)
@@ -252,22 +246,26 @@ def main(**kwargs):
         dt_ave = np.average(abs(-cdot/cdot_tgas/tgas))
         eave_ave = np.average(data["Eavemc"])
 
-        output[i,1] = ermc
-        output[i,2] = kapj_ave
-        output[i,3] = cool
-        output[i,4] = cdot_ave
-        output[i,5] = dt_ave
-        output[i,6] = eave_ave
+        #output[i,1] = abs(ermc-er)/er
+        #output[i,2] = abs(kapj_ave-kappap)/kappap
+        #output[i,3] = abs(cool/eta)
+        #output[i,4] = abs(cdot_ave/eta)
+        #output[i,5] = abs(eave_ave-(3.83223*kb*tgas))/(3.83223*kb*tgas)
+        output[i,1] = np.average(abs(data['Ermc']-er))/er
+        output[i,2] = np.average(abs(kapj-kappap))/kappap
+        output[i,3] = np.average(abs(cool))/eta
+        output[i,4] = np.average(abs(cdot))/eta
+        output[i,5] = np.average(abs(data["Eavemc"]-(3.83223*kb*tgas)))/(3.83223*kb*tgas)
 
     # save plot to outfile
     np.savetxt(kwargs['outfile'],output)
     
     print(output)
-    eta, kappap = eta_kappap_ff(dens,tgas,emin,emax)
     print("kapp, kapj, ratio:",kappap, kapj_ave, kapj_ave/kappap)
     print("er, ermc, ratio:",er,ermc,ermc/er)
     print("<hnu>, <hnu>/4kT, <hnu>/3.83223kT:",eave_ave,eave_ave/(4*kb*tgas),eave_ave/(3.83223*kb*tgas))
     print("mccool, cdot, mccool/eta, cdot/eta:",cool, cdot_ave, cool/eta, cdot_ave/eta)
+    print("Temperature correction:",dt_ave)
 
 # Execute main function
 if __name__ == '__main__':
@@ -298,11 +296,11 @@ if __name__ == '__main__':
         help='boost velocity')
     parser.add_argument('--dens',
         type = float,
-        default = 3.e-5,
+        default = 3.e-4,
         help='density')
     parser.add_argument('--tgas',
         type = float,
-        default = 3.e5,
+        default = 3.e6,
         help='gas temperature')
     parser.add_argument('--length',
         type = float,
