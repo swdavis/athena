@@ -239,7 +239,7 @@ private:
   void SendMonteCarloData(int dest);
   void ReceiveMonteCarloData(int source);
   unsigned int CreateMCMPITag(int bid);
-  void InitializeMonteCarloBlocks(void);
+  void InitializeMonteCarloBlocks(ParameterInput *pinput);
   void SendMoments(int dest);
   void ReceiveMoments(int source, bool sum);
 
@@ -320,6 +320,7 @@ public:
 
   // functions
   void InitUserMonteCarloBlockData(ParameterInput *pin);
+  void MonteCarloProblemGenerator(ParameterInput *pin);
   void RayTracePhotons(int nphtot); // Ray trace photon on this block
   void TransferPhotons(int nphtot); // Transfer photons on this block
   void LorentzTransform(Photon *pphot, const Real sign);

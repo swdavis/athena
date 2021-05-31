@@ -36,11 +36,11 @@ namespace {
   Real energy0;
   bool first = true;
   int i1start,i2start,i3start;
-}
 
-// function headers
-void SphericalEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover);
-void TimedEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover);
+  // function headers
+  void SphericalEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover);
+  void TimedEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover);
+}
 
 //========================================================================================
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
@@ -92,7 +92,21 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 }
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
+
+  // Request one user variable for storing time
   nuser_var = 1;
+
+  // If path is set in problem generator, terminate photon integration based on time
+  // but if not terminated based on radius
+  Real path = pin->GetOrAddReal("problem","path",-1.);
+  if (path > 0.) {
+    EnrollUserWorkInMove(TimedEscape);
+  } else
+    EnrollUserWorkInMove(SphericalEscape);
+
+}
+
+void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
   Real x0 = pin->GetReal("problem","x0");
   Real temp = pin->GetReal("problem","temp");
@@ -109,13 +123,30 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 
   rad0 = pin->GetReal("problem","radius");
   path0 = pin->GetOrAddReal("problem","path",-1.);
-  // enroll function to cease photon propogation based on escape radius
-  // or total integration time
 
-  if (path0 > 0.) {
-    EnrollUserWorkInMove(TimedEscape);
-  } else
-    EnrollUserWorkInMove(SphericalEscape);
+  // Deterime cell of initial photon, which is asssumed to include 
+  // if origin if more than one cell is specified for each direction
+  i1start = -1;
+  for(int i=is; i<=ie; i++) {
+    if ((0. > pcoord->x1f(i)) && (0. <= pcoord->x1f(i+1)))
+      i1start = i;
+  }
+  i2start = -1;
+  for(int i=js; i<=je; i++) {
+    if ((0. > pcoord->x2f(i)) && (0. <= pcoord->x2f(i+1)))
+      i2start = i;
+  } 
+  i3start = -1;
+  for(int i=ks; i<=ke; i++) {
+    if ((0. > pcoord->x3f(i)) && (0. <= pcoord->x3f(i+1)))
+      i3start = i;
+  }
+  if ((i1start < 0) || (i2start < 0) || (i3start < 0)) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in InitUserMonteCarloBlockData" << std::endl
+        << "Origin not found within domain." << std::endl;
+    throw std::runtime_error(msg.str().c_str());
+  }
 
 }
 
@@ -125,35 +156,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   // Set status flag
   pphot->status = EVOLVING;
 
-  // Would be better elsewhere but issue is initialization of
-  // MonteCarloBlocks after creation
-  if (first) {
-    // Deterime cell of initial photon -- asssumed to include origin
-  
-    i1start = -1;
-    for(int i=is; i<=ie; i++) {
-      if ((0. > pcoord->x1f(i)) && (0. <= pcoord->x1f(i+1)))
-        i1start = i;
-    }
-    
-    i2start = -1;
-    for(int i=js; i<=je; i++) {
-      if ((0. > pcoord->x2f(i)) && (0. <= pcoord->x2f(i+1)))
-        i2start = i;
-    }
-    
-    i3start = -1;
-    for(int i=ks; i<=ke; i++) {
-      if ((0. > pcoord->x3f(i)) && (0. <= pcoord->x3f(i+1)))
-        i3start = i;
-    }
-    if ((i1start < 0) || (i2start < 0) || (i3start < 0)) {
-      std::stringstream msg;
-      msg << "### FATAL ERROR in InitUserMonteCarloBlockData" << std::endl
-          << "Origin not found within domain." << std::endl;
-      throw std::runtime_error(msg.str().c_str());
-    }
-  }
+
   pphot->i1 = i1start;
   pphot->i2 = i2start;
   pphot->i3 = i3start;
@@ -201,6 +204,9 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
     first = false;
   }
 }
+
+
+namespace {
 
 // Used to evalue photons time (path) length distribution as fixed spherical
 // escape surface
@@ -256,3 +262,5 @@ void TimedEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
     pphot->face = FACE_UNDEF;
   }
 }
+
+} // namespace

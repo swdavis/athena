@@ -6,11 +6,7 @@ configure = --prob=mc_sphere_lya -mc
 <job>
 problem_id = sphlya   # problem ID: basename of output filenames
 
-#<output1>
-#file_type  = hst       # History data dump
-#dt         = 0.01      # time increment between outputs
-
-<output3>
+<output1>
 file_type = phlist
 relativistic = true
 nuser     = 1
@@ -38,13 +34,13 @@ ox3_mc_bc  = absorb  # outer-X3 boundary flag
 gamma = 1.666666666666667 # gamma = C_p/C_v
 
 <montecarlo>
-nphot     = 1000
-iseed     = 121501
-scattering = resonance
-polarized = false
+nphot     = 1000        # number of photon samples
+iseed     = 121501      # pseudorandom number seed
+scattering = resonance  # scattering method
+polarized = false       # polarization flag
 
 <problem>
-temp     = 1.0e4       # isothermal temperature
-tau      = 1.0e6     # line center optical depth
-radius   = 1.e11
-x0 = 0.
+temp     = 1.e4    # isothermal temperature
+tau      = 1.e6    # line center optical depth
+radius   = 1.e11   # radius of sphere
+x0 = 0.            # initial energy in Doppler units

@@ -815,10 +815,10 @@ unsigned int MonteCarlo::CreateMCMPITag(int bid) {
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarlo::InitializeMonteCarloBlocks(void)
+//! \fn void MonteCarlo::InitializeMonteCarloBlocks(ParameterInput *pinput)
 //  \brief initialize grid data in each monte carlo block
 
-void MonteCarlo::InitializeMonteCarloBlocks(void) {
+void MonteCarlo::InitializeMonteCarloBlocks(ParameterInput *pinput) {
 
   if (GetTemperature == NULL)
     GetTemperature = DefaultGetTemperature;
@@ -850,12 +850,23 @@ void MonteCarlo::InitializeMonteCarloBlocks(void) {
     // Get data from another process
     ReceiveMonteCarloData(origin);
   }
+  // Call problem generators for Monte Carlo after all MonteCarloBlocks initialized
+  MonteCarloBlock *pmcb = pblock;
+  while (pmcb != NULL) {
+    pmcb->MonteCarloProblemGenerator(pinput);
+    pmcb = pmcb->next;
+  }
 
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
+//                                           ParameterInput *pinput)
+//  \brief Finish Initialization of MonteCarloBlocks and run steady-state MC calculation
+
 void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput *pinput) {
  
-  InitializeMonteCarloBlocks();
+  InitializeMonteCarloBlocks(pinput);
 
   MonteCarloBlock *pmcb = pblock;
   // transfer photons over all blocks
