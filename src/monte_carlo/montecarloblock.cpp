@@ -344,7 +344,7 @@ void MonteCarloBlock::RayTracePhotons(int nphot) {
 
     Real const to_comv = 1.0;
     Real const to_eulr = -1.0; 
-    int nscat = 0, nesc = 0, nabs = 0;
+    int nscat = 0, nesc = 0, nabs = 0, ndes = 0;
     int nprop = (nphot > nphremain) ? nphremain : nphot;
  
     for (int i=0; i<nprop; ++i) {
@@ -369,13 +369,17 @@ void MonteCarloBlock::RayTracePhotons(int nphot) {
           pphlist->AddPhoton(pphoton);
         }
 	nesc++;
-      } else
+      } else if (pphoton->status == ABSORBED) {
 	nabs++;
+      } else if (pphoton->status == DESTROYED) {
+        ndes++;
+      } 
     }
 
-    std::cout  << "nesc, nabs: " << nesc << ' ' << nabs << ' ' << Globals::my_rank 
+    std::cout  << "rank, nesc, nabs, ndes, nscat: " << Globals::my_rank << ' ' << nesc 
+               << ' ' << nabs << ' ' << ndes << ' '
+               << static_cast<Real>(nscat)/static_cast<Real>(nprop) 
                << std::endl;
-    std::cout << "nscat: " << nscat << ' ' << Globals::my_rank << std::endl;
 
 
     return;
@@ -389,7 +393,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
 
   Real const to_comv = 1.0;
   Real const to_eulr = -1.0; 
-  int nscat = 0, nesc = 0, nabs = 0;
+  int nscat = 0, nesc = 0, nabs = 0, ndes = 0;
   int nprop = (nphot > nphremain) ? nphremain : nphot;
   for(int i=0; i<nprop; ++i) {
 
@@ -487,15 +491,20 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
         pphlist->AddPhoton(pphoton);
       }
       nesc++;
-    } else
+    } else if (pphoton->status == ABSORBED) {
       nabs++;
+    } else if (pphoton->status == DESTROYED) {
+      ndes++;
+    } 
     nscat += iscat;
   }
   
   nphdone += nprop;
-  
-  std::cout  << "nesc, nabs: " << nesc << ' ' << nabs << ' ' << Globals::my_rank << std::endl;
-  std::cout << "nscat: " << nscat << ' ' << Globals::my_rank << std::endl;
+  std::cout  << "rank, nesc, nabs, ndes, nscat: " << Globals::my_rank << ' ' << nesc 
+             << ' ' << nabs << ' ' << ndes << ' '
+             << static_cast<Real>(nscat)/static_cast<Real>(nprop) << std::endl;
+  //std::cout  << "nesc, nabs: " << nesc << ' ' << nabs << ' ' << Globals::my_rank << std::endl;
+  //std::cout << "nscat: " << nscat << ' ' << Globals::my_rank << std::endl;
 }
 
 //----------------------------------------------------------------------------------------

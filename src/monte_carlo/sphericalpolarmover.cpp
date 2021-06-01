@@ -67,10 +67,10 @@ void SphericalPolarMover::Move(Photon *pphot) {
   debug_t db[NBUFFER];
 #endif
 
-  Real cth = cos(pphot->x[1]);
+  Real cth = cos(pphot->x[IMC2]);
   Real sth = sqrt(1. - SQR(cth));
-  Real cph = cos(pphot->x[2]);
-  Real sph = sin(pphot->x[2]);
+  Real cph = cos(pphot->x[IMC3]);
+  Real sph = sin(pphot->x[IMC3]);
 
   // Make sure kcart is set
   kx = kr*sth*cph + kth*cth*cph - kph*sph;
@@ -93,7 +93,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
     //kth = kx * cth * cph + ky * cth * sph - kz * sth;
     //kph = -kx * sph + ky * cph;
     // Compute cartesian positions
-    Real r0 = pphot->x[0];
+    Real r0 = pphot->x[IMC1];
     Real x0 = r0 * sth * cph;
     Real y0 = r0 * sth * sph;
     Real z0 = r0 * cth;
@@ -146,7 +146,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
       thi = pco->x2f(pphot->i2);
       ascend[1] = false;
     } else {
-      if (pphot->x[1] < 0.5*PI) {
+      if (pphot->x[IMC2] < 0.5*PI) {
         thi = pco->x2f(pphot->i2+1);
 	ascend[1] = true;
       } else {
@@ -266,7 +266,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
       db[iter-1].cth = cth; db[iter-1].sth = sth; db[iter-1].cph = cph; db[iter-1].sph = sph;
       db[iter-1].kr = kr; db[iter-1].kth = kth; db[iter-1].kph = kph;
       db[iter-1].kx = kx; db[iter-1].ky = ky; db[iter-1].kz = kz;
-      db[iter-1].x = pphot->x[0]; db[iter-1].y = pphot->x[1]; db[iter-1].z = pphot->x[2];
+      db[iter-1].x = pphot->x[IMC1]; db[iter-1].y = pphot->x[IMC2]; db[iter-1].z = pphot->x[IMC3];
       db[iter-1].i = pphot->i1; db[iter-1].j = pphot->i2; db[iter-1].k = pphot->i3;
       db[iter-1].ascend[0] = ascend[0]; db[iter-1].ascend[1] = ascend[1]; db[iter-1].ascend[2] = ascend[2];
       db[iter-1].l_ext = l_ext;
@@ -318,17 +318,18 @@ void SphericalPolarMover::Move(Photon *pphot) {
 	if (pmcb->moments_flag)
 	  pmcb->UpdateMoments(pphot,dl);
 	// Update postions
-	pphot->x[0] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
-	pphot->x[1] = acos((z0 + kz * dl) / pphot->x[0]);
-	pphot->x[2] = atan2(y0 + ky * dl,x0 + kx * dl);
-	if (pphot->x[2] < 0.)
-	  pphot->x[2] += 2.*PI;
+	pphot->x[IMC1] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
+	pphot->x[IMC2] = acos((z0 + kz * dl) / pphot->x[IMC1]);
+	pphot->x[IMC3] = atan2(y0 + ky * dl,x0 + kx * dl);
+	if (pphot->x[IMC3] < 0.)
+	  pphot->x[IMC3] += 2.*PI;
+        pphot->x[IMC0] += pphot->k[IMC0] * dl;
 
 	// Update k vector
-	cth = cos(pphot->x[1]);
+	cth = cos(pphot->x[IMC2]);
 	sth = sqrt(1. - SQR(cth));
-	cph = cos(pphot->x[2]);
-	sph = sin(pphot->x[2]);
+	cph = cos(pphot->x[IMC3]);
+	sph = sin(pphot->x[IMC3]);
 	kr  = kx * sth * cph + ky * sth * sph + kz * cth;
 	kth = kx * cth * cph + ky * cth * sph - kz * sth;
 	kph = -kx * sph + ky * cph;
@@ -340,21 +341,22 @@ void SphericalPolarMover::Move(Photon *pphot) {
       if (pmcb->moments_flag)
 	pmcb->UpdateMoments(pphot,dl);
       // Update positions
-      pphot->x[0] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
-      pphot->x[1] = acos((z0 + kz * dl) / pphot->x[0]);
-      pphot->x[2] = atan2(y0 + ky * dl,x0 + kx * dl);
-      if (pphot->x[2] < 0.)
-	pphot->x[2] += 2.*PI;
-    
+      pphot->x[IMC1] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
+      pphot->x[IMC2] = acos((z0 + kz * dl) / pphot->x[IMC1]);
+      pphot->x[IMC3] = atan2(y0 + ky * dl,x0 + kx * dl);
+      if (pphot->x[IMC3] < 0.)
+	pphot->x[IMC3] += 2.*PI;
+      pphot->x[IMC0] += pphot->k[IMC0] * dl;
+
       tauremaining -= chi * dl;
       // move photon to next zone and pdate angular positions
       MovePhotonToNextZone(pphot,pco,pmcb,face,ascend);
       if ((face == 1) || (face == 3) || (face == 4) || (face == 6))
         thface = true;
-      cth = cos(pphot->x[1]);
+      cth = cos(pphot->x[IMC2]);
       sth = sqrt(1. - SQR(cth));
-      cph = cos(pphot->x[2]);
-      sph = sin(pphot->x[2]);
+      cph = cos(pphot->x[IMC3]);
+      sph = sin(pphot->x[IMC3]);
       kr  = kx * sth * cph + ky * sth * sph + kz * cth;
       kth = kx * cth * cph + ky * cth * sph - kz * sth;
       kph = -kx * sph + ky * cph;
@@ -396,18 +398,20 @@ void SphericalPolarMover::Move(Photon *pphot) {
   Real xf = rf*sin(thf)*cos(phf);
   Real yf = rf*sin(thf)*sin(phf);
   Real zf = rf*cos(thf);
-  Real xp =  pphot->x[0]*sin(pphot->x[1])*cos(pphot->x[2]);
-  Real yp =  pphot->x[0]*sin(pphot->x[1])*sin(pphot->x[2]);
-  Real zp =  pphot->x[0]*cos(pphot->x[1]);
+  Real xp =  pphot->x[IMC1]*sin(pphot->x[IMC2])*cos(pphot->x[IMC3]);
+  Real yp =  pphot->x[IMC1]*sin(pphot->x[IMC2])*sin(pphot->x[IMC3]);
+  Real zp =  pphot->x[IMC1]*cos(pphot->x[IMC2]);
   Real delta = sqrt(SQR(xf-xp)+SQR(yf-yp)+SQR(zf-zp));
   Real dmax = 1.e-8*rf;
   //std::cout << delta << " " << xf << " " << xp << std::endl;
   if ((delta > dmax)&&(iter < MAXITER)) {
     std::cout << "-----------------------" << std::endl;
     std::cout << delta <<  ' ' << iter << std::endl;
-    std::cout << "k: " << pphot->k[0] << ' ' << pphot->k[1] << ' ' << pphot->k[2] << std::endl;
+    std::cout << "k: " << pphot->k[IMC1] << ' ' << pphot->k[IMC2] << ' ' << pphot->k[IMC3] 
+              << std::endl;
     std::cout << "xf: " << rf << ' ' << thf << ' ' << phf << ' ' << dl0 << std::endl;
-    std::cout << "xp: " << pphot->x[0] << ' ' <<  pphot->x[1] << ' ' <<  pphot->x[2] << std::endl;
+    std::cout << "xp: " << pphot->x[IMC1] << ' ' <<  pphot->x[IMC2] << ' ' <<  pphot->x[IMC3] 
+              << std::endl;
   }
 #endif
 
@@ -419,14 +423,14 @@ void SphericalPolarMover::Move(Photon *pphot) {
 
 void SphericalPolarMover::CartesianToCurvalinear(Photon *pphot) {
 
-  Real cth = cos(pphot->x[1]);
+  Real cth = cos(pphot->x[IMC2]);
   Real sth = sqrt(1. - SQR(cth));
-  Real cph = cos(pphot->x[2]);
-  Real sph = sin(pphot->x[2]);
+  Real cph = cos(pphot->x[IMC3]);
+  Real sph = sin(pphot->x[IMC3]);
   // Compute spherical-polar
-  pphot->k[0] = pphot->kcart[0]*sth*cph + pphot->kcart[1]*sth*sph + pphot->kcart[2]*cth;
-  pphot->k[1] = pphot->kcart[0]*cth*cph + pphot->kcart[1]*cth*sph - pphot->kcart[2]*sth;
-  pphot->k[2] = -pphot->kcart[0]*sph + pphot->kcart[1]*cph;
+  pphot->k[0] = pphot->kcart[IMC1]*sth*cph + pphot->kcart[IMC2]*sth*sph + pphot->kcart[IMC3]*cth;
+  pphot->k[1] = pphot->kcart[IMC1]*cth*cph + pphot->kcart[IMC2]*cth*sph - pphot->kcart[IMC3]*sth;
+  pphot->k[2] = -pphot->kcart[IMC1]*sph + pphot->kcart[IMC2]*cph;
   
 }
 
@@ -437,13 +441,13 @@ void SphericalPolarMover::CartesianToCurvalinear(Photon *pphot) {
 
 void SphericalPolarMover::CurvalinearToCartesian(Photon *pphot) {
 
-  Real cth = cos(pphot->x[1]);
+  Real cth = cos(pphot->x[IMC2]);
   Real sth = sqrt(1. - SQR(cth));
-  Real cph = cos(pphot->x[2]);
-  Real sph = sin(pphot->x[2]);
+  Real cph = cos(pphot->x[IMC3]);
+  Real sph = sin(pphot->x[IMC3]);
   // Compute cartesian
-  pphot->kcart[0] = pphot->k[0]*sth*cph + pphot->k[1]*cth*cph - pphot->k[2]*sph;
-  pphot->kcart[1] = pphot->k[0]*sth*sph + pphot->k[1]*cth*sph + pphot->k[2]*cph;
-  pphot->kcart[2] = pphot->k[0]*cth - pphot->k[1]*sth;
+  pphot->kcart[0] = pphot->k[IMC1]*sth*cph + pphot->k[IMC2]*cth*cph - pphot->k[IMC3]*sph;
+  pphot->kcart[1] = pphot->k[IMC1]*sth*sph + pphot->k[IMC2]*cth*sph + pphot->k[IMC3]*cph;
+  pphot->kcart[2] = pphot->k[IMC1]*cth - pphot->k[IMC2]*sth;
 }
 

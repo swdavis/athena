@@ -40,6 +40,7 @@ void ReflectMCOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
 //void PeriodicWedgeOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
 void Escape(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
 void Absorb(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
+void Destroy(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
 void Polar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
 //----------------------------------------------------------------------------------------
 //! \class MCBoundaryValues

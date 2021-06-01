@@ -317,7 +317,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
 }
 
-void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
+void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
   int nx1 = pin->GetInteger("mesh","nx1");
   nrmax = pin->GetOrAddInteger("problem","nrmax",nx1);

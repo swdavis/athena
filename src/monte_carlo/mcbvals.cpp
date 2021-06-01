@@ -29,6 +29,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
     case MC_ABSORB_BNDRY:
       BoundaryFunction_[INNER_X1] = Absorb;
       break;
+    case MC_DESTROY_BNDRY:
+      BoundaryFunction_[INNER_X1] = Destroy;
+      break;
     case MC_POLAR_BNDRY:
       BoundaryFunction_[INNER_X1] = Polar;
       break;
@@ -54,6 +57,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
       break;
     case MC_ABSORB_BNDRY:
       BoundaryFunction_[OUTER_X1] = Absorb;
+      break;
+    case MC_DESTROY_BNDRY:
+      BoundaryFunction_[OUTER_X1] = Destroy;
       break;
     case MC_POLAR_BNDRY:
       BoundaryFunction_[OUTER_X1] = Polar;
@@ -81,6 +87,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
     case MC_ABSORB_BNDRY:
       BoundaryFunction_[INNER_X2] = Absorb;
       break;
+    case MC_DESTROY_BNDRY:
+      BoundaryFunction_[INNER_X2] = Destroy;
+      break;
     case MC_POLAR_BNDRY:
       BoundaryFunction_[INNER_X2] = Polar;
       break;
@@ -106,6 +115,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
       break;
     case MC_ABSORB_BNDRY:
       BoundaryFunction_[OUTER_X2] = Absorb;
+      break;
+   case MC_DESTROY_BNDRY:
+      BoundaryFunction_[OUTER_X2] = Destroy;
       break;
     case MC_POLAR_BNDRY:
       BoundaryFunction_[OUTER_X2] = Polar;
@@ -133,6 +145,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
     case MC_ABSORB_BNDRY:
       BoundaryFunction_[INNER_X3] = Absorb;
       break;
+    case MC_DESTROY_BNDRY:
+      BoundaryFunction_[INNER_X3] = Destroy;
+      break;
     case MC_POLAR_BNDRY:
       BoundaryFunction_[INNER_X3] = Polar;
       break;
@@ -158,6 +173,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
       break;
     case MC_ABSORB_BNDRY:
       BoundaryFunction_[OUTER_X3] = Absorb;
+      break;
+    case MC_DESTROY_BNDRY:
+      BoundaryFunction_[OUTER_X3] = Destroy;
       break;
     case MC_POLAR_BNDRY:
       BoundaryFunction_[OUTER_X3] = Polar;
@@ -372,7 +390,7 @@ void Escape(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Absorb(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
-//  \brief mark photon as destroyed
+//  \brief mark photon as absorbed
 
 void Absorb(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
@@ -381,17 +399,29 @@ void Absorb(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void Destroy(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
+//  \brief mark photon as destroyed
+
+void Destroy(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
+
+  pphot->status = DESTROYED;
+
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void Polar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot)
-//  \brief mark photon as destroyed and print error message
+//  \brief mark photon as destroyed and print warning message
 
 void Polar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot) {
 
   std::cout << "Warning: photon moving through polar boundary: " << std::endl
     << "i: " << pphot->i1 << " " << pphot->i2 << " " << pphot->i3 << std::endl
-    << "x: " << pphot->x[0] << " " << pphot->x[1] << " " << pphot->x[2] << std::endl
-    << "k: " << pphot->k[0] << " " << pphot->k[1] << " " << pphot->k[2] << std::endl
+    << "x: " << pphot->x[IMC1] << " " << pphot->x[IMC2] << " " << pphot->x[IMC3] 
+    << std::endl
+    << "k: " << pphot->k[IMC1] << " " << pphot->k[IMC2] << " " << pphot->k[IMC3] 
+    << std::endl
     << "Destroying photon." << std::endl;
-  pphot->PrintPhoton();
+  //pphot->PrintPhoton();
   pphot->status = DESTROYED;
 
 }

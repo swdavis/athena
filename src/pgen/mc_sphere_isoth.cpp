@@ -121,7 +121,7 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
   time0 = pin->GetOrAddReal("problem","time",-1.);
 
   // Deterime cell of initial photon, which is asssumed to include 
-  // if origin if more than one cell is specified for each direction
+  // the origin if more than one cell is specified for each direction
   i1start = -1;
   for(int i=is; i<=ie; i++) {
     if ((0. > pcoord->x1f(i)) && (0. <= pcoord->x1f(i+1)))
@@ -145,7 +145,6 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
   }
 
 }
-
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
@@ -266,7 +265,6 @@ void TimedEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
   Real r = sqrt(SQR(pphot->x[0])+SQR(pphot->x[1])+SQR(pphot->x[2]));
   if (r >= rad0) {
     Real dr = r-rad0;
-    pphot->user_var[0] -= dr;
     for (int i=0; i<4; i++) {
       // assume cartesian for now
       pphot->x[i] -= pphot->k[i]*dr;
@@ -276,9 +274,8 @@ void TimedEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
   }
   // Then check time condition -- ensures time is not over estimated
   if (pphot->x[IMC0] >= time0) {
-    Real dt = pphot->user_var[0] - time0;
-    pphot->user_var[0] = time0;
-    for (int i=0; i<3; i++) {
+    Real dt = pphot->x[IMC0] - time0;
+    for (int i=0; i<4; i++) {
       // assume cartesian for now
       pphot->x[i] -= pphot->k[i]*dt*2.99792458e10;;
     }

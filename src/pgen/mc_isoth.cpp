@@ -170,7 +170,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
 }
 
-void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
+void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
   //EnrollUserOpacityFunction(FreeFreeAbsorptionOpacityUser,true);
   // Set the energy boundaries for free-free emission
