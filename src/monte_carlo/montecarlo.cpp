@@ -363,7 +363,7 @@ enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string) {
     return MC_ESCAPE_BNDRY;
   } else if (input_string == "absorb") {
     return MC_ABSORB_BNDRY;
-  } else if (input_string == "absorb") {
+  } else if (input_string == "destroy") {
     return MC_DESTROY_BNDRY;
   } else if (input_string == "polar") {
     return MC_POLAR_BNDRY;
