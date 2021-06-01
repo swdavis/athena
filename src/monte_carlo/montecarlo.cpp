@@ -920,6 +920,7 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput
       }
     }
   }
+  MPI_Barrier(MPI_COMM_WORLD);
 #else
   for (int i=0; i<nout; i++) {
     nphrun += pmcb->cadence;

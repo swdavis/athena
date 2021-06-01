@@ -460,6 +460,7 @@ int main(int argc, char *argv[]) {
 
   // print diagnostic messages
   if (Globals::my_rank==0) {
+    if (!MONTE_CARLO_STATIC) {
     std::cout << "cycle=" << pmesh->ncycle << " time=" << pmesh->time
               << " dt=" << pmesh->dt << std::endl;
 
@@ -483,7 +484,7 @@ int main(int argc, char *argv[]) {
                 << "; " << pmesh->nbnew << "  created, " << pmesh->nbdel
                 << " destroyed during this simulation." << std::endl;
     }
-
+    }
     // Calculate and print the zone-cycles/cpu-second and wall-second
 #ifdef OPENMP_PARALLEL
     double omp_time = omp_get_wtime() - omp_start_time;;
@@ -493,9 +494,14 @@ int main(int argc, char *argv[]) {
                       1.0)/static_cast<float> (CLOCKS_PER_SEC);
     int64_t zones = pmesh->GetTotalCells();
     float zc_cpus = static_cast<float> (zones*(pmesh->ncycle-ncstart))/cpu_time;
-
-    std::cout << std::endl << "cpu time used  = " << cpu_time << std::endl;
-    std::cout << "zone-cycles/cpu_second = " << zc_cpus << std::endl;
+    if (MONTE_CARLO_STATIC) {
+      float phot_cpus = static_cast<float> (pmc->nphtot)/cpu_time;
+      std::cout << std::endl << "cpu time used  = " << cpu_time << std::endl;
+      std::cout << "samples/cpu_second = " << phot_cpus << std::endl;
+    } else {
+      std::cout << std::endl << "cpu time used  = " << cpu_time << std::endl;
+      std::cout << "zone-cycles/cpu_second = " << zc_cpus << std::endl;
+    }
 #ifdef OPENMP_PARALLEL
     float zc_omps = static_cast<float> (zones*(pmesh->ncycle-ncstart))/omp_time;
     std::cout << std::endl << "omp wtime used = " << omp_time << std::endl;
