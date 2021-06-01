@@ -129,6 +129,8 @@ def main(**kwargs):
     spectrum = mcspec.read_spectrum(infile)
 
     def imu_handler(imu):
+        if imu == None:
+            return [0]
         if imu == 'sum':
             return [imu]
         if (len(imu) > 1):
