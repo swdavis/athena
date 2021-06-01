@@ -77,6 +77,9 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   max_list_size = cadence;
 #endif
 
+  checkscat = pin->GetOrAddInteger("montecarlo","checkscat",10000);
+  checkmove = pin->GetOrAddInteger("montecarlo","checkmove",10000);
+
   // Initialize user MonteCarlo data before initializing MonteCarloBlocks
   // Should be caleld before Output constuctor
   InitUserMonteCarloData(pin);

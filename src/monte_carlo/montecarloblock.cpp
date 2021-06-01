@@ -20,9 +20,6 @@
 #include "../hydro/hydro.hpp"
 #include "../globals.hpp"
 
-// SWD: Eliminate these
-#define MAXSCAT 10000
-
 // constructor, initializes data structures and parameters
 
 MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCarlo *pmc, 
@@ -447,7 +444,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
         Scatter(this,pphoton);
 	iscat++;
       
-	if (iscat %  MAXSCAT == 0) {
+	if (iscat %  pmy_mc->checkscat == 0) {
 	  // Check for possible infinite loop due to NaN in photon
 	  if (pphoton->IsNanPhoton()) {
 	    pphoton->status = DESTROYED;

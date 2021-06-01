@@ -189,6 +189,7 @@ public:
   int nphrun; // number of photons run thus far
   int max_list_size; // maximum number of photons run per output on any process
   int nuser_var;
+  int checkmove,checkscat;
 
   enum EmissionFlag emission_meth;
   enum AbsorptionFlag absorption_meth;

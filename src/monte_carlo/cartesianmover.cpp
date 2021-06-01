@@ -11,14 +11,10 @@
 #include "photonmover.hpp"
 #include "../mesh/mesh.hpp"
 #include "debug.hpp"
-#define MAXITER 10000
+
 //#define DEBUG
-#define TAU_TOL_COH 20.
 
 Real DistanceToNearestFace(MCCoord *pco, Photon *pphot);
-
-int ix[MAXITER],iy[MAXITER],iz[MAXITER];
-// Implementation of Sphericalpolar Photon mover
 
 CartesianMover::CartesianMover(MonteCarloBlock *pmcb) 
   : PhotonMover(pmcb) {
@@ -56,11 +52,10 @@ void CartesianMover::Move(Photon *pphot) {
   Real& kz = pphot->k[IMC3];
 
   int iter = 0;
-  // calculate distances to nearest faces
-  while( (tauremaining > 0.) && (pphot->status == EVOLVING) && (iter < MAXITER)) {
-    ix[iter] = pphot->i1;
-    iy[iter] = pphot->i2;
-    iz[iter] = pphot->i3;
+
+  // checkmove is needed to account for (near) infinite trajectories that can occur
+  // in optically thin, periodic domains.
+  while( (tauremaining > 0.) && (pphot->status == EVOLVING) && (iter < checkmove)) {
     iter++;
     // Compute distance to all faces
     Real dlx, dly, dlz;
@@ -146,7 +141,7 @@ void CartesianMover::Move(Photon *pphot) {
 	pmcb->UpdateMoments(pphot,dl);
       }      
       // update position
-      for (int i=0; i<3; ++i)
+      for (int i=0; i<4; ++i)
 	pphot->x[i] += pphot->k[i] * dl;
       tauremaining -= chi * dl;
 
@@ -157,8 +152,8 @@ void CartesianMover::Move(Photon *pphot) {
     }
   }
 
-  if (iter >= MAXITER) {
-    std::cout << "Warning: iter exceeded MAXITER " << MAXITER << " in photon mover." 
+  if (iter >= checkmove) {
+    std::cout << "Warning: iter exceeded " << checkmove << " in photon mover." 
 	      << std::endl;
     std::cout << "tau: " << tau0 << " " << tauremaining << std::endl;
     pphot->PrintPhoton();
@@ -168,7 +163,7 @@ void CartesianMover::Move(Photon *pphot) {
 #ifdef DEBUG
   Real delta = sqrt(SQR(xf-pphot->x[IMC1])+SQR(yf-pphot->x[IMC2])+SQR(zf-pphot->x[IMC3]));
   Real dmax = 1.e-6*(pco->x3f(pmcb->ke+1)-pco->x3f(pmcb->ks));
-  if ((delta > dmax)&&(iter < MAXITER)) {
+  if ((delta > dmax)&&(iter < checkmove)) {
     std::cout << "-----------------------" << std::endl;
     std::cout << delta <<  ' ' << iter << std::endl;
     std::cout << "k: " << pphot->k[IMC1] << ' ' << pphot->k[IMC2] << ' ' << pphot->k[IMC3] 

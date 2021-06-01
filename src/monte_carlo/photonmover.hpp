@@ -36,6 +36,8 @@ public:
   // data
 
   Real dl; //displacement
+  int checkmove; // check/terminate move
+
   MonteCarloBlock *pmy_mcb;
   MCCoord *pcoord;
 

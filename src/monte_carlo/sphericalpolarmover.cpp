@@ -11,11 +11,9 @@
 #include "photonmover.hpp"
 #include "../mesh/mesh.hpp"
 #include "debug.hpp"
-#define MAXITER 1000000
+
 //#define DEBUG
-//#define OUTTEST
-#define NBUFFER 50
-#define TAU_TOL_COH  10.
+//#define NBUFFER 50
 
 // Implementation of Sphericalpolar Photon mover
 
@@ -77,16 +75,9 @@ void SphericalPolarMover::Move(Photon *pphot) {
   ky = kr*sth*sph + kth*cth*sph + kph*cph;
   kz = kr*cth - kth*sth;
 
-#ifdef OUTTEST
-  Real rf,thf,phf,dl0;
-  FinalPositionSphericalPolar(pmcb,pco,pphot,rf,thf,phf,dl0);
-#endif
-
   int iter = 0;
   // Move photon until requisite # of mean free paths or escape
-  // MAXITER is present to account for (near) infinite trajectories in optically thin,
-  // periodic domains.
-  while( (tauremaining > 0.) && (pphot->status == EVOLVING) && (iter < MAXITER)) {
+  while( (tauremaining > 0.) && (pphot->status == EVOLVING) && (iter < checkmove)) {
     iter++;
 
     //kr  = kx * sth * cph + ky * sth * sph + kz * cth;
@@ -366,8 +357,8 @@ void SphericalPolarMover::Move(Photon *pphot) {
   }
 
   // -------------------------- Debugging -------------------------------------------
-  if (iter >= MAXITER) {
-    std::cout << "Warning: iter exceeded ITERMAX in photon mover." << std::endl;
+  if (iter >= checkmove) {
+    std::cout << "Warning: iter exceeded " << checkmove << " in photon mover." << std::endl;
 #ifdef DEBUG
     int nmax = (NBUFFER > iter) ? iter : NBUFFER;
     for (int i=0; i < nmax; ++i) {
@@ -393,27 +384,6 @@ void SphericalPolarMover::Move(Photon *pphot) {
 #endif
     pphot->status = DESTROYED;
   }
-
-#ifdef OUTTEST
-  Real xf = rf*sin(thf)*cos(phf);
-  Real yf = rf*sin(thf)*sin(phf);
-  Real zf = rf*cos(thf);
-  Real xp =  pphot->x[IMC1]*sin(pphot->x[IMC2])*cos(pphot->x[IMC3]);
-  Real yp =  pphot->x[IMC1]*sin(pphot->x[IMC2])*sin(pphot->x[IMC3]);
-  Real zp =  pphot->x[IMC1]*cos(pphot->x[IMC2]);
-  Real delta = sqrt(SQR(xf-xp)+SQR(yf-yp)+SQR(zf-zp));
-  Real dmax = 1.e-8*rf;
-  //std::cout << delta << " " << xf << " " << xp << std::endl;
-  if ((delta > dmax)&&(iter < MAXITER)) {
-    std::cout << "-----------------------" << std::endl;
-    std::cout << delta <<  ' ' << iter << std::endl;
-    std::cout << "k: " << pphot->k[IMC1] << ' ' << pphot->k[IMC2] << ' ' << pphot->k[IMC3] 
-              << std::endl;
-    std::cout << "xf: " << rf << ' ' << thf << ' ' << phf << ' ' << dl0 << std::endl;
-    std::cout << "xp: " << pphot->x[IMC1] << ' ' <<  pphot->x[IMC2] << ' ' <<  pphot->x[IMC3] 
-              << std::endl;
-  }
-#endif
 
 }
 

@@ -13,10 +13,10 @@
 #include "../mesh/mesh.hpp"
 #include "debug.hpp"
 
+//#define DEBUG
+//#define NBUFFER 1000
 
 // SWD: remove all of these
-#define MAXITER 1e8
-#define NBUFFER 1000
 #define NCOORD 4
 //#define VERBOSE
 
@@ -84,7 +84,7 @@ void GeneralMover::Move(Photon *pphot) {
   y0 = pphot->x[0]*sth*sph;
   z0 = pphot->x[0]*cth;
 
-  while ( (pphot->status == EVOLVING) && (iter < MAXITER) && (TauRemaining > 0.) ) {
+  while ( (pphot->status == EVOLVING) && (TauRemaining > 0.) && (iter < checkmove)) {
 
     iter++;
     count++;
@@ -166,8 +166,9 @@ void GeneralMover::Move(Photon *pphot) {
     //pphot->PrintPhoton();
     }*/
 
-  if (iter >= MAXITER) {
-    printf("GeneralMover::Move warning: max iter reached\n");
+  if (iter >= checkmove) {
+    std::cout << "Warning: iter exceeded " << checkmove << " in photon mover." 
+	      << std::endl;
     pphot->PrintPhoton();
     pphot->status = DESTROYED;
   }
