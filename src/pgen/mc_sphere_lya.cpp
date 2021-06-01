@@ -32,7 +32,7 @@
 
 namespace {
   // Global variables
-  Real rad0,path0;
+  Real rad0,time0;
   Real energy0;
   bool first = true;
   int i1start,i2start,i3start;
@@ -93,13 +93,10 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 
-  // Request one user variable for storing time
-  nuser_var = 1;
-
-  // If path is set in problem generator, terminate photon integration based on time
+  // If time is set in problem generator, terminate photon integration based on time
   // but if not terminated based on radius
-  Real path = pin->GetOrAddReal("problem","path",-1.);
-  if (path > 0.) {
+  Real time = pin->GetOrAddReal("problem","time",-1.);
+  if (time > 0.) {
     EnrollUserWorkInMove(TimedEscape);
   } else
     EnrollUserWorkInMove(SphericalEscape);
@@ -122,7 +119,7 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
   energy0 = h * (nu0 + dopw * x0);
 
   rad0 = pin->GetReal("problem","radius");
-  path0 = pin->GetOrAddReal("problem","path",-1.);
+  time0 = pin->GetOrAddReal("problem","time",-1.);
 
   // Deterime cell of initial photon, which is asssumed to include 
   // if origin if more than one cell is specified for each direction
@@ -179,17 +176,16 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   Real sth = sqrt(1. - SQR(cth));
   
   // Initialize wave vector with isotropic distribution
-  pphot->k[0] = sth*cphi;
-  pphot->k[1] = sth*sphi;
-  pphot->k[2] = cth;
-  
+  pphot->k[IMC1] = sth*cphi;
+  pphot->k[IMC2] = sth*sphi;
+  pphot->k[IMC3] = cth;
+  pphot->k[IMC0] = 1. / 2.99792458e10;
+
   // Initialize photon at the origin
-  pphot->x[0] = 0.;
-  pphot->x[1] = 0.;
-  pphot->x[2] = 0.;
-  
-  for (int i=0; i<pphot->nuser_var; i++)
-    pphot->user_var[i] = 0.;
+  pphot->x[IMC1] = 0.;
+  pphot->x[IMC2] = 0.;
+  pphot->x[IMC3] = 0.;
+  pphot->x[IMC0] = 0.; //time
 
   if (pphot->weight < 0.0) pphot->status = DESTROYED;
   
@@ -208,19 +204,16 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
 namespace {
 
-// Used to evalue photons time (path) length distribution as fixed spherical
+// Used to evalue photons time distribution as fixed spherical
 // escape surface
 void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
  
-  // Update path length for user output
-  pphot->user_var[0] += pmover->dl;
   // First check radius condition
-  Real r = sqrt(SQR(pphot->x[0])+SQR(pphot->x[1])+SQR(pphot->x[2]));
+  Real r = sqrt(SQR(pphot->x[IMC1])+SQR(pphot->x[IMC2])+SQR(pphot->x[IMC3]));
  
   if (r >= rad0) {
     Real dr = r-rad0;
-    pphot->user_var[0] -= dr;
-    for (int i=0; i<3; i++) {
+    for (int i=0; i<4; i++) {
       // assume cartesian for now
       pphot->x[i] -= pphot->k[i]*dr;
     }
@@ -234,29 +227,23 @@ void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) 
 // Used to test photons radial distributions after a fixed travel time
 void TimedEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
 
-  // Update path length for user output
-  pphot->user_var[0] += pmover->dl;
-
   // First check radius condition
-  Real r = sqrt(SQR(pphot->x[0])+SQR(pphot->x[1])+SQR(pphot->x[2]));
+  Real r = sqrt(SQR(pphot->x[IMC1])+SQR(pphot->x[IMC2])+SQR(pphot->x[IMC3]));
   if (r >= rad0) {
     Real dr = r-rad0;
-    pphot->user_var[0] -= dr;
-    for (int i=0; i<3; i++) {
+    for (int i=0; i<4; i++) {
       // assume cartesian for now
       pphot->x[i] -= pphot->k[i]*dr;
     }
     pphot->status = ESCAPED;
     pphot->face = FACE_UNDEF;
   }
-  // Then check path condition -- ensures path is not over estimated
-  if (pphot->user_var[0] >= path0) {
-    //printf("%g %g %g %g\n",pphot->x[0],pphot->x[1],pphot->x[2],pphot->user_var[0]);
-    Real dp = pphot->user_var[0] - path0;
-    pphot->user_var[0] = path0;
-    for (int i=0; i<3; i++) {
+  // Then check time condition -- ensures time is not over estimated
+  if (pphot->x[IMC0] >= time0) {
+    Real dt = pphot->x[IMC0] - time0;
+    for (int i=0; i<4; i++) {
       // assume cartesian for now
-      pphot->x[i] -= pphot->k[i]*dp;
+      pphot->x[i] -= pphot->k[i]*dt*2.99792458e10;
     }
     pphot->status = ESCAPED;
     pphot->face = FACE_UNDEF;

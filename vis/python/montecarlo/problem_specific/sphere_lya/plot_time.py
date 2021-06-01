@@ -15,7 +15,6 @@ from scipy import optimize
 import athena_mc_spec as mcspec
 
 
-
 def tanf(x,tau):
     return np.tan(x) - x/(1.-1.5*tau)
 
@@ -58,31 +57,26 @@ def main(**kwargs):
     outfile = kwargs.pop('outfile')
 
     radius = kwargs.pop('radius')
-    #tau = kwargs.pop('tau')
-    #mfp = radius/tau
-    #time0 = mfp*tau**2*3./np.pi**2
-    time0 = 1.e11
 
     fig = plt.figure()
     ax = fig.add_subplot(1,1,1)
 
     # Read escape time dist
     tdist = np.loadtxt(infile)
-    tmid = 0.5*(tdist[:,0]+tdist[:,1])/time0
-    pt = tdist[:,2]*time0
+    tmid = 0.5*(tdist[:,0]+tdist[:,1])
+    pt = tdist[:,2]
 
-    # Compute comparison function
-    #pt_comp = np.zeros(len(tmid))
-    #for i,t in enumerate(tmid):
-    #    pt_comp[i] = prob_ct_tau(t,tau)
 
     ax.set_ylabel(r"$P(t)$")
-    ax.set_xlabel(r"$t$")
+    ax.set_xlabel(r"$t \; \rm(s)$")
+
     # Plot times
-    if (kwargs['notnorm']): 
+    if (kwargs['tnorm']): 
         c = 2.99792e10
-        tmid *= time0/c
-        ax.set_xlabel(r"$t \; \rm(s)$")
+        tlc = radius/c
+        tmid /= tlc
+        pt *= tlc
+        ax.set_xlabel(r"$t/(r_0/c)$")
     ax.plot(tmid,pt,'.')
     #ax.plot(tmid,pt_comp,':')
 
@@ -104,16 +98,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('infile',
         help='input filename')
-    parser.add_argument('tau',
-        type=float,
-        help='optical depth of sphere')
     parser.add_argument('--radius',
         type=float,
-        default = 1.e10,
+        default = 1.e11,
         help='radius of sphere')
-    parser.add_argument('--notnorm',
+    parser.add_argument('--tnorm',
         action='store_true',
-        help='Sets t axis to physical units')
+        help='Sets t axis to normalized units')
     parser.add_argument('--outfile',
         default=None,
         help='output filename for escape time plot')

@@ -21,7 +21,6 @@ nphi      = 1
 
 <output3>
 file_type = phlist
-nuser     = 1
 
 <mesh>
 nx1        = 1       # Number of zones in X1-direction

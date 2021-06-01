@@ -13,14 +13,11 @@ class photons:
     """
     #Initialization from dictionary
     def __init__(self, phlist):
-        self.npars = 8
+        self.npars = 10
         self.polarized = phlist['polarized']
-        self.relativistic = phlist['relativistic']
         self.ntot = phlist['ntot']
         self.coord = phlist['coord']
         if (self.polarized):
-            self.npars = self.npars + 2
-        if (self.relativistic):
             self.npars = self.npars + 2
         ncol = phlist['npars']
         self.nphot = phlist['length']
@@ -36,30 +33,18 @@ class photons:
         # allocate arrays for each variable
         self.weight = phlist['list'][:,0]
         self.energy = phlist['list'][:,1]
-        if (self.relativistic):
-            self.x0 = phlist['list'][:,5]
-            self.x1 = phlist['list'][:,2]
-            self.x2 = phlist['list'][:,3]
-            self.x3 = phlist['list'][:,4]
-            self.k0 = phlist['list'][:,9]
-            self.k1 = phlist['list'][:,6]
-            self.k2 = phlist['list'][:,7]
-            self.k3 = phlist['list'][:,8]
-            if (self.polarized):
-                self.q = phlist['list'][:,10]
-                self.u = phlist['list'][:,11]
-                #self.v = phlist['list'][:,12]
-        else:
-            self.x1 = phlist['list'][:,2]
-            self.x2 = phlist['list'][:,3]
-            self.x3 = phlist['list'][:,4]
-            self.k1 = phlist['list'][:,5]
-            self.k2 = phlist['list'][:,6]
-            self.k3 = phlist['list'][:,7]  
-            if (self.polarized):
-                self.q = phlist['list'][:,8]
-                self.u = phlist['list'][:,9]
-                #self.v = phlist['list'][:,10]
+        self.x0 = phlist['list'][:,5]
+        self.x1 = phlist['list'][:,2]
+        self.x2 = phlist['list'][:,3]
+        self.x3 = phlist['list'][:,4]
+        self.k0 = phlist['list'][:,9]
+        self.k1 = phlist['list'][:,6]
+        self.k2 = phlist['list'][:,7]
+        self.k3 = phlist['list'][:,8]
+        if (self.polarized):
+            self.q = phlist['list'][:,10]
+            self.u = phlist['list'][:,11]
+            #self.v = phlist['list'][:,12]
         if (self.nuser > 0):
             for i in range(self.nuser):
                 self.user[:,i] = phlist['list'][:,i+self.npars]
@@ -108,12 +93,6 @@ def read_list(filename):
         end_of_line_index += 1
     phlist['polarized'] = bool(map(int,raw_data_ascii[current_index:end_of_line_index].split(' '))[0])
     current_index = end_of_line_index + 1
-    current_index = skip_string("relativistic=")
-    end_of_line_index = current_index + 1
-    while raw_data_ascii[end_of_line_index] != '\n':
-        end_of_line_index += 1
-    phlist['relativistic'] = bool(map(int,raw_data_ascii[current_index:end_of_line_index].split(' '))[0])
-    current_index = end_of_line_index + 1
     current_index = skip_string("coord=")
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
@@ -142,7 +121,6 @@ def write_list(filename,phlist):
     outfile.write("npars={:d}\n".format(phlist['npars']))
     outfile.write("ntot={:d}\n".format(phlist['ntot']))
     outfile.write("polarized={:d}\n".format(int(phlist['polarized'])))
-    outfile.write("relativistic={:d}\n".format(int(phlist['relativistic'])))
     outfile.write("coord="+phlist['coord']+"\n")
 
     # Write list data

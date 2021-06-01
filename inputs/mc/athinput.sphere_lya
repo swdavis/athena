@@ -8,8 +8,6 @@ problem_id = sphlya   # problem ID: basename of output filenames
 
 <output1>
 file_type = phlist
-relativistic = true
-nuser     = 1
 
 <mesh>
 nx1        = 1       # Number of zones in X1-direction

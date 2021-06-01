@@ -577,18 +577,15 @@ void Spectrum::AddSpectrum(Spectrum *pspec) {
 }
 
 // constructor
-PhotonList::PhotonList(int list_mem_size, bool pol, bool rel, int nuser) {
+PhotonList::PhotonList(int list_mem_size, bool pol, int nuser) {
 
 
   // Allocate memory for photon list
   len_limit = list_mem_size;
-  nparams = 8;
+  nparams = 10;
   polarized = pol;
   if (polarized)
     nparams += 2; // print only stokes q and u
-  relativistic = rel;
-  if (relativistic)
-    nparams += 2;
   nparams += nuser;
   nuser_out = nuser;
   photons.NewAthenaArray(len_limit,nparams);
@@ -615,11 +612,9 @@ void PhotonList::AddPhoton(Photon *pphot) {
   int n = 0;
   photons(length,n++) = pphot->weight;
   photons(length,n++) = pphot->energy;
-  int nmax;
-  if (relativistic) nmax = 4; else nmax = 3;
-  for (int i=0; i<nmax; i++)
+  for (int i=0; i<4; i++)
     photons(length,n++) = pphot->x[i];
-  for (int i=0; i<nmax; i++)
+  for (int i=0; i<4; i++)
     photons(length,n++) = pphot->k[i];
   if (polarized) {
     photons(length,n++) = pphot->stokes[1];
@@ -654,7 +649,6 @@ void PhotonList::WriteList(std::string filename, int ntot) {
   fprintf(pfile,"length=%d\nnpars=%d\n",length,nparams);
   fprintf(pfile,"ntot=%d\n",ntot);
   fprintf(pfile,"polarized=%d\n",polarized);
-  fprintf(pfile,"relativistic=%d\n",relativistic);
   fprintf(pfile,"coord=%s\n",COORDINATE_SYSTEM);
   // write data
   int ndata = length*nparams;
@@ -944,8 +938,8 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
               << " greater than user variables: " << pmy_mc->nuser_var << std::endl; 
           throw std::runtime_error(msg.str().c_str());
         }
-        bool rel = pin->GetOrAddBoolean(pib->block_name,"relativistic",false);
-        pphlist = new PhotonList(pmc->max_list_size,pmc->polarized,rel,nuser_out);
+        //bool rel = pin->GetOrAddBoolean(pib->block_name,"relativistic",false);
+        pphlist = new PhotonList(pmc->max_list_size,pmc->polarized,nuser_out);
         // Initialize photon list
         pphlist->length = 0;
 	pphlist->output_number = 0;

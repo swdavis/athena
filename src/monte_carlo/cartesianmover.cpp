@@ -134,7 +134,7 @@ void CartesianMover::Move(Photon *pphot) {
           pmcb->UpdateMoments(pphot,dl);
         }
         // update position
-        for (int i=0; i<3; ++i)
+        for (int i=0; i<4; ++i)
           pphot->x[i] += pphot->k[i] * dl;
       }
       // Perform any user work

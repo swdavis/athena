@@ -54,8 +54,7 @@ def write_histogram(filename,data):
 
 
 def esc_time(phots):
-    print phots.user[:,0]
-    return phots.user[:,0]
+    return phots.x0[:]
 
 # Main function
 def main(**kwargs):

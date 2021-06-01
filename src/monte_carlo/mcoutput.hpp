@@ -78,7 +78,7 @@ public:
 
 class PhotonList {
 public:
-  PhotonList(int list_mem_size, bool pol, bool rel, int nuser);
+  PhotonList(int list_mem_size, bool pol, int nuser);
   ~PhotonList();
 
   std::string base_name;
@@ -88,7 +88,6 @@ public:
   int output_number;// current output number
   int nuser_out;
   bool polarized;
-  bool relativistic;
   AthenaArray<Real> photons;  // array of photon properies
 
   //functions

@@ -33,8 +33,6 @@ def main(**kwargs):
             match = False
         if (list1['polarized'] != list2['polarized']):
             match = False
-        if (list1['relativistic'] != list2['relativistic']):
-            match = False
         return match
 
     firstlist = True
