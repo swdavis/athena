@@ -9,6 +9,7 @@
 //========================================================================================
 
 #include <iostream> // temporary for testing
+#include <stdexcept>
 
 // Athena++ headers
 #include "../athena.hpp"
@@ -27,17 +28,21 @@
 #error "This problem requires monte carlo"
 #endif
 
-static int iphot;
-static Real r0,th0,phi0;
-static Real gcov0[4][4];
-static Real muk,phik;
-static Real rprev;
-static bool first;
+namespace {
 
+  // global variables
+  int iphot;
+  Real r0,th0,phi0;
+  Real gcov0[4][4];
+  Real muk,phik;
+  Real rprev;
+  int i1start,i2start,i3start;
+  bool first;
 
-// User function definitions
-void TurningPointCheck(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover);
+  // user function definitions
+  void TurningPointCheck(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover);
 
+}
 
 //========================================================================================
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
@@ -50,7 +55,6 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   Real rho = 1.;
   Real temp = 1.;
   Real gamma = peos->GetGamma(); 
-
 
   // Set nominal values for grid, unused
   for (int k=ks; k<=ke; k++) {
@@ -67,28 +71,17 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
 }
 
-void MonteCarloBlock::InitUserMonteCarloBlockData(ParameterInput *pin){
-
-#ifdef MPI_PARALLEL 
-  // Set iphot based on assumption that rays are distributed evenly
-  // accross active processes
-  int rank = Globals::my_rank;
-  int ntot = pin->GetInteger("montecarlo", "nphot");
-  if (rank > 0) {
-    int nranks = Globals::nranks;
-    int myn = ntot/(nranks-1);
-    iphot = (rank-1)*myn;
-    printf("iphot: %d %d %d\n",rank,iphot,myn);
-  }
-#else
-  iphot = 0;
-#endif
-
-}
-
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 
+  // Request 6 user variables
   nuser_var = 6;
+
+  // Enroll user work in move function
+  EnrollUserWorkInMove(TurningPointCheck);
+}
+
+void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
+
   Real signa;
   if(pin->GetOrAddBoolean("problem", "corotating",true))
     signa = 1.;
@@ -96,7 +89,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
     signa = -1.;
 
   Real abh = pin->GetReal("coord", "a");
-  Real mbh = pin->GetReal("coord","m")
+  Real mbh = pin->GetReal("coord","m");
   Real a2 = abh*abh;
   Real z1 = 1.0 + pow(1.0 - a2, 1./3.) * (pow(1. + abh, 1./3.) + pow(1.0-abh,1./3.));
   Real z2 = sqrt(3.*a2 + z1*z1);
@@ -115,8 +108,51 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
   pcobl->SetMass(mbh);
   pcobl->Metric(x,gcov0);
 
-  // Enroll user work in move function
-  EnrollUserWorkInMove(TurningPointCheck);
+  // set the photon samples 's initial zone indices
+  MCCoord *pco = pcoord;
+  i1start = -1;
+  for(int i=is; i<=ie; i++) {
+    if ((r0 >= pcoord->x1f(i)) && (r0 < pcoord->x1f(i+1)))
+      i1start = i;
+  }
+  i2start = -1;
+  for(int i=js; i<=je; i++) {
+    if ((th0 >= pcoord->x2f(i)) && (th0 < pcoord->x2f(i+1)))
+      i2start = i;
+  } 
+  i3start = -1;
+  for(int i=ks; i<=ke; i++) {
+    if ((phi0 >= pcoord->x3f(i)) && (phi0 < pcoord->x3f(i+1)))
+      i3start = i;
+  }
+  if ((i1start < 0) || (i2start < 0) || (i3start < 0)) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in InitUserMonteCarloBlockData" << std::endl
+        << "Initial position not found within domain." << std::endl;
+    throw std::runtime_error(msg.str().c_str());
+  }
+
+#ifdef MPI_PARALLEL 
+  // Set iphot based on assumption that rays are distributed evenly
+  // across active processes
+  int rank = Globals::my_rank;
+  int ntot = pin->GetInteger("montecarlo", "nphot");
+  if (rank > 0) {
+    int nranks = Globals::nranks;
+    int myn = ntot/(nranks-1);
+    int remain = ntot % (nranks-1);
+    if (rank <= remain) {
+      myn++;
+      iphot = (rank-1)*myn;
+    } else {
+      iphot = remain*(myn+1) + (rank-1-remain)*myn;
+    }
+    printf("iphot: %d %d %d\n",rank,iphot,myn);
+  }
+#else
+  iphot = 0;
+#endif
+
 }
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot) {
@@ -127,40 +163,19 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   pphot->status = EVOLVING;
   pphot->weight = 1.;
   
-  // Emit photons from a large radius r >> 1 in units of [GM/c^2]. Ideally this would be 
-  // at infinity (or 1/r = 0), but r ~ 1e3 should be fine as long as the region of 
-  // interest is small compared to this initial distance. For -10 < alpha, beta < 10, the
-  // small angle approximation should still be fine. 
-  // To avoid issues with the initial position being on a boundary, I push the position
-  // by a small epislon from the ideal starting position.
+  // initialize cell coordinates
+  pphot->i1 = i1start;
+  pphot->i2 = i2start;
+  pphot->i3 = i3start;
 
-  pphot->x[IMC0] = 1.0;
+  // Initialize photon position
+  pphot->x[IMC0] = 0.;
   pphot->x[IMC1] = r0;
   pphot->x[IMC2] = th0;
   pphot->x[IMC3] = phi0;
 
-  rprev = r0;
-  // update the photon's zone indices
-  pphot->i1 = -1;
-  for(int i=pphot->pmy_mcb->is; i<=pphot->pmy_mcb->ie; i++) {
-    if ((pphot->x[IMC1] >= pco->x1f(i)) && (pphot->x[IMC1] <= pco->x1f(i+1)))
-      pphot->i1 = i;
-  }
-  if (pphot->i1 < 0) pphot->weight = -1.0;
- 
-  pphot->i2 = -1;
-  for(int i=pphot->pmy_mcb->js; i<=pphot->pmy_mcb->je; i++) {
-    if ((pphot->x[IMC2] >= pco->x2f(i)) && (pphot->x[IMC2] <= pco->x2f(i+1)))
-      pphot->i2 = i;
-  }
-  if (pphot->i2 < 0) pphot->weight = -1.0;
- 
-  pphot->i3 = -1;
-  for(int i=pphot->pmy_mcb->ks; i<=pphot->pmy_mcb->ke; i++) {
-    if ((pphot->x[IMC3] >= pco->x3f(i)) && (pphot->x[IMC3] <= pco->x3f(i+1)))
-      pphot->i3 = i;
-  }
-  if (pphot->i3 < 0) pphot->weight = -1.0;
+  rprev = r0; // Used to check for turning point in r
+
 
   if (pphot->weight < 0) {
     printf("Warning: photon initial position not found on grid.\n");
@@ -296,6 +311,8 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot) {
   
 }
 
+namespace {
+
 void TurningPointCheck(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
 
   // Check if r is increasing and set sign of du/dlamda accordingly
@@ -314,5 +331,7 @@ void TurningPointCheck(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover
     if (pphot->x[IMC1] < rprev)
       pphot->user_var[4] = 1.;
   rprev = pphot->x[IMC1];
+
+}
 
 }

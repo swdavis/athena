@@ -38,9 +38,7 @@ a = 0.99  # black hole spin a (0 <= a/M < 1)
 gamma = 1.666666666666667 # gamma = C_p/C_v
 
 <montecarlo>
-#nphot = 262144
 nphot = 16384
-#nphot = 1024
 iseed     = 121500
 scattering = none
 emission   = none

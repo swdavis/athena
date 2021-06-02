@@ -144,6 +144,8 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
     ReceiveMonteCarloBlocks(pin,origin);
   }
 
+  // SWD: Does not agree with current implementation of RunStaticMonteCarlo
+  //      needs to be updated and streamlined
   // set number of photons for each block
   // nphtot is total number of photons over all blocks
   // nbtotal runs over the number meshblocks on this rank

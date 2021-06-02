@@ -34,7 +34,6 @@ namespace {
   // Global variables
   Real rad0,time0;
   Real energy0;
-  bool first = true;
   int i1start,i2start,i3start;
 
   // function headers
@@ -153,7 +152,6 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   // Set status flag
   pphot->status = EVOLVING;
 
-
   pphot->i1 = i1start;
   pphot->i2 = i2start;
   pphot->i3 = i3start;
@@ -194,11 +192,6 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   pphot->abs_coef = AbsorptionOpacity(this,pphot);
   pphot->sct_coef = ScatteringOpacity(this,pphot);
 
-  if (first) {
-    if ((Globals::my_rank == 0) || (Globals::my_rank == 1))
-      printf("taus, taua: %g %g\n",pphot->sct_coef*rad0,pphot->abs_coef*rad0);
-    first = false;
-  }
 }
 
 

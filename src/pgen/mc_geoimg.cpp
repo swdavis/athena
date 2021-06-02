@@ -119,11 +119,15 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
   if (rank > 0) {
     int nranks = Globals::nranks;
     int myn = ntot/(nranks-1);
-    iphot = (rank-1)*myn;
-    //if (rank == nranks-1)
-    //  myn += ntot % (nranks-1);
+    int remain = ntot % (nranks-1);
+    if (rank <= remain) {
+      myn++;
+      iphot = (rank-1)*myn;
+    } else {
+      iphot = remain*(myn+1) + (rank-1-remain)*myn;
+    }
     printf("iphot: %d %d %d\n",rank,iphot,myn);
-    //nphremain = cadence = myn;
+  
   }
 #else
   iphot = 0;
@@ -210,13 +214,12 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   pphot->stokes[3] = 0.0;
  
   GetDirectionTetrad(pphot, alpha0, beta0);
-  //printf("ktet: %e %e %e %e\n",pphot->k[IMC0],pphot->k[IMC1],pphot->k[IMC2],pphot->k[IMC3]);   
   
   pphot->energy = pphot->k[IMC0];
   pphot->weight = 1.0;
   for (int i=0; i<4; i++)
     pphot->dk[i] = 0.;
-  //pphot->PrintPhoton();
+
 
   // Set plane crossing flag to zero
   plane_cross = 0;
