@@ -23,28 +23,32 @@
 #include "../monte_carlo/photonmover.hpp"
 #include "../globals.hpp"
 
-static int iphot;
-static int nrays;
-static int nalpha, nbeta;
-static Real *alpha,*beta;
-static Real rcam,thcam,phcam; 
-static Real r_outer;
-static int plane_cross;
-static bool backward_integration;
-static FILE *input;
-
-static Real spsi,cpsi,szet,czet;
-
 #if !MONTE_CARLO_STATIC
 #error "This problem requires monte carlo"
 #endif
 
-// User function definitions
-void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover);
-void GetMCDirection(Photon *pphot, Real alpha, Real beta);
-void GetDirectionTetrad(Photon *pphot, Real alpha, Real beta);
-void TransformPhotonAtDisk(MonteCarloBlock *pmcb, Photon *pphot);
-void TransformPhotonAtGridEdge(MonteCarloBlock *pmcb, Photon *pphot);
+namespace {
+
+  int iphot;
+  int nrays;
+  int nalpha, nbeta;
+  Real *alpha,*beta;
+  Real rcam,thcam,phcam; 
+  Real r_outer;
+  int plane_cross;
+  bool backward_integration;
+  Real spsi,cpsi,szet,czet;
+
+  // User function definitions
+  void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover);
+  void GetDirectionKerrtrans(Photon *pphot, Real alpha, Real beta);
+  void GetDirectionTetrad(Photon *pphot, Real alpha, Real beta);
+  void TransformPhotonAtDisk(MonteCarloBlock *pmcb, Photon *pphot);
+  void TransformPhotonAtGridEdge(MonteCarloBlock *pmcb, Photon *pphot);
+  void BuildImageArrayUniform(int nx, Real xmin, Real xmax, int ny, Real ymin, Real ymax, 
+                              Real *x, Real *y);
+
+}
 
 //========================================================================================
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
@@ -74,7 +78,38 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
 }
 
-void MonteCarloBlock::InitUserMonteCarloBlockData(ParameterInput *pin){
+
+void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
+
+  // Enroll four user variables
+  nuser_var = 4;
+  // Enroll function for determining plane crossing
+  EnrollUserWorkInMove(MidplaneCrossing);
+}
+
+void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
+
+  // Set r_outer
+  Real abh = pcoord->GetSpin();
+  Real mbh = pcoord->GetMass();
+  r_outer = 1.0 + sqrt(1.0 - SQR(abh));
+
+  nrays = pin->GetInteger("montecarlo", "nphot");
+  nalpha = nbeta = static_cast<int>(sqrt(static_cast<Real>(nrays)));
+  backward_integration = pin->GetOrAddBoolean("problem","backward",false);
+
+  Real amin = pin->GetOrAddReal("problem", "alpha_min", -10.);
+  Real amax = pin->GetOrAddReal("problem", "alpha_max", 10.);
+  Real bmin = pin->GetOrAddReal("problem", "beta_min", -10.);
+  Real bmax = pin->GetOrAddReal("problem", "beta_max", 10.);
+
+  alpha = new Real[nalpha];
+  beta = new Real[nbeta];
+  if (nalpha == 1)
+    amax = amin;
+  if (nbeta == 1)
+    bmax = bmin;
+  BuildImageArrayUniform(nalpha,amin,amax,nbeta,bmin,bmax,alpha,beta);
 
 #ifdef MPI_PARALLEL 
   // Set iphot based on assumption that rays are distributed evenly
@@ -94,50 +129,10 @@ void MonteCarloBlock::InitUserMonteCarloBlockData(ParameterInput *pin){
   iphot = 0;
 #endif
 
-}
-
-void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
-
-  nuser_var = 4;
-
-  nrays = pin->GetInteger("montecarlo", "nphot");
-  nalpha = nbeta = static_cast<int>(sqrt(static_cast<Real>(nrays)));
-  backward_integration = pin->GetOrAddBoolean("problem","backward",false);
-
-  // Set r_outer
-  Real abh = pcoord->GetSpin();
-  Real mbh = pcoord->GetMass();
-  r_outer = 1.0 + sqrt(1.0 - SQR(abh));
-
-  Real alpha_min = pin->GetOrAddReal("problem", "alpha_min", -10.);
-  Real alpha_max = pin->GetOrAddReal("problem", "alpha_max", 10.);
-  Real alpha_range = (alpha_max - alpha_min);
-  Real beta_min = pin->GetOrAddReal("problem", "beta_min", -10.);
-  Real beta_max = pin->GetOrAddReal("problem", "beta_max", 10.);
-  Real beta_range = (beta_max - beta_min);
-  alpha = new Real[nalpha];
-  beta = new Real[nbeta];
-  if (nalpha == 1) 
-    alpha[0] = alpha_min;
-  else {
-    for (int i = 0; i<nalpha; i++) {
-      alpha[i] = alpha_min+(static_cast<Real>(i)/static_cast<Real>(nalpha-1))*alpha_range;
-      if (fabs(alpha[i]) < 1.e-5) alpha[i] = 1.e-1;
-    }
-  }
-  if (nbeta == 1)
-    beta[0] = beta_min;
-  else {
-    for (int i = 0; i<nbeta; i++) {
-      beta[i] = beta_min+(static_cast<Real>(i)/static_cast<Real>(nbeta-1))*beta_range;
-      if (fabs(beta[i]) < 1.0e-5) beta[i] = 1.0e-1;
-    }
-  }
   rcam = pin->GetOrAddReal("problem", "rcam", pin->GetReal("mesh","x1max"));
   thcam = pin->GetOrAddReal("problem", "thcam", 45.) * M_PI / 180.;
   phcam = pin->GetOrAddReal("problem", "phcam", 90.) * M_PI / 180.;
-  
-  EnrollUserWorkInMove(MidplaneCrossing);
+
 }
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot) {
@@ -201,8 +196,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   pphot->user_var[0] = alpha0;
   pphot->user_var[1] = beta0;
 
-  printf("nrays: %d  iphot %d  nalpha: %d  ialpha: %d ",nrays, iphot, nalpha, ia);
-  printf("ibeta: %d  alpha: %g beta: %g\n",ib, alpha0, beta0);
+  //printf("nrays: %d  iphot %d  nalpha: %d  ialpha: %d ",nrays, iphot, nalpha, ia);
+  //printf("ibeta: %d  alpha: %g beta: %g\n",ib, alpha0, beta0);
 
   iphot++;
 
@@ -249,6 +244,8 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot) {
     TransformPhotonAtDisk(this,pphot);
   } 
 }
+
+namespace {
 
 void TransformPhotonAtDisk(MonteCarloBlock *pmcb, Photon *pphot) {
 
@@ -388,14 +385,10 @@ void TransformPhotonAtGridEdge(MonteCarloBlock *pmcb, Photon *pphot) {
 
 }
 
-//void LaunchPhotonAtDisk(MonteCarloBlock *pmcb, Photon *pphot) {
-//
-// 
-//}
 
 // Given initial position x^alpha, alpha, beta, determine the initial photon direction
 // Uses alpha, beta definitions from Cunningham & Bardeen (1973)
-void GetMCDirection(Photon *pphot, Real alpha, Real beta) {
+void GetDirectionKerrtrans(Photon *pphot, Real alpha, Real beta) {
   
   MonteCarloBlock *pmcb = pphot->pmy_mcb;
   //MCCoord *pco = pmcb->pcoord;
@@ -663,3 +656,18 @@ void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover)
 #endif
   }
 }
+
+void BuildImageArrayUniform(int nx, Real xmin, Real xmax, int ny, Real ymin, Real ymax, 
+                            Real *x , Real *y) {
+
+  // Build Uniform grid in x and y
+  Real dx = (xmax-xmin) / static_cast<Real>(nx);
+  for (int i = 0; i<nx; i++)
+    x[i] = xmin+dx*(0.5+i);
+  Real dy = (ymax-ymin) / static_cast<Real>(ny);
+  for (int i = 0; i<ny; i++)
+    y[i] = ymin+dy*(0.5+i);
+
+}
+
+} // namespace

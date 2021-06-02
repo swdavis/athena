@@ -1,0 +1,62 @@
+<comment>
+problem   = Generated image of disk around black hole with ray tracing
+reference =
+configure = --prob=mc_geoimg -mc --coord=kerr-schild -g
+
+<job>
+problem_id = diskimg   # problem ID: basename of output filenames
+
+<output1>
+file_type = phlist
+nuser     = 4
+
+<mesh>
+nx1        = 100       # Number of zones in X1-direction
+x1min      = 1.0       # minimum value of X1
+x1max      = 1.0e4     # maximum value of X1
+ix1_mc_bc  = escape    # inner-X1 boundary flag
+ox1_mc_bc  = escape    # outer-X1 boundary flag
+x1rat = 1.05
+
+nx2        = 8         # Number of zones in X2-direction
+x2min      = 0         # minimum value of X2
+x2max      = 3.14159   # maximum value of X2
+ix2_mc_bc  = polar     # inner-X2 boundary flag
+ox2_mc_bc  = polar     # outer-X2 boundary flag
+
+nx3        = 8         # Number of zones in X3-direction
+x3min      = 0         # minimum value of X3
+x3max      = 6.28318   # maximum value of X3
+ix3_mc_bc  = periodic  # inner-X3 boundary flag
+ox3_mc_bc  = periodic  # outer-X3 boundary flag
+
+<coord>
+m = 1.    # black hole mass M
+a = 0.99  # black hole spin a (0 <= a/M < 1)
+
+<hydro>
+gamma = 1.666666666666667 # gamma = C_p/C_v
+
+<montecarlo>
+#nphot = 262144
+nphot = 16384
+#nphot = 1024
+iseed     = 121500
+scattering = none
+emission   = none
+absorption = none
+polarized = true
+stepsize = 1.0e-3
+varystep = true
+raytrace = true
+boyerlindquist = true
+checkmove = 1000000
+
+<problem>
+backward  = true
+alpha_min = -20.
+alpha_max = 20.
+beta_min = -20.
+beta_max = 20.
+thcam = 75.
+

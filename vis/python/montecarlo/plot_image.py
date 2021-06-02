@@ -23,26 +23,25 @@ class AthenaWarning(RuntimeWarning):
   pass
 
 def blackbody(teff, nu):
-    """
-    Calculates blackbody spectrum
-    """
-
-    h = 6.62607015e-27; # planck constant [cgs]
-    kb = 1.380649e-16 # bolztmann constant [cgs]
-    c = 2.998e10 # speed of light [cgs]
-    efact = np.exp(h*nu/(kb*teff))
-    bnu = 2.*h*nu**3/(c**2*(efact - 1.)) # [cgs] = [erg s^-1 cm^-2 Hz^-1]
-    return bnu
+  """
+  Calculates blackbody spectrum
+  """
+  h = 6.62607015e-27; # planck constant [cgs]
+  kb = 1.380649e-16 # bolztmann constant [cgs]
+  c = 2.99792458e10 # speed of light [cgs]
+  efact = np.exp(h*nu/(kb*teff))
+  bnu = 2.*h*nu**3/(c**2*(efact - 1.)) # [cgs] = [erg s^-1 cm^-2 Hz^-1]
+  return bnu
 
 def DiskFlux(mass,mdot,radius,abh):
     """
     Returns the flux as a function of radius, mass, accretion rate but without relativistic
     and no-torque correction, which is provided by grcor
     """
-    G=6.67e-8
-    msun=1.99e33
-    kapes=0.33
-    c=3.0e10
+    G = 6.67430e-8
+    msun = 1.99e33
+    kapes = 0.34
+    c = 2.99792458e10
 
     # Minimum radius for last stable circular orbit per unit mass, X0
     abh2 = abh*abh
@@ -59,112 +58,74 @@ def DiskFlux(mass,mdot,radius,abh):
     return flux
 
 def grcor(abh,r):
+  """
+  Pythonized version of dispar.f routine used with kerrtrans
+  """
 
-#       IDLized version of dispar.f routine used with kerrtrans
-#       SWD: Needs to be cleaned up                  
-#                                                                                
-#       Procedure for computing general-relativistic correction                  
-#       factors to gravitational factor (QGRAV) and effective                    
-#       temperature (TEFF)                                                       
-#       Also calculates all frour quantities in the Riffer-Herlod (RH)           
-#       notation - arh, BRH, CRH, DRH                                            
-#                                                                                
-#       Input:                                                                   
-#             abh   - angular momentum (0.98 maximum)                            
-#            r   - R/R_g = r/(GM/c^2)                                           
-#       Outout:
-#             qcor - g-correction  = C/B   in RH notation                        
-#             tcor - T-correction  = (D/B)^(1/4)   in RH notation                
-#             arh  - A  in RH notation                                           
-#             brh  - B  in RH notation                                           
-#             crh  - C  in RH notation                                           
-#             drh  - D  in RH notation                                           
-#                                                                                
-#  ----------------                                                              
-#  Imput parameters                                                              
-#  ----------------                                                              
-#                                                                                
-#       abh     - specific angular momentum/mass                                 
-#                 of the Kerr black hole                                         
-#       r       - distance/mass of the Kerr black hole                           
-#                                                                                
-#  ---------------------------------                                             
-#  Set correcion factors A through G  (see Novikov & Thorne,'73, eq.5.4.1a-g)    
-#  ---------------------------------                                             
-#
+  if(abh < 0.):
+    signa=-1.
+  else:
+    signa=1.0
 
-    if(abh < 0.):
-        signa=-1.
-    else:
-        signa=1.0
+  abh2 = abh * abh
+  r1 = 1.0/r
+  r12 = np.sqrt(r1)
+  r2 = r1*r1
+  a2r2 = abh2*r2
+  a4r4 = a2r2*a2r2
+  a2r3 = abh2*r2*r1
+  ar32 = np.sqrt(a2r3)
 
-    abh2 = abh * abh
-    r1 = 1.0/r
-    r12 = np.sqrt(r1)
-    r2 = r1*r1
-    a2r2 = abh2*r2
-    a4r4 = a2r2*a2r2
-    a2r3 = abh2*r2*r1
-    ar32 = np.sqrt(a2r3)
+  A = 1 + a2r2 + 2.*a2r3
+  B = 1 + ar32
+  C = 1 - 3.*r1 + 2.*ar32
+  D = 1 - 2.*r1 + a2r2
+  E = 1 + 4.*a2r2 - 4.*a2r3 + 3*a4r4
 
-    A = 1 +   a2r2  + 2.*a2r3
-    B = 1 +   ar32
-    C = 1 - 3.*r1   + 2.*ar32
-    D = 1 - 2.*r1   +    a2r2
-    E = 1 + 4.*a2r2 - 4.*a2r3 + 3*a4r4
+  # gravity correction  (see Page & Thorne,'73, eq.35) 
+  qcor = (1. - 4.*ar32 + 3.*a2r2)/C
 
-    #  correction - after Riffert and Harold                                         
+  # Minimum radius for last stable circular orbit per unit mass, x0
+  z1 = 1.0+(1.0-abh2)**(1.0/3.0)*((1.0+abh)**(1.0/3.0)+(1.0-abh)**(1.0/3.0))
+  z2 = np.sqrt(3.0*abh2+z1*z1)
+  r0 = 3.0+z2-signa*np.sqrt((3.0-z1)*(3.0+z1+2.0*z2))
+  x0 = np.sqrt(r0)
 
-    qcor = (1. - 4.*ar32 + 3.*a2r2)/C
-#  -----------------------                                                       
-#  Set correction factor Q  (see Page & Thorne,'73, eq.35)                       
-#  -----------------------                                                       
+  # roots of x^3 - 3x + 2a = 0
+  ca3 = 1.0/3.0 * np.arccos(abh)
+  x1 =  2.*np.cos(ca3-np.pi/3.)
+  x2 =  2.*np.cos(ca3+np.pi/3.)
+  x3 = -2.*np.cos(ca3)
 
-# Minimum radius for last stable circular orbit per unit mass, X0                
-    z1 = 1.0+(1.0-abh2)**(1.0/3.0)*((1.0+abh)**(1.0/3.0)+(1.0-abh)**(1.0/3.0))
-    z2 = np.sqrt(3.0*abh2+z1*z1)
-    r0 = 3.0+z2-signa*np.sqrt((3.0-z1)*(3.0+z1+2.0*z2))
-    x0 = np.sqrt(r0)
+  # FB = '[]' term in eq. (35) of Page&Thorne '73                            
+  x = np.sqrt(r)
+  c1 = 3*(x1-abh)*(x1-abh)/(x1*(x1-x2)*(x1-x3))
+  c2 = 3*(x2-abh)*(x2-abh)/(x2*(x2-x1)*(x2-x3))
+  c3 = 3*(x3-abh)*(x3-abh)/(x3*(x3-x1)*(x3-x2))
+  al0 = 1.5*abh * np.log(x/x0)
+  al1 = np.log((x-x1)/(x0-x1))
+  al2 = np.log((x-x2)/(x0-x2))
+  al3 = np.log((x-x3)/(x0-x3))
+  fb = (x-x0 - al0 - c1*al1 - c2*al2 - c3*al3)
+  Q = fb*(1.0+ar32)*r12/np.sqrt(1.0-3.0*r1+2.0*ar32)
 
-    #       Roots of x^3 - 3x + 2a = 0                                               
+  # temperature correction
+  tcor = (Q/B/np.sqrt(C))**0.25
 
-    ca3 = 1.0/3.0 * np.arccos(abh)
-    x1 =  2.*np.cos(ca3-np.pi/3.)
-    x2 =  2.*np.cos(ca3+np.pi/3.)
-    x3 = -2.*np.cos(ca3)
+  inds0 = np.where(r < r0)
 
-    #       FB = '[]' term in eq. (35) of Page&Thorne '73                            
-    x = np.sqrt(r)
-    c1 = 3*(x1-abh)*(x1-abh)/(x1*(x1-x2)*(x1-x3))
-    c2 = 3*(x2-abh)*(x2-abh)/(x2*(x2-x1)*(x2-x3))
-    c3 = 3*(x3-abh)*(x3-abh)/(x3*(x3-x1)*(x3-x2))
-    al0 = 1.5*abh * np.log(x/x0)
-    al1 = np.log((x-x1)/(x0-x1))
-    al2 = np.log((x-x2)/(x0-x2))
-    al3 = np.log((x-x3)/(x0-x3))
-    fb = (x-x0 - al0 - c1*al1 - c2*al2 - c3*al3)
-    Q = fb*(1.0+ar32)*r12/np.sqrt(1.0-3.0*r1+2.0*ar32)
+  #nx = r.shape[0]
+  #ny = r.shape[1]
 
-        
-    #  ------------------------------                                                           
-    #  Set correction factor for TEFF  (see Novikov & Thorne,'73, eq.5.5.14b)                
-    #  ------------------------------                                                           
-    
-    tcor = (Q/B/np.sqrt(C))**0.25
+  tcor[inds0] = 0.
+  qcor[inds0] = 0.
 
-    inds0 = np.where(r < r0)
-
-    nx = r.shape[0]
-    ny = r.shape[1]
-
-    tcor[inds0] = 0.
-    qcor[inds0] = 0.
-
-    return qcor,tcor
+  return qcor,tcor
 
 def intensityblackholedisk(phots,nx,ny,mbh,abh,mdot,nuobs):
     """
-    Generate pixels corresponding to intensity in Novikov-Thorne black hole accreion disk
+    Generate pixels corresponding to intensity in Novikov-Thorne 
+    black hole accretion disk
     """
     
     # set up radius and intensity corrections as nx * ny arrays
@@ -182,10 +143,10 @@ def intensityblackholedisk(phots,nx,ny,mbh,abh,mdot,nuobs):
     intens_em = blackbody(teff, nuem)
     intens_obs = intens_em / (nufac)**3
     intens_obs[indsbad] = 1.e-50
+
     return intens_obs
 
 def make_image(phots,nx,ny,polarization=False):
-
     """
     Makes image (dict) from photon object
     """
@@ -206,8 +167,8 @@ def make_image(phots,nx,ny,polarization=False):
     image['ny'] = ny
     y = phots.user[0:ny,1]
     image['yfaces'] = np.zeros(ny+1)
-    image['yfaces'][0] = 2.*y[0] - y[1]
-    image['yfaces'][ny] = 2.*y[ny-1] - y[ny-2]
+    image['yfaces'][0] = 0.5*(3.*y[0] - y[1])
+    image['yfaces'][ny] = 0.5*(3.*y[-1] - y[-2])
     image['yfaces'][1:ny] = 0.5*(y[1:]+y[:-1])
     image['y'] = y
     
@@ -215,8 +176,8 @@ def make_image(phots,nx,ny,polarization=False):
     image['nx'] = nx
     x = phots.user[0:nx,1]
     image['xfaces'] = np.zeros(nx+1)
-    image['xfaces'][0] = 2.*x[0] - x[1]
-    image['xfaces'][nx] = 2.*x[nx-1] - x[nx-2]
+    image['xfaces'][0] = 0.5*(3.*x[0] - x[1])
+    image['xfaces'][nx] = 0.5*(3.*x[-1] - x[-2])
     image['xfaces'][1:nx] = 0.5*(x[1:]+x[:-1])
     image['x'] = x
   
@@ -319,9 +280,8 @@ def main(**kwargs):
     # Read photon list
     phlist = mclist.read_list(infile+'.list')
     phots = photons(phlist)
-    print phots.q[np.where(phots.q < 0.9)]
+    
     image = make_image(phots,kwargs['nx'],kwargs['ny'],kwargs['polarization'])
-
     plot_image(image,**kwargs)
     plt.savefig(kwargs['outfile'], bbox_inches='tight')
 
