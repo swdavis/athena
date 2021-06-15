@@ -161,6 +161,7 @@ def convert_xaxis(baseunit,newunit,spectrum):
     c = 2.99792e10
 
     xfaces = spectrum['xfaces']
+    xmid = nu = 0.5*(xfaces[1:]+xfaces[:-1])
     if (baseunit == 'kev'):
         nu = 0.5*(xfaces[1:]+xfaces[:-1])*1000.*everg/h
     if (baseunit == 'ev'):
@@ -181,7 +182,7 @@ def convert_xaxis(baseunit,newunit,spectrum):
 
 def plot_spectrum(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='nulnu',
                   ploterr=True,xscale='log',yscale='log',istokes=0,xmin=None,
-                  xmax=None,ymin=None,ymax=None,**kwargs):
+                  xmax=None,ymin=None,ymax=None,xlabel="",**kwargs):
     """
     Plot spectrum. Assumes saving, etc. are performed by the calling function
     """
@@ -593,7 +594,7 @@ def get_angle_bins_cartesian(photons,nmu,mufaces,nphi,phifaces):
 
 
 def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1.,
-                  nphi=1,phimin=0,phimax=2.*np.pi,yerror=True,mask=None):
+                  nphi=1,phimin=0,phimax=2.*np.pi,yerror=True,mask=None,xfunc=None,**kwargs):
     """
     Makes spectrum (dict) from photon object
     """
@@ -608,15 +609,25 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     h = 6.62607015e-27
     everg = 1.6021772e-12
     c = 2.99792e10
+    preset = False
     spectrum['xaxis'] = xaxis
     if (xaxis == 'kev'):
         xphots = phots.energy/everg/1000.
+        preset = True
     if (xaxis == 'ev'):
         xphots = phots.energy/everg
+        preset = True
     if (xaxis == 'nu'):
         xphots = phots.energy/h
+        preset = True
     if (xaxis == 'lambda'):
         xphots = c*h/(phots.energy*1.e8)
+        preset = True
+    if (not preset):
+        if xfunc is None:
+            raise RuntimeError('Unrecognized xunit and no xfunc provided')
+        else:
+            xphots = xfunc(phots.energy,True,**kwargs)
 
     # Create bins
     xfaces = build_bins(xmin,xmax,nx,logx)
@@ -683,6 +694,10 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     if (xaxis == 'lambda'):
         dnu = (1./xfaces[:-1]-1./xfaces[1:])*c/1.e8
         emid = 0.5*(1./xfaces[:-1]-1./xfaces[1:])*c*h/1.e8
+    if (not preset):
+        efaces = xfunc(xfaces,False,**kwargs)
+        emid = 0.5*(efaces[1:]+efaces[:-1])
+        dnu  = (efaces[1:]-efaces[:-1])/h
 
     # Normalize intensities
     mumid = 0.5*(mufaces[1:]+mufaces[:-1])

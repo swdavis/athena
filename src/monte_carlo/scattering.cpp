@@ -584,7 +584,7 @@ Real SigmaHat(Real x)
 
 //----------------------------------------------------------------------------------------
 
-//! \fn Real ElectronDistOld(Real tgas, MCRandom *pran)
+//! \fn Real ElectronDistPzdnyakov(Real tgas, MCRandom *pran)
 //  \brief Return momentum for electon distribution
 //
 //  Method is from Pozdnyakov et al. page 317 for low temperaure electrons

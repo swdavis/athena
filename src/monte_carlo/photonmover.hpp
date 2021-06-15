@@ -35,7 +35,7 @@ public:
   ~PhotonMover();
   // data
 
-  Real dl; //displacement
+  Real dl; // current displacement
   int checkmove; // check/terminate move
 
   MonteCarloBlock *pmy_mcb;

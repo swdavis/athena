@@ -32,8 +32,8 @@
 namespace {
   // Global variables
   Real rad0,time0;
-  Real energy0;
-  bool srcdist;
+  Real energy0,tsource;
+  bool srcdist,tnorm,planckdist;
   int i1start,i2start,i3start;
   Real logemin, logemax;
 
@@ -92,6 +92,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 
+  nuser_var = 3;
   // If time is set in problem generator, terminate photon integration based on time
   // but if not terminated based on radius
   Real time = pin->GetOrAddReal("problem","time",-1.);
@@ -105,15 +106,29 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
   if (emission_meth == EMISNONE) {
-    Real x0 = pin->GetReal("problem","x0");
-    Real temp = pin->GetReal("problem","temp");
-    Real kb = 1.380649e-16;
-    energy0 = kb*temp*x0;
+    planckdist = pin->GetOrAddBoolean("problem","planckdist",false);
+    if (planckdist) {
+      tsource = pin->GetReal("problem","tsource");
+    } else {
+      Real x0 = pin->GetReal("problem","x0");
+      Real temp = pin->GetReal("problem","temp");
+      Real kb = 1.380649e-16;
+      energy0 = kb*temp*x0;
+    }
   } else if (emission_meth == EMISFF) {
     // Set the energy boundaries for free-free emission
-    Real everg = 1.6021772e-12;
-    logemin = log(everg*pin->GetReal("problem", "emin"));
-    logemax = log(everg*pin->GetReal("problem", "emax"));
+    tnorm = pin->GetOrAddBoolean("problem","tnorm",false);
+    if (tnorm) {
+      // interpret as xmin/xmax with x=E/(kb*T)
+      Real kb = 1.380649e-16;
+      logemin = log(kb*pin->GetReal("problem", "emin"));
+      logemax = log(kb*pin->GetReal("problem", "emax"));
+    } else {
+      // interpret as emin/emax in eV
+      Real everg = 1.6021772e-12;
+      logemin = log(everg*pin->GetReal("problem", "emin"));
+      logemax = log(everg*pin->GetReal("problem", "emax"));
+    }
   }
   // Set variables 
   srcdist =pin->GetOrAddBoolean("problem","srcdist",false);
@@ -148,6 +163,10 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
+  pphot->user_var[0] = 0.;
+  pphot->user_var[1] = 0.;
+  pphot->user_var[2] = 0.;
+
   // Set status flag
   pphot->status = EVOLVING;
 
@@ -159,7 +178,10 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   // Initialize Photon weights, energy, direction, polarization
   if (pmy_mc->emission_meth == EMISNONE) {
     pphot->weight = 1.0;
-    pphot->energy = energy0;
+    if (planckdist)
+      pphot->energy = PlanckDist(tsource,pran);
+    else
+      pphot->energy = energy0;
     // Initialize Stokes vector
     pphot->stokes[0] = 1.0;
     pphot->stokes[1] = 0.0;
@@ -216,7 +238,12 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
   } else if (pmy_mc->emission_meth == EMISFF) {
     pphot->weight = emission(pphot->i3,pphot->i2,pphot->i1);
-    PhotonEmitFreeFree(this,pphot,logemin,logemax);
+    if(tnorm) {
+      Real logtg = log(tgas(pphot->i3,pphot->i2,pphot->i1));
+      PhotonEmitFreeFree(this,pphot,logemin+logtg,logemax+logtg);
+    } else{
+      PhotonEmitFreeFree(this,pphot,logemin,logemax);
+    }
     Real r0 = pow(pran->uniform()*rad0*rad0*rad0,1./3.);
     Real phi = 2. * PI * pran->uniform();
     Real cphi = cos(phi);
@@ -243,6 +270,10 @@ namespace {
 // Used to evalue photons time distribution as fixed spherical
 // escape surface
 void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
+
+  pphot->user_var[0] += pmover->dl * pphot->weight;
+  pphot->user_var[1] += pmover->dl * pphot->weight * pphot->energy;
+  pphot->user_var[2] += pmover->dl * pphot->weight * pphot->abs_coef;
 
   // First check radius condition
   Real r = sqrt(SQR(pphot->x[0])+SQR(pphot->x[1])+SQR(pphot->x[2]));

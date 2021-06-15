@@ -47,6 +47,7 @@ static inline void Swap4Bytes2(void *vdat);
 static void init_domain_1d(void);
 int IsBigEndian2(void);
 
+static bool tnorm;
 static Real logemin, logemax;
 
 //========================================================================================
@@ -322,11 +323,18 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
   int nx1 = pin->GetInteger("mesh","nx1");
   nrmax = pin->GetOrAddInteger("problem","nrmax",nx1);
   nrmin = pin->GetOrAddInteger("problem","nrmin",0);
-
-  // Set the energy boundaries for free-free emission
-  Real everg = 1.6021772e-12;
-  logemin = log(everg*pin->GetReal("problem", "emin"));
-  logemax = log(everg*pin->GetReal("problem", "emax"));
+  tnorm = pin->GetOrAddBoolean("problem","tnorm",false);
+  if (tnorm) {
+    // interpret as xmin/xmax with x=E/(kb*T)
+    Real kb = 1.380649e-16;
+    logemin = log(kb*pin->GetReal("problem", "emin"));
+    logemax = log(kb*pin->GetReal("problem", "emax"));
+  } else {
+    // Set the energy boundaries for free-free emission
+    Real everg = 1.6021772e-12;
+    logemin = log(everg*pin->GetReal("problem", "emin"));
+    logemax = log(everg*pin->GetReal("problem", "emax"));
+  }
 
 }
 
@@ -361,7 +369,13 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
 
   // Obtain intitial energy, polarization, direction and weight
   // Utilize free-free emission function in emission.cpp
-  PhotonEmitFreeFree(this,pphot,logemin,logemax);
+  if(tnorm) {
+    Real logtg = log(tgas(pphot->i3,pphot->i2,pphot->i1));
+    PhotonEmitFreeFree(this,pphot,logemin+logtg,logemax+logtg);
+  } else{
+    PhotonEmitFreeFree(this,pphot,logemin,logemax);
+  }
+
   // initialize kcart
   //pmover->CurvalinearToCartesian(pphot);
 

@@ -75,7 +75,7 @@ if __name__ == '__main__':
         default=2.*np.pi,
         help='maximum phi')
     parser.add_argument('--xaxis',
-        default='kev',
+        default='ev',
         help='variable to be used for x axis: ev, kev, nu, lambda')
     parser.add_argument('--linearx',
         action='store_true',
