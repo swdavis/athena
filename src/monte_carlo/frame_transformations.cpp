@@ -14,7 +14,6 @@
 
 #define SMALL_NUMBER 1.e-30
 //#define DEBUG
-// SWD:  Need to implement trial procedure for when normalized vector is NULL
 
 //----------------------------------------------------------------------------------------
 //! \fn void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD],

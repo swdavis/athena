@@ -31,19 +31,19 @@ def read_list(filename):
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
-    phtraj['length'] = map(int,raw_data_ascii[current_index:end_of_line_index].split(' '))[0]
+    phtraj['length'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
     current_index = skip_string("maxstep=")
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
-    phtraj['maxstep'] = map(int,raw_data_ascii[current_index:end_of_line_index].split(' '))[0]
+    phtraj['maxstep'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
     current_index = skip_string("npars=")
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
-    phtraj['npars'] = map(int,raw_data_ascii[current_index:end_of_line_index].split(' '))[0]
+    phtraj['npars'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
     current_index = skip_string("coord=")
     end_of_line_index = current_index + 1

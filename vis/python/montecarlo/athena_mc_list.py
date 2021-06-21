@@ -73,19 +73,19 @@ def read_list(filename):
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
-    phlist['length'] = map(int,raw_data_ascii[current_index:end_of_line_index].split(' '))[0]
+    phlist['length'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
     current_index = skip_string("npars=")
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
-    phlist['npars'] = map(int,raw_data_ascii[current_index:end_of_line_index].split(' '))[0]
+    phlist['npars'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
     current_index = skip_string("ntot=")
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
-    phlist['ntot'] = map(int,raw_data_ascii[current_index:end_of_line_index].split(' '))[0]
+    phlist['ntot'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
     current_index = skip_string("polarized=")
     end_of_line_index = current_index + 1
