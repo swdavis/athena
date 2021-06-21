@@ -32,7 +32,7 @@ def main(**kwargs):
     rundir = curdir+'/rundir'
     system("mkdir -p "+rundir)
     chdir("rundir")
-
+    
     # Run convergence test towards blackbody spectrum
     system("python "+tstpath+"/absorption_spectrum/convergence.py {:d} {:d} {:d} 10".format(iseed,nphot,nstep)+" --path "+path)
     conv_abs = np.loadtxt("conv.out")
