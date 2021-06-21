@@ -205,7 +205,7 @@ def main(**kwargs):
     er0 = float(4.*np.pi*planck_int/c)
     fr0 = 0.
 
-    print kwargs['vel']
+    print(kwargs['vel'])
     if ((kwargs['vel'] is not None) and (kwargs['frame'] == 'eulerian')):
         beta = kwargs['vel']
         gamma=1./(1.-beta**2)**0.5
@@ -232,7 +232,7 @@ def main(**kwargs):
         write_athinput(iseed+99*i,nphot,kwargs['vel'],kwargs['frame'],dens,tgas,emin,emax,length,
                        periodic,scatflag,file=infile)
         com="mpirun -np {:d} ".format(mcranks+1)+athena_path+"/athena -i "+infile
-        print com
+        print(com)
         system(com)
         # read hdf5 output
         data = athena_read.athdf("mciso.out1.00001.athdf",quantities=['Ermc','Frmc1','Frmc2','Frmc3','Eavemc','Cooling','kapjmc','tgas','rho'])

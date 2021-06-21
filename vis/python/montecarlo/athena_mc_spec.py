@@ -76,31 +76,31 @@ def read_spectrum(filename):
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
-    spectrum['nx'] = map(int,raw_data_ascii[current_index:end_of_line_index].split(' '))[0]
+    spectrum['nx'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
     current_index = skip_string("nmu=")
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
-    spectrum['nmu'] = map(int,raw_data_ascii[current_index:end_of_line_index].split(' '))[0]
+    spectrum['nmu'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
     current_index = skip_string("nphi=")
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
-    spectrum['nphi'] = map(int,raw_data_ascii[current_index:end_of_line_index].split(' '))[0]
+    spectrum['nphi'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
     current_index = skip_string("ntot=")
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
-    spectrum['ntot'] = map(int,raw_data_ascii[current_index:end_of_line_index].split(' '))[0]
+    spectrum['ntot'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
     current_index = skip_string("nintens=")
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
-    spectrum['nintens'] = map(int,raw_data_ascii[current_index:end_of_line_index].split(' '))[0]
+    spectrum['nintens'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
     current_index = skip_string("units=")
     end_of_line_index = current_index + 1
@@ -636,6 +636,9 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     
     # Get x bins
     xbins = get_bins(xphots,xfaces,nx,log=logx)
+    print(xphots)
+    print(xaxis)
+    print(phots.energy)
 
     # Get angle bins
     spectrum['nmu'] = nmu

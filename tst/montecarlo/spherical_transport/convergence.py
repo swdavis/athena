@@ -15,14 +15,14 @@ from os import system
 import athena_mc_list as mclist
 from athena_mc_list import photons
 
-def write_athinput(iseed,nphot,step,file='athinput.sphtran'):
+def write_athinput(iseed,nphot,step,file='athinput.sphtran',generalmover=True):
     """
     Write the remainder of the athinput file for convergence test
     """
 
     outfile = open(file,'w')
     outfile.write("<comment>\n")
-    outfile.write("problem   =  Test movement through spherical grid using general mover\n")
+    outfile.write("problem   =  Test movement through spherical grid using general mover or spherical mover\n")
     outfile.write("reference =\n")
     outfile.write("configure = --prob=mc_sph_tran -mc --coord=spherical_polar\n")
     outfile.write("\n")
@@ -63,9 +63,11 @@ def write_athinput(iseed,nphot,step,file='athinput.sphtran'):
     outfile.write("emission   = freefree\n")
     outfile.write("absorption = none\n")
     outfile.write("polarized = false\n")
-    outfile.write("stepsize = {:e}\n".format(step))
-    outfile.write("general_mover = true\n")
-    outfile.write("varystep = true\n")
+    if (generalmover):
+        outfile.write("stepsize = {:e}\n".format(step))
+        outfile.write("general_mover = true\n")
+        outfile.write("varystep = true\n")
+        outfile.write("checkmove = 100000000\n")
     outfile.write("\n<problem>\n")
 
 
@@ -85,21 +87,37 @@ def main(**kwargs):
     
     nstep = kwargs['nstep']
     nphot = kwargs['nphot']
-    steps = [kwargs['step0']]
-    ratio = kwargs['ratio']
     iseed = []
-    for i in range(nstep-1):
-        steps.append(steps[i]/ratio)
+    if (nstep > 0):
+        steps = [kwargs['step0']]
+        ratio = kwargs['ratio']
+        for i in range(nstep-1):
+            steps.append(steps[i]/ratio)
+    else:
+        steps =[]
+    print steps
     iseed = kwargs['iseed']
     # Set up array to store norm for convergence evaluation
-    error = np.zeros((nstep,2))
+    error = np.zeros((nstep+1,2))
 
+    # First do a run with standard cell-by-cell spherical mover integration
+    write_athinput(iseed,nphot,0.,generalmover=False)
+    com="mpirun -np {:d} ".format(mcranks+1)+athena_path+"/athena -i athinput.sphtran"
+    system(com)
+    com="python ~/athena-swdavis/vis/python/montecarlo/joinlists.py sphtran.out1 {:d} 0 0 -rm".format(mcranks+1)
+    system(com)
+    # read list as dict from infile
+    phots = photons(mclist.read_list("sphtran.out1.list"))
+    error[0,0] = 0.
+    error[0,1] = np.average(phots.user[:,0])
+    
+    # Next loop over step size with general mover prescription
     for i,step in enumerate(steps):            
+        i += 1
         write_athinput(iseed+99*i,nphot,step)
         com="mpirun -np {:d} ".format(mcranks+1)+athena_path+"/athena -i athinput.sphtran"
         system(com)
         com="python ~/athena-swdavis/vis/python/montecarlo/joinlists.py sphtran.out1 {:d} 0 0 -rm".format(mcranks+1)
-        print com
         system(com)
 
         # read list as dict from infile
@@ -110,14 +128,14 @@ def main(**kwargs):
     # save plot to outfile
     np.savetxt(kwargs['outfile'],error)
     
-    plt.plot(error[:,0],error[:,1],'+')
-    plt.plot(error[:,0],error[-1,1]*(error[-1,0]/error[:,0])**0.5)
-    plt.xscale('log')
-    plt.yscale('log')
-    plt.savefig("conv.pdf")
+    if (nstep > 0):
+        plt.plot(error[1:,0],error[1:,1],'+')
+        plt.plot(error[1:,0],error[-1,1]*(error[-1,0]/error[1:,0])**(-1.))
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.savefig("conv.pdf")
 
-    print error
-
+    print(error)
 
 # Execute main function
 if __name__ == '__main__':

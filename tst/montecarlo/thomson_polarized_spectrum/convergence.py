@@ -178,7 +178,7 @@ def main(**kwargs):
     plt.yscale('log')
     plt.savefig("conv.pdf")
 
-    print lnorm
+    print(lnorm)
 
 
 # Execute main function

@@ -49,7 +49,7 @@ void GeneralMover::Move(Photon *pphot) {
   PhotonTrajectoryList *ptraj = pmy_mcb->ptraj;
 
   // get number of mean free paths photon will travel
-  Real TauRemaining = GetOpticalDepth(pran);
+  Real tauremaining = GetOpticalDepth(pran);
  
 #ifdef DEBUG
   typedef struct {
@@ -71,7 +71,7 @@ void GeneralMover::Move(Photon *pphot) {
   chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max
 
 #ifdef VERBOSE
-  printf("Tau: %g; chi: %g; chi*dlambda: %g\n", TauRemaining, chi, chi*dlambda);
+  printf("tau: %g; chi: %g; chi*dlambda: %g\n", tauremaining, chi, chi*dlambda);
 #endif
 
   Real cth, sth, cph, sph;
@@ -84,7 +84,7 @@ void GeneralMover::Move(Photon *pphot) {
   y0 = pphot->x[0]*sth*sph;
   z0 = pphot->x[0]*cth;
 
-  while ( (pphot->status == EVOLVING) && (TauRemaining > 0.) && (iter < checkmove)) {
+  while ( (pphot->status == EVOLVING) && (tauremaining > TINY_NUMBER) && (iter < checkmove)) {
 
     iter++;
     count++;
@@ -99,12 +99,12 @@ void GeneralMover::Move(Photon *pphot) {
     pphot->kcart[1] = pphot->k[0]*sth*sph + pphot->k[1]*cth*sph + pphot->k[2]*cph;
     pphot->kcart[2] = pphot->k[0]*cth - pphot->k[1]*sth;*/
   
-   if (TauRemaining > chi * step) {
+   if (tauremaining > chi * step) {
      VerletStep(pphot,step);
      if (pmy_mcb->pmy_mc->polarized)
        PropogatePolarization(pphot,step);
    } else {
-     step = TauRemaining / chi;
+     step = tauremaining / chi;
      VerletStep(pphot,step);
      if (pmy_mcb->pmy_mc->polarized)
        PropogatePolarization(pphot,step);
@@ -125,7 +125,7 @@ void GeneralMover::Move(Photon *pphot) {
    y0 += step*pphot->kcart[1];
    z0 += step*pphot->kcart[2];*/
    //printf("xs: %g %g %g %g %g %g\n",x0,x,y0,y,z0,z,step);
-   TauRemaining -= chi * step;
+   tauremaining -= chi * step;
 
    // SWD: Clean up these checks
    // Check if photon changed zones
@@ -158,9 +158,6 @@ void GeneralMover::Move(Photon *pphot) {
  
   } // end of photon integration
 
-  // SWD: Try to remove this
-  CurvalinearToCartesian(pphot);
-
   /*if (pphot->status == ESCAPED) {
     pphot->energy *= pphot->k[IMC0];
     //pphot->PrintPhoton();
@@ -170,9 +167,9 @@ void GeneralMover::Move(Photon *pphot) {
     std::cout << "Warning: iter exceeded " << checkmove << " in photon mover." 
 	      << std::endl;
     pphot->PrintPhoton();
+    std::cout << "tau remaining, chi: " << tauremaining << " " << chi << std::endl;
     pphot->status = DESTROYED;
   }
-
 
 
 #ifdef VERBOSE
@@ -185,43 +182,30 @@ void GeneralMover::Move(Photon *pphot) {
 
 }
 
-// SWD: The conversion from Cartesian to Curvalinear should be removed entirely
-// or handled by MC coordinate class.
+// SWD: The conversion from Curvalinear  to Cartesian should be generalized or removed
 //----------------------------------------------------------------------------------------
-//! \fn void GeneralMover::CartesianToCurvalinear(Photon *pphot)
-//  \brief convert k vector from cartesian to curvalinear
-
-void GeneralMover::CartesianToCurvalinear(Photon *pphot) {
-
-  Real cth = cos(pphot->x[1]);
-  Real sth = sqrt(1. - SQR(cth));
-  Real cph = cos(pphot->x[2]);
-  Real sph = sin(pphot->x[2]);
-  // Compute spherical-polar
-  pphot->k[0] = pphot->kcart[0]*sth*cph + pphot->kcart[1]*sth*sph + pphot->kcart[2]*cth;
-  pphot->k[1] = pphot->kcart[0]*cth*cph + pphot->kcart[1]*cth*sph - pphot->kcart[2]*sth;
-  pphot->k[2] = -pphot->kcart[0]*sph + pphot->kcart[1]*cph;
-  
-}
-
-
-//----------------------------------------------------------------------------------------
-//! \fn void GeneralMover::CurvalinearToCartesian(Photon *pphot)
+//! \fn void GeneralMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4])
 //  \brief convert k vector from curvalinear to cartesian
 
-void GeneralMover::CurvalinearToCartesian(Photon *pphot) {
+void GeneralMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
 
+  Real r = pphot->x[IMC1];
   Real cth = cos(pphot->x[IMC2]);
   Real sth = sqrt(1. - SQR(cth));
   Real cph = cos(pphot->x[IMC3]);
   Real sph = sin(pphot->x[IMC3]);
+
+  Real nth = pphot->k[IMC2]*r;
+  Real nph = pphot->k[IMC3]*r*sth;
   // Compute cartesian
-  pphot->kcart[0] = (pphot->k[IMC1]*sth*cph + pphot->k[IMC2]*cth*cph - pphot->k[IMC3]*sph) / 
-    pphot->k[IMC0];
-  pphot->kcart[1] = (pphot->k[IMC1]*sth*sph + pphot->k[IMC2]*cth*sph + pphot->k[IMC3]*cph) / 
-    pphot->k[IMC0];
-  pphot->kcart[2] = (pphot->k[IMC1]*cth - pphot->k[IMC2]*sth) / pphot->k[IMC0];
- 
+  kcart[IMC1] = (pphot->k[IMC1]*sth*cph+nth*cth*cph-nph*sph);
+  kcart[IMC2] = (pphot->k[IMC1]*sth*sph+nth*cth*sph+nph*cph);
+  kcart[IMC3] = (pphot->k[IMC1]*cth-nth*sth);
+  Real norm = sqrt(SQR(kcart[IMC1])+SQR(kcart[IMC2])+SQR(kcart[IMC3]));
+  kcart[IMC1] /= norm;
+  kcart[IMC2] /= norm;
+  kcart[IMC3] /= norm;
+
 }
 
 //----------------------------------------------------------------------------------------
@@ -377,7 +361,7 @@ bool GeneralMover::UpdateZone(Photon *pphot) {
 
 void GeneralMover::VerletStep(Photon *pphot, Real step) {
    
-  Real gamma[NCOORD][NCOORD][NCOORD];
+  //Real gamma[NCOORD][NCOORD][NCOORD];
   Real k_n1[NCOORD],k_n1_copy[NCOORD];
   Real dk_n1[NCOORD];
   Real dk, error;
@@ -388,6 +372,7 @@ void GeneralMover::VerletStep(Photon *pphot, Real step) {
     k_n1[i] = (pphot->k[i]) + (pphot->dk[i])*step;
   }
   
+  // Update gamma for current location
   pcoord->Connect(pphot->x, gamma);
   n_iteration = 0;
   
@@ -442,9 +427,10 @@ void GeneralMover::VerletStep(Photon *pphot, Real step) {
 
 void GeneralMover::PropogatePolarization(Photon *pphot, Real step) {
 
-  Real gamma[NCOORD][NCOORD][NCOORD];
+  // SWD: Gamma does not need recomputing
+  //Real gamma[NCOORD][NCOORD][NCOORD];
   // Store gamma in Coord to prevent recalculation
-  pcoord->Connect(pphot->x, gamma);
+  //pcoord->Connect(pphot->x, gamma);
 
   int i, j, k, l;
   std::complex<Real> ptcopy[NCOORD][NCOORD];

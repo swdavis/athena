@@ -107,7 +107,7 @@ def main(**kwargs):
 # Execute main function
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--path',
+    parser.add_argument('path',
         default = None,
         help='path to Athena++ distribution')
     parser.add_argument('--mcranks',

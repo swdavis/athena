@@ -62,13 +62,14 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot) {
     stokes[i] = pphot->stokes[i] / norm;
   }
 
-  pmover->CurvalinearToCartesian(pphot);
+  // SWD: should be done outside of scattering -- i.e. transform to tetrad
+  //pmover->CurvalinearToCartesian(pphot);
 
   // Polarized scattering must be computed relative to cartesian bases due to definition of
   // stokes vectors
-  Real &kx = pphot->kcart[0];
-  Real &ky = pphot->kcart[1];
-  Real &kz = pphot->kcart[2];
+  Real &kx = pphot->k[IMC1];
+  Real &ky = pphot->k[IMC2];
+  Real &kz = pphot->k[IMC3];
 
   Real mu = kz;
   Real stheta = sqrt(1. - SQR(mu));
@@ -218,7 +219,8 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot) {
   ky = sthetap * sin(phip);
   kz = mup;
 
-  pmover->CartesianToCurvalinear(pphot);
+  // SWD: Should be done outside of scattering
+  //pmover->CartesianToCurvalinear(pphot);
  
 }
 
@@ -267,9 +269,9 @@ void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot) {
   MCRandom *pran = pmcb->pran;
   Real mec2 = 8.18711e-7;
 
-  Real &k1 = pphot->k[0];
-  Real &k2 = pphot->k[1];
-  Real &k3 = pphot->k[2];
+  Real &k1 = pphot->k[IMC1];
+  Real &k2 = pphot->k[IMC2];
+  Real &k3 = pphot->k[IMC3];
   
   Real v1,v2,v3,vdc,gamma,x,onemuvdc;
   do {
@@ -348,13 +350,14 @@ void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot) {
     stokes[i] = pphot->stokes[i] / norms;
   }
 
-  pmover->CurvalinearToCartesian(pphot);
+  // SWD: move outside of scattering
+  //pmover->CurvalinearToCartesian(pphot);
 
   // Polarized scattering must be computed relative to cartesian bases due to definition of
   // stokes vectors
-  Real &kx = pphot->kcart[0];
-  Real &ky = pphot->kcart[1];
-  Real &kz = pphot->kcart[2];
+  Real &kx = pphot->k[IMC1];
+  Real &ky = pphot->k[IMC2];
+  Real &kz = pphot->k[IMC3];
   
   
   Real stheta = sqrt(1. - SQR(kz));
@@ -487,7 +490,8 @@ void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot) {
   ky = k2p;
   kz = k3p;
 
-  pmover->CartesianToCurvalinear(pphot);
+  // SWD: move outside of scattering
+  //pmover->CartesianToCurvalinear(pphot);
   
 }
 

@@ -278,7 +278,6 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
       }
     }
     
-    CurvalinearToCartesian(pphot);
     if (pphot->IsNanPhoton())
       pphot->PrintPhoton();
 
@@ -579,27 +578,16 @@ bool PhotonMover::UpdateZone(Photon *pphot) {
 
 }
 
-//----------------------------------------------------------------------------------------
-//! \fn void PhotonMover::CartesianToCurvalinear(Photon *pphot)
-//  \brief convert k vector from cartesian to curvalinear
-
-void PhotonMover::CartesianToCurvalinear(Photon *pphot) {
-
-  // Default corresponds to Cartesian so just copy
-  for (int i=0; i<3; ++i)
-    pphot->k[i] = pphot->kcart[i];
-  
-}
 
 //----------------------------------------------------------------------------------------
-//! \fn void PhotonMover::CurvalinearToCartesian(Photon *pphot)
+//! \fn void PhotonMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4])
 //  \brief convert k vector from curvalinear to cartesian
 
-void PhotonMover::CurvalinearToCartesian(Photon *pphot) {
+void PhotonMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
 
   // Default corresponds to Cartesian so just copy
-  for (int i=0; i<3; ++i)
-    pphot->kcart[i] = pphot->k[i];
+  for (int i=0; i<4; ++i)
+    kcart[i] = pphot->k[i];
   
 }
 

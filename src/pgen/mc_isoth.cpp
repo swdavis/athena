@@ -160,14 +160,21 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   // Obtain intitial energy, polarization, direction and weight
   // Utilize free-free emission function in emission.cpp
   PhotonEmitFreeFree(this,pphot,logemin,logemax);
-  
+  // Convert k unit vector to k^\alpha
+  if (general_mover_flag) {
+    pphot->k[IMC0] = 1.;
+    pphot->k[IMC2] /= pphot->x[IMC1];
+    pphot->k[IMC3] /= (pphot->x[IMC1]*sin(pphot->x[IMC2]));
+    for(int i=0; i<4; i++) pphot->dk[i] = 0.;
+  }
+
   if (pphot->weight < 0.0) pphot->status = DESTROYED;
 
   // Initialize the absorption and scattering extinction coefficients
   // to the values appropriate in the emitted zone
   pphot->abs_coef = AbsorptionOpacity(this,pphot);
   pphot->sct_coef = ScatteringOpacity(this,pphot);
-
+ 
 }
 
 void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {

@@ -42,7 +42,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
   Real tauremaining = GetOpticalDepth(pran);
 
   // References for momentum vectors
-  CurvalinearToCartesian(pphot);// SWD: Redundant calculation of cth,sth,cph,sph
+  //CurvalinearToCartesian(pphot);// SWD: Redundant calculation of cth,sth,cph,sph
   Real& kx = pphot->kcart[0];
   Real& ky = pphot->kcart[1];
   Real& kz = pphot->kcart[2];
@@ -55,8 +55,6 @@ void SphericalPolarMover::Move(Photon *pphot) {
   typedef struct {
     Real dlr, dlt, dlp;
     Real cth, sth, cph, sph;
-    //Real kr, kth, kph;
-    //Real kx, ky, kz;
     Real x,y,z;
     int i,j,k;
     bool ascend[3];
@@ -80,9 +78,6 @@ void SphericalPolarMover::Move(Photon *pphot) {
   while( (tauremaining > 0.) && (pphot->status == EVOLVING) && (iter < checkmove)) {
     iter++;
 
-    //kr  = kx * sth * cph + ky * sth * sph + kz * cth;
-    //kth = kx * cth * cph + ky * cth * sph - kz * sth;
-    //kph = -kx * sph + ky * cph;
     // Compute cartesian positions
     Real r0 = pphot->x[IMC1];
     Real x0 = r0 * sth * cph;
@@ -388,36 +383,18 @@ void SphericalPolarMover::Move(Photon *pphot) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void SphericalPolarMover::CartesianToCurvalinear(Photon *pphot)
-//  \brief convert k vector from cartesian to curvalinear
-
-void SphericalPolarMover::CartesianToCurvalinear(Photon *pphot) {
-
-  Real cth = cos(pphot->x[IMC2]);
-  Real sth = sqrt(1. - SQR(cth));
-  Real cph = cos(pphot->x[IMC3]);
-  Real sph = sin(pphot->x[IMC3]);
-  // Compute spherical-polar
-  pphot->k[0] = pphot->kcart[IMC1]*sth*cph + pphot->kcart[IMC2]*sth*sph + pphot->kcart[IMC3]*cth;
-  pphot->k[1] = pphot->kcart[IMC1]*cth*cph + pphot->kcart[IMC2]*cth*sph - pphot->kcart[IMC3]*sth;
-  pphot->k[2] = -pphot->kcart[IMC1]*sph + pphot->kcart[IMC2]*cph;
-  
-}
-
-
-//----------------------------------------------------------------------------------------
-//! \fn void SphericalPolarMover::CurvalinearToCartesian(Photon *pphot)
+//! \fn void SphericalPolarMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4])
 //  \brief convert k vector from curvalinear to cartesian
 
-void SphericalPolarMover::CurvalinearToCartesian(Photon *pphot) {
+void SphericalPolarMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
 
   Real cth = cos(pphot->x[IMC2]);
   Real sth = sqrt(1. - SQR(cth));
   Real cph = cos(pphot->x[IMC3]);
   Real sph = sin(pphot->x[IMC3]);
   // Compute cartesian
-  pphot->kcart[0] = pphot->k[IMC1]*sth*cph + pphot->k[IMC2]*cth*cph - pphot->k[IMC3]*sph;
-  pphot->kcart[1] = pphot->k[IMC1]*sth*sph + pphot->k[IMC2]*cth*sph + pphot->k[IMC3]*cph;
-  pphot->kcart[2] = pphot->k[IMC1]*cth - pphot->k[IMC2]*sth;
+  kcart[IMC1] = pphot->k[IMC1]*sth*cph + pphot->k[IMC2]*cth*cph - pphot->k[IMC3]*sph;
+  kcart[IMC2] = pphot->k[IMC1]*sth*sph + pphot->k[IMC2]*cth*sph + pphot->k[IMC3]*cph;
+  kcart[IMC3] = pphot->k[IMC1]*cth - pphot->k[IMC2]*sth;
 }
 

@@ -62,8 +62,8 @@ public:
   void UpdateSpectrum(Photon *pphot);
   int EnergyBin(Real energy);
   int EnergyBinUniform(Real energy, bool loge);
-  bool AngleBinsCartesian(Photon *pphot, int &Phibin, int &mubin);
-  bool AngleBinsSphericalPolar(Photon *pphot, int &Phibin, int &mubin);
+  bool AngleBinsCartesian(Real k[4], int &Phibin, int &mubin);
+  bool AngleBinsSphericalPolar(Real k[4], int &Phibin, int &mubin);
   void SetSurface(std::string input_face);
   bool ScreenCoordinates(Photon *pphot);
   void ResetSpectrum();

@@ -16,6 +16,7 @@
 // Athena++ headers
 #include "montecarlo.hpp"
 #include "mcoutput.hpp"
+#include "photonmover.hpp"
 #include "../globals.hpp"
 #include "../outputs/io_wrapper.hpp"
 
@@ -178,14 +179,14 @@ void Spectrum::SetSurface(std::string input_face) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn bool Spectrum::AngleBinsCarteisan(Photon *pphot, int &phibin, int &cthbin)
+//! \fn bool Spectrum::AngleBinsCarteisan(Real kx[4], int &phibin, int &cthbin)
 //  \brief set index of phi and cth bins relative to cartesian axis
 
-bool Spectrum::AngleBinsCartesian(Photon *pphot, int &phibin, int &cthbin) {
+bool Spectrum::AngleBinsCartesian(Real k[4], int &phibin, int &cthbin) {
 
-  Real kx = pphot->kcart[0];
-  Real ky = pphot->kcart[1];
-  Real kz = pphot->kcart[2];
+  Real kx = k[IMC1];
+  Real ky = k[IMC2];
+  Real kz = k[IMC3];
 
   Real ctheta, phi, stheta;
   if (COORDINATE_SYSTEM == "cartesian") {
@@ -269,7 +270,7 @@ bool Spectrum::AngleBinsCartesian(Photon *pphot, int &phibin, int &cthbin) {
               << ctheta << ' ' << kx << ' ' << ky << ' ' << kz << std::endl;
     return false;
   }
-  if (cthbin < 0.) {
+  if (cthbin < 0) {
     std::cout << "Warning: cthbin < 0 (cthbin, mu, k1, k2, k3): " << cthbin << ' '
               << ctheta << ' ' << kx << ' ' << ky << ' ' << kz << std::endl;
     return false;
@@ -299,14 +300,14 @@ bool Spectrum::AngleBinsCartesian(Photon *pphot, int &phibin, int &cthbin) {
 
 
 //----------------------------------------------------------------------------------------
-//! \fn bool Spectrum::AngleBinsSphericalPolar(Photon *pphot, int &phibin, int &cthbin)
+//! \fn bool Spectrum::AngleBinsSphericalPolar(Real k[4], int &phibin, int &cthbin)
 //  \brief set index of phi and cth bins relative to spherical-polar axis
 
-bool Spectrum::AngleBinsSphericalPolar(Photon *pphot, int &phibin, int &cthbin) {
+bool Spectrum::AngleBinsSphericalPolar(Real k[4], int &phibin, int &cthbin) {
 
-  Real kr = pphot->k[0];
-  Real kth = pphot->k[1];
-  Real kph = pphot->k[2];
+  Real kr = k[IMC1];
+  Real kth = k[IMC2];
+  Real kph = k[IMC3];
 
   Real ctheta, phi, stheta;
   // Set ctheta, phi according to face
@@ -362,7 +363,6 @@ bool Spectrum::AngleBinsSphericalPolar(Photon *pphot, int &phibin, int &cthbin) 
   }
   if (ctheta < 0.0) {
     printf("Warning: ctheta < 0\n");
-    pphot->PrintPhoton();
     return false;
   }
 
@@ -448,12 +448,27 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
     // Get angle bins
     int phibin, mubin;
     if (polar_axis) {
-      if (!AngleBinsCartesian(pphot,phibin,mubin))
+      Real kcart[4];
+      pphot->pmy_mcb->pmover->CurvalinearToCartesian(pphot,kcart);
+      if (!AngleBinsCartesian(kcart,phibin,mubin))
 	return;
     } else {
-      if (COORDINATE_SYSTEM == "spherical_polar")
-	if(!AngleBinsSphericalPolar(pphot,phibin,mubin))
-	  return;	
+      if (COORDINATE_SYSTEM == "spherical_polar") {
+	if (pphot->pmy_mcb->general_mover_flag) {
+	  Real kn[4];
+	  kn[IMC1] = pphot->k[IMC1];
+	  kn[IMC2] = pphot->k[IMC2]*pphot->x[IMC1];
+	  kn[IMC3] = pphot->k[IMC3]*pphot->x[IMC1]*sin(pphot->x[IMC2]);
+	  Real norm = sqrt(SQR(kn[IMC1])+SQR(kn[IMC2])+SQR(kn[IMC3]));
+	  for (int i=0; i<4; ++i)
+	    kn[i] /= norm;
+	  if(!AngleBinsSphericalPolar(kn,phibin,mubin))
+	    return;
+	} else {
+	  if(!AngleBinsSphericalPolar(pphot->k,phibin,mubin))
+	    return;
+	}
+      }
     }
     //Real tauabs = -log(weight);
     //Real opac = tauabs/pphot->path;

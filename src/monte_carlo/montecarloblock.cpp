@@ -411,6 +411,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
 
     // move photon to next scattering/absorption or to boundary
     pmover->Move(pphoton);
+  
     int iscat = 0;
     Real xmax = 0.;
     while (pphoton->status == EVOLVING) {

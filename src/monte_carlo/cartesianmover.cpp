@@ -46,7 +46,6 @@ void CartesianMover::Move(Photon *pphot) {
   FinalPositionCartesian(pmcb,pco,pphot,xf,yf,zf,dl0);
 #endif
 
-  CurvalinearToCartesian(pphot);
   Real& kx = pphot->k[IMC1];
   Real& ky = pphot->k[IMC2];
   Real& kz = pphot->k[IMC3];

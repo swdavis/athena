@@ -161,7 +161,7 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot) {
     //printf("error: %g %g %g %g %g %g %g\n",xp,yp,zp,xf,yf,zf,error/rf);
     pphot->user_var[0] = error;
     if (nerror == cadence)
-      printf("Mean error: %g\n",error_sum/static_cast<Real>(nerror));
+      printf("Mean relative error: %g\n",error_sum/static_cast<Real>(nerror));
   }
 
 }

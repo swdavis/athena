@@ -149,7 +149,7 @@ def main(**kwargs):
     for i,nphot in enumerate(nphots):            
         write_athinput(iseed+99*i,nphot,kwargs['vel'],kwargs['frame'],dens,tgas,emin,emax,file=infile)
         com="mpirun -np {:d} ".format(mcranks+1)+athena_path+"/athena -i "+infile
-        print com
+        print(com)
         system(com)
         # read hdf5 outputs
         data = athena_read.athdf("mciso.out1.00001.athdf",quantities=['Ermc','Frmc1','Frmc2','Frmc3'])
