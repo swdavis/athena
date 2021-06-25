@@ -43,9 +43,9 @@ void SphericalPolarMover::Move(Photon *pphot) {
 
   // References for momentum vectors
   //CurvalinearToCartesian(pphot);// SWD: Redundant calculation of cth,sth,cph,sph
-  Real& kx = pphot->kcart[0];
-  Real& ky = pphot->kcart[1];
-  Real& kz = pphot->kcart[2];
+  //Real& kx = pphot->kcart[0];
+  //Real& ky = pphot->kcart[1];
+  //Real& kz = pphot->kcart[2];
   Real& kr  = pphot->k[0];
   Real& kth = pphot->k[1];
   Real& kph = pphot->k[2];
@@ -69,9 +69,9 @@ void SphericalPolarMover::Move(Photon *pphot) {
   Real sph = sin(pphot->x[IMC3]);
 
   // Make sure kcart is set
-  kx = kr*sth*cph + kth*cth*cph - kph*sph;
-  ky = kr*sth*sph + kth*cth*sph + kph*cph;
-  kz = kr*cth - kth*sth;
+  Real kx = kr*sth*cph + kth*cth*cph - kph*sph;
+  Real ky = kr*sth*sph + kth*cth*sph + kph*cph;
+  Real kz = kr*cth - kth*sth;
 
   int iter = 0;
   // Move photon until requisite # of mean free paths or escape

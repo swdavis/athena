@@ -32,7 +32,10 @@ def write_spectrum(filename,spectrum):
     outfile.write("units="+spectrum['xaxis']+"\n")
     outfile.write("polarized="+spectrum['polarized']+"\n")
     outfile.write("yerror="+spectrum['yerror']+"\n")
+    outfile.close()
+
     # Write binfaces
+    outfile = open(filename, 'ab')
     myfmt='>'+'d'*(nx+1)
     bin=struct.pack(myfmt,*(spectrum['xfaces']))
     outfile.write(bin)
@@ -636,9 +639,6 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     
     # Get x bins
     xbins = get_bins(xphots,xfaces,nx,log=logx)
-    print(xphots)
-    print(xaxis)
-    print(phots.energy)
 
     # Get angle bins
     spectrum['nmu'] = nmu

@@ -21,8 +21,8 @@ def main(**kwargs):
     bbnorm = kwargs.pop('bbnorm')
 
     # Use latex labels
-    plt.rc('text',usetex=True)
-    plt.rc('font', **{'family' :"serif"})
+    #plt.rc('text',usetex=True)
+    #plt.rc('font', **{'family' :"serif"})
 
     # filenames for io
     infile = kwargs.pop('infile')

@@ -91,7 +91,7 @@ def read_list(filename):
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
-    phlist['polarized'] = bool(map(int,raw_data_ascii[current_index:end_of_line_index].split(' '))[0])
+    phlist['polarized'] = bool(list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0])
     current_index = end_of_line_index + 1
     current_index = skip_string("coord=")
     end_of_line_index = current_index + 1
@@ -122,8 +122,10 @@ def write_list(filename,phlist):
     outfile.write("ntot={:d}\n".format(phlist['ntot']))
     outfile.write("polarized={:d}\n".format(int(phlist['polarized'])))
     outfile.write("coord="+phlist['coord']+"\n")
+    outfile.close()
 
     # Write list data
+    outfile = open(filename, 'ab')
     nelements = phlist['length']*phlist['npars']
     phlist['list'] = phlist['list'].reshape(nelements)
     myfmt='>'+'d'*nelements

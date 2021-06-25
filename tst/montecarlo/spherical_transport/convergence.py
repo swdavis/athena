@@ -95,7 +95,7 @@ def main(**kwargs):
             steps.append(steps[i]/ratio)
     else:
         steps =[]
-    print steps
+    print("steps: ",steps)
     iseed = kwargs['iseed']
     # Set up array to store norm for convergence evaluation
     error = np.zeros((nstep+1,2))
