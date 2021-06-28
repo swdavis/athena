@@ -42,7 +42,7 @@ class MCCoord;
 // Flags for controlling monte carlo emission, scattering, absorption, bcs
 enum EmissionFlag {EMISUSER = 0, EMISNONE = 1, EMISFF = 2};
 enum AbsorptionOpacityFlag {ABSUSER = 0, ABSNONE = 1, ABSFF = 2};
-enum AbsorptionMethodFlag {ABSWEIGHT = 0, ABSDESTROY = 1, ABSTAU = 2};
+enum AbsorptionMethodFlag {ABSWEIGHT = 0, ABSPROB = 1, ABSTAU = 2};
 enum ScatteringFlag {SCATUSER = 0, SCATNONE =1, SCATISO = 2, SCATTHOM = 3, SCATCOMP =4,
                      SCATRES = 5};
 enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY = 2,

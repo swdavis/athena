@@ -427,7 +427,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
         if(pphoton->weight <= minweight) {
           pphoton->status = ABSORBED;
         }
-      } else if (absorption_meth == ABSDESTROY) {
+      } else if (absorption_meth == ABSPROB) {
         if (pran->uniform() > (pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef)) )
           pphoton->weight = 0.;
           pphoton->status = ABSORBED;

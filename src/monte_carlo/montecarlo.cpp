@@ -240,8 +240,8 @@ enum AbsorptionOpacityFlag GetAbsorptionOpacityFlag(std::string input_string) {
 enum AbsorptionMethodFlag GetAbsorptionMethodFlag(std::string input_string) {
   if (input_string == "weight") {
     return ABSWEIGHT;
-  } else if (input_string == "destroy") {
-    return ABSDESTROY;
+  } else if (input_string == "prob") {
+    return ABSPROB;
   } else if (input_string == "tau") {
     return ABSTAU;
   } else {
