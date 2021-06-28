@@ -68,6 +68,8 @@ public:
   // functions
   virtual void Move(Photon *pphot);
   virtual Real GetOpticalDepth(MCRandom *pran);
+  virtual Real GetExtinctionCoefficient(Photon *pphot);
+  virtual Real ExpTauAbsorption(Photon *pphot, Real dl);
   virtual void NextFace(Real dx1, Real dx2, Real dx3, int &face, Real &dx);
   virtual void MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
     MonteCarloBlock *pmcb, int face, bool ascend[3]);

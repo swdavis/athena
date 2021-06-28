@@ -41,7 +41,8 @@ class MCCoord;
 
 // Flags for controlling monte carlo emission, scattering, absorption, bcs
 enum EmissionFlag {EMISUSER = 0, EMISNONE = 1, EMISFF = 2};
-enum AbsorptionFlag {ABSUSER = 0, ABSNONE = 1, ABSFF = 2};
+enum AbsorptionOpacityFlag {ABSUSER = 0, ABSNONE = 1, ABSFF = 2};
+enum AbsorptionMethodFlag {ABSWEIGHT = 0, ABSDESTROY = 1, ABSTAU = 2};
 enum ScatteringFlag {SCATUSER = 0, SCATNONE =1, SCATISO = 2, SCATTHOM = 3, SCATCOMP =4,
                      SCATRES = 5};
 enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY = 2,
@@ -131,7 +132,8 @@ void ComplexTetradToCoordinate(std::complex<Real> ttet[NCOORD][NCOORD],
 //---------------------- prototypes for setting flags ------------------------------------
 enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string);
 enum EmissionFlag GetEmissionFlag(std::string input_string);
-enum AbsorptionFlag GetAbsorptionFlag(std::string input_string);
+enum AbsorptionOpacityFlag GetAbsorptionOpacityFlag(std::string input_string);
+enum AbsorptionMethodFlag GetAbsorptionMethodFlag(std::string input_string);
 enum ScatteringFlag GetScatteringFlag(std::string input_string);
 
 //----------------------------------------------------------------------------------------
@@ -192,8 +194,6 @@ public:
   int checkmove,checkscat;
 
   enum EmissionFlag emission_meth;
-  enum AbsorptionFlag absorption_meth;
-  enum ScatteringFlag scattering_meth;
   enum MCBoundaryFlag mc_bcs[6];
 
   bool boosts;  // Compute lorentz transformations
@@ -271,9 +271,6 @@ public:
   PhotonList *pphlist; // ptr to photon list
   PhotonTrajectoryList *ptraj;
 
-  enum EmissionFlag emission_meth;
-  enum AbsorptionFlag absorption_meth;
-  enum ScatteringFlag scattering_meth;
   enum MCBoundaryFlag mcb_bcs[6];
 
   // function pointers
@@ -299,8 +296,14 @@ public:
   bool acceleration;  // use MRW acceleration
   bool time_acc;  // use MRW acceleration with time limit
 
+  // Set flags
+  //enum EmissionFlag emission_meth;
+  enum AbsorptionMethodFlag absorption_meth;
+  enum AbsorptionOpacityFlag absorption_opac;
+  enum ScatteringFlag scattering_meth;
+
   // Associated with general mover
-  // SWD some of these should be eliminated others moved to MonteCarlo
+  // SWD some of these should be eliminated others moved to MonteCarlo?
   bool general_mover_flag; // use general integration (default for all but
                            // cartesian, spherical
   bool boyerlindquist_flag; // use Boyer-Lindquist coordinates 
@@ -329,7 +332,7 @@ public:
   void TetradTransform(Photon *pphot, const Real sign);
   void InitializePhoton(Photon *pphot);
   void FinalizePhoton(Photon *pphot);
-  void UpdateMoments(Photon *pphot, Real dl);
+  void UpdateMoments(Photon *pphot, Real dl, Real etau);
   void NormalizeMoments(bool normalize);
   void ResetMoments();
   void UpdateCooling(Photon *pphot, Real energy0, Real weight0);

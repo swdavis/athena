@@ -167,7 +167,6 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
     pphot->k[IMC3] /= (pphot->x[IMC1]*sin(pphot->x[IMC2]));
     for(int i=0; i<4; i++) pphot->dk[i] = 0.;
   }
-
   if (pphot->weight < 0.0) pphot->status = DESTROYED;
 
   // Initialize the absorption and scattering extinction coefficients

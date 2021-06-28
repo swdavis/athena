@@ -27,7 +27,7 @@ def bnu_int(en,tgas):
         return (en**3*np.log(1.-x)-3.*kt*en**2*polylog(2,x)
                 -6.*en*kt**2*polylog(3,x)-6*kt**3*polylog(4,x))
 
-def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,file='athinput.mciso'):
+def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,absmeth='weight',scattering=False,file='athinput.mciso'):
     """
     Write the remainder of the athinput file for convergence test
     """
@@ -76,10 +76,14 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,file='athinput.mcis
     outfile.write("<montecarlo>\n")
     outfile.write("nphot     = {:d}\n".format(nphot))
     outfile.write("iseed     = {:d}\n".format(iseed))
-    outfile.write("scattering = none\n")
+    if (scattering):
+        outfile.write("scattering = thomson\n")
+    else:
+        outfile.write("scattering = none\n")        
     outfile.write("emission   = freefree\n")
     outfile.write("absorption = freefree\n")
     outfile.write("polarized = false\n")
+    outfile.write("abs_method = "+absmeth+"\n")
     if (boosts):
         outfile.write("boosts     = true\n")
     else:
@@ -147,7 +151,7 @@ def main(**kwargs):
     # Set up array to store norm for convergence evaluation
     results = np.zeros((nstep,12))
     for i,nphot in enumerate(nphots):            
-        write_athinput(iseed+99*i,nphot,kwargs['vel'],kwargs['frame'],dens,tgas,emin,emax,file=infile)
+        write_athinput(iseed+99*i,nphot,kwargs['vel'],kwargs['frame'],dens,tgas,emin,emax,scattering=kwargs['scat'],absmeth=kwargs['absmeth'],file=infile)
         com="mpirun -np {:d} ".format(mcranks+1)+athena_path+"/athena -i "+infile
         print(com)
         system(com)
@@ -220,6 +224,12 @@ if __name__ == '__main__':
     parser.add_argument('--frame',
         default = "eulerian",
         help='boost velocity')
+    parser.add_argument('--scat',
+        action = 'store_true',
+        help='use thomson scattering')
+    parser.add_argument('--absmeth',
+        default = "weight",
+        help='absorption method: weight, destroy, tau') 
     parser.add_argument('--path',
         default = "/home/swd8g/athena-swdavis",
         help='path to Athena++ distribution') 

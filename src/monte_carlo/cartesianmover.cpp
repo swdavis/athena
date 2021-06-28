@@ -95,8 +95,10 @@ void CartesianMover::Move(Photon *pphot) {
     int face;
     NextFace(dlx,dly,dlz,face,dl);
 
-    Real chi = pphot->sct_coef + pphot->abs_coef;
-    chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER;
+    Real chi = GetExtinctionCoefficient(pphot);
+    //Real chi = pphot->sct_coef + pphot->abs_coef;
+    //chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER;
+    
     if (dl > tauremaining / chi) { // Photon remains in zone
       bool accel_success = false;
       if (acceleration) {
@@ -123,10 +125,12 @@ void CartesianMover::Move(Photon *pphot) {
 	  return;
 	// compute distance remaining in zone
         dl = tauremaining/chi;
-	// Update moments
+        // Account for absorption (if needed) and update moments
+        Real etaua = ExpTauAbsorption(pphot,dl);
         if (pmcb->moments_flag) {
-          pmcb->UpdateMoments(pphot,dl);
+          pmcb->UpdateMoments(pphot,dl,etaua);
         }
+        pphot->weight *= etaua;
         // update position
         for (int i=0; i<4; ++i)
           pphot->x[i] += pphot->k[i] * dl;
@@ -136,9 +140,13 @@ void CartesianMover::Move(Photon *pphot) {
       return;
 
     } else { // Photon moves to next zone and reduce tauremaining
+      // Account for absorption (if needed) and update moments
+      Real etaua = ExpTauAbsorption(pphot,dl);
+      pphot->weight *= etaua;
       if (pmcb->moments_flag) {
-	pmcb->UpdateMoments(pphot,dl);
-      }      
+	pmcb->UpdateMoments(pphot,dl,etaua);
+      }
+      pphot->weight *= etaua;
       // update position
       for (int i=0; i<4; ++i)
 	pphot->x[i] += pphot->k[i] * dl;

@@ -105,7 +105,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 
 void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
-  if (emission_meth == EMISNONE) {
+  if (pmy_mc->emission_meth == EMISNONE) {
     planckdist = pin->GetOrAddBoolean("problem","planckdist",false);
     if (planckdist) {
       tsource = pin->GetReal("problem","tsource");
@@ -115,7 +115,7 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
       Real kb = 1.380649e-16;
       energy0 = kb*temp*x0;
     }
-  } else if (emission_meth == EMISFF) {
+  } else if (pmy_mc->emission_meth == EMISFF) {
     // Set the energy boundaries for free-free emission
     tnorm = pin->GetOrAddBoolean("problem","tnorm",false);
     if (tnorm) {

@@ -307,6 +307,36 @@ Real PhotonMover::GetOpticalDepth(MCRandom *pran) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn Real PhotonMover::GetExtinctionCoefficient(Photon *pphot)
+//  \brief returns total opacity or scattering opacity depending on method
+
+Real PhotonMover::GetExtinctionCoefficient(Photon *pphot) {
+  
+  Real chi;
+  if (pmy_mcb->absorption_meth == ABSTAU) {
+    chi = pphot->sct_coef;
+  } else {
+    chi = pphot->sct_coef + pphot->abs_coef;
+  }
+  return (chi > TINY_NUMBER) ? chi : TINY_NUMBER;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Real PhotonMover::ExpTauAbsorption(Photon *pphot, Real dl)
+//  \brief Computes e^-tau_abs
+
+Real PhotonMover::ExpTauAbsorption(Photon *pphot, Real dl) {
+  
+ 
+  if (pmy_mcb->absorption_meth == ABSTAU) {
+    return exp(-pphot->abs_coef*dl);
+  } else {
+    return 1.;
+  }
+
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void PhotonMover::NextFace(Real dx1, Real dx2, Real dx3, int &face, Real &dx)
 //  \brief returns flag with next face and distance to next face
 
