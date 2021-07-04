@@ -113,6 +113,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   }
 
   codetocgs_rho = 1.; codetocgs_vel = 1., codetocgs_tgas = 1.;  // default cgs for code units
+ 
   // SWD:  stepsize control needs to be modified
   stepsize = pin->GetOrAddReal("montecarlo","stepsize",1.0e-3);
   minweight = pin->GetOrAddReal("montecarlo","minweight",1.0e-20);
@@ -419,7 +420,6 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
     int iscat = 0;
     Real xmax = 0.;
     while (pphoton->status == EVOLVING) {
-      
       // Account for absorption
       Real weight0 = pphoton->weight;
       if (absorption_meth == ABSWEIGHT) {
@@ -484,6 +484,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
       pmover->Move(pphoton);
     }
     if (ptraj != NULL) ptraj->CompleteTrajectory();
+
     if (pphoton->status == ESCAPED) {
       // User defined completion work
       FinalizePhoton(pphoton);

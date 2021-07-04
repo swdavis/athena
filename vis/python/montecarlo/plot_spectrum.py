@@ -31,6 +31,10 @@ def main(**kwargs):
     # read spectrum as dict from infile
     spectrum = mcspec.read_spectrum(infile)
 
+    #Convert xaxis, if needed
+    if (kwargs['xunit'] != spectrum['units']):
+        mcspec.convert_xaxis(kwargs['xunit'],spectrum)
+
     def imu_handler(imu):
         if imu == None:
             return [0]

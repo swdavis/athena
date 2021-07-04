@@ -45,7 +45,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   }
 
 
-  // read bc flags for each of the 6 boundaries.
+  // read bc flags for each of the 6 physical boundaries.
   mc_bcs[INNER_X1] = GetMCBoundaryFlag(pin->GetOrAddString("mesh","ix1_mc_bc","escape"));
   mc_bcs[OUTER_X1] = GetMCBoundaryFlag(pin->GetOrAddString("mesh","ox1_mc_bc","escape"));
   mc_bcs[INNER_X2] = GetMCBoundaryFlag(pin->GetOrAddString("mesh","ix2_mc_bc","escape"));

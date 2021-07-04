@@ -105,6 +105,11 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 
 void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
+  // Set variables 
+  srcdist =pin->GetOrAddBoolean("problem","srcdist",false);
+  rad0 = pin->GetReal("problem","radius");
+  time0 = pin->GetOrAddReal("problem","time",-1.);
+
   if (pmy_mc->emission_meth == EMISNONE) {
     planckdist = pin->GetOrAddBoolean("problem","planckdist",false);
     if (planckdist) {
@@ -130,10 +135,6 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
       logemax = log(everg*pin->GetReal("problem", "emax"));
     }
   }
-  // Set variables 
-  srcdist =pin->GetOrAddBoolean("problem","srcdist",false);
-  rad0 = pin->GetReal("problem","radius");
-  time0 = pin->GetOrAddReal("problem","time",-1.);
 
   // Deterime cell of initial photon, which is asssumed to include 
   // the origin if more than one cell is specified for each direction
@@ -157,6 +158,15 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
     msg << "### FATAL ERROR in MonteCarloProblemGenerator" << std::endl
         << "Origin not found within domain." << std::endl;
     throw std::runtime_error(msg.str().c_str());
+  }
+
+  if (pmy_mc->emission_meth == EMISFF) {
+    // Adjust for smaller emission volume
+    Real cellvol = pcoord->vol(i3start,i2start,i1start);
+    Real spherevol = 4./3.*PI*pow(rad0,3);
+    emission(i3start,i2start,i1start) *= (spherevol/cellvol);
+    pcoord->vol(i3start,i2start,i1start) *= (spherevol/cellvol);
+    minweight *= (spherevol/cellvol);
   }
 
 }

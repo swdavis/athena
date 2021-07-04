@@ -235,7 +235,7 @@ bool Spectrum::AngleBinsCartesian(Real k[4], int &phibin, int &cthbin) {
 	  phi = 2 * PI - phi;
 	break;
       case FACE_UNDEF:
-	ctheta=0.0;
+	ctheta=fabs(kz);
 	phi = 0.;
 	break;
       default:
@@ -260,7 +260,6 @@ bool Spectrum::AngleBinsCartesian(Real k[4], int &phibin, int &cthbin) {
 	phi = 2 * PI - phi;
     }
   }
-
 
   // Get ctheta bin
   int ncth = range.ncth;
