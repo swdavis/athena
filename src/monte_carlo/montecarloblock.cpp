@@ -20,6 +20,9 @@
 #include "../hydro/hydro.hpp"
 #include "../globals.hpp"
 
+static Real test;
+static bool first = true;
+
 // constructor, initializes data structures and parameters
 
 MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCarlo *pmc, 
@@ -42,10 +45,6 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   pmover = NULL;
   pcoord = NULL;
 
-  // Initialize input parameters and flags
-  weighted_absorption = pin->GetOrAddBoolean("montecarlo","abs_weight",true);
-  //polarized = pin->GetOrAddBoolean("montecarlo","polarized",false);
-
   // get seed and intitialize randon number generator
   int rank = Globals::my_rank;
   int iseed = pmy_mc->iseed + rank *100;  // temporary solution
@@ -53,10 +52,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 
   next=NULL;
 
-  // Set flags (initialized in MonteCarlo class)
-  emission_meth = pmy_mc->emission_meth;
-  absorption_meth = pmy_mc->absorption_meth;
-  scattering_meth = pmy_mc->scattering_meth;
+  // SWD: eliminate some or all of these?
+  // set local flags based on monte_carlo
   boosts = pmy_mc->boosts;
   emission_array_flag = pmy_mc->emission_array_flag;
   moments_flag = pmy_mc->pmcout->moments; // set in mcoutput
@@ -116,6 +113,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   }
 
   codetocgs_rho = 1.; codetocgs_vel = 1., codetocgs_tgas = 1.;  // default cgs for code units
+ 
   // SWD:  stepsize control needs to be modified
   stepsize = pin->GetOrAddReal("montecarlo","stepsize",1.0e-3);
   minweight = pin->GetOrAddReal("montecarlo","minweight",1.0e-20);
@@ -209,16 +207,23 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   }
   // Set pcoord in pmover
   pmover->pcoord = pcoord;
-  // Set absorption opacity
-  if (absorption_meth == ABSUSER) {
+
+  // Set absorption opacity and method
+  absorption_meth = GetAbsorptionMethodFlag(pin->GetOrAddString("montecarlo","abs_method",
+                                                                "weight"));
+  absorption_opac = GetAbsorptionOpacityFlag(pin->GetOrAddString("montecarlo","absorption",
+                                                                 "none"));
+  if (absorption_opac == ABSUSER) {
     AbsorptionOpacity = pmy_mc->UserAbsorptionOpacity;
-  } else if (absorption_meth == ABSNONE) {
+  } else if (absorption_opac == ABSNONE) {
     AbsorptionOpacity = NoOpacity;
-  } else if (absorption_meth == ABSFF) {
+  } else if (absorption_opac == ABSFF) {
     AbsorptionOpacity = FreeFreeAbsorptionOpacity;
   }
  
   // Set scattering opacity and method
+  scattering_meth = GetScatteringFlag(pin->GetOrAddString("montecarlo","scattering",
+                                                          "none"));
   if (scattering_meth == SCATUSER) {
     ScatteringOpacity = pmy_mc->UserScatteringOpacity;
     Scatter = pmy_mc->UserScattering;
@@ -415,18 +420,21 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
     int iscat = 0;
     Real xmax = 0.;
     while (pphoton->status == EVOLVING) {
-      
       // Account for absorption
       Real weight0 = pphoton->weight;
-      if (weighted_absorption) {
+      if (absorption_meth == ABSWEIGHT) {
         pphoton->weight *= (pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef));
         if(pphoton->weight <= minweight) {
           pphoton->status = ABSORBED;
         }
-      } else {
+      } else if (absorption_meth == ABSPROB) {
         if (pran->uniform() > (pphoton->sct_coef / (pphoton->sct_coef+pphoton->abs_coef)) )
           pphoton->weight = 0.;
           pphoton->status = ABSORBED;
+      } else if (absorption_meth == ABSTAU) {
+        if(pphoton->weight <= minweight) {
+          pphoton->status = ABSORBED;
+        }
       }
       if (moments_flag)
         UpdateCooling(pphoton,0.,weight0);
@@ -476,6 +484,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
       pmover->Move(pphoton);
     }
     if (ptraj != NULL) ptraj->CompleteTrajectory();
+
     if (pphoton->status == ESCAPED) {
       // User defined completion work
       FinalizePhoton(pphoton);
@@ -519,9 +528,9 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
 
 void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign) {
 
-  Real &k1 = pphot->k[0];
-  Real &k2 = pphot->k[1];
-  Real &k3 = pphot->k[2];
+  Real &k1 = pphot->k[IMC1];
+  Real &k2 = pphot->k[IMC2];
+  Real &k3 = pphot->k[IMC3];
   int i1 = pphot->i1, i2 = pphot->i2, i3 = pphot->i3;
   
   Real beta[3];
@@ -539,7 +548,7 @@ void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign) {
     Real aber = gamma*(1.-gamma*bdk/(gamma+1.));
     
     pphot->energy *= gonembdk;
-    //printf("%g %g %g %g\n",gonembdk,gamma,bdk,pphot->energy/1.6021772e-12);
+
     Real kz = k3;
     k1 = (k1 - aber * beta[0]) / gonembdk;
     k2 = (k2 - aber * beta[1]) / gonembdk;
@@ -669,19 +678,24 @@ void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl)
+//! \fn void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau)
 //  \brief add contribution to radiation moments in current zone
 
-void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
+void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau) {
   
-  // SWD: needs to be modifed for non Cartesian kvectors
+  if (first) {
+    test =0.0;
+    first = false;
+  }
+
+  // SWD: needs to be modifed for non general mover kvectors
   Real k1,k2,k3;
   Real energy, abs_coef, step;
   if (moments_comoving) {
     // boost relevant quanitities to comoving frame
-    k1 = pphot->k[0];
-    k2 = pphot->k[1];
-    k3 = pphot->k[2];
+    k1 = pphot->k[IMC1];
+    k2 = pphot->k[IMC2];
+    k3 = pphot->k[IMC3];
     energy = pphot->energy;
     int i1 = pphot->i1, i2 = pphot->i2, i3 = pphot->i3;
     Real beta[3];
@@ -700,25 +714,37 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl) {
       k1 = (k1 - aber * beta[0]) / gonembdk;
       k2 = (k2 - aber * beta[1]) / gonembdk;
       k3 = (k3 - aber * beta[2]) / gonembdk;
-      abs_coef = pphot->abs_coef /= gonembdk;
+      abs_coef = pphot->abs_coef / gonembdk;
       step = dl * gonembdk;
     }
   } else {
     // Use eulerian values
-    k1 = pphot->k[0];
-    k2 = pphot->k[1];
-    k3 = pphot->k[2];
+    k1 = pphot->k[IMC1];
+    k2 = pphot->k[IMC2];
+    k3 = pphot->k[IMC3];
     energy = pphot->energy;
     abs_coef = pphot->abs_coef;
     step = dl;
   }
-
+  
+  // Account for attenuation along ray
+  Real leff;
+  if (absorption_meth == ABSTAU) {
+    if (fabs(1.-etau) < TINY_NUMBER) {
+      leff = step;
+    } else {
+      leff = (1.-etau)/abs_coef;
+      //printf("%g %g %g %g\n",etau,leff/step,abs_coef,step);
+    }
+  } else {
+    leff = step;
+  }
   // Weight moments by time spent in domain
-  Real weight = pphot->weight * energy * step / 2.99792458e10;
+  Real weight = pphot->weight * energy * leff / 2.99792458e10;
   if ((isinf(weight)) || (isnan(weight))) {
     std::cout << "Warning: UpdateMoments weight is : " << weight << std::endl;
   } else {
-    // Higher order moments are weighted by curvalinear coorindates k
+    // Higher order moments are weighted by curvalinear coordinates k
     Real weight1 = weight * k1;
     Real weight2 = weight * k2;
     Real weight3 = weight * k3;

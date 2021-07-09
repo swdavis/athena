@@ -108,11 +108,6 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   pphot->k[IMC2] = sth*sph;
   pphot->k[IMC3] = cth;
 
-  // Compute cartesian (for testing) SWD: Remove
-  // pphot->kcart[0] = pphot->k[0]*sth*cph + pphot->k[1]*cth*cph - pphot->k[2]*sph;
-  //pphot->kcart[1] = pphot->k[0]*sth*sph + pphot->k[1]*cth*sph + pphot->k[2]*cph;
-  //pphot->kcart[2] = pphot->k[0]*cth - pphot->k[1]*sth;
-
   // Convert k unit vector to k^\alpha
   if (general_mover_flag) {
     pphot->k[IMC2] /= pphot->x[IMC1];

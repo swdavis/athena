@@ -87,8 +87,6 @@ void Photon::PrintPhoton() {
 	    << "i: " << i1 << " " << i2 << " " << i3 <<std::endl
 	    << "x: " << x[0] << " " << x[1] << " " << x[2] << " " << x[3] << std::endl
 	    << "k: " << k[0] << " " << k[1] << " " << k[2] << " " << k[3] << std::endl
-	    << "kcart: " << kcart[0] << " " << kcart[1] << " "
-	    << kcart[2] <<std::endl
 	    << "stokes: " << stokes[0] << " " << stokes[1] << " "
 	    << stokes[2] << std::endl
 	    << "opacity: " << sct_coef << " " << abs_coef << std::endl;

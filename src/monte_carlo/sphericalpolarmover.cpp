@@ -43,9 +43,9 @@ void SphericalPolarMover::Move(Photon *pphot) {
 
   // References for momentum vectors
   //CurvalinearToCartesian(pphot);// SWD: Redundant calculation of cth,sth,cph,sph
-  Real& kx = pphot->kcart[0];
-  Real& ky = pphot->kcart[1];
-  Real& kz = pphot->kcart[2];
+  //Real& kx = pphot->kcart[0];
+  //Real& ky = pphot->kcart[1];
+  //Real& kz = pphot->kcart[2];
   Real& kr  = pphot->k[0];
   Real& kth = pphot->k[1];
   Real& kph = pphot->k[2];
@@ -69,9 +69,9 @@ void SphericalPolarMover::Move(Photon *pphot) {
   Real sph = sin(pphot->x[IMC3]);
 
   // Make sure kcart is set
-  kx = kr*sth*cph + kth*cth*cph - kph*sph;
-  ky = kr*sth*sph + kth*cth*sph + kph*cph;
-  kz = kr*cth - kth*sth;
+  Real kx = kr*sth*cph + kth*cth*cph - kph*sph;
+  Real ky = kr*sth*sph + kth*cth*sph + kph*cph;
+  Real kz = kr*cth - kth*sth;
 
   int iter = 0;
   // Move photon until requisite # of mean free paths or escape
@@ -260,7 +260,8 @@ void SphericalPolarMover::Move(Photon *pphot) {
 #endif
     
 
-    Real chi = pphot->sct_coef + pphot->abs_coef;
+    //Real chi = pphot->sct_coef + pphot->abs_coef;
+    Real chi = GetExtinctionCoefficient(pphot);
     chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max
     bool test = false;
     if (dl > tauremaining / chi) { // Photon remains in zone
@@ -302,7 +303,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
 	dl = tauremaining/chi;
 	// Update moments
 	if (pmcb->moments_flag)
-	  pmcb->UpdateMoments(pphot,dl);
+	  pmcb->UpdateMoments(pphot,dl,1.);
 	// Update postions
 	pphot->x[IMC1] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
 	pphot->x[IMC2] = acos((z0 + kz * dl) / pphot->x[IMC1]);
@@ -325,7 +326,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
     } else { // Photon moves to next zone and reduce tauremaining
       // Update moments
       if (pmcb->moments_flag)
-	pmcb->UpdateMoments(pphot,dl);
+	pmcb->UpdateMoments(pphot,dl,1.);
       // Update positions
       pphot->x[IMC1] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
       pphot->x[IMC2] = acos((z0 + kz * dl) / pphot->x[IMC1]);

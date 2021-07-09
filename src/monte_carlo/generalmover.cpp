@@ -67,8 +67,9 @@ void GeneralMover::Move(Photon *pphot) {
   int count = 0;
   int iter = 0;
   int zone_counter = 0;
-  Real chi = pphot->sct_coef + pphot->abs_coef;
-  chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max
+  Real chi = GetExtinctionCoefficient(pphot);
+  //Real chi = pphot->sct_coef + pphot->abs_coef;
+  //chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max
 
 #ifdef VERBOSE
   printf("tau: %g; chi: %g; chi*dlambda: %g\n", tauremaining, chi, chi*dlambda);
@@ -130,10 +131,11 @@ void GeneralMover::Move(Photon *pphot) {
    // SWD: Clean up these checks
    // Check if photon changed zones
    if (UpdateZone(pphot)) {
-     UpdateOpacities(pphot, pmcb);
+     UpdateOpacities(pphot,pmcb);
      zone_counter++;
-     chi = pphot->sct_coef + pphot->abs_coef;
-     chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max(chi, TINY_NUMBER)
+     chi = GetExtinctionCoefficient(pphot);
+     //chi = pphot->sct_coef + pphot->abs_coef;
+     //chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max(chi, TINY_NUMBER)
    } 
    if (pphot->status == DESTROYED) {
      pphot->PrintPhoton();
@@ -141,7 +143,7 @@ void GeneralMover::Move(Photon *pphot) {
 
    // Update moments
    if (pmcb->moments_flag) {
-     pmcb->UpdateMoments(pphot,step);
+     pmcb->UpdateMoments(pphot,step,1.);
    }
  
    if ((isnan(pphot->k[IMC0])) or (pphot->IsNanPhoton())) {

@@ -32,7 +32,10 @@ def write_spectrum(filename,spectrum):
     outfile.write("units="+spectrum['xaxis']+"\n")
     outfile.write("polarized="+spectrum['polarized']+"\n")
     outfile.write("yerror="+spectrum['yerror']+"\n")
+    outfile.close()
+
     # Write binfaces
+    outfile = open(filename, 'ab')
     myfmt='>'+'d'*(nx+1)
     bin=struct.pack(myfmt,*(spectrum['xfaces']))
     outfile.write(bin)
@@ -153,36 +156,53 @@ def read_spectrum(filename):
         spectrum['errors'] = vals.reshape((nintens,nphi,nmu,nx))
     return spectrum
 
-# Retrun xmid, nu for desired units
-def convert_xaxis(baseunit,newunit,spectrum):
+# Retrun x for desired units
+def convert_xaxis(newunit,spectrum):
 
     h = 6.62607015e-27
     everg = 1.6021772e-12
     c = 2.99792e10
-
+    
+    baseunit = spectrum['units']
     xfaces = spectrum['xfaces']
-    xmid = nu = 0.5*(xfaces[1:]+xfaces[:-1])
     if (baseunit == 'kev'):
-        nu = 0.5*(xfaces[1:]+xfaces[:-1])*1000.*everg/h
+        nu = xfaces*1000.*everg/h
     if (baseunit == 'ev'):
-        nu = 0.5*(xfaces[1:]+xfaces[:-1])*everg/h
+        nu = xfaces*everg/h
     if (baseunit == 'nu'):
-        nu = 0.5*(xfaces[1:]+xfaces[:-1])
+        nu = xfaces
     if (baseunit == 'lambda'):
-        nu = 0.5*(1./xfaces[:-1]+1./xfaces[1:])*c/1.e8
+        nu = c/1.e8/xfaces
     if (newunit == 'kev'):
-        xmid = nu*h/(everg*1000.)
+        spectrum['xfaces'] = nu*h/(everg*1000.)
     if (newunit == 'ev'):
-        xmid = nu*h/everg
+        spectrum['xfaces'] = nu*h/everg
     if (newunit == 'nu'):
-        xmid = nu
+        spectrum['xfaces'] = nu
     if (newunit == 'lambda'):
-        xmid = c/nu*1.e8
-    return xmid,nu
+        spectrum['xfaces'] = c/nu*1.e8
+    spectrum['units'] = newunit
+
+# Return nu
+def get_frequency(xunit,xfaces):
+
+    h = 6.62607015e-27
+    everg = 1.6021772e-12
+    c = 2.99792e10
+    
+    if (xunit == 'kev'):
+        nu = 0.5*(xfaces[1:]+xfaces[:-1])*1000.*everg/h
+    if (xunit == 'ev'):
+        nu = 0.5*(xfaces[1:]+xfaces[:-1])*everg/h
+    if (xunit == 'nu'):
+        nu = 0.5*(xfaces[1:]+xfaces[:-1])
+    if (xunit == 'lambda'):
+        nu = 0.5*(1./xfaces[:-1]+1./xfaces[1:])*c/1.e8
+    return nu
 
 def plot_spectrum(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='nulnu',
                   ploterr=True,xscale='log',yscale='log',istokes=0,xmin=None,
-                  xmax=None,ymin=None,ymax=None,xlabel="",**kwargs):
+                  xmax=None,ymin=None,ymax=None,xlabel=None,nu=None,**kwargs):
     """
     Plot spectrum. Assumes saving, etc. are performed by the calling function
     """
@@ -193,17 +213,21 @@ def plot_spectrum(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='nulnu',
         ax = fig.add_subplot(1,1,1)
 
     # Set up x axis as bin midpoints
-    x, nu = convert_xaxis(spectrum['units'],xunit,spectrum)
-    
+    xfaces = spectrum['xfaces']
+    x = 0.5*(xfaces[1:]+xfaces[:-1])
+    if (nu is None):
+        nu = get_frequency(spectrum['units'],xfaces)
+
     # Initialize x labels
-    if (xunit == 'kev'):
-        xlabel = r"$E {\rm (keV)}$"
-    if (xunit == 'ev'):
-        xlabel = r"$E {\rm (eV)}$"
-    if (xunit == 'nu'):
-        xlabel = r"$\nu {\rm (Hz)}$"
-    if (xunit == 'lambda'):
-        xlabel = r"$\lambda {\rm (\AA)$"
+    if (xlabel is None):
+        if (xunit == 'kev'):
+            xlabel = r"$E {\rm (keV)}$"
+        if (xunit == 'ev'):
+            xlabel = r"$E {\rm (eV)}$"
+        if (xunit == 'nu'):
+            xlabel = r"$\nu {\rm (Hz)}$"
+        if (xunit == 'lambda'):
+            xlabel = r"$\lambda {\rm (\AA)$"
     ax.set_xlabel(xlabel)
 
 
@@ -636,9 +660,6 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     
     # Get x bins
     xbins = get_bins(xphots,xfaces,nx,log=logx)
-    print(xphots)
-    print(xaxis)
-    print(phots.energy)
 
     # Get angle bins
     spectrum['nmu'] = nmu

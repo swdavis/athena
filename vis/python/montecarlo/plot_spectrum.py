@@ -21,8 +21,8 @@ def main(**kwargs):
     bbnorm = kwargs.pop('bbnorm')
 
     # Use latex labels
-    plt.rc('text',usetex=True)
-    plt.rc('font', **{'family' :"serif"})
+    #plt.rc('text',usetex=True)
+    #plt.rc('font', **{'family' :"serif"})
 
     # filenames for io
     infile = kwargs.pop('infile')
@@ -30,6 +30,10 @@ def main(**kwargs):
 
     # read spectrum as dict from infile
     spectrum = mcspec.read_spectrum(infile)
+
+    #Convert xaxis, if needed
+    if (kwargs['xunit'] != spectrum['units']):
+        mcspec.convert_xaxis(kwargs['xunit'],spectrum)
 
     def imu_handler(imu):
         if imu == None:

@@ -47,6 +47,7 @@ def main(**kwargs):
     system("rm conv.out feautrier.out")
 
     # Run convergence test for estimate of radiation field without boosts
+    system("cp "+path+"/vis/python/athena_read.py .")
     system("python "+tstpath+"/boosts/convergence.py {:d} {:d} {:d} 10".format(iseed,nphot,nstep)+" --path "+path) 
     conv_boost_off = np.loadtxt("conv.out")
     system("rm conv.out")

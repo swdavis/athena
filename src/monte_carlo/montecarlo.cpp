@@ -43,12 +43,9 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
     InitEmission = InitializeEmissionFreeFree;
     emission_array_flag = true; // allocate memory for array
   }
-  absorption_meth = GetAbsorptionFlag(pin->GetOrAddString("montecarlo","absorption",
-                                                          "none"));
-  scattering_meth = GetScatteringFlag(pin->GetOrAddString("montecarlo","scattering",
-                                                          "none"));
 
-  // read bc flags for each of the 6 boundaries.
+
+  // read bc flags for each of the 6 physical boundaries.
   mc_bcs[INNER_X1] = GetMCBoundaryFlag(pin->GetOrAddString("mesh","ix1_mc_bc","escape"));
   mc_bcs[OUTER_X1] = GetMCBoundaryFlag(pin->GetOrAddString("mesh","ox1_mc_bc","escape"));
   mc_bcs[INNER_X2] = GetMCBoundaryFlag(pin->GetOrAddString("mesh","ix2_mc_bc","escape"));
@@ -217,10 +214,10 @@ MonteCarlo::~MonteCarlo() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn enum AbsorptionFlag GetAbsorptionFlag(std::string input_string)
-//  \brief set absorption flag
+//! \fn enum AbsorptionOpacityFlag GetAbsorptionOpacityFlag(std::string input_string)
+//  \brief set absorption opacity flag
 
-enum AbsorptionFlag GetAbsorptionFlag(std::string input_string) {
+enum AbsorptionOpacityFlag GetAbsorptionOpacityFlag(std::string input_string) {
   if (input_string == "user") {
     return ABSUSER;
   } else if (input_string == "none") {
@@ -229,12 +226,33 @@ enum AbsorptionFlag GetAbsorptionFlag(std::string input_string) {
     return ABSFF;
   } else {
     std::stringstream msg;
-    msg << "### FATAL ERROR in GetAbsorptionFlag" << std::endl
-        << "Input string=" << input_string << " not valid absorption type" << std::endl;
+    msg << "### FATAL ERROR in GetAbsorptionOpacityFlag" << std::endl
+        << "Input string=" << input_string << " not valid absorption opacity" << std::endl;
     throw std::runtime_error(msg.str().c_str());
   }
 
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn enum AbsorptionMethodFlag GetAbsorptionMethodFlag(std::string input_string)
+//  \brief set absorption method flag
+
+enum AbsorptionMethodFlag GetAbsorptionMethodFlag(std::string input_string) {
+  if (input_string == "weight") {
+    return ABSWEIGHT;
+  } else if (input_string == "prob") {
+    return ABSPROB;
+  } else if (input_string == "tau") {
+    return ABSTAU;
+  } else {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in GetAbsorptionMethodFlag" << std::endl
+        << "Input string=" << input_string << " not valid absorption method" << std::endl;
+    throw std::runtime_error(msg.str().c_str());
+  }
+
+}
+
 
 //----------------------------------------------------------------------------------------
 //! \fn enum ScatteringFlag GetScatteringFlag(std::string input_string)
@@ -255,7 +273,7 @@ enum ScatteringFlag GetScatteringFlag(std::string input_string) {
     return SCATRES;
   } else {
     std::stringstream msg;
-    msg << "### FATAL ERROR in GetAbsorptionFlag" << std::endl
+    msg << "### FATAL ERROR in GetScatteringFlag" << std::endl
         << "Input string=" << input_string << " not valid scattering type" << std::endl;
     throw std::runtime_error(msg.str().c_str());
   }

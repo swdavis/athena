@@ -37,11 +37,9 @@ public:
   enum BoundaryFace face;
 
   // SWD: x can always include time, k could always include energy?
-  // SWD: kcart maybe should be deprecated
   Real x[4];  // current photon position in spacetime
   Real k[4];  // photon direction (momentum vector) curvalinear
   Real dk[4]; // the change in photon direction used for general mover
-  Real kcart[3]; // photon direction in cartesian coordinates
   Real stokes[4];  // stokes vectors
   Real weight; // photon statistical weight
   Real energy;  // photon energy
