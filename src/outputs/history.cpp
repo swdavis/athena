@@ -4,8 +4,8 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file history.cpp
-//  \brief writes history output data, volume-averaged quantities that are output
-//         frequently in time to trace their history.
+//! \brief writes history output data, volume-averaged quantities that are output
+//!        frequently in time to trace their history.
 
 // C headers
 
@@ -29,46 +29,42 @@
 #include "../gravity/gravity.hpp"
 #include "../hydro/hydro.hpp"
 #include "../mesh/mesh.hpp"
+#include "../orbital_advection/orbital_advection.hpp"
 #include "../particles/particles.hpp"
 #include "../scalars/scalars.hpp"
 #include "outputs.hpp"
 
-//----------------------------------------------------------------------------------------
-// HistoryOutput constructor
-// destructor - not needed for this derived class
+// NEW_OUTPUT_TYPES:
 
-HistoryOutput::HistoryOutput(OutputParameters oparams)
-    : OutputType(oparams) {
-  // NEW_OUTPUT_TYPES:
-  // "3" for 1-KE, 2-KE, 3-KE additional columns (come before tot-E)
-  num_vars_ = (NHYDRO) + (SELF_GRAVITY_ENABLED) + (NFIELD) + 3 + (NSCALARS);
-  if (PARTICLES) num_vars_ += Particles::NHISTORY;
-}
+// "3" for 1-KE, 2-KE, 3-KE additional columns (come before tot-E)
+#define NHISTORY_VARS ((NHYDRO) + (SELF_GRAVITY_ENABLED > 0) + (NFIELD) + 3 + (NSCALARS))
 
 //----------------------------------------------------------------------------------------
-//! \fn void OutputType::HistoryFile()
-//  \brief Writes a history file
+//! \fn void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag)
+//! \brief Writes a history file
 
 void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
   MeshBlock *pmb = pm->my_blocks(0);
   Real real_max = std::numeric_limits<Real>::max();
-  Real real_min = std::numeric_limits<Real>::min();
+  Real real_lowest = std::numeric_limits<Real>::lowest();
   AthenaArray<Real> vol(pmb->ncells1);
-  const int nhistory_output = num_vars_ + pm->nuser_history_output_;
+  const int nhistory_par(PARTICLES? Particles::NHISTORY : 0);
+  const int nhistory_predefined(NHISTORY_VARS + nhistory_par);
+  const int nhistory_output = nhistory_predefined + pm->nuser_history_output_;
   std::unique_ptr<Real[]> hst_data(new Real[nhistory_output]);
   // initialize built-in variable sums to 0.0
-  for (int n=0; n<num_vars_; ++n) hst_data[n] = 0.0;
+  for (int n = 0; n < nhistory_predefined; ++n) hst_data[n] = 0.0;
   // initialize user-defined history outputs depending on the requested operation
   for (int n=0; n<pm->nuser_history_output_; n++) {
     switch (pm->user_history_ops_[n]) {
       case UserHistoryOperation::sum:
-        hst_data[num_vars_+n] = 0.0;
+        hst_data[nhistory_predefined+n] = 0.0;
         break;
       case UserHistoryOperation::max:
-        hst_data[num_vars_+n] = real_min;
+        hst_data[nhistory_predefined+n] = real_lowest;
         break;
       case UserHistoryOperation::min:
-        hst_data[num_vars_+n] = real_max;
+        hst_data[nhistory_predefined+n] = real_max;
         break;
     }
   }
@@ -80,53 +76,108 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
     Field *pfld = pmb->pfield;
     PassiveScalars *psclr = pmb->pscalars;
     Gravity *pgrav = pmb->pgrav;
+    OrbitalAdvection *porb = pmb->porb;
 
-    // Sum history variables over cells.  Note ghost cells are never included in sums
-    for (int k=pmb->ks; k<=pmb->ke; ++k) {
-      for (int j=pmb->js; j<=pmb->je; ++j) {
-        pmb->pcoord->CellVolume(k, j, pmb->is, pmb->ie, vol);
-        for (int i=pmb->is; i<=pmb->ie; ++i) {
-          // NEW_OUTPUT_TYPES:
+    // Sum history variables over cells. Note ghost cells are never included in sums
+    if(porb->orbital_advection_defined
+       && !output_params.orbital_system_output) {
+      porb->ConvertOrbitalSystem(phyd->w, phyd->u, OrbitalTransform::cons);
+      for (int k=pmb->ks; k<=pmb->ke; ++k) {
+        for (int j=pmb->js; j<=pmb->je; ++j) {
+          pmb->pcoord->CellVolume(k, j, pmb->is, pmb->ie, vol);
+          for (int i=pmb->is; i<=pmb->ie; ++i) {
+            // NEW_OUTPUT_TYPES:
 
-          // Hydro conserved variables:
-          Real& u_d  = phyd->u(IDN,k,j,i);
-          Real& u_mx = phyd->u(IM1,k,j,i);
-          Real& u_my = phyd->u(IM2,k,j,i);
-          Real& u_mz = phyd->u(IM3,k,j,i);
+            // Hydro conserved variables:
+            Real& u_d  = porb->u_orb(IDN,k,j,i);
+            Real& u_mx = porb->u_orb(IM1,k,j,i);
+            Real& u_my = porb->u_orb(IM2,k,j,i);
+            Real& u_mz = porb->u_orb(IM3,k,j,i);
 
-          hst_data[0] += vol(i)*u_d;
-          hst_data[1] += vol(i)*u_mx;
-          hst_data[2] += vol(i)*u_my;
-          hst_data[3] += vol(i)*u_mz;
-          // + partitioned KE by coordinate direction:
-          hst_data[4] += vol(i)*0.5*SQR(u_mx)/u_d;
-          hst_data[5] += vol(i)*0.5*SQR(u_my)/u_d;
-          hst_data[6] += vol(i)*0.5*SQR(u_mz)/u_d;
+            hst_data[0] += vol(i)*u_d;
+            hst_data[1] += vol(i)*u_mx;
+            hst_data[2] += vol(i)*u_my;
+            hst_data[3] += vol(i)*u_mz;
+            // + partitioned KE by coordinate direction:
+            hst_data[4] += vol(i)*0.5*SQR(u_mx)/u_d;
+            hst_data[5] += vol(i)*0.5*SQR(u_my)/u_d;
+            hst_data[6] += vol(i)*0.5*SQR(u_mz)/u_d;
 
-          if (NON_BAROTROPIC_EOS) {
-            Real& u_e = phyd->u(IEN,k,j,i);;
-            hst_data[7] += vol(i)*u_e;
+            if (NON_BAROTROPIC_EOS) {
+              Real& u_e = porb->u_orb(IEN,k,j,i);
+              hst_data[7] += vol(i)*u_e;
+            }
+            // Graviatational potential energy:
+            if (SELF_GRAVITY_ENABLED) {
+              Real& phi = pgrav->phi(k,j,i);
+              hst_data[NHYDRO + 3] += vol(i)*0.5*u_d*phi;
+            }
+            // Cell-centered magnetic energy, partitioned by coordinate direction:
+            if (MAGNETIC_FIELDS_ENABLED) {
+              Real& bcc1 = pfld->bcc(IB1,k,j,i);
+              Real& bcc2 = pfld->bcc(IB2,k,j,i);
+              Real& bcc3 = pfld->bcc(IB3,k,j,i);
+              constexpr int prev_out = NHYDRO + 3 + (SELF_GRAVITY_ENABLED > 0);
+              hst_data[prev_out] += vol(i)*0.5*bcc1*bcc1;
+              hst_data[prev_out + 1] += vol(i)*0.5*bcc2*bcc2;
+              hst_data[prev_out + 2] += vol(i)*0.5*bcc3*bcc3;
+            }
+            // (conserved variable) Passive scalars:
+            for (int n=0; n<NSCALARS; n++) {
+              Real& s = psclr->s(n,k,j,i);
+              constexpr int prev_out = NHYDRO + 3 + (SELF_GRAVITY_ENABLED > 0) + NFIELD;
+              hst_data[prev_out + n] += vol(i)*s;
+            }
           }
-          // Graviatational potential energy:
-          if (SELF_GRAVITY_ENABLED) {
-            Real& phi = pgrav->phi(k,j,i);
-            hst_data[NHYDRO + 3] += vol(i)*0.5*u_d*phi;
-          }
-          // Cell-centered magnetic energy, partitioned by coordinate direction:
-          if (MAGNETIC_FIELDS_ENABLED) {
-            Real& bcc1 = pfld->bcc(IB1,k,j,i);
-            Real& bcc2 = pfld->bcc(IB2,k,j,i);
-            Real& bcc3 = pfld->bcc(IB3,k,j,i);
-            constexpr int prev_out = NHYDRO + 3 + SELF_GRAVITY_ENABLED;
-            hst_data[prev_out] += vol(i)*0.5*bcc1*bcc1;
-            hst_data[prev_out + 1] += vol(i)*0.5*bcc2*bcc2;
-            hst_data[prev_out + 2] += vol(i)*0.5*bcc3*bcc3;
-          }
-          // (conserved variable) Passive scalars:
-          for (int n=0; n<NSCALARS; n++) {
-            Real& s = psclr->s(n,k,j,i);
-            constexpr int prev_out = NHYDRO + 3 + SELF_GRAVITY_ENABLED + NFIELD;
-            hst_data[prev_out + n] += vol(i)*s;
+        }
+      }
+    } else {
+      for (int k=pmb->ks; k<=pmb->ke; ++k) {
+        for (int j=pmb->js; j<=pmb->je; ++j) {
+          pmb->pcoord->CellVolume(k, j, pmb->is, pmb->ie, vol);
+          for (int i=pmb->is; i<=pmb->ie; ++i) {
+            // NEW_OUTPUT_TYPES:
+
+            // Hydro conserved variables:
+            Real& u_d  = phyd->u(IDN,k,j,i);
+            Real& u_mx = phyd->u(IM1,k,j,i);
+            Real& u_my = phyd->u(IM2,k,j,i);
+            Real& u_mz = phyd->u(IM3,k,j,i);
+
+            hst_data[0] += vol(i)*u_d;
+            hst_data[1] += vol(i)*u_mx;
+            hst_data[2] += vol(i)*u_my;
+            hst_data[3] += vol(i)*u_mz;
+            // + partitioned KE by coordinate direction:
+            hst_data[4] += vol(i)*0.5*SQR(u_mx)/u_d;
+            hst_data[5] += vol(i)*0.5*SQR(u_my)/u_d;
+            hst_data[6] += vol(i)*0.5*SQR(u_mz)/u_d;
+
+            if (NON_BAROTROPIC_EOS) {
+              Real& u_e = phyd->u(IEN,k,j,i);
+              hst_data[7] += vol(i)*u_e;
+            }
+            // Graviatational potential energy:
+            if (SELF_GRAVITY_ENABLED) {
+              Real& phi = pgrav->phi(k,j,i);
+              hst_data[NHYDRO + 3] += vol(i)*0.5*u_d*phi;
+            }
+            // Cell-centered magnetic energy, partitioned by coordinate direction:
+            if (MAGNETIC_FIELDS_ENABLED) {
+              Real& bcc1 = pfld->bcc(IB1,k,j,i);
+              Real& bcc2 = pfld->bcc(IB2,k,j,i);
+              Real& bcc3 = pfld->bcc(IB3,k,j,i);
+              constexpr int prev_out = NHYDRO + 3 + (SELF_GRAVITY_ENABLED > 0);
+              hst_data[prev_out] += vol(i)*0.5*bcc1*bcc1;
+              hst_data[prev_out + 1] += vol(i)*0.5*bcc2*bcc2;
+              hst_data[prev_out + 2] += vol(i)*0.5*bcc3*bcc3;
+            }
+            // (conserved variable) Passive scalars:
+            for (int n=0; n<NSCALARS; n++) {
+              Real& s = psclr->s(n,k,j,i);
+              constexpr int prev_out = NHYDRO + 3 + (SELF_GRAVITY_ENABLED > 0) + NFIELD;
+              hst_data[prev_out + n] += vol(i)*s;
+            }
           }
         }
       }
@@ -139,13 +190,15 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
             // TODO(felker): this should automatically volume-weight the sum, like the
             // built-in variables. But existing user-defined .hst fns are currently
             // weighting their returned values.
-            hst_data[num_vars_+n] += usr_val;
+            hst_data[nhistory_predefined+n] += usr_val;
             break;
           case UserHistoryOperation::max:
-            hst_data[num_vars_+n] = std::max(usr_val, hst_data[num_vars_+n]);
+            hst_data[nhistory_predefined+n] =
+                std::max(usr_val, hst_data[nhistory_predefined+n]);
             break;
           case UserHistoryOperation::min:
-            hst_data[num_vars_+n] = std::min(usr_val, hst_data[num_vars_+n]);
+            hst_data[nhistory_predefined+n] =
+                std::min(usr_val, hst_data[nhistory_predefined+n]);
             break;
         }
       }
@@ -153,24 +206,22 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
   }  // end loop over MeshBlocks
 
   // Get history output from Particles class.
-  if (PARTICLES) {
-    constexpr int prev_out =
-        (NHYDRO) + 3 + (SELF_GRAVITY_ENABLED) + (NFIELD) + (NSCALARS);
-    Particles::FindHistoryOutput(pm, hst_data.get(), prev_out);
-  }
+  // TODO(ccyang): consider computing this with meshblock-by-meshblock basis.
+  if (PARTICLES)
+    Particles::FindHistoryOutput(pm, hst_data.get(), NHISTORY_VARS);
 
 #ifdef MPI_PARALLEL
   // sum built-in/predefined hst_data[] over all ranks
   if (Globals::my_rank == 0) {
-    MPI_Reduce(MPI_IN_PLACE, hst_data.get(), num_vars_, MPI_ATHENA_REAL, MPI_SUM, 0,
-               MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, hst_data.get(), nhistory_predefined, MPI_ATHENA_REAL,
+               MPI_SUM, 0, MPI_COMM_WORLD);
   } else {
-    MPI_Reduce(hst_data.get(), hst_data.get(), num_vars_, MPI_ATHENA_REAL, MPI_SUM,
-               0, MPI_COMM_WORLD);
+    MPI_Reduce(hst_data.get(), hst_data.get(), nhistory_predefined, MPI_ATHENA_REAL,
+               MPI_SUM, 0, MPI_COMM_WORLD);
   }
   // apply separate chosen operations to each user-defined history output
   for (int n=0; n<pm->nuser_history_output_; n++) {
-    Real *usr_hst_data = hst_data.get() + num_vars_ + n;
+    Real *usr_hst_data = hst_data.get() + nhistory_predefined + n;
     MPI_Op usr_op;
     switch (pm->user_history_ops_[n]) {
       case UserHistoryOperation::sum:
@@ -238,10 +289,10 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
         std::string output_names[Particles::NHISTORY];
         Particles::GetHistoryOutputNames(output_names);
         for (int i = 0; i < Particles::NHISTORY; ++i)
-          std::fprintf(pfile, "[%d]=%-8s", iout++, output_names[i].data());
+          std::fprintf(pfile, "[%d]=%-7s", iout++, output_names[i].data());
       }
       for (int n=0; n<pm->nuser_history_output_; n++)
-        std::fprintf(pfile,"[%d]=%-8s", iout++,
+        std::fprintf(pfile,"[%d]=%-7s ", iout++,
                      pm->user_history_output_names_[n].c_str());
       std::fprintf(pfile,"\n");                              // terminate line
     }

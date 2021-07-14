@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file scalars.cpp
-//  \brief implementation of functions in class PassiveScalars
+//! \brief implementation of functions in class PassiveScalars
 
 // C headers
 
@@ -22,7 +22,7 @@
 #include "../reconstruct/reconstruction.hpp"
 #include "scalars.hpp"
 
-// constructor, initializes data structures and parameters
+//! constructor, initializes data structures and parameters
 
 PassiveScalars::PassiveScalars(MeshBlock *pmb, ParameterInput *pin)  :
     s(NSCALARS, pmb->ncells3, pmb->ncells2, pmb->ncells1),
@@ -67,7 +67,7 @@ PassiveScalars::PassiveScalars(MeshBlock *pmb, ParameterInput *pin)  :
 
   // If STS RKL2, allocate additional memory registers
   if (STS_ENABLED) {
-    std::string sts_integrator = pin->GetOrAddString("time", "sts_integrator", "rkl1");
+    std::string sts_integrator = pin->GetOrAddString("time", "sts_integrator", "rkl2");
     if (sts_integrator == "rkl2") {
       s0.NewAthenaArray(NSCALARS, nc3, nc2, nc1);
       s_fl_div.NewAthenaArray(NSCALARS, nc3, nc2, nc1);
