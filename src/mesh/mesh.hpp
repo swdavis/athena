@@ -149,7 +149,7 @@ class MeshBlock {
  private:
   // data
   Real new_block_dt_, new_block_dt_hyperbolic_, new_block_dt_parabolic_,
-    new_block_dt_user_;
+       new_block_dt_particles_, new_block_dt_user_;
   //! \todo(felker):
   //! * make global TaskList a member of MeshBlock, store TaskStates in list
   //!   shared by main integrator + FFT gravity task lists.
