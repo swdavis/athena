@@ -1652,6 +1652,15 @@ void Mesh::Initialize(int res_flag, ParameterInput *pin) {
   for (int i=0; i<nblocal; ++i) {
     my_blocks(i)->phydro->NewBlockTimeStep();
   }
+  if (PARTICLES) {
+#pragma omp parallel for num_threads(nthreads)
+    for (int i = 0; i < nblocal; ++i) {
+      MeshBlock *pmb(my_blocks(i));
+      Real min_dt(pmb->ppar->NewBlockTimeStep());
+      pmb->new_block_dt_particles_ = min_dt;
+      pmb->new_block_dt_ = std::min(pmb->new_block_dt_, min_dt);
+    }
+  }
 
   NewTimeStep();
   return;
