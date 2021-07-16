@@ -1110,6 +1110,7 @@ void Mesh::NewTimeStep() {
   dt = std::min(dt, pmb->new_block_dt_);
   dt_hyperbolic = pmb->new_block_dt_hyperbolic_;
   dt_parabolic = pmb->new_block_dt_parabolic_;
+  dt_particles = pmb->new_block_dt_particles_;
   dt_user = pmb->new_block_dt_user_;
 
   for (int i=0; i<nblocal; ++i) {
@@ -1117,17 +1118,19 @@ void Mesh::NewTimeStep() {
     dt = std::min(dt, pmb->new_block_dt_);
     dt_hyperbolic  = std::min(dt_hyperbolic, pmb->new_block_dt_hyperbolic_);
     dt_parabolic  = std::min(dt_parabolic, pmb->new_block_dt_parabolic_);
+    dt_particles  = std::min(dt_particles, pmb->new_block_dt_particles_);
     dt_user  = std::min(dt_user, pmb->new_block_dt_user_);
   }
 
 #ifdef MPI_PARALLEL
   // pack array, MPI allreduce over array, then unpack into Mesh variables
-  Real dt_array[4] = {dt, dt_hyperbolic, dt_parabolic, dt_user};
-  MPI_Allreduce(MPI_IN_PLACE, dt_array, 4, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
+  Real dt_array[5] = {dt, dt_hyperbolic, dt_parabolic, dt_particles, dt_user};
+  MPI_Allreduce(MPI_IN_PLACE, dt_array, 5, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
   dt            = dt_array[0];
   dt_hyperbolic = dt_array[1];
   dt_parabolic  = dt_array[2];
-  dt_user       = dt_array[3];
+  dt_particles  = dt_array[3];
+  dt_user       = dt_array[4];
 #endif
 
   if (time < tlim && (tlim - time) < dt) // timestep would take us past desired endpoint
