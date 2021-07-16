@@ -278,6 +278,7 @@ class Mesh {
   int gids_, gide_;
   int *nslist, *ranklist, *nblist;
   double *costlist;
+  Real dt_particles;
   // 8x arrays used exclusively for AMR (not SMR):
   int *nref, *nderef;
   int *rdisp, *ddisp;

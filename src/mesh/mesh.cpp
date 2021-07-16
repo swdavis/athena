@@ -103,7 +103,7 @@ Mesh::Mesh(ParameterInput *pin, int mesh_test) :
     step_since_lb(), gflag(), turb_flag(), amr_updated(multilevel),
     // private members:
     next_phys_id_(), num_mesh_threads_(pin->GetOrAddInteger("mesh", "num_threads", 1)),
-    gids_(), gide_(),
+    gids_(), gide_(), dt_particles(dt),
     tree(this),
     use_uniform_meshgen_fn_{true, true, true},
     nreal_user_mesh_data_(), nint_user_mesh_data_(), nuser_history_output_(),
@@ -605,7 +605,7 @@ Mesh::Mesh(ParameterInput *pin, IOWrapper& resfile, int mesh_test) :
     step_since_lb(), gflag(), turb_flag(), amr_updated(multilevel),
     // private members:
     next_phys_id_(), num_mesh_threads_(pin->GetOrAddInteger("mesh", "num_threads", 1)),
-    gids_(), gide_(),
+    gids_(), gide_(), dt_particles(dt),
     tree(this),
     use_uniform_meshgen_fn_{true, true, true},
     nreal_user_mesh_data_(), nint_user_mesh_data_(), nuser_history_output_(),
