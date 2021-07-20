@@ -78,7 +78,7 @@ void Particles::AMRCoarseToFine(MeshBlock* pmbc, MeshBlock* pmbf) {
       int npar = pparf->npar;
       if (npar >= pparf->nparmax) pparf->UpdateCapacity(2 * pparf->nparmax);
       for (int j = 0; j < nint; ++j)
-        pparf->intprop(j,npar) = pparc->intprop(j,k);
+        pparf->intprop[j][npar] = pparc->intprop[j][k];
       for (int j = 0; j < nreal; ++j)
         pparf->realprop(j,npar) = pparc->realprop(j,k);
       for (int j = 0; j < naux; ++j)
@@ -102,7 +102,7 @@ void Particles::AMRFineToCoarse(MeshBlock* pmbf, MeshBlock* pmbc) {
   // Load the particles.
   for (int j = 0; j < nint; ++j)
     for (int k = 0; k < nparf; ++k)
-      pparc->intprop(j,nparc+k) = pparf->intprop(j,k);
+      pparc->intprop[j][nparc+k] = pparf->intprop[j][k];
   for (int j = 0; j < nreal; ++j)
     for (int k = 0; k < nparf; ++k)
       pparc->realprop(j,nparc+k) = pparf->realprop(j,k);
@@ -325,7 +325,9 @@ int Particles::GetTotalNumber(Mesh *pm) {
 //! \fn Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
 //! \brief constructs a Particles instance.
 
-Particles::Particles(MeshBlock *pmb, ParameterInput *pin) {
+Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
+  // Allocate space for particle data.
+  : intprop(new std::vector<int>[nint]), pid(intprop[ipid]) {
   // Point to the calling MeshBlock.
   pmy_block = pmb;
   pmy_mesh = pmb->pmy_mesh;
@@ -337,9 +339,6 @@ Particles::Particles(MeshBlock *pmb, ParameterInput *pin) {
   active1_ = pmy_mesh->mesh_size.nx1 > 1;
   active2_ = pmy_mesh->mesh_size.nx2 > 1;
   active3_ = pmy_mesh->mesh_size.nx3 > 1;
-
-  // Allocate integer properties.
-  intprop.NewAthenaArray(nint,nparmax);
 
   // Allocate integer properties.
   realprop.NewAthenaArray(nreal,nparmax);
@@ -366,7 +365,7 @@ Particles::Particles(MeshBlock *pmb, ParameterInput *pin) {
 
 Particles::~Particles() {
   // Delete integer properties.
-  intprop.DeleteAthenaArray();
+  delete [] intprop;
 
   // Delete real properties.
   realprop.DeleteAthenaArray();
@@ -543,7 +542,7 @@ void Particles::RemoveOneParticle(int k) {
     xi2(k) = xi2(npar);
     xi3(k) = xi3(npar);
     for (int j = 0; j < nint; ++j)
-      intprop(j,k) = intprop(j,npar);
+      intprop[j][k] = intprop[j][npar];
     for (int j = 0; j < nreal; ++j)
       realprop(j,k) = realprop(j,npar);
     for (int j = 0; j < naux; ++j)
@@ -626,7 +625,7 @@ void Particles::SendToNeighbors() {
     // Copy the properties of the particle to the buffer.
     int *pi = ppb->ibuf + ParticleBuffer::nint * ppb->npar;
     for (int j = 0; j < nint; ++j)
-      *pi++ = intprop(j,k);
+      *pi++ = intprop[j][k];
     Real *pr = ppb->rbuf + ParticleBuffer::nreal * ppb->npar;
     for (int j = 0; j < nreal; ++j)
       *pr++ = realprop(j,k);
@@ -830,7 +829,7 @@ void Particles::ProcessNewParticles(Mesh *pmesh) {
 int Particles::CountNewParticles() const {
   int n = 0;
   for (int i = 0; i < npar; ++i)
-    if (pid(i) <= 0) ++n;
+    if (pid[i] <= 0) ++n;
   return n;
 }
 
@@ -964,7 +963,7 @@ void Particles::GetPositionIndices(int npar,
 
 void Particles::SetNewParticleID(int id) {
   for (int i = 0; i < npar; ++i)
-    if (pid(i) <= 0) pid(i) = ++id;
+    if (pid[i] <= 0) pid[i] = ++id;
 }
 
 //--------------------------------------------------------------------------------------
@@ -1029,7 +1028,7 @@ void Particles::FlushReceiveBuffer(ParticleBuffer& recv) {
   Real *pr = recv.rbuf;
   for (int k = npar; k < npar + nprecv; ++k) {
     for (int j = 0; j < nint; ++j)
-      intprop(j,k) = *pi++;
+      intprop[j][k] = *pi++;
     for (int j = 0; j < nreal; ++j)
       realprop(j,k) = *pr++;
     for (int j = 0; j < naux; ++j)
@@ -1088,7 +1087,7 @@ int Particles::AddWorkingArray() {
 //! \brief assigns shorthands by shallow copying slices of the data.
 
 void Particles::AssignShorthands() {
-  pid.InitWithShallowSlice(intprop, 2, ipid, 1);
+  pid = intprop[ipid];
 
   xp.InitWithShallowSlice(realprop, 2, ixp, 1);
   yp.InitWithShallowSlice(realprop, 2, iyp, 1);
@@ -1116,7 +1115,8 @@ void Particles::AssignShorthands() {
 void Particles::UpdateCapacity(int new_nparmax) {
   // Increase size of property arrays
   nparmax = new_nparmax;
-  intprop.ResizeLastDimension(nparmax);
+  for (int i = 0; i < nint; ++i)
+    intprop[i].reserve(nparmax);
   realprop.ResizeLastDimension(nparmax);
   if (naux > 0) auxprop.ResizeLastDimension(nparmax);
   if (nwork > 0) work.ResizeLastDimension(nparmax);
@@ -1174,7 +1174,7 @@ void Particles::UnpackParticlesForRestart(char *mbdata, std::size_t &os) {
     // Read integer properties.
     std::size_t size = npar * sizeof(int);
     for (int k = 0; k < nint; ++k) {
-      std::memcpy(&(intprop(k,0)), &(mbdata[os]), size);
+      std::memcpy(&(intprop[k]), &(mbdata[os]), size);
       os += size;
     }
 
@@ -1200,7 +1200,7 @@ void Particles::PackParticlesForRestart(char *&pdata) {
     // Write integer properties.
     std::size_t size = npar * sizeof(int);
     for (int k = 0; k < nint; ++k) {
-      std::memcpy(pdata, &(intprop(k,0)), size);
+      std::memcpy(pdata, &(intprop[k]), size);
       pdata += size;
     }
     // Write real properties.
@@ -1246,7 +1246,7 @@ void Particles::FormattedTableOutput(Mesh *pm, OutputParameters op) {
 
     // Write the particle data in the meshblock.
     for (int k = 0; k < ppar->npar; ++k)
-      os << ppar->pid(k) << "  "
+      os << ppar->pid[k] << "  "
          << ppar->xp(k) << "  " << ppar->yp(k) << "  " << ppar->zp(k) << "  "
          << ppar->vpx(k) << "  " << ppar->vpy(k) << "  " << ppar->vpz(k) << std::endl;
 

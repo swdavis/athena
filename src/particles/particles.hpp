@@ -10,6 +10,7 @@
 
 // C/C++ Standard Libraries
 #include <string>
+#include <vector>
 
 // Athena headers
 #include "../athena.hpp"
@@ -124,7 +125,7 @@ friend class ParticleMesh;
 
   // Instance methods
   virtual void AssignShorthands();  //!> Needs to be called everytime
-                                    //!> intprop, realprop, & auxprop are resized
+                                    //!> realprop, & auxprop are resized
                                     //!> Be sure to call back when derived.
 
   void UpdateCapacity(int new_nparmax);  //!> Change the capacity of particle arrays
@@ -134,7 +135,7 @@ friend class ParticleMesh;
   int nparmax;  //!> maximum number of particles per meshblock
 
                                // Data attached to the particles:
-  AthenaArray<int> intprop;    //!>   integer properties
+  std::vector<int> *intprop;   //!>   integer properties
   AthenaArray<Real> realprop;  //!>   real properties
   AthenaArray<Real> auxprop;   //!>   auxiliary properties (communicated when
                                //!>     particles moving to another meshblock)
@@ -143,7 +144,7 @@ friend class ParticleMesh;
   ParticleMesh *ppm;  //!> ptr to particle-mesh
 
                                        // Shorthands:
-  AthenaArray<int> pid;                //!>   particle ID
+  std::vector<int>& pid;               //!>   particle ID
   AthenaArray<Real> xp, yp, zp;        //   position
   AthenaArray<Real> vpx, vpy, vpz;     //   velocity
   AthenaArray<Real> xi1, xi2, xi3;     //   position indices in local meshblock
