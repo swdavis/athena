@@ -11,6 +11,7 @@
 
 // C++ standard library
 #include <cmath>
+#include <vector>
 
 // Athena++ classes headers
 #include "../athena_arrays.hpp"
@@ -69,11 +70,11 @@ friend class OutputType;
            const AthenaArray<Real>& meshsrc, int ms1,
            AthenaArray<Real>& par, int p1, int nprop);
   void AssignParticlesToMeshAux(
-           const AthenaArray<Real>& par, int p1, int ma1, int nprop);
+           const std::vector<Real> par[], int p1, int ma1, int nprop);
   void InterpolateMeshAndAssignParticles(
            const AthenaArray<Real>& meshsrc, int ms1,
-           AthenaArray<Real>& pardst, int pd1, int ni,
-           const AthenaArray<Real>& parsrc, int ps1, int ma1, int na);
+           std::vector<Real> pardst[], int pd1, int ni,
+           const std::vector<Real> parsrc[], int ps1, int ma1, int na);
   void DepositMeshAux(AthenaArray<Real>& u, int ma1, int mb1, int nprop);
 
   void ClearBoundary();
@@ -113,7 +114,7 @@ friend class OutputType;
   void InitiateBoundaryData();
   void SetBoundaryAttributes();
   void AssignParticlesToDifferentLevels(
-           const AthenaArray<Real>& par, int p1, int ma1, int nprop);
+           const std::vector<Real> par[], int p1, int ma1, int nprop);
   int LoadBoundaryBufferSameLevel(Real *buf, const BoundaryAttributes& ba);
   void AddBoundaryBuffer(Real *buf, const BoundaryAttributes& ba);
 

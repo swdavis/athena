@@ -263,12 +263,12 @@ void ParticleMesh::InterpolateMeshToParticles(
 
 //--------------------------------------------------------------------------------------
 //! \fn void ParticleMesh::AssignParticlesToMeshAux(
-//       const AthenaArray<Real>& par, int p1, int ma1, int nprop)
+//       const std::vector<Real> par[], int p1, int ma1, int nprop)
 //! \brief assigns par (realprop, auxprop, or work in Particles class) from property
 //!        index p1 to p1+nprop-1 onto meshaux from property index ma1 and up.
 
 void ParticleMesh::AssignParticlesToMeshAux(
-         const AthenaArray<Real>& par, int p1, int ma1, int nprop) {
+         const std::vector<Real> par[], int p1, int ma1, int nprop) {
   // Zero out meshaux.
 #pragma ivdep
   std::fill(&weight(0,0,0), &weight(0,0,0) + ncells_, 0.0);
@@ -328,7 +328,7 @@ void ParticleMesh::AssignParticlesToMeshAux(
       // Fetch particle properties.
       Real *ps = new Real[nprop];
       for (int i = 0; i < nprop; ++i)
-        ps[i] = par(p1+i,kkk);
+        ps[i] = par[p1+i][kkk];
 
       int imb1 = imb1v[kk], imb2 = imb2v[kk], imb3 = imb3v[kk];
 
@@ -373,8 +373,8 @@ void ParticleMesh::AssignParticlesToMeshAux(
 //--------------------------------------------------------------------------------------
 //! \fn void ParticleMesh::InterpolateMeshAndAssignParticles(
 //!              const AthenaArray<Real>& meshsrc, int ms1,
-//!              AthenaArray<Real>& pardst, int pd1, int ni,
-//!              const AthenaArray<Real>& parsrc, int ps1, int ma1, int na)
+//!              std::vector<Real> pardst[], int pd1, int ni,
+//!              const std::vector<Real> parsrc[], int ps1, int ma1, int na)
 //! \brief interpolates meshsrc from property index ms1 to ms1 + ni - 1 onto particle
 //!     array pardst from index pd1 to pd1 + ni - 1, and assigns parsrc from property
 //!     index ps1 to ps1 + na - 1 onto meshaux from ma1 to ma1 + na - 1.  The arrays
@@ -382,8 +382,8 @@ void ParticleMesh::AssignParticlesToMeshAux(
 
 void ParticleMesh::InterpolateMeshAndAssignParticles(
          const AthenaArray<Real>& meshsrc, int ms1,
-         AthenaArray<Real>& pardst, int pd1, int ni,
-         const AthenaArray<Real>& parsrc, int ps1, int ma1, int na) {
+         std::vector<Real> pardst[], int pd1, int ni,
+         const std::vector<Real> parsrc[], int ps1, int ma1, int na) {
   // Zero out meshaux.
 #pragma ivdep
   std::fill(&weight(0,0,0), &weight(0,0,0) + ncells_, 0.0);
@@ -456,7 +456,7 @@ void ParticleMesh::InterpolateMeshAndAssignParticles(
       for (int i = 0; i < ni; ++i)
         pd[i] = 0.0;
       for (int i = 0; i < na; ++i)
-        ps[i] = parsrc(ps1+i,kkk);
+        ps[i] = parsrc[ps1+i][kkk];
 
       int imb1 = imb1v[kk], imb2 = imb2v[kk], imb3 = imb3v[kk];
 
@@ -484,7 +484,7 @@ void ParticleMesh::InterpolateMeshAndAssignParticles(
 
       // Record the final interpolated properties.
       for (int n = 0; n < ni; ++n)
-        pardst(pd1+n,kkk) = pd[n];
+        pardst[pd1+n][kkk] = pd[n];
 
       delete [] pd;
       delete [] ps;
@@ -811,12 +811,12 @@ void ParticleMesh::SetBoundaryAttributes() {
 
 //--------------------------------------------------------------------------------------
 //! \fn void ParticleMesh::AssignParticlesToDifferentLevels(
-//!        const AthenaArray<Real>& par, int p1, int ma1, int nprop)
+//!        const std::vector<Real> par[], int p1, int ma1, int nprop)
 //! \brief assigns particle array par from property index p1 to p1+nprop-1 to meshaux
 //!        from property index ma1 to ma1+nprop-1 in neighbors of different levels.
 
 void ParticleMesh::AssignParticlesToDifferentLevels(
-         const AthenaArray<Real>& par, int p1, int ma1, int nprop) {
+         const std::vector<Real> par[], int p1, int ma1, int nprop) {
   const int mylevel = pmb_->loc.level;
 
   // Find neighbor blocks that are on a different level.
@@ -888,7 +888,7 @@ void ParticleMesh::AssignParticlesToDifferentLevels(
 
       bufw = pbufw + dbuf1;
       for (int n = 0; n < nprop; ++n) {
-        prop[n] = par(p1+n,k);
+        prop[n] = par[p1+n][k];
         buf[n] = pbuf[n] + dbuf1;
       }
 

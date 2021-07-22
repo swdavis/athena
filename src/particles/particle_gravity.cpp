@@ -66,9 +66,9 @@ void ParticleGravity::ExertGravitationalForce(Real dt) {
 
   // Add the force.
   for (int k = 0; k < pmy_par->npar; ++k) {
-    pmy_par->vpx(k) += dt * pmy_par->work(iwx,k);
-    pmy_par->vpy(k) += dt * pmy_par->work(iwy,k);
-    pmy_par->vpz(k) += dt * pmy_par->work(iwz,k);
+    pmy_par->vpx[k] += dt * pmy_par->work(iwx,k);
+    pmy_par->vpy[k] += dt * pmy_par->work(iwy,k);
+    pmy_par->vpz[k] += dt * pmy_par->work(iwz,k);
   }
 }
 

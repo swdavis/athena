@@ -137,7 +137,7 @@ friend class ParticleMesh;
 
                                // Data attached to the particles:
   std::vector<int> *intprop;   //!>   integer properties
-  AthenaArray<Real> realprop;  //!>   real properties
+  std::vector<Real> *realprop; //!>   real properties
   AthenaArray<Real> auxprop;   //!>   auxiliary properties (communicated when
                                //!>     particles moving to another meshblock)
   AthenaArray<Real> work;      //!>   working arrays (not communicated)
@@ -145,9 +145,9 @@ friend class ParticleMesh;
   ParticleMesh *ppm;  //!> ptr to particle-mesh
 
                                        // Shorthands:
-  std::vector<int>& pid;               //!>   particle ID
-  AthenaArray<Real> xp, yp, zp;        //   position
-  AthenaArray<Real> vpx, vpy, vpz;     //   velocity
+  std::vector<int> &pid;               //!>   particle ID
+  std::vector<Real> &xp, &yp, &zp;     //   position
+  std::vector<Real> &vpx, &vpy, &vpz;  //   velocity
   AthenaArray<Real> xi1, xi2, xi3;     //   position indices in local meshblock
   AthenaArray<Real> xp0, yp0, zp0;     //   beginning position
   AthenaArray<Real> vpx0, vpy0, vpz0;  //   beginning velocity
@@ -170,10 +170,10 @@ friend class ParticleMesh;
   void ApplyBoundaryConditions(int k, Real &x1, Real &x2, Real &x3);
   void EulerStep(Real t, Real dt, const AthenaArray<Real>& meshsrc);
   void FlushReceiveBuffer(ParticleBuffer& recv);
-  void GetPositionIndices(int npar,
-                          const AthenaArray<Real>& xp,
-                          const AthenaArray<Real>& yp,
-                          const AthenaArray<Real>& zp,
+  void GetPositionIndices(int ibegin, int iend,
+                          const std::vector<Real>& xp,
+                          const std::vector<Real>& yp,
+                          const std::vector<Real>& zp,
                           AthenaArray<Real>& xi1,
                           AthenaArray<Real>& xi2,
                           AthenaArray<Real>& xi3);

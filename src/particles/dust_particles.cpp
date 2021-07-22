@@ -246,15 +246,15 @@ void DustParticles::SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsr
       for (int k = 0; k < npar; ++k) {
         //! \todo (ccyang):
         //! - This is a temporary hack; to be fixed.
-        Real tmpx = vpx(k), tmpy = vpy(k), tmpz = vpz(k);
+        Real tmpx(vpx[k]), tmpy(vpy[k]), tmpz(vpz[k]);
         //
         Real c = dt / taus(k);
-        wx(k) = c * (vpx(k) - wx(k));
-        wy(k) = c * (vpy(k) - wy(k));
-        wz(k) = c * (vpz(k) - wz(k));
-        vpx(k) = vpx0(k) - wx(k);
-        vpy(k) = vpy0(k) - wy(k);
-        vpz(k) = vpz0(k) - wz(k);
+        wx(k) = c * (vpx[k] - wx(k));
+        wy(k) = c * (vpy[k] - wy(k));
+        wz(k) = c * (vpz[k] - wz(k));
+        vpx[k] = vpx0(k) - wx(k);
+        vpy[k] = vpy0(k) - wy(k);
+        vpz[k] = vpz0(k) - wz(k);
         //
         vpx0(k) = tmpx; vpy0(k) = tmpy; vpz0(k) = tmpz;
         //
@@ -265,14 +265,14 @@ void DustParticles::SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsr
       for (int k = 0; k < npar; ++k) {
         //! \todo (ccyang):
         //! - This is a temporary hack; to be fixed.
-        Real tmpx = vpx(k), tmpy = vpy(k), tmpz = vpz(k);
+        Real tmpx(vpx[k]), tmpy(vpy[k]), tmpz(vpz[k]);
         //
-        wx(k) = c * (vpx(k) - wx(k));
-        wy(k) = c * (vpy(k) - wy(k));
-        wz(k) = c * (vpz(k) - wz(k));
-        vpx(k) = vpx0(k) - wx(k);
-        vpy(k) = vpy0(k) - wy(k);
-        vpz(k) = vpz0(k) - wz(k);
+        wx(k) = c * (vpx[k] - wx(k));
+        wy(k) = c * (vpy[k] - wy(k));
+        wz(k) = c * (vpz[k] - wz(k));
+        vpx[k] = vpx0(k) - wx(k);
+        vpy[k] = vpy0(k) - wy(k);
+        vpz[k] = vpz0(k) - wz(k);
         //
         vpx0(k) = tmpx; vpy0(k) = tmpy; vpz0(k) = tmpz;
         //
@@ -280,17 +280,17 @@ void DustParticles::SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsr
     } else if (taus0 == 0.0) {
       // Tracer particles
       for (int k = 0; k < npar; ++k) {
-        vpx(k) = wx(k);
-        vpy(k) = wy(k);
-        vpz(k) = wz(k);
+        vpx[k] = wx(k);
+        vpy[k] = wy(k);
+        vpz[k] = wz(k);
       }
     }
   } else {
     for (int k = 0; k < npar; ++k) {
       //! \todo (ccyang):
       //! - This is a temporary hack; to be fixed.
-      Real tmpx = vpx(k), tmpy = vpy(k), tmpz = vpz(k);
-      vpx(k) = vpx0(k); vpy(k) = vpy0(k); vpz(k) = vpz0(k);
+      Real tmpx(vpx[k]), tmpy(vpy[k]), tmpz(vpz[k]);
+      vpx[k] = vpx0(k); vpy[k] = vpy0(k); vpz[k] = vpz0(k);
       vpx0(k) = tmpx; vpy0(k) = tmpy; vpz0(k) = tmpz;
     }
   }
@@ -338,7 +338,16 @@ void DustParticles::ReactToMeshAux(Real t, Real dt, const AthenaArray<Real>& mes
         mass * wx(k), mass * wy(k), mass * wz(k), wx(k), wy(k), wz(k));
 
   // Assign the momentum change onto mesh.
-  ppm->AssignParticlesToMeshAux(work, iwx, idpx1, 3);
+  // TODO(ccyang): Restore the following
+  //ppm->AssignParticlesToMeshAux(work, iwx, idpx1, 3);
+  std::vector<Real> w[3];
+  for (int k = 0; k < npar; ++k) {
+    w[0].push_back(wx(k));
+    w[1].push_back(wy(k));
+    w[2].push_back(wz(k));
+  }
+  ppm->AssignParticlesToMeshAux(w, 0, idpx1, 3);
+  //
 }
 
 //--------------------------------------------------------------------------------------

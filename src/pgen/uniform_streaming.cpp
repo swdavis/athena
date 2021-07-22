@@ -95,12 +95,12 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
       Real yp1 = block_size.x2min + (j + 0.5) * dx2;
       for (int i = 0; i < npx1_loc; ++i) {
         Real xp1 = block_size.x1min + (i + 0.5) * dx1;
-        ppar->xp(ipar) = xp1;
-        ppar->yp(ipar) = yp1;
-        ppar->zp(ipar) = zp1;
-        ppar->vpx(ipar) = vpx0;
-        ppar->vpy(ipar) = vpy0;
-        ppar->vpz(ipar) = vpz0;
+        ppar->xp[ipar] = xp1;
+        ppar->yp[ipar] = yp1;
+        ppar->zp[ipar] = zp1;
+        ppar->vpx[ipar] = vpx0;
+        ppar->vpy[ipar] = vpy0;
+        ppar->vpz[ipar] = vpz0;
         ++ipar;
       }
     }
