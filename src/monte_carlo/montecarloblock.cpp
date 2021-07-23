@@ -683,11 +683,6 @@ void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign) {
 
 void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau) {
   
-  if (first) {
-    test =0.0;
-    first = false;
-  }
-
   // SWD: needs to be modifed for non general mover kvectors
   Real k1,k2,k3;
   Real energy, abs_coef, step;
@@ -868,6 +863,8 @@ void MonteCarloBlock::ResetMoments() {
 void MonteCarloBlock::UpdateCooling(Photon *pphot, Real energy0, Real weight0) {
   
   Real cool = (pphot->weight - weight0) * (pphot->energy - energy0);
+  //if (energy0 == 0.0)
+  //  printf("weight, cool: %g %g\n",pphot->weight,cool);
   if ((isinf(cool)) || (isnan(cool))) {
     std::cout << "Warning: UpdateCooling cooling is : " << cool << std::endl;
     pphot->PrintPhoton();
