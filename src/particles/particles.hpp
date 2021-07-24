@@ -129,6 +129,7 @@ friend class ParticleMesh;
                                     //!> Be sure to call back when derived.
 
   void UpdateCapacity(int new_nparmax);  //!> Change the capacity of particle arrays
+  void Resize(int new_npar);  //!> Change number of particles
 
   // Instance variables
   int npar;     //!> number of particles

@@ -84,9 +84,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   int npx1_loc = static_cast<int>(std::round(block_size.x1len / dx1)),
       npx2_loc = static_cast<int>(std::round(block_size.x2len / dx2)),
       npx3_loc = static_cast<int>(std::round(block_size.x3len / dx3));
-  int npar = ppar->npar = npx1_loc * npx2_loc * npx3_loc;
-  if (npar > ppar->nparmax)
-    ppar->UpdateCapacity(npar);
+  int npar(npx1_loc * npx2_loc * npx3_loc);
+  ppar->Resize(npar);
 
   // Assign the particles.
   int ipar = 0;

@@ -68,6 +68,7 @@ void Particles::AMRCoarseToFine(MeshBlock* pmbc, MeshBlock* pmbf) {
   const Coordinates *pcoord = pmbf->pcoord;
 
   // Loop over particles in the coarse meshblock.
+  int nparf(pparf->npar);
   for (int k = 0; k < pparc->npar; ++k) {
     Real x1, x2, x3;
     pcoord->CartesianToMeshCoords(xp(k), yp(k), zp(k), x1, x2, x3);
@@ -75,15 +76,14 @@ void Particles::AMRCoarseToFine(MeshBlock* pmbc, MeshBlock* pmbf) {
         (!active2 || (active2 && x2min <= x2 && x2 < x2max)) &&
         (!active3 || (active3 && x3min <= x3 && x3 < x3max))) {
       // Load a particle to the fine meshblock.
-      int npar = pparf->npar;
-      if (npar >= pparf->nparmax) pparf->UpdateCapacity(2 * pparf->nparmax);
+      pparf->Resize(nparf + 1);
       for (int j = 0; j < nint; ++j)
-        pparf->intprop[j][npar] = pparc->intprop[j][k];
+        pparf->intprop[j][nparf] = pparc->intprop[j][k];
       for (int j = 0; j < nreal; ++j)
-        pparf->realprop(j,npar) = pparc->realprop(j,k);
+        pparf->realprop(j,nparf) = pparc->realprop(j,k);
       for (int j = 0; j < naux; ++j)
-        pparf->auxprop(j,npar) = pparc->auxprop(j,k);
-      ++pparf->npar;
+        pparf->auxprop(j,nparf) = pparc->auxprop(j,k);
+      ++nparf;
     }
   }
 }
@@ -96,10 +96,9 @@ void Particles::AMRFineToCoarse(MeshBlock* pmbf, MeshBlock* pmbc) {
   // Check the capacity.
   Particles *pparf = pmbf->ppar, *pparc = pmbc->ppar;
   int nparf = pparf->npar, nparc = pparc->npar;
-  int npar_new = nparf + nparc;
-  if (npar_new > pparc->nparmax) pparc->UpdateCapacity(npar_new);
 
   // Load the particles.
+  pparc->Resize(nparf + nparc);
   for (int j = 0; j < nint; ++j)
     for (int k = 0; k < nparf; ++k)
       pparc->intprop[j][nparc+k] = pparf->intprop[j][k];
@@ -109,7 +108,6 @@ void Particles::AMRFineToCoarse(MeshBlock* pmbf, MeshBlock* pmbc) {
   for (int j = 0; j < naux; ++j)
     for (int k = 0; k < nparf; ++k)
       pparc->auxprop(j,nparc+k) = pparf->auxprop(j,k);
-  pparc->npar = npar_new;
 }
 
 //--------------------------------------------------------------------------------------
@@ -1019,14 +1017,13 @@ struct Neighbor* Particles::FindTargetNeighbor(
 
 void Particles::FlushReceiveBuffer(ParticleBuffer& recv) {
   // Check the memory size.
-  int nprecv = recv.npar;
-  if (npar + nprecv > nparmax)
-    UpdateCapacity(nparmax + 2 * (npar + nprecv - nparmax));
+  int nprecv(recv.npar), npar_old(npar);
+  Resize(npar + nprecv);
 
   // Flush the receive buffers.
   int *pi = recv.ibuf;
   Real *pr = recv.rbuf;
-  for (int k = npar; k < npar + nprecv; ++k) {
+  for (int k = npar_old; k < npar; ++k) {
     for (int j = 0; j < nint; ++j)
       intprop[j][k] = *pi++;
     for (int j = 0; j < nreal; ++j)
@@ -1037,16 +1034,15 @@ void Particles::FlushReceiveBuffer(ParticleBuffer& recv) {
 
   // Find their position indices.
   AthenaArray<Real> xps, yps, zps, xi1s, xi2s, xi3s;
-  xps.InitWithShallowSlice(xp, 1, npar, nprecv);
-  yps.InitWithShallowSlice(yp, 1, npar, nprecv);
-  zps.InitWithShallowSlice(zp, 1, npar, nprecv);
-  xi1s.InitWithShallowSlice(xi1, 1, npar, nprecv);
-  xi2s.InitWithShallowSlice(xi2, 1, npar, nprecv);
-  xi3s.InitWithShallowSlice(xi3, 1, npar, nprecv);
+  xps.InitWithShallowSlice(xp, 1, npar_old, nprecv);
+  yps.InitWithShallowSlice(yp, 1, npar_old, nprecv);
+  zps.InitWithShallowSlice(zp, 1, npar_old, nprecv);
+  xi1s.InitWithShallowSlice(xi1, 1, npar_old, nprecv);
+  xi2s.InitWithShallowSlice(xi2, 1, npar_old, nprecv);
+  xi3s.InitWithShallowSlice(xi3, 1, npar_old, nprecv);
   GetPositionIndices(nprecv, xps, yps, zps, xi1s, xi2s, xi3s);
 
   // Clear the receive buffers.
-  npar += nprecv;
   recv.npar = 0;
 }
 
@@ -1113,13 +1109,32 @@ void Particles::AssignShorthands() {
 //! \brief changes the capacity of particle arrays while preserving existing data.
 
 void Particles::UpdateCapacity(int new_nparmax) {
-  // Increase size of property arrays
   nparmax = new_nparmax;
-  for (int i = 0; i < nint; ++i)
-    intprop[i].reserve(nparmax);
   realprop.ResizeLastDimension(nparmax);
   if (naux > 0) auxprop.ResizeLastDimension(nparmax);
   if (nwork > 0) work.ResizeLastDimension(nparmax);
+}
+
+//--------------------------------------------------------------------------------------
+//! \fn void Particles::Resize(int new_npar)
+//! \brief changes number of particles.
+
+void Particles::Resize(int new_npar) {
+  // TODO(ccyang): remove the following after all particle arrays are in
+  //     vector<T> type, as well as the method UpdateCapacity().
+  if (new_npar > nparmax)
+    UpdateCapacity(2 * new_npar - nparmax);
+
+  // Resize the particle arrays.
+  for (int i = 0; i < nint; ++i)
+    intprop[i].resize(new_npar);
+
+  // Flag new particles.
+  for (int k = npar; k < new_npar; ++k)
+    pid[k] = -1;
+
+  // Update number of particles.
+  npar = new_npar;
 
   // Reassign the shorthands.
   AssignShorthands();
@@ -1167,8 +1182,7 @@ void Particles::UnpackParticlesForRestart(char *mbdata, std::size_t &os) {
   // Read number of particles.
   std::memcpy(&npar, &(mbdata[os]), sizeof(npar));
   os += sizeof(npar);
-  if (nparmax < npar)
-    UpdateCapacity(npar);
+  Resize(npar);
 
   if (npar > 0) {
     // Read integer properties.
