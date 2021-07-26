@@ -110,6 +110,6 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   if (DustParticles::GetVariableTaus()) {
     Real taus0 = DustParticles::GetStoppingTime();
     for (int k = 0; k < npar; ++k)
-      ppar->taus(k) = taus0;
+      ppar->taus[k] = taus0;
   }
 }

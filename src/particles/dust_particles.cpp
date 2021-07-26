@@ -8,6 +8,7 @@
 
 // C++ headers
 #include <algorithm>  // min()
+#include <cmath>      // nan()
 
 // Athena++ headers
 #include "../athena.hpp"
@@ -117,8 +118,11 @@ void DustParticles::SetOneParticleMass(Real new_mass) {
 //! \fn DustParticles::DustParticles(MeshBlock *pmb, ParameterInput *pin)
 //! \brief constructs a DustParticles instance.
 
+static std::vector<Real> dummy_vector(1, std::nan(NULL));
+
 DustParticles::DustParticles(MeshBlock *pmb, ParameterInput *pin)
-  : Particles(pmb, pin) {
+  : Particles(pmb, pin),
+    taus(variable_taus ? aux[itaus] : dummy_vector) {
   // Assign shorthands (need to do this for every constructor of a derived class)
   AssignShorthands();
 
@@ -216,7 +220,6 @@ void DustParticles::AssignShorthands() {
   wx.InitWithShallowSlice(work, 2, iwx, 1);
   wy.InitWithShallowSlice(work, 2, iwy, 1);
   wz.InitWithShallowSlice(work, 2, iwz, 1);
-  if (variable_taus) taus.InitWithShallowSlice(aux, 2, itaus, 1);
 }
 
 //--------------------------------------------------------------------------------------
@@ -234,7 +237,7 @@ void DustParticles::SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsr
       Real x1, x2, x3;
       //! \todo (ccyang):
       //! - using (xp0, yp0, zp0) is a temporary hack.
-      pc->CartesianToMeshCoords(xp0(k), yp0(k), zp0(k), x1, x2, x3);
+      pc->CartesianToMeshCoords(xp0[k], yp0[k], zp0[k], x1, x2, x3);
       pc->MeshCoordsToCartesianVector(x1, x2, x3, wx(k), wy(k), wz(k),
                                                   wx(k), wy(k), wz(k));
     }
@@ -248,15 +251,15 @@ void DustParticles::SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsr
         //! - This is a temporary hack; to be fixed.
         Real tmpx(vpx[k]), tmpy(vpy[k]), tmpz(vpz[k]);
         //
-        Real c = dt / taus(k);
+        Real c = dt / taus[k];
         wx(k) = c * (vpx[k] - wx(k));
         wy(k) = c * (vpy[k] - wy(k));
         wz(k) = c * (vpz[k] - wz(k));
-        vpx[k] = vpx0(k) - wx(k);
-        vpy[k] = vpy0(k) - wy(k);
-        vpz[k] = vpz0(k) - wz(k);
+        vpx[k] = vpx0[k] - wx(k);
+        vpy[k] = vpy0[k] - wy(k);
+        vpz[k] = vpz0[k] - wz(k);
         //
-        vpx0(k) = tmpx; vpy0(k) = tmpy; vpz0(k) = tmpz;
+        vpx0[k] = tmpx; vpy0[k] = tmpy; vpz0[k] = tmpz;
         //
       }
     } else if (taus0 > 0.0) {
@@ -270,11 +273,11 @@ void DustParticles::SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsr
         wx(k) = c * (vpx[k] - wx(k));
         wy(k) = c * (vpy[k] - wy(k));
         wz(k) = c * (vpz[k] - wz(k));
-        vpx[k] = vpx0(k) - wx(k);
-        vpy[k] = vpy0(k) - wy(k);
-        vpz[k] = vpz0(k) - wz(k);
+        vpx[k] = vpx0[k] - wx(k);
+        vpy[k] = vpy0[k] - wy(k);
+        vpz[k] = vpz0[k] - wz(k);
         //
-        vpx0(k) = tmpx; vpy0(k) = tmpy; vpz0(k) = tmpz;
+        vpx0[k] = tmpx; vpy0[k] = tmpy; vpz0[k] = tmpz;
         //
       }
     } else if (taus0 == 0.0) {
@@ -290,8 +293,8 @@ void DustParticles::SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsr
       //! \todo (ccyang):
       //! - This is a temporary hack; to be fixed.
       Real tmpx(vpx[k]), tmpy(vpy[k]), tmpz(vpz[k]);
-      vpx[k] = vpx0(k); vpy[k] = vpy0(k); vpz[k] = vpz0(k);
-      vpx0(k) = tmpx; vpy0(k) = tmpy; vpz0(k) = tmpz;
+      vpx[k] = vpx0[k]; vpy[k] = vpy0[k]; vpz[k] = vpz0[k];
+      vpx0[k] = tmpx; vpy0[k] = tmpy; vpz0[k] = tmpz;
     }
   }
 
@@ -334,7 +337,7 @@ void DustParticles::ReactToMeshAux(Real t, Real dt, const AthenaArray<Real>& mes
   for (int k = 0; k < npar; ++k)
     //! \todo (ccyang):
     //! - using (xp0, yp0, zp0) is a temporary hack.
-    pc->CartesianToMeshCoordsVector(xp0(k), yp0(k), zp0(k),
+    pc->CartesianToMeshCoordsVector(xp0[k], yp0[k], zp0[k],
         mass * wx(k), mass * wy(k), mass * wz(k), wx(k), wy(k), wz(k));
 
   // Assign the momentum change onto mesh.

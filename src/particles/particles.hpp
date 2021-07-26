@@ -138,19 +138,19 @@ friend class ParticleMesh;
                                // Data attached to the particles:
   std::vector<int> *intprop;   //!>   integer properties
   std::vector<Real> *realprop; //!>   real properties
-  AthenaArray<Real> aux;       //!>   auxiliary properties (communicated when
+  std::vector<Real> *aux;      //!>   auxiliary properties (communicated when
                                //!>     particles moving to another meshblock)
   AthenaArray<Real> work;      //!>   working arrays (not communicated)
 
   ParticleMesh *ppm;  //!> ptr to particle-mesh
 
-                                       // Shorthands:
-  std::vector<int> &pid;               //!>   particle ID
-  std::vector<Real> &xp, &yp, &zp;     //   position
-  std::vector<Real> &vpx, &vpy, &vpz;  //   velocity
-  AthenaArray<Real> xi1, xi2, xi3;     //   position indices in local meshblock
-  AthenaArray<Real> xp0, yp0, zp0;     //   beginning position
-  AthenaArray<Real> vpx0, vpy0, vpz0;  //   beginning velocity
+                                          // Shorthands:
+  std::vector<int> &pid;                  //!>   particle ID
+  std::vector<Real> &xp, &yp, &zp;        //   position
+  std::vector<Real> &vpx, &vpy, &vpz;     //   velocity
+  AthenaArray<Real> xi1, xi2, xi3;        //   position indices in local meshblock
+  std::vector<Real> &xp0, &yp0, &zp0;     //   beginning position
+  std::vector<Real> &vpx0, &vpy0, &vpz0;  //   beginning velocity
 
   MeshBlock* pmy_block;  //!> MeshBlock pointer
   Mesh* pmy_mesh;        //!> Mesh pointer
@@ -264,7 +264,7 @@ friend class MeshBlock;
   // Instance variables
   AthenaArray<Real> wx, wy, wz;        // shorthand for working arrays
   AthenaArray<Real> dpx1, dpx2, dpx3;  // shorthand for momentum change
-  AthenaArray<Real> taus;              // shorthand for stopping time
+  std::vector<Real> &taus;             // shorthand for stopping time
   ParticleGravity *ppgrav;
 };
 

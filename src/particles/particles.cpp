@@ -82,7 +82,7 @@ void Particles::AMRCoarseToFine(MeshBlock* pmbc, MeshBlock* pmbf) {
       for (int j = 0; j < nreal; ++j)
         pparf->realprop[j][nparf] = pparc->realprop[j][k];
       for (int j = 0; j < naux; ++j)
-        pparf->aux(j,nparf) = pparc->aux(j,k);
+        pparf->aux[j][nparf] = pparc->aux[j][k];
       ++nparf;
     }
   }
@@ -107,7 +107,7 @@ void Particles::AMRFineToCoarse(MeshBlock* pmbf, MeshBlock* pmbc) {
       pparc->realprop[j][nparc+k] = pparf->realprop[j][k];
   for (int j = 0; j < naux; ++j)
     for (int k = 0; k < nparf; ++k)
-      pparc->aux(j,nparc+k) = pparf->aux(j,k);
+      pparc->aux[j][nparc+k] = pparf->aux[j][k];
 }
 
 //--------------------------------------------------------------------------------------
@@ -325,10 +325,13 @@ int Particles::GetTotalNumber(Mesh *pm) {
 
 Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
   // Allocate space for particle data.
-  : intprop(new std::vector<int>[nint]), realprop(new std::vector<Real>[nreal]),
+  : intprop(new std::vector<int> [nint]), realprop(new std::vector<Real> [nreal]),
+    aux(new std::vector<Real> [naux]),
     pid(intprop[ipid]),
     xp(realprop[ixp]), yp(realprop[iyp]), zp(realprop[izp]),
-    vpx(realprop[ivpx]), vpy(realprop[ivpy]), vpz(realprop[ivpz]) {
+    vpx(realprop[ivpx]), vpy(realprop[ivpy]), vpz(realprop[ivpz]),
+    xp0(aux[ixp0]), yp0(aux[iyp0]), zp0(aux[izp0]),
+    vpx0(aux[ivpx0]), vpy0(aux[ivpy0]), vpz0(aux[ivpz0]) {
   // Point to the calling MeshBlock.
   pmy_block = pmb;
   pmy_mesh = pmb->pmy_mesh;
@@ -340,9 +343,6 @@ Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
   active1_ = pmy_mesh->mesh_size.nx1 > 1;
   active2_ = pmy_mesh->mesh_size.nx2 > 1;
   active3_ = pmy_mesh->mesh_size.nx3 > 1;
-
-  // Allocate auxiliary properties.
-  if (naux > 0) aux.NewAthenaArray(naux,nparmax);
 
   // Allocate working arrays.
   if (nwork > 0) work.NewAthenaArray(nwork,nparmax);
@@ -362,16 +362,10 @@ Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
 //! \brief destroys a Particles instance.
 
 Particles::~Particles() {
-  // Delete integer properties.
+  // Free dynamically allocated space.
   delete [] intprop;
-
-  // Delete real properties.
   delete [] realprop;
-
-  // Delete auxiliary properties.
-  if (naux > 0) aux.DeleteAthenaArray();
-
-  // Delete working arrays.
+  delete [] aux;
   if (nwork > 0) work.DeleteAthenaArray();
 
   // Clear links to neighbors.
@@ -546,13 +540,15 @@ void Particles::RemoveOneParticle(int k) {
       for (int j = 0; j < nreal; ++j)
         realprop[j][k] = realprop[j].back();
       for (int j = 0; j < naux; ++j)
-        aux(j,k) = aux(j,npar);
+        aux[j][k] = aux[j].back();
     }
     // Remove the last particle.
     for (int j = 0; j < nint; ++j)
       intprop[j].pop_back();
     for (int j = 0; j < nreal; ++j)
       realprop[j].pop_back();
+    for (int j = 0; j < naux; ++j)
+      aux[j].pop_back();
   } else {
     // Throw error when index k is invalid.
     std::stringstream msg;
@@ -643,7 +639,7 @@ void Particles::SendToNeighbors() {
     for (int j = 0; j < nreal; ++j)
       *pr++ = realprop[j][k];
     for (int j = 0; j < naux; ++j)
-      *pr++ = aux(j,k);
+      *pr++ = aux[j][k];
     ++ppb->npar;
 
     // Pop the particle from the current MeshBlock.
@@ -861,14 +857,14 @@ void Particles::ApplyBoundaryConditions(int k, Real &x1, Real &x2, Real &x3) {
   // Find the mesh coordinates.
   Real x10, x20, x30;
   pcoord->IndicesToMeshCoords(xi1(k), xi2(k), xi3(k), x1, x2, x3);
-  pcoord->CartesianToMeshCoords(xp0(k), yp0(k), zp0(k), x10, x20, x30);
+  pcoord->CartesianToMeshCoords(xp0[k], yp0[k], zp0[k], x10, x20, x30);
 
   // Convert velocity vectors in mesh coordinates.
   Real vp1, vp2, vp3, vp10, vp20, vp30;
   pcoord->CartesianToMeshCoordsVector(xp[k], yp[k], zp[k],
                                       vpx[k], vpy[k], vpz[k], vp1, vp2, vp3);
-  pcoord->CartesianToMeshCoordsVector(xp0(k), yp0(k), zp0(k),
-                                      vpx0(k), vpy0(k), vpz0(k), vp10, vp20, vp30);
+  pcoord->CartesianToMeshCoordsVector(xp0[k], yp0[k], zp0[k],
+                                      vpx0[k], vpy0[k], vpz0[k], vp10, vp20, vp30);
 
   // Apply periodic boundary conditions in X1.
   if (x1 < mesh_size.x1min) {
@@ -912,11 +908,11 @@ void Particles::ApplyBoundaryConditions(int k, Real &x1, Real &x2, Real &x3) {
   if (flag) {
     // Convert positions and velocities back in Cartesian coordinates.
     pcoord->MeshCoordsToCartesian(x1, x2, x3, xp[k], yp[k], zp[k]);
-    pcoord->MeshCoordsToCartesian(x10, x20, x30, xp0(k), yp0(k), zp0(k));
+    pcoord->MeshCoordsToCartesian(x10, x20, x30, xp0[k], yp0[k], zp0[k]);
     pcoord->MeshCoordsToCartesianVector(x1, x2, x3,
                                         vp1, vp2, vp3, vpx[k], vpy[k], vpz[k]);
     pcoord->MeshCoordsToCartesianVector(x10, x20, x30,
-                                        vp10, vp20, vp30, vpx0(k), vpy0(k), vpz0(k));
+                                        vp10, vp20, vp30, vpx0[k], vpy0[k], vpz0[k]);
   }
 }
 
@@ -930,12 +926,12 @@ void Particles::EulerStep(Real t, Real dt, const AthenaArray<Real>& meshsrc) {
     //! \todo (ccyang):
     //! - This is a temporary hack.
     Real tmpx(xp[k]), tmpy(yp[k]), tmpz(zp[k]);
-    xp[k] = xp0(k) + dt * vpx[k];
-    yp[k] = yp0(k) + dt * vpy[k];
-    zp[k] = zp0(k) + dt * vpz[k];
-    xp0(k) = tmpx;
-    yp0(k) = tmpy;
-    zp0(k) = tmpz;
+    xp[k] = xp0[k] + dt * vpx[k];
+    yp[k] = yp0[k] + dt * vpy[k];
+    zp[k] = zp0[k] + dt * vpz[k];
+    xp0[k] = tmpx;
+    yp0[k] = tmpy;
+    zp0[k] = tmpz;
   }
 
   // Integrate the source terms (e.g., acceleration).
@@ -982,14 +978,14 @@ void Particles::SetNewParticleID(int id) {
 void Particles::SaveStatus() {
   for (int k = 0; k < npar; ++k) {
     // Save current positions.
-    xp0(k) = xp[k];
-    yp0(k) = yp[k];
-    zp0(k) = zp[k];
+    xp0[k] = xp[k];
+    yp0[k] = yp[k];
+    zp0[k] = zp[k];
 
     // Save current velocities.
-    vpx0(k) = vpx[k];
-    vpy0(k) = vpy[k];
-    vpz0(k) = vpz[k];
+    vpx0[k] = vpx[k];
+    vpy0[k] = vpy[k];
+    vpz0[k] = vpz[k];
   }
 }
 
@@ -1040,7 +1036,7 @@ void Particles::FlushReceiveBuffer(ParticleBuffer& recv) {
     for (int j = 0; j < nreal; ++j)
       realprop[j][k] = *pr++;
     for (int j = 0; j < naux; ++j)
-      aux(j,k) = *pr++;
+      aux[j][k] = *pr++;
   }
 
   // Find their position indices.
@@ -1087,13 +1083,6 @@ int Particles::AddWorkingArray() {
 //! \brief assigns shorthands by shallow copying slices of the data.
 
 void Particles::AssignShorthands() {
-  xp0.InitWithShallowSlice(aux, 2, ixp0, 1);
-  yp0.InitWithShallowSlice(aux, 2, iyp0, 1);
-  zp0.InitWithShallowSlice(aux, 2, izp0, 1);
-  vpx0.InitWithShallowSlice(aux, 2, ivpx0, 1);
-  vpy0.InitWithShallowSlice(aux, 2, ivpy0, 1);
-  vpz0.InitWithShallowSlice(aux, 2, ivpz0, 1);
-
   xi1.InitWithShallowSlice(work, 2, ixi1, 1);
   xi2.InitWithShallowSlice(work, 2, ixi2, 1);
   xi3.InitWithShallowSlice(work, 2, ixi3, 1);
@@ -1105,7 +1094,6 @@ void Particles::AssignShorthands() {
 
 void Particles::UpdateCapacity(int new_nparmax) {
   nparmax = new_nparmax;
-  if (naux > 0) aux.ResizeLastDimension(nparmax);
   if (nwork > 0) work.ResizeLastDimension(nparmax);
 }
 
@@ -1124,6 +1112,8 @@ void Particles::Resize(int new_npar) {
     intprop[i].resize(new_npar);
   for (int i = 0; i < nreal; ++i)
     realprop[i].resize(new_npar);
+  for (int i = 0; i < naux; ++i)
+    aux[i].resize(new_npar);
 
   // Flag new particles.
   for (int k = npar; k < new_npar; ++k)
