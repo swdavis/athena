@@ -125,7 +125,7 @@ friend class ParticleMesh;
 
   // Instance methods
   virtual void AssignShorthands();  //!> Needs to be called everytime
-                                    //!> realprop, & auxprop are resized
+                                    //!> realprop, & aux are resized
                                     //!> Be sure to call back when derived.
 
   void UpdateCapacity(int new_nparmax);  //!> Change the capacity of particle arrays
@@ -138,7 +138,7 @@ friend class ParticleMesh;
                                // Data attached to the particles:
   std::vector<int> *intprop;   //!>   integer properties
   std::vector<Real> *realprop; //!>   real properties
-  AthenaArray<Real> auxprop;   //!>   auxiliary properties (communicated when
+  AthenaArray<Real> aux;       //!>   auxiliary properties (communicated when
                                //!>     particles moving to another meshblock)
   AthenaArray<Real> work;      //!>   working arrays (not communicated)
 

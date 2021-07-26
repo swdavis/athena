@@ -82,7 +82,7 @@ void Particles::AMRCoarseToFine(MeshBlock* pmbc, MeshBlock* pmbf) {
       for (int j = 0; j < nreal; ++j)
         pparf->realprop[j][nparf] = pparc->realprop[j][k];
       for (int j = 0; j < naux; ++j)
-        pparf->auxprop(j,nparf) = pparc->auxprop(j,k);
+        pparf->aux(j,nparf) = pparc->aux(j,k);
       ++nparf;
     }
   }
@@ -107,7 +107,7 @@ void Particles::AMRFineToCoarse(MeshBlock* pmbf, MeshBlock* pmbc) {
       pparc->realprop[j][nparc+k] = pparf->realprop[j][k];
   for (int j = 0; j < naux; ++j)
     for (int k = 0; k < nparf; ++k)
-      pparc->auxprop(j,nparc+k) = pparf->auxprop(j,k);
+      pparc->aux(j,nparc+k) = pparf->aux(j,k);
 }
 
 //--------------------------------------------------------------------------------------
@@ -342,7 +342,7 @@ Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
   active3_ = pmy_mesh->mesh_size.nx3 > 1;
 
   // Allocate auxiliary properties.
-  if (naux > 0) auxprop.NewAthenaArray(naux,nparmax);
+  if (naux > 0) aux.NewAthenaArray(naux,nparmax);
 
   // Allocate working arrays.
   if (nwork > 0) work.NewAthenaArray(nwork,nparmax);
@@ -369,7 +369,7 @@ Particles::~Particles() {
   delete [] realprop;
 
   // Delete auxiliary properties.
-  if (naux > 0) auxprop.DeleteAthenaArray();
+  if (naux > 0) aux.DeleteAthenaArray();
 
   // Delete working arrays.
   if (nwork > 0) work.DeleteAthenaArray();
@@ -546,7 +546,7 @@ void Particles::RemoveOneParticle(int k) {
       for (int j = 0; j < nreal; ++j)
         realprop[j][k] = realprop[j].back();
       for (int j = 0; j < naux; ++j)
-        auxprop(j,k) = auxprop(j,npar);
+        aux(j,k) = aux(j,npar);
     }
     // Remove the last particle.
     for (int j = 0; j < nint; ++j)
@@ -643,7 +643,7 @@ void Particles::SendToNeighbors() {
     for (int j = 0; j < nreal; ++j)
       *pr++ = realprop[j][k];
     for (int j = 0; j < naux; ++j)
-      *pr++ = auxprop(j,k);
+      *pr++ = aux(j,k);
     ++ppb->npar;
 
     // Pop the particle from the current MeshBlock.
@@ -1040,7 +1040,7 @@ void Particles::FlushReceiveBuffer(ParticleBuffer& recv) {
     for (int j = 0; j < nreal; ++j)
       realprop[j][k] = *pr++;
     for (int j = 0; j < naux; ++j)
-      auxprop(j,k) = *pr++;
+      aux(j,k) = *pr++;
   }
 
   // Find their position indices.
@@ -1087,12 +1087,12 @@ int Particles::AddWorkingArray() {
 //! \brief assigns shorthands by shallow copying slices of the data.
 
 void Particles::AssignShorthands() {
-  xp0.InitWithShallowSlice(auxprop, 2, ixp0, 1);
-  yp0.InitWithShallowSlice(auxprop, 2, iyp0, 1);
-  zp0.InitWithShallowSlice(auxprop, 2, izp0, 1);
-  vpx0.InitWithShallowSlice(auxprop, 2, ivpx0, 1);
-  vpy0.InitWithShallowSlice(auxprop, 2, ivpy0, 1);
-  vpz0.InitWithShallowSlice(auxprop, 2, ivpz0, 1);
+  xp0.InitWithShallowSlice(aux, 2, ixp0, 1);
+  yp0.InitWithShallowSlice(aux, 2, iyp0, 1);
+  zp0.InitWithShallowSlice(aux, 2, izp0, 1);
+  vpx0.InitWithShallowSlice(aux, 2, ivpx0, 1);
+  vpy0.InitWithShallowSlice(aux, 2, ivpy0, 1);
+  vpz0.InitWithShallowSlice(aux, 2, ivpz0, 1);
 
   xi1.InitWithShallowSlice(work, 2, ixi1, 1);
   xi2.InitWithShallowSlice(work, 2, ixi2, 1);
@@ -1105,7 +1105,7 @@ void Particles::AssignShorthands() {
 
 void Particles::UpdateCapacity(int new_nparmax) {
   nparmax = new_nparmax;
-  if (naux > 0) auxprop.ResizeLastDimension(nparmax);
+  if (naux > 0) aux.ResizeLastDimension(nparmax);
   if (nwork > 0) work.ResizeLastDimension(nparmax);
 }
 

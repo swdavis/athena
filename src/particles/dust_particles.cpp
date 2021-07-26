@@ -216,7 +216,7 @@ void DustParticles::AssignShorthands() {
   wx.InitWithShallowSlice(work, 2, iwx, 1);
   wy.InitWithShallowSlice(work, 2, iwy, 1);
   wz.InitWithShallowSlice(work, 2, iwz, 1);
-  if (variable_taus) taus.InitWithShallowSlice(auxprop, 2, itaus, 1);
+  if (variable_taus) taus.InitWithShallowSlice(aux, 2, itaus, 1);
 }
 
 //--------------------------------------------------------------------------------------
