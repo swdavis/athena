@@ -124,10 +124,6 @@ friend class ParticleMesh;
   static ParameterInput *pinput;
 
   // Instance methods
-  virtual void AssignShorthands();  //!> Needs to be called everytime
-                                    //!> realprop, & aux are resized
-                                    //!> Be sure to call back when derived.
-
   void UpdateCapacity(int new_nparmax);  //!> Change the capacity of particle arrays
   void Resize(int new_npar);  //!> Change number of particles
 
@@ -252,7 +248,6 @@ friend class MeshBlock;
   static Real taus0;  //!> constant/default stopping time (in code units)
 
   // Instance methods.
-  void AssignShorthands();
   void SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsrc);
   void UserSourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsrc);
   void UserStoppingTime(Real t, Real dt, const AthenaArray<Real>& meshsrc);

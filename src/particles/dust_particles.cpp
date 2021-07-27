@@ -124,10 +124,8 @@ DustParticles::DustParticles(MeshBlock *pmb, ParameterInput *pin)
   : Particles(pmb, pin),
     wx(work[iwx]), wy(work[iwy]), wz(work[iwz]),
     taus(variable_taus ? aux[itaus] : dummy_vector) {
-  // Assign shorthands (need to do this for every constructor of a derived class)
-  AssignShorthands();
-
   if (backreaction) {
+    // Assign shallow copies for momentum feedback.
     dpx1.InitWithShallowSlice(ppm->meshaux, 4, idpx1, 1);
     dpx2.InitWithShallowSlice(ppm->meshaux, 4, idpx2, 1);
     dpx3.InitWithShallowSlice(ppm->meshaux, 4, idpx3, 1);
@@ -206,14 +204,6 @@ Real DustParticles::NewBlockTimeStep() {
 
   // Return the drag timescale.
   return std::min(dt, static_cast<Real>(cfl_par * taus0 / (1.0 + epsmax)));
-}
-
-//--------------------------------------------------------------------------------------
-//! \fn void DustParticles::AssignShorthands()
-//! \brief assigns shorthands by shallow coping slices of the data.
-
-void DustParticles::AssignShorthands() {
-  Particles::AssignShorthands();
 }
 
 //--------------------------------------------------------------------------------------

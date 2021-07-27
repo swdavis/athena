@@ -348,9 +348,6 @@ Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
   // Allocate mesh auxiliaries.
   ppm = new ParticleMesh(this);
 
-  // Shallow copy to shorthands.
-  AssignShorthands();
-
   // Initiate ParticleBuffer class.
   ParticleBuffer::SetNumberOfProperties(nint, nreal + naux);
 }
@@ -1076,13 +1073,6 @@ int Particles::AddWorkingArray() {
 }
 
 //--------------------------------------------------------------------------------------
-//! \fn void Particles::AssignShorthands()
-//! \brief assigns shorthands by shallow copying slices of the data.
-
-void Particles::AssignShorthands() {
-}
-
-//--------------------------------------------------------------------------------------
 //! \fn void Particles::UpdateCapacity(int new_nparmax)
 //! \brief changes the capacity of particle arrays while preserving existing data.
 
@@ -1111,9 +1101,6 @@ void Particles::Resize(int new_npar) {
 
   // Update number of particles.
   npar = new_npar;
-
-  // Reassign the shorthands.
-  AssignShorthands();
 }
 
 //--------------------------------------------------------------------------------------
