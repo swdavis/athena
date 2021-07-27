@@ -326,10 +326,11 @@ int Particles::GetTotalNumber(Mesh *pm) {
 Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
   // Allocate space for particle data.
   : intprop(new std::vector<int> [nint]), realprop(new std::vector<Real> [nreal]),
-    aux(new std::vector<Real> [naux]),
+    aux(new std::vector<Real> [naux]), work(new std::vector<Real> [nwork]),
     pid(intprop[ipid]),
     xp(realprop[ixp]), yp(realprop[iyp]), zp(realprop[izp]),
     vpx(realprop[ivpx]), vpy(realprop[ivpy]), vpz(realprop[ivpz]),
+    xi1(work[ixi1]), xi2(work[ixi2]), xi3(work[ixi3]),
     xp0(aux[ixp0]), yp0(aux[iyp0]), zp0(aux[izp0]),
     vpx0(aux[ivpx0]), vpy0(aux[ivpy0]), vpz0(aux[ivpz0]) {
   // Point to the calling MeshBlock.
@@ -343,9 +344,6 @@ Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
   active1_ = pmy_mesh->mesh_size.nx1 > 1;
   active2_ = pmy_mesh->mesh_size.nx2 > 1;
   active3_ = pmy_mesh->mesh_size.nx3 > 1;
-
-  // Allocate working arrays.
-  if (nwork > 0) work.NewAthenaArray(nwork,nparmax);
 
   // Allocate mesh auxiliaries.
   ppm = new ParticleMesh(this);
@@ -366,7 +364,7 @@ Particles::~Particles() {
   delete [] intprop;
   delete [] realprop;
   delete [] aux;
-  if (nwork > 0) work.DeleteAthenaArray();
+  delete [] work;
 
   // Clear links to neighbors.
   ClearNeighbors();
@@ -532,15 +530,14 @@ void Particles::RemoveOneParticle(int k) {
   if (0 <= k && k < npar) {
     if (--npar != k) {
       // Replace the k-th particle by the last particle.
-      xi1(k) = xi1(npar);
-      xi2(k) = xi2(npar);
-      xi3(k) = xi3(npar);
       for (int j = 0; j < nint; ++j)
         intprop[j][k] = intprop[j].back();
       for (int j = 0; j < nreal; ++j)
         realprop[j][k] = realprop[j].back();
       for (int j = 0; j < naux; ++j)
         aux[j][k] = aux[j].back();
+      for (int j = 0; j < nwork; ++j)
+        work[j][k] = work[j].back();
     }
     // Remove the last particle.
     for (int j = 0; j < nint; ++j)
@@ -549,6 +546,8 @@ void Particles::RemoveOneParticle(int k) {
       realprop[j].pop_back();
     for (int j = 0; j < naux; ++j)
       aux[j].pop_back();
+    for (int j = 0; j < nwork; ++j)
+      work[j].pop_back();
   } else {
     // Throw error when index k is invalid.
     std::stringstream msg;
@@ -582,9 +581,9 @@ void Particles::SendToNeighbors() {
 
   for (int k = 0; k < npar; ) {
     // Check if a particle is outside the boundary.
-    int xi1i = static_cast<int>(xi1(k)),
-        xi2i = static_cast<int>(xi2(k)),
-        xi3i = static_cast<int>(xi3(k));
+    int xi1i(static_cast<int>(xi1[k])),
+        xi2i(static_cast<int>(xi2[k])),
+        xi3i(static_cast<int>(xi3[k]));
     int ox1 = CheckSide(xi1i, IS, IE),
         ox2 = CheckSide(xi2i, JS, JE),
         ox3 = CheckSide(xi3i, KS, KE);
@@ -613,7 +612,7 @@ void Particles::SendToNeighbors() {
     if (pnb->snb.rank == Globals::my_rank) {
       // No need to send if back to the same block.
       if (pnb->snb.gid == pmy_block->gid) {
-        pmy_block->pcoord->MeshCoordsToIndices(x1, x2, x3, xi1(k), xi2(k), xi3(k));
+        pmy_block->pcoord->MeshCoordsToIndices(x1, x2, x3, xi1[k], xi2[k], xi3[k]);
         ++k;
         continue;
       }
@@ -856,7 +855,7 @@ void Particles::ApplyBoundaryConditions(int k, Real &x1, Real &x2, Real &x3) {
 
   // Find the mesh coordinates.
   Real x10, x20, x30;
-  pcoord->IndicesToMeshCoords(xi1(k), xi2(k), xi3(k), x1, x2, x3);
+  pcoord->IndicesToMeshCoords(xi1[k], xi2[k], xi3[k], x1, x2, x3);
   pcoord->CartesianToMeshCoords(xp0[k], yp0[k], zp0[k], x10, x20, x30);
 
   // Convert velocity vectors in mesh coordinates.
@@ -941,24 +940,22 @@ void Particles::EulerStep(Real t, Real dt, const AthenaArray<Real>& meshsrc) {
 
 //--------------------------------------------------------------------------------------
 //! \fn void Particles::GetPositionIndices(int ibegin, int iend,
-//!                                        const std::vector<Real>& xp,
-//!                                        const std::vector<Real>& yp,
-//!                                        const std::vector<Real>& zp,
-//!                                        AthenaArray<Real>& xi1,
-//!                                        AthenaArray<Real>& xi2,
-//!                                        AthenaArray<Real>& xi3)
+//!         const std::vector<Real>& xp,
+//!         const std::vector<Real>& yp,
+//!         const std::vector<Real>& zp,
+//!         std::vector<Real>& xi1, std::vector<Real>& xi2, std::vector<Real>& xi3)
 //! \brief finds the position indices of each particle with respect to the local grid.
 
 void Particles::GetPositionIndices(int ibegin, int iend,
     const std::vector<Real>& xp, const std::vector<Real>& yp, const std::vector<Real>& zp,
-    AthenaArray<Real>& xi1, AthenaArray<Real>& xi2, AthenaArray<Real>& xi3) {
+    std::vector<Real>& xi1, std::vector<Real>& xi2, std::vector<Real>& xi3) {
   for (int k = ibegin; k < iend; ++k) {
     // Convert to the Mesh coordinates.
     Real x1, x2, x3;
     pmy_block->pcoord->CartesianToMeshCoords(xp[k], yp[k], zp[k], x1, x2, x3);
 
     // Convert to the index space.
-    pmy_block->pcoord->MeshCoordsToIndices(x1, x2, x3, xi1(k), xi2(k), xi3(k));
+    pmy_block->pcoord->MeshCoordsToIndices(x1, x2, x3, xi1[k], xi2[k], xi3[k]);
   }
 }
 
@@ -1083,9 +1080,6 @@ int Particles::AddWorkingArray() {
 //! \brief assigns shorthands by shallow copying slices of the data.
 
 void Particles::AssignShorthands() {
-  xi1.InitWithShallowSlice(work, 2, ixi1, 1);
-  xi2.InitWithShallowSlice(work, 2, ixi2, 1);
-  xi3.InitWithShallowSlice(work, 2, ixi3, 1);
 }
 
 //--------------------------------------------------------------------------------------
@@ -1094,7 +1088,6 @@ void Particles::AssignShorthands() {
 
 void Particles::UpdateCapacity(int new_nparmax) {
   nparmax = new_nparmax;
-  if (nwork > 0) work.ResizeLastDimension(nparmax);
 }
 
 //--------------------------------------------------------------------------------------
@@ -1102,11 +1095,6 @@ void Particles::UpdateCapacity(int new_nparmax) {
 //! \brief changes number of particles.
 
 void Particles::Resize(int new_npar) {
-  // TODO(ccyang): remove the following after all particle arrays are in
-  //     vector<T> type, as well as the method UpdateCapacity().
-  if (new_npar > nparmax)
-    UpdateCapacity(2 * new_npar - nparmax);
-
   // Resize the particle arrays.
   for (int i = 0; i < nint; ++i)
     intprop[i].resize(new_npar);
@@ -1114,6 +1102,8 @@ void Particles::Resize(int new_npar) {
     realprop[i].resize(new_npar);
   for (int i = 0; i < naux; ++i)
     aux[i].resize(new_npar);
+  for (int i = 0; i < nwork; ++i)
+    work[i].resize(new_npar);
 
   // Flag new particles.
   for (int k = npar; k < new_npar; ++k)
@@ -1139,9 +1129,9 @@ Real Particles::NewBlockTimeStep() {
     Real dt_inv2 = 0.0, vpx1, vpx2, vpx3;
     pc->CartesianToMeshCoordsVector(xp[k], yp[k], zp[k], vpx[k], vpy[k], vpz[k],
                                     vpx1, vpx2, vpx3);
-    dt_inv2 += active1_ ? std::pow(vpx1 / pc->dx1f(static_cast<int>(xi1(k))), 2) : 0;
-    dt_inv2 += active2_ ? std::pow(vpx2 / pc->dx2f(static_cast<int>(xi2(k))), 2) : 0;
-    dt_inv2 += active3_ ? std::pow(vpx3 / pc->dx3f(static_cast<int>(xi3(k))), 2) : 0;
+    dt_inv2 += active1_ ? std::pow(vpx1 / pc->dx1f(static_cast<int>(xi1[k])), 2) : 0;
+    dt_inv2 += active2_ ? std::pow(vpx2 / pc->dx2f(static_cast<int>(xi2[k])), 2) : 0;
+    dt_inv2 += active3_ ? std::pow(vpx3 / pc->dx3f(static_cast<int>(xi3[k])), 2) : 0;
     dt_inv2_max = std::max(dt_inv2_max, dt_inv2);
   }
 

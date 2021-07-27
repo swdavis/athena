@@ -68,7 +68,7 @@ friend class OutputType;
   // Instance methods
   void InterpolateMeshToParticles(
            const AthenaArray<Real>& meshsrc, int ms1,
-           AthenaArray<Real>& par, int p1, int nprop);
+           std::vector<Real> par[], int p1, int nprop);
   void AssignParticlesToMeshAux(
            const std::vector<Real> par[], int p1, int ma1, int nprop);
   void InterpolateMeshAndAssignParticles(

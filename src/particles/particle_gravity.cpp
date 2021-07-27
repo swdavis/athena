@@ -9,6 +9,7 @@
 // C++ standard libraries
 #include <cstring>  // strcmp()
 #include <sstream>  // stringstream
+#include <vector>   // vector
 
 // Athena++ headers
 #include "../athena.hpp"
@@ -65,10 +66,13 @@ void ParticleGravity::ExertGravitationalForce(Real dt) {
   pmy_pm->InterpolateMeshToParticles(gforce, 0, pmy_par->work, iwx, 3);
 
   // Add the force.
+  std::vector<Real> &wx(pmy_par->work[iwx]);
+  std::vector<Real> &wy(pmy_par->work[iwy]);
+  std::vector<Real> &wz(pmy_par->work[iwz]);
   for (int k = 0; k < pmy_par->npar; ++k) {
-    pmy_par->vpx[k] += dt * pmy_par->work(iwx,k);
-    pmy_par->vpy[k] += dt * pmy_par->work(iwy,k);
-    pmy_par->vpz[k] += dt * pmy_par->work(iwz,k);
+    pmy_par->vpx[k] += dt * wx[k];
+    pmy_par->vpy[k] += dt * wy[k];
+    pmy_par->vpz[k] += dt * wz[k];
   }
 }
 

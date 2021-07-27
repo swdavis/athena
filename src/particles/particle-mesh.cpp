@@ -150,14 +150,14 @@ Real ParticleMesh::FindMaximumWeight() const {
 //--------------------------------------------------------------------------------------
 //! \fn void ParticleMesh::InterpolateMeshToParticles(
 //!              const AthenaArray<Real>& meshsrc, int ms1,
-//!              AthenaArray<Real>& par, int p1, int nprop)
+//!              std::vector<Real> par[], int p1, int nprop)
 //! \brief interpolates meshsrc from property index ms1 to ms1+nprop-1 onto particle
 //!     array par (realprop, auxprop, or work in Particles class) from property index p1
 //!     to p1+nprop-1.
 
 void ParticleMesh::InterpolateMeshToParticles(
          const AthenaArray<Real>& meshsrc, int ms1,
-         AthenaArray<Real>& par, int p1, int nprop) {
+         std::vector<Real> par[], int p1, int nprop) {
   // Transpose meshsrc.
   int nx1 = meshsrc.GetDim1(), nx2 = meshsrc.GetDim2(), nx3 = meshsrc.GetDim3();
   AthenaArray<Real> u;
@@ -190,7 +190,7 @@ void ParticleMesh::InterpolateMeshToParticles(
       int kkk = k + kk;
 
       // Find the domain the particle influences.
-      Real xi1 = ppar_->xi1(kkk), xi2 = ppar_->xi2(kkk), xi3 = ppar_->xi3(kkk);
+      Real xi1(ppar_->xi1[kkk]), xi2(ppar_->xi2[kkk]), xi3(ppar_->xi3[kkk]);
       int imb1 = static_cast<int>(xi1 - dxi1_),
           imb2 = static_cast<int>(xi2 - dxi2_),
           imb3 = static_cast<int>(xi3 - dxi3_);
@@ -242,7 +242,7 @@ void ParticleMesh::InterpolateMeshToParticles(
 
       // Record the final interpolated properties.
       for (int n = 0; n < nprop; ++n)
-        par(p1+n,kkk) = pd[n];
+        par[p1+n][kkk] = pd[n];
 
       delete [] pd;
     }
@@ -297,7 +297,7 @@ void ParticleMesh::AssignParticlesToMeshAux(
       int kkk = k + kk;
 
       // Find the domain the particle influences.
-      Real xi1 = ppar_->xi1(kkk), xi2 = ppar_->xi2(kkk), xi3 = ppar_->xi3(kkk);
+      Real xi1(ppar_->xi1[kkk]), xi2(ppar_->xi2[kkk]), xi3(ppar_->xi3[kkk]);
       int imb1 = static_cast<int>(xi1 - dxi1_),
           imb2 = static_cast<int>(xi2 - dxi2_),
           imb3 = static_cast<int>(xi3 - dxi3_);
@@ -422,7 +422,7 @@ void ParticleMesh::InterpolateMeshAndAssignParticles(
       int kkk = k + kk;
 
       // Find the domain the particle influences.
-      Real xi1 = ppar_->xi1(kkk), xi2 = ppar_->xi2(kkk), xi3 = ppar_->xi3(kkk);
+      Real xi1(ppar_->xi1[kkk]), xi2(ppar_->xi2[kkk]), xi3(ppar_->xi3[kkk]);
       int imb1 = static_cast<int>(xi1 - dxi1_),
           imb2 = static_cast<int>(xi2 - dxi2_),
           imb3 = static_cast<int>(xi3 - dxi3_);
@@ -853,7 +853,7 @@ void ParticleMesh::AssignParticlesToDifferentLevels(
 
     // Find particles that influences the neighbor block.
     for (int k = 0; k < ppar_->npar; ++k) {
-      Real xi1 = ppar_->xi1(k), xi2 = ppar_->xi2(k), xi3 = ppar_->xi3(k);
+      Real xi1(ppar_->xi1[k]), xi2(ppar_->xi2[k]), xi3(ppar_->xi3[k]);
       if ((active1_ && (xi1 <= ba.xi1min || xi1 >= ba.xi1max)) ||
           (active2_ && (xi2 <= ba.xi2min || xi2 >= ba.xi2max)) ||
           (active3_ && (xi3 <= ba.xi3min || xi3 >= ba.xi3max))) continue;

@@ -122,6 +122,7 @@ static std::vector<Real> dummy_vector(1, std::nan(NULL));
 
 DustParticles::DustParticles(MeshBlock *pmb, ParameterInput *pin)
   : Particles(pmb, pin),
+    wx(work[iwx]), wy(work[iwy]), wz(work[iwz]),
     taus(variable_taus ? aux[itaus] : dummy_vector) {
   // Assign shorthands (need to do this for every constructor of a derived class)
   AssignShorthands();
@@ -142,10 +143,6 @@ DustParticles::DustParticles(MeshBlock *pmb, ParameterInput *pin)
 //! \brief destroys a DustParticles instance.
 
 DustParticles::~DustParticles() {
-  wx.DeleteAthenaArray();
-  wy.DeleteAthenaArray();
-  wz.DeleteAthenaArray();
-
   if (backreaction) {
     dpx1.DeleteAthenaArray();
     dpx2.DeleteAthenaArray();
@@ -217,9 +214,6 @@ Real DustParticles::NewBlockTimeStep() {
 
 void DustParticles::AssignShorthands() {
   Particles::AssignShorthands();
-  wx.InitWithShallowSlice(work, 2, iwx, 1);
-  wy.InitWithShallowSlice(work, 2, iwy, 1);
-  wz.InitWithShallowSlice(work, 2, iwz, 1);
 }
 
 //--------------------------------------------------------------------------------------
@@ -238,8 +232,8 @@ void DustParticles::SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsr
       //! \todo (ccyang):
       //! - using (xp0, yp0, zp0) is a temporary hack.
       pc->CartesianToMeshCoords(xp0[k], yp0[k], zp0[k], x1, x2, x3);
-      pc->MeshCoordsToCartesianVector(x1, x2, x3, wx(k), wy(k), wz(k),
-                                                  wx(k), wy(k), wz(k));
+      pc->MeshCoordsToCartesianVector(x1, x2, x3, wx[k], wy[k], wz[k],
+                                                  wx[k], wy[k], wz[k]);
     }
 
     // Add drag force to particles.
@@ -252,12 +246,12 @@ void DustParticles::SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsr
         Real tmpx(vpx[k]), tmpy(vpy[k]), tmpz(vpz[k]);
         //
         Real c = dt / taus[k];
-        wx(k) = c * (vpx[k] - wx(k));
-        wy(k) = c * (vpy[k] - wy(k));
-        wz(k) = c * (vpz[k] - wz(k));
-        vpx[k] = vpx0[k] - wx(k);
-        vpy[k] = vpy0[k] - wy(k);
-        vpz[k] = vpz0[k] - wz(k);
+        wx[k] = c * (vpx[k] - wx[k]);
+        wy[k] = c * (vpy[k] - wy[k]);
+        wz[k] = c * (vpz[k] - wz[k]);
+        vpx[k] = vpx0[k] - wx[k];
+        vpy[k] = vpy0[k] - wy[k];
+        vpz[k] = vpz0[k] - wz[k];
         //
         vpx0[k] = tmpx; vpy0[k] = tmpy; vpz0[k] = tmpz;
         //
@@ -270,12 +264,12 @@ void DustParticles::SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsr
         //! - This is a temporary hack; to be fixed.
         Real tmpx(vpx[k]), tmpy(vpy[k]), tmpz(vpz[k]);
         //
-        wx(k) = c * (vpx[k] - wx(k));
-        wy(k) = c * (vpy[k] - wy(k));
-        wz(k) = c * (vpz[k] - wz(k));
-        vpx[k] = vpx0[k] - wx(k);
-        vpy[k] = vpy0[k] - wy(k);
-        vpz[k] = vpz0[k] - wz(k);
+        wx[k] = c * (vpx[k] - wx[k]);
+        wy[k] = c * (vpy[k] - wy[k]);
+        wz[k] = c * (vpz[k] - wz[k]);
+        vpx[k] = vpx0[k] - wx[k];
+        vpy[k] = vpy0[k] - wy[k];
+        vpz[k] = vpz0[k] - wz[k];
         //
         vpx0[k] = tmpx; vpy0[k] = tmpy; vpz0[k] = tmpz;
         //
@@ -283,9 +277,9 @@ void DustParticles::SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsr
     } else if (taus0 == 0.0) {
       // Tracer particles
       for (int k = 0; k < npar; ++k) {
-        vpx[k] = wx(k);
-        vpy[k] = wy(k);
-        vpz[k] = wz(k);
+        vpx[k] = wx[k];
+        vpy[k] = wy[k];
+        vpz[k] = wz[k];
       }
     }
   } else {
@@ -338,19 +332,10 @@ void DustParticles::ReactToMeshAux(Real t, Real dt, const AthenaArray<Real>& mes
     //! \todo (ccyang):
     //! - using (xp0, yp0, zp0) is a temporary hack.
     pc->CartesianToMeshCoordsVector(xp0[k], yp0[k], zp0[k],
-        mass * wx(k), mass * wy(k), mass * wz(k), wx(k), wy(k), wz(k));
+        mass * wx[k], mass * wy[k], mass * wz[k], wx[k], wy[k], wz[k]);
 
   // Assign the momentum change onto mesh.
-  // TODO(ccyang): Restore the following
-  //ppm->AssignParticlesToMeshAux(work, iwx, idpx1, 3);
-  std::vector<Real> w[3];
-  for (int k = 0; k < npar; ++k) {
-    w[0].push_back(wx(k));
-    w[1].push_back(wy(k));
-    w[2].push_back(wz(k));
-  }
-  ppm->AssignParticlesToMeshAux(w, 0, idpx1, 3);
-  //
+  ppm->AssignParticlesToMeshAux(work, iwx, idpx1, 3);
 }
 
 //--------------------------------------------------------------------------------------

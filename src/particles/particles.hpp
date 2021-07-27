@@ -140,7 +140,7 @@ friend class ParticleMesh;
   std::vector<Real> *realprop; //!>   real properties
   std::vector<Real> *aux;      //!>   auxiliary properties (communicated when
                                //!>     particles moving to another meshblock)
-  AthenaArray<Real> work;      //!>   working arrays (not communicated)
+  std::vector<Real> *work;     //!>   working arrays (not communicated)
 
   ParticleMesh *ppm;  //!> ptr to particle-mesh
 
@@ -148,7 +148,7 @@ friend class ParticleMesh;
   std::vector<int> &pid;                  //!>   particle ID
   std::vector<Real> &xp, &yp, &zp;        //   position
   std::vector<Real> &vpx, &vpy, &vpz;     //   velocity
-  AthenaArray<Real> xi1, xi2, xi3;        //   position indices in local meshblock
+  std::vector<Real> &xi1, &xi2, &xi3;     //   position indices in local meshblock
   std::vector<Real> &xp0, &yp0, &zp0;     //   beginning position
   std::vector<Real> &vpx0, &vpy0, &vpz0;  //   beginning velocity
 
@@ -170,13 +170,12 @@ friend class ParticleMesh;
   void ApplyBoundaryConditions(int k, Real &x1, Real &x2, Real &x3);
   void EulerStep(Real t, Real dt, const AthenaArray<Real>& meshsrc);
   void FlushReceiveBuffer(ParticleBuffer& recv);
-  void GetPositionIndices(int ibegin, int iend,
-                          const std::vector<Real>& xp,
-                          const std::vector<Real>& yp,
-                          const std::vector<Real>& zp,
-                          AthenaArray<Real>& xi1,
-                          AthenaArray<Real>& xi2,
-                          AthenaArray<Real>& xi3);
+  void GetPositionIndices(
+      int ibegin, int iend,
+      const std::vector<Real>& xp,
+      const std::vector<Real>& yp,
+      const std::vector<Real>& zp,
+      std::vector<Real>& xi1, std::vector<Real>& xi2, std::vector<Real>& xi3);
   void SetNewParticleID(int id);
   void SaveStatus();
   struct Neighbor* FindTargetNeighbor(
@@ -262,9 +261,9 @@ friend class MeshBlock;
                      AthenaArray<Real>& meshdst);
 
   // Instance variables
-  AthenaArray<Real> wx, wy, wz;        // shorthand for working arrays
-  AthenaArray<Real> dpx1, dpx2, dpx3;  // shorthand for momentum change
-  std::vector<Real> &taus;             // shorthand for stopping time
+  std::vector<Real> &wx, &wy, &wz;        // shorthand for working arrays
+  AthenaArray<Real> dpx1, dpx2, dpx3;     // shorthand for momentum change
+  std::vector<Real> &taus;                // shorthand for stopping time
   ParticleGravity *ppgrav;
 };
 
