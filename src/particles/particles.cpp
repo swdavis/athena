@@ -337,7 +337,6 @@ Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
   pmy_block = pmb;
   pmy_mesh = pmb->pmy_mesh;
   pbval_ = pmb->pbval;
-  nparmax = pin->GetOrAddInteger("particles", "nparmax", 1);
   npar = 0;
 
   // Check active dimensions.
@@ -1070,14 +1069,6 @@ int Particles::AddAuxProperty() {
 
 int Particles::AddWorkingArray() {
   return nwork++;
-}
-
-//--------------------------------------------------------------------------------------
-//! \fn void Particles::UpdateCapacity(int new_nparmax)
-//! \brief changes the capacity of particle arrays while preserving existing data.
-
-void Particles::UpdateCapacity(int new_nparmax) {
-  nparmax = new_nparmax;
 }
 
 //--------------------------------------------------------------------------------------

@@ -124,12 +124,10 @@ friend class ParticleMesh;
   static ParameterInput *pinput;
 
   // Instance methods
-  void UpdateCapacity(int new_nparmax);  //!> Change the capacity of particle arrays
   void Resize(int new_npar);  //!> Change number of particles
 
   // Instance variables
   int npar;     //!> number of particles
-  int nparmax;  //!> maximum number of particles per meshblock
 
                                // Data attached to the particles:
   std::vector<int> *intprop;   //!>   integer properties
