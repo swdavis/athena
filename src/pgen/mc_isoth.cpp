@@ -43,12 +43,29 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
   // Determine density via optical depth or constant density
   bool constdens = pin->GetOrAddBoolean("problem","constdens",false);
-  Real rho, taumin, taumax;
+  Real rho, tau, taumin, taumax;
   if (constdens) {
-    rho = pin->GetReal("problem","dens");
+    rho = pin->GetOrAddReal("problem","dens",-1.);
+    tau = pin->GetOrAddReal("problem","tau",-1.);
   } else {
     taumin = pin->GetReal("problem","taumin");
     taumax = pin->GetReal("problem","taumax");
+  }
+
+  Real heabund = 0.09; //hardcode for now (should be parameter)
+  Real mp = 1.6726e-24; 
+  Real sigmat = 6.65248e-25;
+  Real kappaes = sigmat * (1. + 2.*heabund) / (mp * (1.+4.*heabund) );
+  if (tau > 0.) {
+    Real length;
+    if (COORDINATE_SYSTEM == "cartesian") {
+      Real xlow = pin->GetReal("mesh","x3min");
+      Real xhigh = pin->GetReal("mesh","x3max");
+      length = xhigh-xlow;
+    } else {
+      length = pin->GetReal("mesh","x1max");
+    }
+    rho = tau / (kappaes * length);
   }
 
   AthenaArray<Real> tau1d,dens1d;
@@ -75,10 +92,9 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
       tau1d(i) = log10(taumin) + step * static_cast<Real>(i);
       tau1d(i) = pow(10.,tau1d(i));
     }
-    Real kapes = 0.33;
-    dens1d(0) = tau1d(0) / dx / kapes;
+    dens1d(0) = tau1d(0) / dx / kappaes;
     for (int i=1; i<nx; ++i) {
-      dens1d(i) = (tau1d(i)-tau1d(i-1) ) / (dx * kapes);
+      dens1d(i) = (tau1d(i)-tau1d(i-1) ) / (dx * kappaes);
     }
   }
 
