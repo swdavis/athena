@@ -39,7 +39,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   }
 
   // Construct pointer to photon 
-  pphoton  = new Photon(this,pmy_mc->nuser_var); // Currently one photon per block
+  pphoton  = new Photon(this,pmy_mc->nuser_var,pmy_mc->max_phots_init); // Currently one photon per block
 
   // Initialize to NULL and set below
   pmover = NULL;

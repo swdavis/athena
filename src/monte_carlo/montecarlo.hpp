@@ -190,6 +190,7 @@ public:
   int blocksize;
   int nphrun; // number of photons run thus far
   int max_list_size; // maximum number of photons run per output on any process
+  int max_phots_init; // maximum number of photon elements
   int nuser_var;
   int checkmove,checkscat;
 

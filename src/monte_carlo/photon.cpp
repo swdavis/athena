@@ -13,16 +13,21 @@
 
 // constructor, initializes data structures and parameters
 
-Photon::Photon(MonteCarloBlock *pmcb, int nuser) {
+Photon::Photon(MonteCarloBlock *pmcb, int nuser, int len_limit) {
 
   pmy_mcb = pmcb;
   weight = 1.0;
   face = FACE_UNDEF;
+  nphot_limit = len_limit;
   nuser_var = nuser;
+  nphots = 0;
   if (nuser > 0)
     user_var = new Real[nuser];
   else
     user_var = NULL;
+
+  // Allocated memory for photon positions
+  xp.NewAthenaArray(4,nphot_limit);
 
 }
 
@@ -31,6 +36,7 @@ Photon::Photon(MonteCarloBlock *pmcb, int nuser) {
 Photon::~Photon() {
   
   if (user_var != NULL) delete [] user_var;
+  xp.DeleteAthenaArray();
 
 }
 

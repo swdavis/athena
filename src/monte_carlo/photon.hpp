@@ -25,7 +25,7 @@ enum {IMC1 = 0, IMC2 = 1, IMC3 = 2, IMC0 = 3};
 
 class Photon {
 public:
-  Photon(MonteCarloBlock *pmcb, int nuser);
+  Photon(MonteCarloBlock *pmcb, int nuser, int len_limit);
   ~Photon();
 
   // data
@@ -34,9 +34,11 @@ public:
   int i1,i2,i3; // zone indicies currently containing photon
   int status; // photon status (escaped, absorbed, evolving)
   int nuser_var; // number of user variables
+  int nphot_limit, nphots;
   enum BoundaryFace face;
 
   // SWD: x can always include time, k could always include energy?
+  AthenaArray<Real> xp;
   Real x[4];  // current photon position in spacetime
   Real k[4];  // photon direction (momentum vector) curvalinear
   Real dk[4]; // the change in photon direction used for general mover

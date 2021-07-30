@@ -68,6 +68,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   nphtot = pin->GetInteger("montecarlo","nphot");
   cadence = pin->GetOrAddInteger("montecarlo","cadence",nphtot);
   nout = nphtot/cadence;
+  max_phots_init = 10000;
 #ifdef MPI_PARALLEL
   max_list_size = cadence/(Globals::nranks-1)+1;
 #else
