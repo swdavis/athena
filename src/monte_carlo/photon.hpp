@@ -39,6 +39,7 @@ public:
 
   // SWD: x can always include time, k could always include energy?
   AthenaArray<Real> xp;
+  thenaArray<Real> kp;
   Real x[4];  // current photon position in spacetime
   Real k[4];  // photon direction (momentum vector) curvalinear
   Real dk[4]; // the change in photon direction used for general mover
