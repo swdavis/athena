@@ -64,7 +64,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
 #endif
 
   Real cth = cos(pphot->x[IMC2]);
-  Real sth = sqrt(1. - SQR(cth));
+  Real sth = sin(pphot->x[IMC2]);
   Real cph = cos(pphot->x[IMC3]);
   Real sph = sin(pphot->x[IMC3]);
 

@@ -109,7 +109,7 @@ def plot_trajectory_projection(traj,axs=None,l0=1.):
     if (axs is None):
         # Create figure, axes
         fig, axs = plt.subplots(1, 3, figsize=(14,4))
-    print traj['list'].shape
+
     for i in range(traj['length']):
         n = traj['nsteps'][i]
         x = np.zeros(n)

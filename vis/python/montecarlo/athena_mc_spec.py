@@ -363,13 +363,13 @@ def compute_q_error(intensity,errors=None):
         ei = errors[0,:]
         eq = errors[1,:]
         err = np.sqrt(eq**2 + (q**2)*(ei/i)**2)/i
-        return frac*100, err*100.
+        return frac, err
     else:
         return frac, None
 
 def plot_polarization(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='frac',
                       ploterr=True,xscale='log',yscale='linear',xmin=None,xmax=None,
-                      ymin=None,ymax=None,**kwargs):
+                      ymin=None,ymax=None,nu=None,**kwargs):
     """
     Plot polarization fraction or angle. Assumes saving, etc. are performed by the 
     calling function
@@ -386,7 +386,10 @@ def plot_polarization(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='frac',
     # Assumes saving, etc. are performed by the calling function
 
     # Set up x axis as bin midpoints
-    x, nu = convert_xaxis(spectrum['units'],xunit,spectrum)
+    xfaces = spectrum['xfaces']
+    x = 0.5*(xfaces[1:]+xfaces[:-1])
+    if (nu is None):
+        nu = get_frequency(spectrum['units'],xfaces)
     
     # Initialize x labels
     xlabel = ""
