@@ -152,51 +152,61 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 }
 
 
-void MonteCarloBlock::InitializePhoton(Photon *pphot) {
-
-  // Set status flag
-
-  pphot->status = EVOLVING;
+void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
   // Choose a random cell for emission
   Real nx1 = static_cast<Real>(ie-is+1);
   Real nx2 = static_cast<Real>(je-js+1);
   Real nx3 = static_cast<Real>(ke-ks+1);
 
-  pphot->i1 = static_cast<int>(pran->uniform()*nx1)+is;
-  pphot->i2 = static_cast<int>(pran->uniform()*nx2)+js;
-  pphot->i3 = static_cast<int>(pran->uniform()*nx3)+ks;
+  for (int ip=ips; ip<=ipe; ip++) {
 
-  // Set weight according to the emission array, which is the relative number of photons
-  // per unit time emitted in each cell
-  pphot->weight = emission(pphot->i3,pphot->i2,pphot->i1);
+    // Randomly assign emission zone
+    int i1,i2,i3;
+    pphot->i1p[ip] = i1 = static_cast<int>(pran->uniform()*nx1)+is;
+    pphot->i2p[ip] = i2 = static_cast<int>(pran->uniform()*nx2)+js;
+    pphot->i3p[ip] = i3 = static_cast<int>(pran->uniform()*nx3)+ks;
 
-  // Obtain initial position within zone
-  GetZonePosition(pphot,pran,pcoord);
+    // Obtain initial position within zone
+    GetZonePosition(pphot,pran,pcoord,ip);
 
-  // Obtain intitial energy, polarization, direction and weight
-  // Utilize free-free emission function in emission.cpp
-  if(tnorm) {
-    Real logtg = log(tgas(pphot->i3,pphot->i2,pphot->i1));
-    PhotonEmitFreeFree(this,pphot,logemin+logtg,logemax+logtg);
-  } else{
-    PhotonEmitFreeFree(this,pphot,logemin,logemax);
+    // Set weight according to the emission array, which is the relative number of photons
+    // per unit time emitted in each cell
+    pphot->wp[ip] = emission(i3,i2,i1);
+
+    // Obtain intitial energy, polarization, direction and weight
+    // Utilize free-free emission function in emission.cpp
+    if(tnorm) {
+      Real logtg = log(tgas(i3,i2,i1));
+      PhotonEmitFreeFree(this,pphot,logemin+logtg,logemax+logtg,ip);
+    } else{
+      PhotonEmitFreeFree(this,pphot,logemin,logemax,ip);
+    }
+
+    // Convert k unit vector to k^\alpha
+    if (general_mover_flag) {
+      pphot->k0p[ip] = 1.;
+      pphot->k2p[ip] /= pphot->x1p[ip];
+      pphot->k3p[ip] /= (pphot->x1p[ip]*sin(pphot->x2p[ip]));
+      pphot->dk0p[ip] = 0.;
+      pphot->dk1p[ip] = 0.;
+      pphot->dk2p[ip] = 0.;
+      pphot->dk3p[ip] = 0.;
+    }
+
+    // Set status flag
+    if (pphot->wp[ip] < 0.0) 
+      pphot->statp[ip] = DESTROYED;
+    else
+      pphot->statp[ip] = EVOLVING;
+
+    // Initialize the absorption and scattering extinction coefficients
+    // to the values appropriate in the emitted zone
+    pphot->acp[ip] = AbsorptionOpacity(this,i1,i2,i3,pphot->ep[ip]);
+    pphot->scp[ip] = ScatteringOpacity(this,i1,i2,i3,pphot->ep[ip]);
   }
-  //  PhotonEmitFreeFree(this,pphot,logemin,logemax);
-  // Convert k unit vector to k^\alpha
-  if (general_mover_flag) {
-    pphot->k[IMC0] = 1.;
-    pphot->k[IMC2] /= pphot->x[IMC1];
-    pphot->k[IMC3] /= (pphot->x[IMC1]*sin(pphot->x[IMC2]));
-    for(int i=0; i<4; i++) pphot->dk[i] = 0.;
-  }
-  if (pphot->weight < 0.0) pphot->status = DESTROYED;
+  //pphot->nphot++;
 
-  // Initialize the absorption and scattering extinction coefficients
-  // to the values appropriate in the emitted zone
-  pphot->abs_coef = AbsorptionOpacity(this,pphot);
-  pphot->sct_coef = ScatteringOpacity(this,pphot);
- 
 }
 
 void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {

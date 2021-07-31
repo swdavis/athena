@@ -11,552 +11,584 @@
 #include "photonmover.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn void NoScatter(MonteCarloBlock *pmcb, Photon *pphot)
+//! \fn void NoScatter(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe)
 //  \brief prints warning, should not be called
 
-void NoScatter(MonteCarloBlock *pmcb, Photon *pphot) {
+void NoScatter(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
 
-  std::cout << "Warning: Scatter called with scattering=none." << std::endl;
-    pphot->PrintPhoton();
-    pphot->status = DESTROYED;
+  for (int ip=ips; ip<=ipe; ip++) {
+    std::cout << "Warning: Scatter called with scattering=none." << std::endl;
+    pphot->PrintPhoton(ip);
+    pphot->statp[ip] = DESTROYED;
+  }
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot)
+//! \fn void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe)
 //  \brief isotropic scattering of unpolarized radiation
 
-void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot) {
+void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
 
   MCRandom *pran = pmcb->pran;
 
-  Real phi = 2.*PI * pran->uniform();
-  Real cphi = cos(phi);
-  Real sphi = sqrt(1. - SQR(cphi));
+  for (int ip=ips; ip<=ipe; ip++) {
 
-  Real cth = 2. * pran->uniform() - 1.;
-  Real sth = sqrt(1. - SQR(cth));
+    Real phi = 2.*PI * pran->uniform();
+    Real cphi = cos(phi);
+    Real sphi = sqrt(1. - SQR(cphi));
 
-  // calculate new wave vector
-  pphot->k[0] = sth * cphi;
-  pphot->k[1] = sth * sphi;
-  pphot->k[2] = cth;
+    Real cth = 2. * pran->uniform() - 1.;
+    Real sth = sqrt(1. - SQR(cth));
+
+    // calculate new wave vector
+    pphot->k1p[ip] = sth * cphi;
+    pphot->k2p[ip] = sth * sphi;
+    pphot->k3p[ip] = cth;
+
+  }
 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot)
+//! \fn void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
+//                                   int ipe)
 //  \brief Thomson scattering of polarized radiation
 //  See Chandrasekhar(1960) Chapter 1 figure 8
 //  Rotation matrix (r):  L(\pi-i2)R(\Theta)L(-i1)
 //  Here \Theta=smu
 
 // SWD: Needs to be changed to handle non-cartesian k
-void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot) {
+void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
 
   MCRandom *pran = pmcb->pran;
   PhotonMover *pmover = pmcb->pmover;
 
-  Real norm = pphot->stokes[0];
-  Real stokes[3];
-  for(int i=0; i<3; ++i) {
-    stokes[i] = pphot->stokes[i] / norm;
-  }
+  for (int ip=ips; ip<=ipe; ip++) {
 
-  // SWD: should be done outside of scattering -- i.e. transform to tetrad
-  //pmover->CurvalinearToCartesian(pphot);
+    Real norm = pphot->sip[0];
+    Real stokes[3];
+    stokes[0] = 1.;
+    stokes[1] = pphot->sqp[ip] / norm;
+    stokes[2] = pphot->sup[ip] / norm;
 
-  // Polarized scattering must be computed relative to cartesian bases due to definition of
-  // stokes vectors
-  Real &kx = pphot->k[IMC1];
-  Real &ky = pphot->k[IMC2];
-  Real &kz = pphot->k[IMC3];
+    // SWD: should be done outside of scattering -- i.e. transform to tetrad
+    //pmover->CurvalinearToCartesian(pphot);
 
-  Real mu = kz;
-  Real stheta = sqrt(1. - SQR(mu));
-  Real phio = acos(kx / stheta);
-  if(ky < 0.0)
+    // Polarized scattering must be computed relative to cartesian bases due to 
+    // definition of stokes vectors
+    Real &kx = pphot->k1p[ip];
+    Real &ky = pphot->k2p[ip];
+    Real &kz = pphot->k3p[ip];
+
+    Real mu = kz;
+    Real stheta = sqrt(1. - SQR(mu));
+    Real phio = acos(kx / stheta);
+    if(ky < 0.0)
       phio = 2.*PI - phio;
   
-  Real smu, sstheta, s1, s2, s3, i1;
-  Real ci1, si1, ci2, si2, s2i1, c2i1;
-  Real intensi;
-  do {
-    smu = 1. - 2. * pran->uniform();
-    sstheta = sqrt(1.0 - SQR(smu));
+    Real smu, sstheta, s1, s2, s3, i1;
+    Real ci1, si1, ci2, si2, s2i1, c2i1;
+    Real intensi;
+    do {
+      smu = 1. - 2. * pran->uniform();
+      sstheta = sqrt(1.0 - SQR(smu));
 
-    s1 = SQR(smu) + 1.0;
-    s2 = SQR(smu) - 1.0;
-    s3 = 2. * smu;
+      s1 = SQR(smu) + 1.0;
+      s2 = SQR(smu) - 1.0;
+      s3 = 2. * smu;
 
-    i1 = 2. * PI * pran->uniform();
-    ci1 = cos(i1);
-    si1 = sin(i1);
-    s2i1 = 2. * si1 * ci1;
-    c2i1 = 2. * ci1 * ci1 - 1.;
+      i1 = 2. * PI * pran->uniform();
+      ci1 = cos(i1);
+      si1 = sin(i1);
+      s2i1 = 2. * si1 * ci1;
+      c2i1 = 2. * ci1 * ci1 - 1.;
 
-    Real r00 =  s1;
-    Real r01 =  s2 * c2i1;
-    Real r02 = -s2 * s2i1;
+      Real r00 =  s1;
+      Real r01 =  s2 * c2i1;
+      Real r02 = -s2 * s2i1;
 
-    intensi = r00 * stokes[0] + r01 * stokes[1] + r02 * stokes[2];
+      intensi = r00 * stokes[0] + r01 * stokes[1] + r02 * stokes[2];
 
-  } while (pran->uniform()>0.5*intensi);
+    } while (pran->uniform()>0.5*intensi);
 
 
-  Real r10,r11,r12,r20,r21,r22;
-  Real mup,sthetap,phip;
-  if(i1 < PI) {
-    mup = mu * smu + stheta * sstheta * ci1;
-    if(mup > 1.0)
-      mup = 1.0;
-    else if(mup < -1.0)
-      mup = -1.0;
+    Real r10,r11,r12,r20,r21,r22;
+    Real mup,sthetap,phip;
+    if(i1 < PI) {
+      mup = mu * smu + stheta * sstheta * ci1;
+      if(mup > 1.0)
+        mup = 1.0;
+      else if(mup < -1.0)
+        mup = -1.0;
 
-    sthetap = sqrt(1. - SQR(mup));
+      sthetap = sqrt(1. - SQR(mup));
 
-    if( (sthetap != 0.) && (sstheta !=0.)) {
-      si2 = si1 * stheta / sthetap;
-      ci2 = (mu - mup * smu)/ (sthetap * sstheta);
-    }
-    else
-      if (sthetap == 0.0) {
-        si2 = 0.;
-        ci2 = 1.;
+      if( (sthetap != 0.) && (sstheta !=0.)) {
+        si2 = si1 * stheta / sthetap;
+        ci2 = (mu - mup * smu)/ (sthetap * sstheta);
+      } else {
+        if (sthetap == 0.0) {
+          si2 = 0.;
+          ci2 = 1.;
+        } else if (sstheta == 0.0) {
+          si2 = si1;
+          ci2 = -ci1;
+        }
       }
-      else if (sstheta == 0.0) {
-        si2 = si1;
-        ci2 = -ci1;
-      }
-    Real s2i2 = 2. * si2 * ci2;
-    Real c2i2 = 2. * ci2 * ci2 - 1.;
+      Real s2i2 = 2. * si2 * ci2;
+      Real c2i2 = 2. * ci2 * ci2 - 1.;
 
-    Real cdphi = -ci1 * ci2 + si1 * si2 * smu;
-    if(cdphi > 1.)
-      cdphi = 1.0;
-    else if(cdphi < -1.)
-      cdphi = -1.;
+      Real cdphi = -ci1 * ci2 + si1 * si2 * smu;
+      if(cdphi > 1.)
+        cdphi = 1.0;
+      else if(cdphi < -1.)
+        cdphi = -1.;
 
-    phip = phio - acos(cdphi);
-    if(phip > 2.*PI)
-      phip = phip - 2.*PI;
-    else
-      if (phip < 0.)
+      phip = phio - acos(cdphi);
+      if(phip > 2.*PI)
+        phip = phip - 2.*PI;
+      else if (phip < 0.)
         phip = phip + 2.*PI;
 
-    Real c1c2 = c2i1 * c2i2;
-    Real s1s2 = s2i1 * s2i2;
-    Real c1s2 = c2i1 * s2i2;
-    Real s1c2 = c2i2 * s2i1;
+      Real c1c2 = c2i1 * c2i2;
+      Real s1s2 = s2i1 * s2i2;
+      Real c1s2 = c2i1 * s2i2;
+      Real s1c2 = c2i2 * s2i1;
 
-    r10 =  s2 * c2i2;
-    r11 =  s1 * c1c2 - s3 * s1s2;
-    r12 = -s1 * s1c2 - s3 * c1s2;
-    r20 =  s2 * s2i2;
-    r21 =  s1 * c1s2 + s3 * s1c2;
-    r22 =  s3 * c1c2 - s1 * s1s2;
+      r10 =  s2 * c2i2;
+      r11 =  s1 * c1c2 - s3 * s1s2;
+      r12 = -s1 * s1c2 - s3 * c1s2;
+      r20 =  s2 * s2i2;
+      r21 =  s1 * c1s2 + s3 * s1c2;
+      r22 =  s3 * c1c2 - s1 * s1s2;
 
-  } else {
-    si1 = -si1;
-    s2i1 = -s2i1;
-    mup = mu * smu + stheta * sstheta * ci1;
-    if(mup > 1.)
-      mup = 1.;
-    else if(mup < -1.)
-      mup = -1.;
+    } else {
+      si1 = -si1;
+      s2i1 = -s2i1;
+      mup = mu * smu + stheta * sstheta * ci1;
+      if(mup > 1.)
+        mup = 1.;
+      else if(mup < -1.)
+        mup = -1.;
 
-    sthetap = sqrt(1. - SQR(mup));
-    if( (sthetap != 0.) && (sstheta != 0.)) {
-      si2 = si1 * stheta / sthetap;
-      ci2 = (mu - mup * smu)/ (sthetap * sstheta);
-    }
-    else
-      if (sstheta==0.0) {
-        si2 = 0.0;
-        ci2 = 1.0;
+      sthetap = sqrt(1. - SQR(mup));
+      if( (sthetap != 0.) && (sstheta != 0.)) {
+        si2 = si1 * stheta / sthetap;
+        ci2 = (mu - mup * smu)/ (sthetap * sstheta);
       }
-      else if (sthetap==0.0) {
-        si2 = si1;
-        ci2 = -ci1;
+      else {
+        if (sstheta==0.0) {
+          si2 = 0.0;
+          ci2 = 1.0;
+        } else if (sthetap==0.0) {
+          si2 = si1;
+          ci2 = -ci1;
+        }
       }
-    Real s2i2 = 2.0*si2*ci2;
-    Real c2i2 = 2.0*ci2*ci2-1.0;
 
-    Real cdphi = -ci1 * ci2 + si1 * si2 * smu;
-    if(cdphi > 1.)
-      cdphi = 1.0;
-    else if(cdphi < -1.)
-      cdphi = -1.;
+      Real s2i2 = 2.0*si2*ci2;
+      Real c2i2 = 2.0*ci2*ci2-1.0;
 
-    phip = phio + acos(cdphi);
-    if(phip > 2.*PI)
-      phip = phip - 2.*PI;
-    else
-      if (phip < 0.)
+      Real cdphi = -ci1 * ci2 + si1 * si2 * smu;
+      if(cdphi > 1.)
+        cdphi = 1.0;
+      else if(cdphi < -1.)
+        cdphi = -1.;
+
+      phip = phio + acos(cdphi);
+      if(phip > 2.*PI) {
+        phip = phip - 2.*PI;
+      } else if (phip < 0.) {
         phip = phip + 2.*PI;
+      }
 
-    Real c1c2 = c2i1 * c2i2;
-    Real s1s2 = s2i1 * s2i2;
-    Real c1s2 = c2i1 * s2i2;
-    Real s1c2 = c2i2 * s2i1;
+      Real c1c2 = c2i1 * c2i2;
+      Real s1s2 = s2i1 * s2i2;
+      Real c1s2 = c2i1 * s2i2;
+      Real s1c2 = c2i2 * s2i1;
 
-    r10 =  s2 * c2i2;
-    r11 =  s1 * c1c2 - s3 * s1s2;
-    r12 =  s1 * s1c2 + s3 * c1s2;
-    r20 = -s2 * s2i2;
-    r21 = -s1 * c1s2 - s3 * s1c2;
-    r22 =  s3 * c1c2 - s1 * s1s2;
+      r10 =  s2 * c2i2;
+      r11 =  s1 * c1c2 - s3 * s1s2;
+      r12 =  s1 * s1c2 + s3 * c1s2;
+      r20 = -s2 * s2i2;
+      r21 = -s1 * c1s2 - s3 * s1c2;
+      r22 =  s3 * c1c2 - s1 * s1s2;
+    } // end if (i1 < PI) else
 
-  }
+    // Calculate new stokes vectors from rotation matrix.  Note that the
+    // value of the overall intensity (stokes[0]) does not change
+    pphot->sqp[ip] = norm*(r10*stokes[0]+r11*stokes[1]+r12*stokes[2])/intensi;
+    pphot->sup[ip] = norm*(r20*stokes[0]+r21*stokes[1]+r22*stokes[2])/intensi;
 
-  // Calculate new stokes vectors from rotation matrix.  Note that the
-  // value of the overall intensity (stokes[0]) does not change
-  pphot->stokes[1] = norm*(r10*stokes[0]+r11*stokes[1]+r12*stokes[2])/intensi;
-  pphot->stokes[2] = norm*(r20*stokes[0]+r21*stokes[1]+r22*stokes[2])/intensi;
-  //diag=sqrt(stokes[1]*stokes[1]+stokes[2]*stokes[2]);
+    // Calculate new photon direction
+    kx = sthetap * cos(phip);
+    ky = sthetap * sin(phip);
+    kz = mup;
 
-  // Calculate new photon wave vector and phi value
-  kx = sthetap * cos(phip);
-  ky = sthetap * sin(phip);
-  kz = mup;
+    // SWD: Should be done outside of scattering
+    //pmover->CartesianToCurvalinear(pphot);
+  } // end loop over ip 
 
-  // SWD: Should be done outside of scattering
-  //pmover->CartesianToCurvalinear(pphot);
- 
 }
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot)
+//! \fn void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
+//                                   int ipe)
 //  \brief Thomson scattering of unpolarized radiation
 
-void ScatterThomsonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot) {
+void ScatterThomsonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
 
   MCRandom *pran = pmcb->pran;
   
-  Real &k1 = pphot->k[0];
-  Real &k2 = pphot->k[1];
-  Real &k3 = pphot->k[2];
+  for (int ip=ips; ip<=ipe; ip++) {
 
-  Real k1p,k2p,k3p,cths;
-  do {
+    Real &k1 = pphot->k1p[ip];
+    Real &k2 = pphot->k2p[ip];
+    Real &k3 = pphot->k3p[ip];
+
+    Real k1p,k2p,k3p,cths;
+    do {
      
-    Real cthp = 2.0 * pran->uniform() - 1.;
-    Real phip = 2.*PI * pran->uniform();
-    Real cphip = cos(phip);
-    Real sphip = sin(phip);
-    Real sthp = sqrt(1. - SQR(cthp));
+      Real cthp = 2.0 * pran->uniform() - 1.;
+      Real phip = 2.*PI * pran->uniform();
+      Real cphip = cos(phip);
+      Real sphip = sin(phip);
+      Real sthp = sqrt(1. - SQR(cthp));
     
-    k1p = sthp * cphip;
-    k2p = sthp * sphip;
-    k3p = cthp;
+      k1p = sthp * cphip;
+      k2p = sthp * sphip;
+      k3p = cthp;
     
-    cths = k1 * k1p + k2 * k2p + k3 * k3p;
+      cths = k1 * k1p + k2 * k2p + k3 * k3p;
     
-  } while(pran->uniform() > SQR(cths));
+    } while(pran->uniform() > SQR(cths));
 
-  k1 = k1p;
-  k2 = k2p;
-  k3 = k3p;
+    k1 = k1p;
+    k2 = k2p;
+    k3 = k3p;
+
+  } // end loop over ip
   
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot)
+//! \fn void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
+//                                     int ipe)
 //  \brief Unpolarized Compton scattering
 
-void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot) {
+void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
 
   MCRandom *pran = pmcb->pran;
   Real mec2 = 8.18711e-7;
 
-  Real &k1 = pphot->k[IMC1];
-  Real &k2 = pphot->k[IMC2];
-  Real &k3 = pphot->k[IMC3];
-  
-  Real v1,v2,v3,vdc,gamma,x,onemuvdc;
-  do {
-    // Pick random direction for velocity of scattering electron
-    v3 = 2.0*pran->uniform() - 1.;
-    Real sinv = sqrt(1. - SQR(v3));
-    Real phiv = 2.*PI * pran->uniform();
-    v1 = sinv * cos(phiv);
-    v2 = sinv * sin(phiv);
+  for (int ip=ips; ip<=ipe; ip++) {
 
-    // Calculate v . k
-    Real vdotk = k1 * v1 + k2 * v2 + k3 * v3;
+    Real &k1 = pphot->k1p[ip];
+    Real &k2 = pphot->k2p[ip];
+    Real &k3 = pphot->k3p[ip];
+    int &i1 = pphot->i1p[ip];
+    int &i2 = pphot->i2p[ip];
+    int &i3 = pphot->i3p[ip];
 
-    // Draw momentum from random distribution and calculate gamma,v/c,x
-    // sigma^ and test for acceptance
-    Real mom = ElectronDist(pmcb->tgas(pphot->i3,pphot->i2,pphot->i1),pran);
-    gamma = sqrt(1. + SQR(mom));
-    vdc = mom / gamma;
-    onemuvdc = 1. - vdotk * vdc;
-    x = 2. * gamma * pphot->energy * onemuvdc / mec2;
-  } while(pran->uniform() >= 0.375*SigmaHat(x)*onemuvdc);
+    Real v1,v2,v3,vdc,gamma,x,onemuvdc;
+    do {
+      // Pick random direction for velocity of scattering electron
+      v3 = 2.0*pran->uniform() - 1.;
+      Real sinv = sqrt(1. - SQR(v3));
+      Real phiv = 2.*PI * pran->uniform();
+      v1 = sinv * cos(phiv);
+      v2 = sinv * sin(phiv);
 
-  // Calculate rho,mup,phip,cths (cos scattering angle) etc.
-  // and test for acceptance
-  Real rho = sqrt(SQR(v1) + SQR(v2));
-  Real onecthpvdc,k1p,k2p,k3p,xp;
-  do {
-    Real cthp = 2.0 * pran->uniform() - 1.;
-    cthp = (vdc + cthp) / (1. + vdc * cthp);
-    Real phip = 2.*PI * pran->uniform();
-    Real cphip = cos(phip);
-    Real sphip = sin(phip);
-    Real sthp = sqrt(1. - SQR(cthp));
+      // Calculate v . k
+      Real vdotk = k1 * v1 + k2 * v2 + k3 * v3;
 
-    if(rho > 0.0) {
-      k1p = cthp * v1 + sthp / rho * (v2 * cphip + v1 * v3 * sphip);
-      k2p = cthp * v2 + sthp / rho * (v2 * v3 * sphip - v1 * cphip);
-      k3p = cthp * v3 - sthp * rho * sphip;
-    }
-    else {
-      k1p = sthp * cphip;
-      k2p = sthp * sphip;
-      k3p = cthp;
-    }
+      // Draw momentum from random distribution and calculate gamma,v/c,x
+      // sigma^ and test for acceptance
+      Real mom = ElectronDist(pmcb->tgas(i3,i2,i1),pran);
+      gamma = sqrt(1. + SQR(mom));
+      vdc = mom / gamma;
+      onemuvdc = 1. - vdotk * vdc;
+      x = 2. * gamma * pphot->ep[ip] * onemuvdc / mec2;
+    } while(pran->uniform() >= 0.375*SigmaHat(x)*onemuvdc);
 
-    Real cths = k1 * k1p + k2 * k2p + k3 * k3p;
-    onecthpvdc = 1. - cthp * vdc;
-    xp = x / (1. + pphot->energy / mec2 * (1.-cths) / (gamma*onecthpvdc));
+    // Calculate rho,mup,phip,cths (cos scattering angle) etc.
+    // and test for acceptance
+    Real rho = sqrt(SQR(v1) + SQR(v2));
+    Real onecthpvdc,k1p,k2p,k3p,xp;
+    do {
+      Real cthp = 2.0 * pran->uniform() - 1.;
+      cthp = (vdc + cthp) / (1. + vdc * cthp);
+      Real phip = 2.*PI * pran->uniform();
+      Real cphip = cos(phip);
+      Real sphip = sin(phip);
+      Real sthp = sqrt(1. - SQR(cthp));
 
-  } while(2.*pran->uniform() >= Bigy(x,xp));
+      if(rho > 0.0) {
+        k1p = cthp * v1 + sthp / rho * (v2 * cphip + v1 * v3 * sphip);
+        k2p = cthp * v2 + sthp / rho * (v2 * v3 * sphip - v1 * cphip);
+        k3p = cthp * v3 - sthp * rho * sphip;
+      } else {
+        k1p = sthp * cphip;
+        k2p = sthp * sphip;
+        k3p = cthp;
+      }
 
-  // Assign new energy and direction vector
-  pphot->energy = xp * mec2 / (2. * gamma * onecthpvdc);
-  k1 = k1p;
-  k2 = k2p;
-  k3 = k3p;
+      Real cths = k1 * k1p + k2 * k2p + k3 * k3p;
+      onecthpvdc = 1. - cthp * vdc;
+      xp = x / (1. + pphot->ep[ip] / mec2 * (1.-cths) / (gamma*onecthpvdc));
+
+    } while(2.*pran->uniform() >= Bigy(x,xp));
+
+    // Assign new energy and direction vector
+    pphot->ep[ip] = xp * mec2 / (2. * gamma * onecthpvdc);
+    k1 = k1p;
+    k2 = k2p;
+    k3 = k3p;
+
+  } //end loop over ip
 
 }
 
 
 //------------------------------------------------------------------------------
-//! \fn void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot)
+//! \fn void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot, 
+//                                   int ips, int ipe)
 //  \brief Polarized Compton scattering
 //
 // Note that this uses the correct R matrix expressions -- not the incorrect
 // expression listed in the appendix of Davis et al. (2009) */
 
-void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot) {
+void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
+                             int ipe) {
 
   MCRandom *pran = pmcb->pran;
   PhotonMover *pmover = pmcb->pmover;
 
-  Real norms = pphot->stokes[0];
-  Real stokes[3];
-  for(int i=0; i<3; ++i) {
-    stokes[i] = pphot->stokes[i] / norms;
-  }
+  for (int ip=ips; ip<=ipe; ip++) {
 
-  // SWD: move outside of scattering
-  //pmover->CurvalinearToCartesian(pphot);
+    Real norms = pphot->sip[ip];
+    Real stokes[3];
+    stokes[0] = 1.;
+    stokes[1] = pphot->sqp[ip] / norms;
+    stokes[2] = pphot->sup[ip] / norms;
 
-  // Polarized scattering must be computed relative to cartesian bases due to definition of
-  // stokes vectors
-  Real &kx = pphot->k[IMC1];
-  Real &ky = pphot->k[IMC2];
-  Real &kz = pphot->k[IMC3];
+    // SWD: needs to be generalized
+    //pmover->CurvalinearToCartesian(pphot);
+    // Polarized scattering must be computed relative to cartesian basis due 
+    // to definition of stokes vectors
+    Real &kx = pphot->k1p[ip];
+    Real &ky = pphot->k2p[ip];
+    Real &kz = pphot->k3p[ip];
+
+    int &i1 = pphot->i1p[ip];
+    int &i2 = pphot->i2p[ip];
+    int &i3 = pphot->i3p[ip];
   
-  
-  Real stheta = sqrt(1. - SQR(kz));
-  Real mec2 = 8.18711e-7;
-  Real v1,v2,v3,vdc,mom,gamma,bgamma,x,vdotk;
-  do {
-    // Pick random direction for velocity of scattering electron
-    v3 = 2.0*pran->uniform()-1.0;
-    Real sinv = sqrt(1.0 - SQR(v3));
-    Real phiv = 2.*PI*pran->uniform();
-    v1 = sinv * cos(phiv);
-    v2 = sinv * sin(phiv);
+    Real stheta = sqrt(1. - SQR(kz));
+    Real mec2 = 8.18711e-7;
+    Real v1,v2,v3,vdc,mom,gamma,bgamma,x,vdotk;
+    do {
+      // Pick random direction for velocity of scattering electron
+      v3 = 2.0*pran->uniform()-1.0;
+      Real sinv = sqrt(1.0 - SQR(v3));
+      Real phiv = 2.*PI*pran->uniform();
+      v1 = sinv * cos(phiv);
+      v2 = sinv * sin(phiv);
 
-    // Calculate v . k
-    Real vdotk = kx * v1 + ky * v2 + kz * v3;
+      // Calculate v . k
+      Real vdotk = kx * v1 + ky * v2 + kz * v3;
 
-    // Draw momentum from random distribution and calculate gamma,v/c,x
-    // sigma^ and test for acceptance
-    mom = ElectronDist(pmcb->tgas(pphot->i3,pphot->i2,pphot->i1),pran);
-    gamma = sqrt(1. + SQR(mom));
-    bgamma = gamma - vdotk * mom;
-    x = 2.0*pphot->energy /mec2*bgamma;
+      // Draw momentum from random distribution and calculate gamma,v/c,x
+      // sigma^ and test for acceptance
+      mom = ElectronDist(pmcb->tgas(i3,i2,i1),pran);
+      gamma = sqrt(1. + SQR(mom));
+      bgamma = gamma - vdotk * mom;
+      x = 2.0*pphot->ep[ip] /mec2*bgamma;
 
-  } while(pran->uniform()>=0.375*SigmaHat(x)*bgamma/gamma);
+    } while(pran->uniform()>=0.375*SigmaHat(x)*bgamma/gamma);
 
-  Real rho = sqrt(v1*v1+v2*v2);
-  Real beta = mom/gamma;
+    Real rho = sqrt(v1*v1+v2*v2);
+    Real beta = mom/gamma;
 
-  // Calculate scattering angles and scattered photon energies in fluid frame
-  // to evaluate probability for scattering
-  Real mup,k1p,k2p,k3p,bgammap,mus,cmus,xp,erat,diff,deltac,kcon,s2i1,c2i1;
-  Real s2,r00,r01,r02,norm;
-  do {
+    // Calculate scattering angles and scattered photon energies in fluid frame
+    // to evaluate probability for scattering
+    Real mup,k1p,k2p,k3p,bgammap,mus,cmus,xp,erat,diff,deltac,kcon,s2i1,c2i1;
+    Real s2,r00,r01,r02,norm;
+    do {
 
-    // Calculate trial scattering angles
-    Real mud = 2.0*pran->uniform()-1.0;
-    mup = (beta + mud)/(1.0 + beta * mud);
+      // Calculate trial scattering angles
+      Real mud = 2.0*pran->uniform()-1.0;
+      mup = (beta + mud)/(1.0 + beta * mud);
 
-    Real phip = 2.*PI*pran->uniform();
-    Real cphip = cos(phip);
-    Real sphip = sin(phip);
-    Real sthetap = sqrt(1.0-mup*mup);
-    bgammap = gamma-mup*mom;
+      Real phip = 2.*PI*pran->uniform();
+      Real cphip = cos(phip);
+      Real sphip = sin(phip);
+      Real sthetap = sqrt(1.0-mup*mup);
+      bgammap = gamma-mup*mom;
 
-    if(rho > 0.0) {
-      k1p = mup * v1 + sthetap / rho * (v2*cphip + v1*v3*sphip);
-      k2p = mup * v2 + sthetap / rho * (v2*v3*sphip - v1*cphip);
-      k3p = mup * v3 - sthetap * rho * sphip;
+      if(rho > 0.0) {
+        k1p = mup * v1 + sthetap / rho * (v2*cphip + v1*v3*sphip);
+        k2p = mup * v2 + sthetap / rho * (v2*v3*sphip - v1*cphip);
+        k3p = mup * v3 - sthetap * rho * sphip;
+      } else {
+        k1p = sthetap * cphip;
+        k2p = sthetap * sphip;
+        k3p = mup;
+      }
+
+      mus = kx*k1p + ky*k2p + kz*k3p;
+      cmus = 1.0 - mus;
+
+      xp = x / (1.0+pphot->ep[ip]/mec2*cmus/bgammap);
+      erat = xp / x;
+      diff = (1.0/x-1.0/xp);
+      deltac = sqrt(-1.0-1.0/diff);
+
+      // Cacluate angle, i1, which rotates stokes vectors into "internal"
+      // scattering basis
+      Real bottom = stheta*cmus*deltac;
+      kcon = k1p * ky - k2p * kx;
+      Real ci1,si1;
+      if(fabs(bottom) > TINY_NUMBER) {
+        ci1 = (bgamma*(k3p-mus*kz)+mom*cmus*(kz*vdotk-v3))/bottom;
+        si1 = (bgamma*kcon-mom*cmus*(v1*ky-v2*kx))/bottom;
+      } else { // SWD: Very rare, but this should be improved
+        ci1 = 1.0;
+        si1 = 0.0;
+      }
+      s2i1 = 2.0*si1*ci1;
+      c2i1 = 2.0*ci1*ci1-1.0;
+
+      s2 = 4.0*diff*(1.0+diff);
+      r00 = (erat+1.0/erat+s2);
+      r01 = s2*c2i1;
+      r02 = s2*s2i1;
+
+      norm = r00 + r01 * stokes[1] + r02 * stokes[2];
+
+      // Scattering probability proportional to cross section
+    } while(2*pran->uniform() >= (erat*erat*norm));
+
+    // Calculate other elements of the Compton matrix
+    Real s1 = s2+2.0;
+    Real s3 = 4.0*diff+2.0;
+
+    // Determine i2 angle which rotates stokes vectors back from scattering plane
+    Real bottom = sqrt(1.0-k3p*k3p)*cmus*deltac;
+    Real ci2,si2;
+    if( fabs(bottom) > TINY_NUMBER) {
+      ci2 = (bgammap*(kz-mus*k3p)+mom*cmus*(k3p*mup-v3))/bottom;
+      si2 = -(bgammap*kcon+mom*cmus*(v1*k2p-v2*k1p))/bottom;
+    } else {
+      ci2 = 1.0;
+      si2 = 0.0;
     }
-    else {
-      k1p = sthetap * cphip;
-      k2p = sthetap * sphip;
-      k3p = mup;
-    }
+    Real s2i2 = 2.0*si2*ci2;
+    Real c2i2 = 2.0*ci2*ci2-1.0;
 
-    mus = kx*k1p + ky*k2p + kz*k3p;
-    cmus = 1.0 - mus;
+    // Rotate Stokes vectors
+    Real c1c2 = c2i1 * c2i2;
+    Real s1s2 = s2i1 * s2i2;
+    Real c1s2 = c2i1 * s2i2;
+    Real s1c2 = c2i2 * s2i1;
 
-    xp = x / (1.0+pphot->energy/mec2*cmus/bgammap);
-    erat = xp / x;
-    diff = (1.0/x-1.0/xp);
-    deltac = sqrt(-1.0-1.0/diff);
+    Real r10 = s2 * c2i2;
+    Real r11 = s1 * c1c2 + s3 * s1s2;
+    Real r12 = s1 * s1c2 - s3 * c1s2;
 
-    // Cacluate angle, i1, which rotates stokes vectors into "internal"
-    // scattering basis
-    Real bottom = stheta*cmus*deltac;
-    kcon = k1p * ky - k2p * kx;
-    Real ci1,si1;
-    if(fabs(bottom) > TINY_NUMBER) {
-      ci1 = (bgamma*(k3p-mus*kz)+mom*cmus*(kz*vdotk-v3))/bottom;
-      si1 = (bgamma*kcon-mom*cmus*(v1*ky-v2*kx))/bottom;
-    }
-    else { // Very rare, but this should be improved
-      ci1 = 1.0;
-      si1 = 0.0;
-    }
-    s2i1 = 2.0*si1*ci1;
-    c2i1 = 2.0*ci1*ci1-1.0;
+    Real r20 = s2 * s2i2;
+    Real r21 = s1 * c1s2 - s3 * s1c2;
+    Real r22 = s3 * c1c2 + s1 * s1s2;
 
-    s2 = 4.0*diff*(1.0+diff);
-    r00 = (erat+1.0/erat+s2);
-    r01 = s2*c2i1;
-    r02 = s2*s2i1;
+    // Calculate new stokes vectors from rotation matrix.  Note that the
+    // value of the overall intensity (stokes[0]=1) does not change
+    pphot->sqp[ip] = (r10+r11*stokes[1]+r12*stokes[2]) / norms;
+    pphot->sup[ip] = (r20+r21*stokes[1]+r22*stokes[2]) / norms;
 
-    norm = r00 + r01 * stokes[1] + r02 * stokes[2];
+    // Calculate scattered energy and update k vector
+    pphot->ep[ip] = xp / (2.0 * bgammap) * mec2;
+    kx = k1p;
+    ky = k2p;
+    kz = k3p;
 
-    // Scattering probability proportional to cross section
-  } while(2*pran->uniform() >= (erat*erat*norm));
+    // SWD: move outside of scattering
+    //pmover->CartesianToCurvalinear(pphot);
+  } // end loop over ip
 
-  // Calculate other elements of the Compton matrix
-  Real s1 = s2+2.0;
-  Real s3 = 4.0*diff+2.0;
-
-  // Determine i2 angle which rotates stokes vectors back from scattering plane
-  Real bottom = sqrt(1.0-k3p*k3p)*cmus*deltac;
-  Real ci2,si2;
-  if( fabs(bottom) > TINY_NUMBER) {
-    ci2 = (bgammap*(kz-mus*k3p)+mom*cmus*(k3p*mup-v3))/bottom;
-    si2 = -(bgammap*kcon+mom*cmus*(v1*k2p-v2*k1p))/bottom;
-  }
-  else {
-    ci2 = 1.0;
-    si2 = 0.0;
-  }
-  Real s2i2 = 2.0*si2*ci2;
-  Real c2i2 = 2.0*ci2*ci2-1.0;
-
-  // Rotate Stokes vectors
-  Real c1c2 = c2i1 * c2i2;
-  Real s1s2 = s2i1 * s2i2;
-  Real c1s2 = c2i1 * s2i2;
-  Real s1c2 = c2i2 * s2i1;
-
-  Real r10 = s2 * c2i2;
-  Real r11 = s1 * c1c2 + s3 * s1s2;
-  Real r12 = s1 * s1c2 - s3 * c1s2;
-
-  Real r20 = s2 * s2i2;
-  Real r21 = s1 * c1s2 - s3 * s1c2;
-  Real r22 = s3 * c1c2 + s1 * s1s2;
-
-  // Calculate new stokes vectors from rotation matrix.  Note that the
-  // value of the overall intensity (stokes[0]=1) does not change
-  pphot->stokes[1] = (r10+r11*stokes[1]+r12*stokes[2]) / norms;
-  pphot->stokes[2] = (r20+r21*stokes[1]+r22*stokes[2]) / norms;
-
-  // Calculate scattered energy and update k vector
-  pphot->energy = xp / (2.0 * bgammap) * mec2;
-  kx = k1p;
-  ky = k2p;
-  kz = k3p;
-
-  // SWD: move outside of scattering
-  //pmover->CartesianToCurvalinear(pphot);
-  
 }
 
 
 //----------------------------------------------------------------------------
-//! \fn void ScatterResonanceLine((MonteCarloBlock *pmcb, Photon *pphot)
+//! \fn void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, 
+//                                int ips, int ipe)
 //  \brief Implements resonance line scattering
 //
 
-void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot) {
+void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips,
+                          int ipe) {
 
   MCRandom *pran = pmcb->pran;
-  // SWD: Assumes k is Cartesian
-  Real &kx = pphot->k[0];
-  Real &ky = pphot->k[1];
-  Real &kz = pphot->k[2];
 
-  // Compute atom thermal velocity
-  Real kb = 1.380649e-16;
-  Real mass = 1.660538782e-24;
-  Real tgas = pmcb->tgas(pphot->i3, pphot->i2, pphot->i1);
-  Real vth = sqrt( 2 * kb * tgas / mass );
+  for (int ip=ips; ip<=ipe; ip++) {
+    // SWD: Assumes k is unit vector -- needs to be generalized
+    Real &kx = pphot->k1p[ip];
+    Real &ky = pphot->k2p[ip];
+    Real &kz = pphot->k3p[ip];
 
-  // Compute a and x
-  Real nu0 = 2.468e15;
-  Real c = 2.99792458e10;
-  Real doppwidth = nu0 * vth / c;
-  Real lorwidth = 6.265e8/(4.*PI);
-  Real a = lorwidth / doppwidth;
-  Real h = 6.62607015e-27;
-  Real nu = pphot->energy / h;
-  Real x = (nu - nu0) / doppwidth;
+    int &i1 = pphot->i1p[ip];
+    int &i2 = pphot->i2p[ip];
+    int &i3 = pphot->i3p[ip];
+
+    // Compute atom thermal velocity
+    Real kb = 1.380649e-16;
+    Real mass = 1.660538782e-24;
+    Real tgas = pmcb->tgas(i3,i2,i1);
+    Real vth = sqrt( 2 * kb * tgas / mass );
+
+    // Compute a and x
+    Real nu0 = 2.468e15;
+    Real c = 2.99792458e10;
+    Real doppwidth = nu0 * vth / c;
+    Real lorwidth = 6.265e8/(4.*PI);
+    Real a = lorwidth / doppwidth;
+    Real h = 6.62607015e-27;
+    Real nu = pphot->ep[ip] / h;
+    Real x = (nu - nu0) / doppwidth;
   
-  //Parallel and perpendicular velocities
-  Real vperp = vth * sqrt(-log(pran->uniform())) * cos(2.*PI*pran->uniform());
-  Real vpar = vth * SampleVelocityParallel(a, x, pran);
+    // Parallel and perpendicular velocities
+    Real vperp = vth * sqrt(-log(pran->uniform())) * cos(2.*PI*pran->uniform());
+    Real vpar = vth * SampleVelocityParallel(a, x, pran);
   
-  //Compute incoming angles
-  Real sth_in = sqrt(1. - SQR(kz));
-  Real phi_in = atan2(ky , kx);
+    //Compute incoming angles
+    Real sth_in = sqrt(1. - SQR(kz));
+    Real phi_in = atan2(ky , kx);
  
-  // Sample outgoing angles
-  Real cth,sth,phi,cgam;
-  do {
-    // sample uniform in cos theta
-    cth = 2. * pran->uniform() - 1.;
-    sth = sqrt(1. - SQR(cth));
+    // Sample outgoing angles
+    Real cth,sth,phi,cgam;
+    do {
+      // sample uniform in cos theta
+      cth = 2. * pran->uniform() - 1.;
+      sth = sqrt(1. - SQR(cth));
   
-    // sample uniform phi
-    phi = 2. * PI * pran->uniform();
+      // sample uniform phi
+      phi = 2. * PI * pran->uniform();
 
-    // evaluate scattering angle
-    cgam = sth_in * sth * cos(phi_in - phi) + cth * kz;
+      // evaluate scattering angle
+      cgam = sth_in * sth * cos(phi_in - phi) + cth * kz;
    
-  } while (pran->uniform()*2. > (1.+SQR(cgam))); 
-
-  kx = sth * cos(phi);
-  ky = sth * sin(phi);
-  kz = cth;
+    } while (pran->uniform()*2. > (1.+SQR(cgam))); 
+    
+    kx = sth * cos(phi);
+    ky = sth * sin(phi);
+    kz = cth;
   
-  // Evaluate outgoing photon energy
-  Real sgam = sqrt(1. - SQR(cgam));
-  pphot->energy = h * (nu + nu0 * ( (cgam - 1.) * vpar + sgam * vperp ) / c);
-  //printf("nu: %g %g %g %g %g %g\n", pphot->energy/h, nu, cgam, vpar, vperp, vth);
+    // Evaluate outgoing photon energy
+    Real sgam = sqrt(1. - SQR(cgam));
+    pphot->ep[ip] = h * (nu + nu0 * ( (cgam - 1.) * vpar + sgam * vperp ) / c);
+    //printf("nu: %g %g %g %g %g %g\n", pphot->ep[i]/h, nu, cgam, vpar, vperp, vth);
 
+  } // end loop over ip
 }
 
 //----------------------------------------------------------------------------------------

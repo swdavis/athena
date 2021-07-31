@@ -110,11 +110,12 @@ void __attribute__((weak)) MonteCarloBlock::MonteCarloProblemGenerator(Parameter
 }
 
 //========================================================================================
-//! \fn void MonteCarloBlock::InitializePhoton(Photon *pphot)
+//! \fn void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe)
 //  \brief Initializes Photon packets before integration
 //========================================================================================
   
-void __attribute__((weak)) MonteCarloBlock::InitializePhoton(Photon *pphot) {
+void __attribute__((weak)) MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, 
+                                                             int ipe) {
 
 }
 

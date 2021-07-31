@@ -27,19 +27,20 @@ Real xsect[NE + 1][NT + 1];
 Real dle, dlt, lmine, lmint;
 
 //----------------------------------------------------------------------------------------
-//! \fn Real NoOpacity(MonteCarloBlock *pmcb, Photon *pphot)
+//! \fn Real NoOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy)
 //  \brief return zero for extinction coeffictent
 
-Real NoOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
+Real NoOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy) {
 
   return 0.;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot)
+//! \fn Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, 
+//                                     Real energy)
 //  \brief calculation extinction coefficient for free-free absorption
 
-Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
+Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy) {
 
   Real ffnrm = 3.692146e8;
   Real heabund = 0.09; //hardcode for now (should be parameter)
@@ -49,13 +50,13 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
 
   //ffnrm *= 12.;  // Added to match the Athena++ prescription
 
-  Real nh = pmcb->rho(pphot->i3,pphot->i2,pphot->i1) / (mp*(1.+4.*heabund));
+  Real nh = pmcb->rho(i3,i2,i1) / (mp*(1.+4.*heabund));
   Real nhe = nh*heabund;
   Real ne = nh + 2.*nhe;
 
-  Real nu = pphot->energy / h;
-  Real tgas = pmcb->tgas(pphot->i3,pphot->i2,pphot->i1);
-  Real ehnu = exp(-pphot->energy / (kb * tgas) );
+  Real nu = energy / h;
+  Real tgas = pmcb->tgas(i3,i2,i1);
+  Real ehnu = exp(-energy / (kb * tgas) );
 
   Real aff = ffnrm/sqrt(tgas)/pow(nu,3);
   return ne * (nh + 4. * nhe) * aff * (1. - ehnu);
@@ -63,24 +64,24 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real ThomsonOpacity(MonteCarloBlock *pmcb, Photon *pphot)
+//! \fn Real ThomsonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy)
 //  \brief calculation extinction coefficient for Thomson scattering
 
-Real ThomsonOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
+Real ThomsonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy) {
   
   Real heabund = 0.09; //hardcode for now (should be parameter)
   Real mp = 1.67262192369e-24;
   Real sigmat = 6.65248e-25;
 
   Real kappaes = sigmat * (1. + 2.*heabund) / (mp * (1.+4.*heabund) );
-  return kappaes * pmcb->rho(pphot->i3,pphot->i2,pphot->i1);
+  return kappaes * pmcb->rho(i3,i2,i1);
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot)
+//! \fn Real ComptonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy)
 //  \brief Returns compton cross section via lookup table
 
-Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
+Real ComptonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy) {
   
   Real heabund = 0.09; //hardcode for now (should be parameter)
   Real mp = 1.67262192369e-24;
@@ -89,9 +90,9 @@ Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
   Real mec2 = 8.18711e-7;
   
   Real kappa0 = 1./mp/(1. + 4.*heabund) * (1. + 2.*heabund);
-  Real theta = pmcb->tgas(pphot->i3,pphot->i2,pphot->i1)* kmec2;
-  Real dens = pmcb->rho(pphot->i3,pphot->i2,pphot->i1);
-  Real edim = pphot->energy / mec2;
+  Real theta = pmcb->tgas(i3,i2,i1)* kmec2;
+  Real dens = pmcb->rho(i3,i2,i1);
+  Real edim = energy / mec2;
 
   Real sigma0;
   if (theta <= MINT) {
@@ -127,19 +128,20 @@ Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
 
 }
 
-//------------------------------------------------------------------------
-//! \fn Real ResonanceLineOpacity(MonteCarloBlock *pmcb, Photon *pphot)
-//  \brief 
+//----------------------------------------------------------------------------------------
+//! \fn Real ResonanceLineOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, 
+//                                Real energy)
+//  \brief opacity due resonance line for thermal distribution of atoms
 //
-Real ResonanceLineOpacity(MonteCarloBlock *pmcb, Photon *pphot) {
+Real ResonanceLineOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy) {
 
   Real h = 6.62607015e-27;
-  Real tgas = pmcb->tgas(pphot->i3, pphot->i2, pphot->i1);
+  Real tgas = pmcb->tgas(i3, i2, i1);
   Real mass = 1.660538782e-24;
 
-  Real kappa = XsecVoigt(pphot->energy / h, tgas) / mass;
+  Real kappa = XsecVoigt(energy / h, tgas) / mass;
 
-  return kappa * pmcb->rho(pphot->i3,pphot->i2,pphot->i1);
+  return kappa * pmcb->rho(i3,i2,i1);
 
 }
 
@@ -309,24 +311,20 @@ void InitializeAccelerationOpacity(MonteCarloBlock *pmcb)
   int jl = pmcb->js; int ju = pmcb->je;
   int kl = pmcb->ks; int ku = pmcb->ke;
 
-  Photon phot(pmcb,0.,0.); // to pass to opacity functions
   Real kb = 1.380649e-16;
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
       for (int i=il; i<=iu+1; ++i) {
 	Real temp = pmcb->tgas(k,j,i);
 	Real dens = pmcb->rho(k,j,i);
-	phot.i1 = i;
-	phot.i2 = j;
-	phot.i3 = k;
 	Real Bint = 0.0;
 	Real planck = 0.0;
 	Real planck_inv = 0.0;
 	for(int l=0; l<nx; ++l) {
-	  phot.energy = x[l] * kb * temp;
-	  Real abs_coef = pmcb->AbsorptionOpacity(pmcb,&phot);
+	  Real energy = x[l] * kb * temp;
+	  Real abs_coef = pmcb->AbsorptionOpacity(pmcb,i,j,k,energy);
 	  //printf("%g %g %g\n",abs_coef,2.44955e-23*dens*dens*(1.-exp(-7.2427e15*phot.energy/temp))/(pow(phot.energy,3)*sqrt(temp)),phot.energy);
-	  Real sct_coef = pmcb->ScatteringOpacity(pmcb,&phot);
+	  Real sct_coef = pmcb->ScatteringOpacity(pmcb,i,j,k,energy);
 	  Real Bx = pow(x[l],3)/(exp(x[l])-1.0) *dx[l];
 	  Bint += Bx;
 	  planck += Bx * abs_coef;

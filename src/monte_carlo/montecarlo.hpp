@@ -56,20 +56,21 @@ enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
 // function pointer prototypes for user-defined modules set at runtime
 typedef Real (*EmisFunc_t)(MonteCarloBlock *pmcb);
 typedef void (*TempFunc_t)(MonteCarloBlock *pmcb);
-typedef void (*MCBValFunc_t)(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot);
-typedef Real (*OpacFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
-typedef void (*ScatFunc_t)(MonteCarloBlock *pmcb, Photon *phot);
-typedef void (*UserMoveFunc_t)(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover);
-typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, MCCoord *pco);
+typedef void (*MCBValFunc_t)(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
+typedef Real (*OpacFunc_t)(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
+typedef void (*ScatFunc_t)(MonteCarloBlock *pmcb, Photon *phot, int ips, int ipe);
+typedef void (*UserMoveFunc_t)(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover,
+                               int ip);
+typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, MCCoord *pco, int ip);
 
 //---------------------- prototypes for provided functions -------------------------------
 void DefaultGetTemperature(MonteCarloBlock *pmcb);
 //--------------------- prototypes for opacity.cpp functions -----------------------------
-Real NoOpacity(MonteCarloBlock *pmcb, Photon *pphot);
-Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot);
-Real ThomsonOpacity(MonteCarloBlock *pmcb, Photon *pphot);
-Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot);
-Real ResonanceLineOpacity(MonteCarloBlock *pmcb, Photon *pphot);
+Real NoOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
+Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
+Real ThomsonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
+Real ComptonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
+Real ResonanceLineOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
 void GenerateComptonTable(int io);
 Real ComptonCrossSection(Real energy, Real theta);
 Real Maxwell(Real theta, Real gamma);
@@ -80,28 +81,29 @@ Real XsecDoppler(Real nu, Real tgas);
 Real XsecVoigt(Real nu, Real tgas);
 void InitializeAccelerationOpacity(MonteCarloBlock *pmcb);
 //--------------------- prototypes for scatter.cpp functions -----------------------------
-void NoScatter(MonteCarloBlock *pmcb, Photon *pphot);
-void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot);
-void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot);
-void ScatterThomsonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot);
-void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot);
-void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot);
-void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot);
+void NoScatter(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe);
+void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe);
+void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe);
+void ScatterThomsonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe);
+void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe);
+void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe);
+void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe);
 Real Bigy(Real x, Real xp);
 Real SigmaHat(Real x);
 Real ElectronDistPozdnyakov(Real tgas, MCRandom *pran);
 Real ElectronDist(Real tgas, MCRandom *pran);
-void SampleDipole(Real theta_in, Real phi_in, Real &theta_out, Real &phi_out, MCRandom *pran);
+void SampleDipole(Real theta_in, Real phi_in, Real &theta_out, Real &phi_out,
+                  MCRandom *pran);
 Real SampleVelocityParallel(Real a, Real x_in, MCRandom *pran);
 //--------------------- prototypes for emission.cpp functions ----------------------------
 Real InitializeEmissionFreeFree(MonteCarloBlock *pmcb);
-void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real lemax);
+void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real lemax, 
+                        int ip);
 Real PlanckDist(Real temp,MCRandom *pran);
-void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pco);
-void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pco);
-void GetZonePositionSphericalPolarGR(Photon *pphot, MCRandom *pran, MCCoord *pcoord);
-void GetZonePositionCylindrical(Photon *pphot, MCRandom *pran, MCCoord *pcoord);
-void GetZonePositionCylindricalGR(Photon *pphot, MCRandom *pran, MCCoord *pcoord);
+void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pco, int ip);
+void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pco, int ip);
+void GetZonePositionCylindrical(Photon *pphot, MCRandom *pran, MCCoord *pco, int ip);
+
 //------------------ prototypes for frame_transformations.cpp functions ------------------
 // SWD:  Add these to MCCoord class, utils, keep here?
 void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD],
@@ -263,7 +265,7 @@ public:
   MonteCarloBlock *next;
   MCCoord *pcoord;
 
-  Photon* pphoton; // ptr to photon packet
+  Photon* pphot; // ptr to photon packet
   PhotonMover* pmover; // ptr to photon mover
   MCRandom *pran; // ptr to random number generator
   MCBoundaryValues *pbval; // ptr to MC boundary values
@@ -329,14 +331,14 @@ public:
   void RayTracePhotons(int nphtot); // Ray trace photon on this block
   void TransferPhotons(int nphtot); // Transfer photons on this block
   void LorentzTransform(Photon *pphot, const Real sign);
-  Real LorentzTransformFrequencyShift(Photon *pphot);
+  Real LorentzTransformFrequencyShift(Photon *pphot, int ip);
   void TetradTransform(Photon *pphot, const Real sign);
-  void InitializePhoton(Photon *pphot);
+  void InitializePhoton(Photon *pphot, int ips, int ipe);
   void FinalizePhoton(Photon *pphot);
-  void UpdateMoments(Photon *pphot, Real dl, Real etau);
+  void UpdateMoments(Photon *pphot, Real dl, Real etau, int ip);
   void NormalizeMoments(bool normalize);
   void ResetMoments();
-  void UpdateCooling(Photon *pphot, Real energy0, Real weight0);
+  void UpdateCooling(Photon *pphot, Real energy0, Real weight0, int ip);
   //void GetPhotonsFromNeighbors();
   //void SendPhotonsToNeighbors();
 

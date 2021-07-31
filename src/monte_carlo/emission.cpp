@@ -57,11 +57,12 @@ Real InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void PhotonInitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, 
-//                              Real lemax))
+//                              Real lemax, int ips, int ipe))
 //  \brief initialize energy, direction, polarization and weight of the photon
 //         consistent with free-free emission, 
 
-void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real lemax)
+void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real lemax,
+                        int ip)
 {
   Real kb = 1.380649e-16;
   MCRandom *pran = pmcb->pran;
@@ -69,66 +70,68 @@ void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real l
   // Scheme in which packets are drawn from a uniform distribution in log E
   // requires weight = exp(-x) note log(10)=2.30258509299
   Real dev = exp((lemax-lemin)*pran->uniform()+lemin);
-  pphot->energy = dev;
-  Real x = dev / (kb * pmcb->tgas(pphot->i3,pphot->i2,pphot->i1));
+  pphot->ep[ip] = dev;
+  Real x = dev / (kb * pmcb->tgas(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]));
 
   // Initialize weight
-  pphot->weight *= exp(-x) * (lemax-lemin);
+  pphot->wp[ip] *= exp(-x) * (lemax-lemin);
 
   // Initialize Stokes vector
-  pphot->stokes[0] = 1.0;
-  pphot->stokes[1] = 0.0;
-  pphot->stokes[2] = 0.0;
+  pphot->sip[ip] = 1.0;
+  pphot->sup[ip] = 0.0;
+  pphot->sqp[ip] = 0.0;
 
   // Generate initial angle parameters
   Real phi = 2. * PI * pran->uniform();
   Real cphi = cos(phi);
   Real sphi = sin(phi);
-
+  
   Real cth = 2. * pran->uniform() - 1.;
   Real sth = sqrt(1. - SQR(cth));
 
   // Initialize wave vector with isotropic distribution
-  pphot->k[0] = sth*cphi;
-  pphot->k[1] = sth*sphi;
-  pphot->k[2] = cth;
+  pphot->k1p[ip] = sth*cphi;
+  pphot->k2p[ip] = sth*sphi;
+  pphot->k3p[ip] = cth;
+  
 }
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pcoord)
-//  \brief choose random position within cartesian gridzone
+//! \fn void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pcoord,
+//                                    int ip)
+//  \brief choose random position within cartesian gridzone ip
 
-void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pcoord) {
+void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pcoord, int ip) {
 
-  Real xl = pcoord->x1f(pphot->i1); Real dx = pcoord->x1f(pphot->i1+1)-xl;
-  Real yl = pcoord->x2f(pphot->i2); Real dy = pcoord->x2f(pphot->i2+1)-yl;
-  Real zl = pcoord->x3f(pphot->i3); Real dz = pcoord->x3f(pphot->i3+1)-zl;
+  Real xl = pcoord->x1f(pphot->i1p[ip]); Real dx = pcoord->x1f(pphot->i1p[ip]+1)-xl;
+  Real yl = pcoord->x2f(pphot->i2p[ip]); Real dy = pcoord->x2f(pphot->i2p[ip]+1)-yl;
+  Real zl = pcoord->x3f(pphot->i3p[ip]); Real dz = pcoord->x3f(pphot->i3p[ip]+1)-zl;
 
-  pphot->x[IMC0] = 1.;
-  pphot->x[IMC1] = xl+pran->uniform()*dx;
-  pphot->x[IMC2] = yl+pran->uniform()*dy;
-  pphot->x[IMC3] = zl+pran->uniform()*dz;
-
+  pphot->x0p[ip] = 1.;
+  pphot->x1p[ip] = xl+pran->uniform()*dx;
+  pphot->x2p[ip] = yl+pran->uniform()*dy;
+  pphot->x3p[ip] = zl+pran->uniform()*dz;
+  
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pcoord)
-//  \brief choose random position within spherical-polar gridzone
+//! \fn void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pcoord, 
+//                                         int ip)
+//  \brief choose random position within spherical-polar gridzone ip
 
-void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pcoord) {
-
-
-  pphot->x[IMC0] = 1.;
-
-  Real rl = pcoord->x1f(pphot->i1), rh = pcoord->x1f(pphot->i1+1);
-  pphot->x[IMC1]  = pow(pran->uniform()*(rh*rh*rh-rl*rl*rl)+rl*rl*rl,1./3.);
-  Real cthh = cos(pcoord->x2f(pphot->i2));
-  Real cthl = cos(pcoord->x2f(pphot->i2+1));
+void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pcoord,
+                                   int ip) {
+  
+  Real rl = pcoord->x1f(pphot->i1p[ip]), rh = pcoord->x1f(pphot->i1p[ip]+1);
+  pphot->x1p[ip]  = pow(pran->uniform()*(rh*rh*rh-rl*rl*rl)+rl*rl*rl,1./3.);
+  Real cthh = cos(pcoord->x2f(pphot->i2p[ip]));
+  Real cthl = cos(pcoord->x2f(pphot->i2p[ip]+1));
   Real cth = cthl + pran->uniform() * (cthh-cthl);
-  pphot->x[IMC2] = acos(cth);
-  Real pl = pcoord->x3f(pphot->i3); Real dp = pcoord->x3f(pphot->i3+1)-pl;
-  pphot->x[IMC3] = pl+pran->uniform()*dp;
+  pphot->x2p[ip] = acos(cth);
+  Real pl = pcoord->x3f(pphot->i3p[ip]); Real dp = pcoord->x3f(pphot->i3p[ip]+1)-pl;
+  pphot->x3p[ip] = pl+pran->uniform()*dp;
+  
 
 }
 //----------------------------------------------------------------------------------------

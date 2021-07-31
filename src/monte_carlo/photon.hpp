@@ -8,7 +8,9 @@
 //! \file photon.hpp
 //  \brief definitions for Photon class
 
+// C/C++ Standard Libraries
 #include <complex>
+#include <vector>
 
 // Athena++ classes headers
 #include "../athena.hpp"
@@ -34,12 +36,10 @@ public:
   int i1,i2,i3; // zone indicies currently containing photon
   int status; // photon status (escaped, absorbed, evolving)
   int nuser_var; // number of user variables
-  int nphot_limit, nphots;
   enum BoundaryFace face;
 
   // SWD: x can always include time, k could always include energy?
-  AthenaArray<Real> xp;
-  thenaArray<Real> kp;
+
   Real x[4];  // current photon position in spacetime
   Real k[4];  // photon direction (momentum vector) curvalinear
   Real dk[4]; // the change in photon direction used for general mover
@@ -47,7 +47,6 @@ public:
   Real weight; // photon statistical weight
   Real energy;  // photon energy
   Real *user_var; // storage for user variables
-  AthenaArray<Real> trajectory; // Store trajectory
   Real sct_coef, abs_coef;  //scattering and absoprtion coefficients
   std::complex<Real> polten[4][4]; // the polarization tensor
 
@@ -56,6 +55,47 @@ public:
   void PrintPhoton();
   bool IsNanPhoton();
   void AllocateUserVariables(int n);
+
+  
+  // New
+
+  int npar;
+  int nphot_limit;
+  int &nphot;
+  static int nint;
+  static int nreal;
+  static int naux;
+  static int nwork;
+
+  static int ipid;
+  static int istatp, ii1p, ii2p, ii3p;
+  static int ix0p, ix1p, ix2p, ix3p;
+  static int ik0p, ik1p, ik2p, ik3p;
+  static int idk0p, idk1p, idk2p, idk3p;
+  static int iep, iwp, iscp, iacp;
+  static int isip, isqp, isup, isvp;
+
+  std::vector<int> *intprop;   //!>   integer properties
+  std::vector<Real> *realprop; //!>   real properties
+  std::vector<Real> *aux;      //!>   auxiliary properties (communicated when
+                               //!>     particles moving to another meshblock)
+  std::vector<Real> *work;     //!>   working arrays (not communicated)
+
+  std::vector<int> &pid;                  //!>   particle ID
+  std::vector<int> &statp;
+  std::vector<int> &i1p, &i2p, &i3p;
+  std::vector<Real> &x0p, &x1p, &x2p, &x3p;
+  std::vector<Real> &k0p, &k1p, &k2p, &k3p;
+  std::vector<Real> &dk0p, &dk1p, &dk2p, &dk3p;
+  std::vector<Real> &ep, &wp, &scp, &acp;
+  std::vector<Real> &sip, &sqp, &sup, &svp;
+
+  void Resize(int new_npar);
+  void RemoveOneParticle(int k);
+  void PrintPhoton(int ip);
+  void VectorsToWorkingArrays(int n);
+  void WorkingArraysToVectors(int n);
+  bool IsNanPhoton(int ip);
 
 };
 #endif // PHOTON_HPP

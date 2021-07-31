@@ -38,11 +38,11 @@ GeneralMover::~GeneralMover() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void GeneralMover::Move(Photon *pphot)
+//! \fn void GeneralMover::Move(Photon *pphot, int ips, int ipe)
 //  \brief Moves photon along straight line specified number of mean free paths or until
 //         photon leave monte carlo block
 
-void GeneralMover::Move(Photon *pphot) {
+void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
 
   MonteCarloBlock *pmcb = pmy_mcb;
   MCRandom *pran = pmy_mcb->pran;
@@ -67,7 +67,7 @@ void GeneralMover::Move(Photon *pphot) {
   int count = 0;
   int iter = 0;
   int zone_counter = 0;
-  Real chi = GetExtinctionCoefficient(pphot);
+  Real chi = GetExtinctionCoefficient(pphot->abs_coef,pphot->sct_coef);
   //Real chi = pphot->sct_coef + pphot->abs_coef;
   //chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max
 
@@ -130,10 +130,10 @@ void GeneralMover::Move(Photon *pphot) {
 
    // SWD: Clean up these checks
    // Check if photon changed zones
-   if (UpdateZone(pphot)) {
+   if (UpdateZone(pphot,0)) {
      UpdateOpacities(pphot,pmcb);
      zone_counter++;
-     chi = GetExtinctionCoefficient(pphot);
+     chi = GetExtinctionCoefficient(pphot->abs_coef,pphot->sct_coef);
      //chi = pphot->sct_coef + pphot->abs_coef;
      //chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max(chi, TINY_NUMBER)
    } 
@@ -143,7 +143,7 @@ void GeneralMover::Move(Photon *pphot) {
 
    // Update moments
    if (pmcb->moments_flag) {
-     pmcb->UpdateMoments(pphot,step,1.);
+     pmcb->UpdateMoments(pphot,step,1.,0);
    }
  
    if ((isnan(pphot->k[IMC0])) or (pphot->IsNanPhoton())) {
@@ -154,7 +154,7 @@ void GeneralMover::Move(Photon *pphot) {
    step = StepSize(pphot);
  
    // Perform any user work
-   if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this);
+   if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this,0);
    // SWD: put here for now, may need additional flag
    if (ptraj != NULL) ptraj->AddToTrajectory(pphot);
  
@@ -223,143 +223,28 @@ void GeneralMover::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb) {
     // back to Eulerian frame when Lorentz Transformations are enabled.
     Real shift;     
         
-    /*if (pmy_mcb->orthotet_flag) {
-      /*pmcb->TetradTransform(pphot, 1.0); // to comving frame
-      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot);    
-      pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,pphot); 
-      pmcb->TetradTransform(pphot, -1.0); // to coordinate frame
-      shift = pmy_mcb->TetradTransformFrequencyShift(pphot);
-      pphot->energy *= shift;
-      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb, pphot);
-      pphot->sct_coef = pmcb->ScatteringOpacity(pmcb, pphot);
-      pphot->energy /= shift;
-      pphot->abs_coef *= shift;
-      pphot->sct_coef *= shift;
-    } else if (pmy_mcb->lorentz_transform) {  */  
+    int i1 = pphot->i1;
+    int i2 = pphot->i2;
+    int i3 = pphot->i3;
     if (pmcb->boosts) {
       // Shift photon energy to comoving frame
-      shift = pmy_mcb->LorentzTransformFrequencyShift(pphot);
-      pphot->energy *= shift; 
+      shift = pmy_mcb->LorentzTransformFrequencyShift(pphot,0); //SWDFIX
+      Real energy = pphot->energy * shift; 
       // compute opacities in comoving frame 
-      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot);    
-      pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,pphot); 
-      // Shift energy back to Eulerian frame             
-      pphot->energy /= shift;      
+      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,i1,i2,i3,energy);    
+      pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,i1,i2,i3,energy); 
       // Shift opaciteis to Eulerian frame   
       pphot->abs_coef *= shift;
       pphot->sct_coef *= shift;         
     } else {  
       // No distinction between comovinng frame and eulerian frame
-      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot); 
-      pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,pphot); 
+      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,i1,i2,i3,pphot->energy); 
+      pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,i1,i2,i3,pphot->energy); 
     }
     
   }    
   
 }
-
-//----------------------------------------------------------------------------------------
-//! \fn bool GeneralMover::UpdateZone(Photon *pphot)
-//  \brief check if photon has changed zones and update zone indices
-
-bool GeneralMover::UpdateZone(Photon *pphot) {
-
-  bool change = false;
-  MonteCarloBlock *pmcb = pmy_mcb;
-  bool update = false;
-
-  if (pphot->x[IMC1] >= pcoord->x1f(pphot->i1+1)) {
-    update = true;
-    while (pphot->x[IMC1] >= pcoord->x1f(pphot->i1+1)) {
-      pphot->i1++;
-      if(pphot->i1 > pmcb->ie)
-	pmcb->pbval->BoundaryFunction_[OUTER_X1](pmcb,pcoord,pphot);
-      if (pphot->status == ESCAPED) {
-	pphot->face = OUTER_X1;
-	break;
-      }
-      if (pphot->status == DESTROYED)
-	break;
-    }
-  } else if (pphot->x[IMC1] < pcoord->x1f(pphot->i1)) {
-    update = true;
-    while (pphot->x[IMC1] < pcoord->x1f(pphot->i1)) {
-      pphot->i1--;
-      if(pphot->i1 < pmcb->is)
-	pmcb->pbval->BoundaryFunction_[INNER_X1](pmcb,pcoord,pphot);
-      if (pphot->status == ESCAPED) {
-	pphot->face = INNER_X1;
-	break;
-      }
-      if (pphot->status == DESTROYED)
-	break;
-    }
-  }
-
-  if (pphot->x[IMC2] >= pcoord->x2f(pphot->i2+1)) {
-    update = true;
-    while (pphot->x[IMC2] >= pcoord->x2f(pphot->i2+1)) {
-      pphot->i2++;
-      if(pphot->i2 > pmcb->je)
-	pmcb->pbval->BoundaryFunction_[OUTER_X2](pmcb,pcoord,pphot);
-      if (pphot->status == ESCAPED) {
-	pphot->face = OUTER_X2;
-	break;
-      }
-      if (pphot->status == DESTROYED)
-	break;
-    }
-  } else if (pphot->x[IMC2] < pcoord->x2f(pphot->i2)) {
-    update = true;
-    while (pphot->x[IMC2] < pcoord->x2f(pphot->i2)) {
-      pphot->i2--;
-      if(pphot->i2 < pmcb->js)
-	pmcb->pbval->BoundaryFunction_[INNER_X2](pmcb,pcoord,pphot);
-      if (pphot->status == ESCAPED) {
-	pphot->face = INNER_X2;
-	break;
-      }
-      if (pphot->status == DESTROYED) {
-	break;
-      }
-    }
-  }
-
-  if (pphot->x[IMC3] >= pcoord->x3f(pphot->i3+1)) {
-    update = true;
-    while (pphot->x[IMC3] >= pcoord->x3f(pphot->i3+1)) {
-      pphot->i3++;
-      if(pphot->i3 > pmcb->ke)
-	pmcb->pbval->BoundaryFunction_[OUTER_X3](pmcb,pcoord,pphot);
-      if (pphot->status == ESCAPED) {
-	pphot->face = OUTER_X3;
-	break;
-      }
-      if (pphot->status == DESTROYED)
-	break;
-    }
-  } else if (pphot->x[IMC3] < pcoord->x3f(pphot->i3)) {
-    update = true;
-    while (pphot->x[IMC3] < pcoord->x3f(pphot->i3)) {
-      pphot->i3--;
-      if(pphot->i3 < pmcb->ks)
-	pmcb->pbval->BoundaryFunction_[INNER_X3](pmcb,pcoord,pphot);
-      if (pphot->status == ESCAPED) {
-	pphot->face = INNER_X3;
-	break;
-      }
-      if (pphot->status == DESTROYED)
-	break;
-    }
-  }
-
-  // Returns true if zone changes, false otherwise
-  return update;
-
-
-}
-
-
 
 void GeneralMover::VerletStep(Photon *pphot, Real step) {
    

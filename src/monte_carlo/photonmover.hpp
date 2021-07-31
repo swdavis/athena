@@ -66,14 +66,14 @@ public:
   bool time_acc;
 
   // functions
-  virtual void Move(Photon *pphot);
+  virtual void Move(Photon *pphot, int ips, int ipe);
   virtual Real GetOpticalDepth(MCRandom *pran);
-  virtual Real GetExtinctionCoefficient(Photon *pphot);
-  virtual Real ExpTauAbsorption(Photon *pphot, Real dl);
+  virtual Real GetExtinctionCoefficient(Real ac, Real sc);
+  virtual Real ExpTauAbsorption(Real ac, Real dl);
   virtual void NextFace(Real dx1, Real dx2, Real dx3, int &face, Real &dx);
   virtual void MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
-    MonteCarloBlock *pmcb, int face, bool ascend[3]);
-  virtual bool UpdateZone(Photon *pphot);
+               MonteCarloBlock *pmcb, int face, bool ascend[3], int ip);
+  virtual bool UpdateZone(Photon *pphot, int ip);
   virtual void CurvalinearToCartesian(Photon *pphot, Real kcart[4]);
   virtual void InitializeMRWDist(void);
   // Acceleration methods
@@ -95,7 +95,7 @@ public:
   ~CartesianMover();
 
   // functions
-  void Move(Photon *pphot);
+  void Move(Photon *pphot, int ips, int ipe);
 
 };
 
@@ -108,7 +108,7 @@ public:
   ~SphericalPolarMover();
 
   // functions
-  void Move(Photon *pphot);
+  void Move(Photon *pphot, int ips, int ipe);
   void CurvalinearToCartesian(Photon *pphot, Real kcart[4]);
 };
 
@@ -124,10 +124,9 @@ public:
   Real gamma[NCOORD][NCOORD][NCOORD];
 
   // functions
-  void Move(Photon *pphot);
+  void Move(Photon *pphot, int ips, int ipe);
   void CurvalinearToCartesian(Photon *pphot, Real kcart[4]);
   void UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb);
-  bool UpdateZone(Photon *pphot);
   void VerletStep(Photon *pphot, Real step);
   void PropogatePolarization(Photon *nphot, Real step);
   Real StepSize(Photon *pphot);

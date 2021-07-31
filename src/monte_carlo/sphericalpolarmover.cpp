@@ -27,11 +27,11 @@ SphericalPolarMover::~SphericalPolarMover() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void SphericalPolarMover::Move(Photon *pphot)
+//! \fn void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe)
 //  \brief Moves photon along straight line specified number of mean free paths or until
 //         photon leave monte carlo block
 
-void SphericalPolarMover::Move(Photon *pphot) {
+void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
 
   MonteCarloBlock *pmcb = pmy_mcb;
   MCRandom *pran = pmy_mcb->pran;
@@ -261,7 +261,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
     
 
     //Real chi = pphot->sct_coef + pphot->abs_coef;
-    Real chi = GetExtinctionCoefficient(pphot);
+    Real chi = GetExtinctionCoefficient(pphot->abs_coef,pphot->sct_coef);
     chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max
     bool test = false;
     if (dl > tauremaining / chi) { // Photon remains in zone
@@ -303,7 +303,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
 	dl = tauremaining/chi;
 	// Update moments
 	if (pmcb->moments_flag)
-	  pmcb->UpdateMoments(pphot,dl,1.);
+	  pmcb->UpdateMoments(pphot,dl,1.,0);
 	// Update postions
 	pphot->x[IMC1] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
 	pphot->x[IMC2] = acos((z0 + kz * dl) / pphot->x[IMC1]);
@@ -326,7 +326,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
     } else { // Photon moves to next zone and reduce tauremaining
       // Update moments
       if (pmcb->moments_flag)
-	pmcb->UpdateMoments(pphot,dl,1.);
+	pmcb->UpdateMoments(pphot,dl,1.,0);
       // Update positions
       pphot->x[IMC1] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
       pphot->x[IMC2] = acos((z0 + kz * dl) / pphot->x[IMC1]);
@@ -337,7 +337,7 @@ void SphericalPolarMover::Move(Photon *pphot) {
 
       tauremaining -= chi * dl;
       // move photon to next zone and pdate angular positions
-      MovePhotonToNextZone(pphot,pco,pmcb,face,ascend);
+      MovePhotonToNextZone(pphot,pco,pmcb,face,ascend,0);
       if ((face == 1) || (face == 3) || (face == 4) || (face == 6))
         thface = true;
       cth = cos(pphot->x[IMC2]);

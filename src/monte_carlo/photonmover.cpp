@@ -63,7 +63,7 @@ PhotonMover::~PhotonMover() {
     
 }
 
-void PhotonMover::Move(Photon *pphot) {
+void PhotonMover::Move(Photon *pphot, int ips, int ipe) {
 
 }
 
@@ -172,7 +172,7 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
       pphot->energy = xf * kb * temp;
       //tauabs = ct*pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1);
       //pphot->energy = PlanckDist(pmcb->tgas(pphot->i3,pphot->i2,pphot->i1),pran);
-      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot);
+      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot->i1,pphot->i2,pphot->i3,pphot->energy);
       Real opacf = pphot->abs_coef;
       //Real opacf = std::max(pphot->abs_coef,pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1));
       //tauabs = ct*sqrt(opaci*pphot->abs_coef);
@@ -240,7 +240,7 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
     }
 
     // Check if photon has left original zone and update
-    bool newzone = UpdateZone(pphot);
+    bool newzone = UpdateZone(pphot,0); //SWDFIX
     if (newzone) {
       // Check if photon is absorbed or escape due to boundary condition
       if (pphot->status != EVOLVING)
@@ -248,8 +248,10 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
     }
     if (newzone || compton) {
       // update opacity if zone or energy has changed
-      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot);
-      pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,pphot);
+      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot->i1,pphot->i2,pphot->i3,
+                                                pphot->energy);
+      pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,pphot->i1,pphot->i2,pphot->i3,
+                                                pphot->energy);
     }
 
     // update direction assuming isotropic random direction in comoving frame
@@ -307,29 +309,29 @@ Real PhotonMover::GetOpticalDepth(MCRandom *pran) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real PhotonMover::GetExtinctionCoefficient(Photon *pphot)
+//! \fn Real PhotonMover::GetExtinctionCoefficient(Real ac, Real sc)
 //  \brief returns total opacity or scattering opacity depending on method
 
-Real PhotonMover::GetExtinctionCoefficient(Photon *pphot) {
+Real PhotonMover::GetExtinctionCoefficient(Real ac, Real sc) {
   
   Real chi;
   if (pmy_mcb->absorption_meth == ABSTAU) {
-    chi = pphot->sct_coef;
+    chi = sc;
   } else {
-    chi = pphot->sct_coef + pphot->abs_coef;
+    chi = sc + ac;
   }
   return (chi > TINY_NUMBER) ? chi : TINY_NUMBER;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real PhotonMover::ExpTauAbsorption(Photon *pphot, Real dl)
+//! \fn Real PhotonMover::ExpTauAbsorption(Real ac, Real dl)
 //  \brief Computes e^-tau_abs
 
-Real PhotonMover::ExpTauAbsorption(Photon *pphot, Real dl) {
+Real PhotonMover::ExpTauAbsorption(Real ac, Real dl) {
   
  
   if (pmy_mcb->absorption_meth == ABSTAU) {
-    return exp(-pphot->abs_coef*dl);
+    return exp(-ac * dl);
   } else {
     return 1.;
   }
@@ -412,122 +414,105 @@ void PhotonMover::NextFace(Real dx1, Real dx2, Real dx3, int &face, Real &dx)
 //  \brief updates photon zone when face is known
 
 void PhotonMover::MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
-  MonteCarloBlock *pmcb, int face, bool ascend[3]) {
+                  MonteCarloBlock *pmcb, int face, bool ascend[3], int ip) {
   
   // Update face(s) and adjust positions to lie exactly on boundary
-  if ((face == 0) || (face == 3) || (face == 5) || (face == 6)) { //update x1 face
+  if ((face == 0) || (face == 3) || (face == 5) || (face == 6)) {
+    //update x1 face
     if (ascend[0]) {
-      pphot->i1++;
-      if(pphot->i1 <= pmcb->ie)
-        pphot->x[IMC1] = pco->x1f(pphot->i1);
+      pphot->i1p[ip]++;
+      if(pphot->i1p[ip] <= pmcb->ie)
+        pphot->x1p[ip] = pco->x1f(pphot->i1p[ip]);
       else {
-        pmcb->pbval->BoundaryFunction_[OUTER_X1](pmcb,pco,pphot);
-        if (pphot->status == ESCAPED) {
-          pphot->face = OUTER_X1;
-        }
+        pmcb->pbval->BoundaryFunction_[OUTER_X1](pmcb,pco,pphot,ip);
       }
     } else {
-      pphot->i1--;
-      if(pphot->i1 >= pmcb->is)
-        pphot->x[IMC1] = pco->x1f(pphot->i1+1);
+      pphot->i1p[ip]--;
+      if(pphot->i1p[ip] >= pmcb->is)
+        pphot->x1p[ip] = pco->x1f(pphot->i1p[ip]+1);
       else {
-        pmcb->pbval->BoundaryFunction_[INNER_X1](pmcb,pco,pphot);
-        if (pphot->status == ESCAPED) {
-          pphot->face = INNER_X1;
-        }
+        pmcb->pbval->BoundaryFunction_[INNER_X1](pmcb,pco,pphot,ip);
       }
     }
   }
-  if ((face == 1) || (face == 3) || (face == 4) || (face == 6)) { //update x2 face
+  if ((face == 1) || (face == 3) || (face == 4) || (face == 6)) {
+    //update x2 face
     if (ascend[1]) {
-      pphot->i2++;
-      if(pphot->i2 <= pmcb->je)
-        pphot->x[IMC2] = pco->x2f(pphot->i2);
+      pphot->i2p[ip]++;
+      if(pphot->i2p[ip] <= pmcb->je)
+        pphot->x2p[ip] = pco->x2f(pphot->i2p[ip]);
       else {
-        pmcb->pbval->BoundaryFunction_[OUTER_X2](pmcb,pco,pphot);
-        if (pphot->status == ESCAPED) {
-          pphot->face = OUTER_X2;
-        }
+        pmcb->pbval->BoundaryFunction_[OUTER_X2](pmcb,pco,pphot,ip);
       }
     } else {
-      pphot->i2--;
-      if(pphot->i2 >= pmcb->js)
-        pphot->x[IMC2] = pco->x2f(pphot->i2+1);
+      pphot->i2p[ip]--;
+      if(pphot->i2p[ip] >= pmcb->js)
+        pphot->x2p[ip] = pco->x2f(pphot->i2p[ip]+1);
       else {
-        pmcb->pbval->BoundaryFunction_[INNER_X2](pmcb,pco,pphot);
-        if (pphot->status == ESCAPED) {
-          pphot->face = INNER_X2;
-        }
+        pmcb->pbval->BoundaryFunction_[INNER_X2](pmcb,pco,pphot,ip);
       }
     } 
   }
-  if ((face == 2) || (face == 4) || (face == 5) || (face == 6)) { //update x3 face
+  if ((face == 2) || (face == 4) || (face == 5) || (face == 6)) {
+    //update x3 face
     if (ascend[2]) {
-      pphot->i3++;
-      if(pphot->i3 <= pmcb->ke)
-        pphot->x[IMC3] = pco->x3f(pphot->i3);
+      pphot->i3p[ip]++;
+      if(pphot->i3p[ip] <= pmcb->ke)
+        pphot->x3p[ip] = pco->x3f(pphot->i3p[ip]);
       else {
-        pmcb->pbval->BoundaryFunction_[OUTER_X3](pmcb,pco,pphot);
-        if (pphot->status == ESCAPED) {
-          pphot->face = OUTER_X3;
-        }
+        pmcb->pbval->BoundaryFunction_[OUTER_X3](pmcb,pco,pphot,ip);
       }
     } else {
-      pphot->i3--;
-      if(pphot->i3 >= pmcb->ks)
-        pphot->x[IMC3] = pco->x3f(pphot->i3+1);
+      pphot->i3p[ip]--;
+      if(pphot->i3p[ip] >= pmcb->ks)
+        pphot->x3p[ip] = pco->x3f(pphot->i3p[ip]+1);
       else {
-        pmcb->pbval->BoundaryFunction_[INNER_X3](pmcb,pco,pphot);
-        if (pphot->status == ESCAPED) {
-          pphot->face = INNER_X3;
-        }
+        pmcb->pbval->BoundaryFunction_[INNER_X3](pmcb,pco,pphot,ip);
       }
     } 
   }
 
   // Update opacities
-  if (pphot->status == EVOLVING) {
+  if (pphot->statp[ip] == EVOLVING) {
     // Opacities need to be calculated using comoving frame energy and then transformed
     // back to Eulerian frame when Lorentz Transformations are enabled.
-    Real shift;
-
+    int &i1 = pphot->i1p[ip];
+    int &i2 = pphot->i2p[ip];
+    int &i3 = pphot->i3p[ip];
     if (pmy_mcb->boosts) {
       // Shift photon energy to comoving frame
-      shift = pmy_mcb->LorentzTransformFrequencyShift(pphot);
-      pphot->energy *= shift;
+      Real shift = pmy_mcb->LorentzTransformFrequencyShift(pphot,ip);
+      Real energy = pphot->ep[ip] * shift;
       // compute opacities in comoving frame
-      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot);
-      pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,pphot);
-      // Shift energy back to Eulerian frame
-      pphot->energy /= shift;
-      // Shift opaciteis to Eulerian frame
-      pphot->abs_coef *= shift;
-      pphot->sct_coef *= shift;
+      pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,i1,i2,i3,energy);
+      pphot->scp[ip] = pmcb->ScatteringOpacity(pmcb,i1,i2,i3,energy);
+      // Shift opacities to Eulerian frame
+      pphot->acp[ip] *= shift;
+      pphot->scp[ip] *= shift;
     } else {
       // No distinction between comovinng frame and eulerian frame
-      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot);
-      pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,pphot);
+      pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,i1,i2,i3,pphot->ep[ip]);
+      pphot->scp[ip] = pmcb->ScatteringOpacity(pmcb,i1,i2,i3,pphot->ep[ip]);
     }
   }
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn bool PhotonMover::UpdateZone(photon *pphot)
+//! \fn bool PhotonMover::UpdateZone(photon *pphot, int ip)
 //  \brief check/updates photon zone after displacement
 
-bool PhotonMover::UpdateZone(Photon *pphot) {
+bool PhotonMover::UpdateZone(Photon *pphot, int ip) {
 
   bool change = false;
   MonteCarloBlock *pmcb = pmy_mcb;
-  MCCoord *pco = pmcb->pcoord;
   bool update = false;
 
-  if (pphot->x[IMC1] >= pco->x1f(pphot->i1+1)) {
+  if (pphot->x[IMC1] >= pcoord->x1f(pphot->i1+1)) {
     update = true;
-    while (pphot->x[IMC1] >= pco->x1f(pphot->i1+1)) {
+    while (pphot->x[IMC1] >= pcoord->x1f(pphot->i1+1)) {
       pphot->i1++;
       if(pphot->i1 > pmcb->ie)
-	pmcb->pbval->BoundaryFunction_[OUTER_X1](pmcb,pco,pphot);
+	pmcb->pbval->BoundaryFunction_[OUTER_X1](pmcb,pcoord,pphot,ip);
       if (pphot->status == ESCAPED) {
 	pphot->face = OUTER_X1;
 	break;
@@ -535,12 +520,12 @@ bool PhotonMover::UpdateZone(Photon *pphot) {
       if (pphot->status == DESTROYED)
 	break;
     }
-  } else if (pphot->x[IMC1] < pco->x1f(pphot->i1)) {
+  } else if (pphot->x[IMC1] < pcoord->x1f(pphot->i1)) {
     update = true;
-    while (pphot->x[IMC1] < pco->x1f(pphot->i1)) {
+    while (pphot->x[IMC1] < pcoord->x1f(pphot->i1)) {
       pphot->i1--;
       if(pphot->i1 < pmcb->is)
-	pmcb->pbval->BoundaryFunction_[INNER_X1](pmcb,pco,pphot);
+	pmcb->pbval->BoundaryFunction_[INNER_X1](pmcb,pcoord,pphot,ip);
       if (pphot->status == ESCAPED) {
 	pphot->face = INNER_X1;
 	break;
@@ -549,12 +534,12 @@ bool PhotonMover::UpdateZone(Photon *pphot) {
 	break;
     }
   }
-  if (pphot->x[IMC2] >= pco->x2f(pphot->i2+1)) {
+  if (pphot->x[IMC2] >= pcoord->x2f(pphot->i2+1)) {
     update = true;
-    while (pphot->x[IMC2] >= pco->x2f(pphot->i2+1)) {
+    while (pphot->x[IMC2] >= pcoord->x2f(pphot->i2+1)) {
       pphot->i2++;
       if(pphot->i2 > pmcb->je)
-	pmcb->pbval->BoundaryFunction_[OUTER_X2](pmcb,pco,pphot);
+	pmcb->pbval->BoundaryFunction_[OUTER_X2](pmcb,pcoord,pphot,ip);
       if (pphot->status == ESCAPED) {
 	pphot->face = OUTER_X2;
 	break;
@@ -562,12 +547,12 @@ bool PhotonMover::UpdateZone(Photon *pphot) {
       if (pphot->status == DESTROYED)
 	break;
     }
-  } else if (pphot->x[IMC2] < pco->x2f(pphot->i2)) {
+  } else if (pphot->x[IMC2] < pcoord->x2f(pphot->i2)) {
     update = true;
-    while (pphot->x[IMC2] < pco->x2f(pphot->i2)) {
+    while (pphot->x[IMC2] < pcoord->x2f(pphot->i2)) {
       pphot->i2--;
       if(pphot->i2 < pmcb->js)
-	pmcb->pbval->BoundaryFunction_[INNER_X2](pmcb,pco,pphot);
+	pmcb->pbval->BoundaryFunction_[INNER_X2](pmcb,pcoord,pphot,ip);
       if (pphot->status == ESCAPED) {
 	pphot->face = INNER_X2;
 	break;
@@ -576,12 +561,12 @@ bool PhotonMover::UpdateZone(Photon *pphot) {
 	break;
     }
   }
-  if (pphot->x[IMC3] >= pco->x3f(pphot->i3+1)) {
+  if (pphot->x[IMC3] >= pcoord->x3f(pphot->i3+1)) {
     update = true;
-    while (pphot->x[IMC3] >= pco->x3f(pphot->i3+1)) {
+    while (pphot->x[IMC3] >= pcoord->x3f(pphot->i3+1)) {
       pphot->i3++;
       if(pphot->i3 > pmcb->ke)
-	pmcb->pbval->BoundaryFunction_[OUTER_X3](pmcb,pco,pphot);
+	pmcb->pbval->BoundaryFunction_[OUTER_X3](pmcb,pcoord,pphot,ip);
       if (pphot->status == ESCAPED) {
 	pphot->face = OUTER_X3;
 	break;
@@ -589,12 +574,12 @@ bool PhotonMover::UpdateZone(Photon *pphot) {
       if (pphot->status == DESTROYED)
 	break;
     }
-  } else if (pphot->x[IMC3] < pco->x3f(pphot->i3)) {
+  } else if (pphot->x[IMC3] < pcoord->x3f(pphot->i3)) {
     update = true;
-    while (pphot->x[IMC3] < pco->x3f(pphot->i3)) {
+    while (pphot->x[IMC3] < pcoord->x3f(pphot->i3)) {
       pphot->i3--;
       if(pphot->i3 < pmcb->ks)
-	pmcb->pbval->BoundaryFunction_[INNER_X3](pmcb,pco,pphot);
+	pmcb->pbval->BoundaryFunction_[INNER_X3](pmcb,pcoord,pphot,ip);
       if (pphot->status == ESCAPED) {
 	pphot->face = INNER_X3;
 	break;

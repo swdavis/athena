@@ -14,7 +14,7 @@
 
 //#define DEBUG
 
-Real DistanceToNearestFace(MCCoord *pco, Photon *pphot);
+Real DistanceToNearestFace(MCCoord *pco, Photon *pphot, int ip);
 
 CartesianMover::CartesianMover(MonteCarloBlock *pmcb) 
   : PhotonMover(pmcb) {
@@ -26,170 +26,159 @@ CartesianMover::~CartesianMover() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void CartesianMover::Move(Photon *pphot)
+//! \fn void CartesianMover::Move(Photon *pphot, int ips, int ipe)
 //  \brief Moves photon along straight line specified number of mean free paths or until
 //         photon leave monte carlo block
 
-void CartesianMover::Move(Photon *pphot) {
+void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
 
   MonteCarloBlock *pmcb = pmy_mcb;
   MCRandom *pran = pmy_mcb->pran;
   MCCoord *pco = pmy_mcb->pcoord;
 
-  // get number of mean free paths photon will travel
-  Real tauremaining = GetOpticalDepth(pran);
-  Real tau0 = tauremaining;
-#ifdef DEBUG
-  Real xf,yf,zf,dl0;
-  Real xi,yi,zi;
-  xi = pphot->x[IMC1]; yi = pphot->x[IMC2]; zi = pphot->x[IMC3];
-  FinalPositionCartesian(pmcb,pco,pphot,xf,yf,zf,dl0);
-#endif
-
-  Real& kx = pphot->k[IMC1];
-  Real& ky = pphot->k[IMC2];
-  Real& kz = pphot->k[IMC3];
-
-  int iter = 0;
-
-  // checkmove is needed to account for (near) infinite trajectories that can occur
-  // in optically thin, periodic domains.
-  while( (tauremaining > 0.) && (pphot->status == EVOLVING) && (iter < checkmove)) {
-    iter++;
-    // Compute distance to all faces
-    Real dlx, dly, dlz;
-    bool ascend[3];
-    if(kx > 0.0) {
-      dlx = (pco->x1f(pphot->i1+1) - pphot->x[IMC1]) / kx;
-      ascend[0] = true;
-    } else if(kx < 0.0) {
-      dlx = (pco->x1f(pphot->i1) - pphot->x[IMC1]) / kx;
-      ascend[0] = false;
-    } else {
-      dlx = HUGE_NUMBER;
-      ascend[0] = false;
-    }
-
-    if(ky > 0.0) {
-      dly = (pco->x2f(pphot->i2+1)  - pphot->x[IMC2]) / ky;
-      ascend[1] = true;
-    } else if(ky < 0.0) {
-      dly = (pco->x2f(pphot->i2) - pphot->x[IMC2]) / ky;
-      ascend[1] = false;
-    } else {
-      dly = HUGE_NUMBER;
-      ascend[1] = false;
-    }
+  for (int ip=ips; ip<=ipe; ip++) {
     
-    if(kz > 0.0) {
-      dlz = (pco->x3f(pphot->i3+1) - pphot->x[IMC3]) / kz;
-      ascend[2] = true;
-    } else if(kz < 0.0) {
-      dlz = (pco->x3f(pphot->i3) - pphot->x[IMC3]) / kz;
-      ascend[2] = false;
-    } else {
-      dlz = HUGE_NUMBER;
-      ascend[2] = false;
-    }
+    // get number of mean free paths photon will travel
+    Real tauremaining = GetOpticalDepth(pran);
+    Real tau0 = tauremaining;
 
-    int face;
-    NextFace(dlx,dly,dlz,face,dl);
+    Real& kx = pphot->k1p[ip];
+    Real& ky = pphot->k2p[ip];
+    Real& kz = pphot->k3p[ip];
 
-    Real chi = GetExtinctionCoefficient(pphot);
-    //Real chi = pphot->sct_coef + pphot->abs_coef;
-    //chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER;
-    
-    if (dl > tauremaining / chi) { // Photon remains in zone
-      bool accel_success = false;
-      if (acceleration) {
-	Real dist;
-	dist = DistanceToNearestFace(pco,pphot);
-	/*dist = pco->dmin(pphot->i3,pphot->i2,pphot->i1);
-	  dist = std::min(dl,dist);*/
+    int iter = 0;
 
-	// Try/perform MRW acceleration if optical depth is large enough
-	if (pmcb->coherent_scattering) {
-	  Real tauacc = 10.;
-	  if ((pphot->abs_coef+pphot->sct_coef) * dist > tauacc)
-	    accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
-	} else {
-	  Real tauacc = 10.;
-	  if (pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) * dist > tauacc)
-	    accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
-	}
+    // checkmove is needed to account for (near) infinite trajectories that can occur
+    // in optically thin, periodic domains.
+    while( (tauremaining > 0.) && (pphot->statp[ip] == EVOLVING) && (iter < checkmove)) {
+      iter++;
+      
+      // Compute distance to all faces
+      Real dlx, dly, dlz;
+      bool ascend[3];
+      if(kx > 0.0) {
+        dlx = (pco->x1f(pphot->i1p[ip]+1) - pphot->x1p[ip]) / kx;
+        ascend[0] = true;
+      } else if(kx < 0.0) {
+        dlx = (pco->x1f(pphot->i1p[ip]) - pphot->x1p[ip]) / kx;
+        ascend[0] = false;
+      } else {
+        dlx = HUGE_NUMBER;
+        ascend[0] = false;
       }
 
-      // Perform standard displacement if acceleration not atempted or unsuccsessful
-      if (!accel_success) {
-	if (pphot->status != EVOLVING)
-	  return;
-	// compute distance remaining in zone
-        dl = tauremaining/chi;
-        // Account for absorption (if needed) and update moments
-        Real etaua = ExpTauAbsorption(pphot,dl);
-        if (pmcb->moments_flag) {
-          pmcb->UpdateMoments(pphot,dl,etaua);
+      if(ky > 0.0) {
+        dly = (pco->x2f(pphot->i2p[ip]+1)  - pphot->x2p[ip]) / ky;
+        ascend[1] = true;
+      } else if(ky < 0.0) {
+        dly = (pco->x2f(pphot->i2p[ip]) - pphot->x2p[ip]) / ky;
+        ascend[1] = false;
+      } else {
+        dly = HUGE_NUMBER;
+        ascend[1] = false;
+      }
+    
+      if(kz > 0.0) {
+        dlz = (pco->x3f(pphot->i3p[ip]+1) - pphot->x3p[ip]) / kz;
+        ascend[2] = true;
+      } else if(kz < 0.0) {
+        dlz = (pco->x3f(pphot->i3p[ip]) - pphot->x3p[ip]) / kz;
+        ascend[2] = false;
+      } else {
+        dlz = HUGE_NUMBER;
+        ascend[2] = false;
+      }
+
+      int face;
+      NextFace(dlx,dly,dlz,face,dl);
+      Real chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
+
+      if (dl > tauremaining / chi) { // Photon remains in zone
+        bool accel_success = false;
+        if (acceleration) {
+          Real dist;
+          dist = DistanceToNearestFace(pco,pphot,ip);
+
+          // Try/perform MRW acceleration if optical depth is large enough
+          if (pmcb->coherent_scattering) {
+            Real tauacc = 10.;
+            if ((pphot->acp[ip]+pphot->scp[ip]) * dist > tauacc)
+              accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
+          } else {
+            Real tauacc = 10.;
+            if (pmcb->planck_inv_opacity(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]) 
+                * dist > tauacc)
+              accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
+          }
         }
-        pphot->weight *= etaua;
+
+        // Perform standard displacement if acceleration not atempted or unsuccsessful
+        if (!accel_success) {
+          if (pphot->statp[ip] != EVOLVING)
+            return;
+          // compute distance remaining in zone
+          dl = tauremaining/chi;
+          // Account for absorption (if needed) and update moments
+          Real etaua = ExpTauAbsorption(pphot->acp[ip],dl);
+          if (pmcb->moments_flag) {
+            pmcb->UpdateMoments(pphot,dl,etaua,ip);
+          }
+          pphot->wp[ip] *= etaua;
+          // update position
+          pphot->x0p[ip] += pphot->k0p[ip] * dl;
+          pphot->x1p[ip] += pphot->k1p[ip] * dl;
+          pphot->x2p[ip] += pphot->k2p[ip] * dl;
+          pphot->x3p[ip] += pphot->k3p[ip] * dl;
+        }
+        // Perform any user work
+        if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this,ip);
+        break;
+
+      } else { // Photon moves to next zone and reduce tauremaining
+        // Account for absorption (if needed) and update moments
+        Real etaua = ExpTauAbsorption(pphot->acp[ip],dl);
+        if (pmcb->moments_flag) {
+          pmcb->UpdateMoments(pphot,dl,etaua,ip);
+        }
+        pphot->wp[ip] *= etaua;
         // update position
-        for (int i=0; i<4; ++i)
-          pphot->x[i] += pphot->k[i] * dl;
+        pphot->x0p[ip] += pphot->k0p[ip] * dl;
+        pphot->x1p[ip] += pphot->k1p[ip] * dl;
+        pphot->x2p[ip] += pphot->k2p[ip] * dl;
+        pphot->x3p[ip] += pphot->k3p[ip] * dl;
+
+        tauremaining -= chi * dl;
+
+        // Perform any user work
+        if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this,ip);     
+        MovePhotonToNextZone(pphot,pco,pmcb,face,ascend,ip);
       }
-      // Perform any user work
-      if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this);
-      return;
-
-    } else { // Photon moves to next zone and reduce tauremaining
-      // Account for absorption (if needed) and update moments
-      Real etaua = ExpTauAbsorption(pphot,dl);
-      pphot->weight *= etaua;
-      if (pmcb->moments_flag) {
-	pmcb->UpdateMoments(pphot,dl,etaua);
-      }
-      pphot->weight *= etaua;
-      // update position
-      for (int i=0; i<4; ++i)
-	pphot->x[i] += pphot->k[i] * dl;
-      tauremaining -= chi * dl;
-
-      // Perform any user work
-      if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this);
-
-      MovePhotonToNextZone(pphot,pco,pmcb,face,ascend);
     }
-  }
 
-  if (iter >= checkmove) {
-    std::cout << "Warning: iter exceeded " << checkmove << " in photon mover." 
-	      << std::endl;
-    std::cout << "tau: " << tau0 << " " << tauremaining << std::endl;
-    pphot->PrintPhoton();
-    pphot->status = DESTROYED;
-  }
+    if (iter >= checkmove) {
+      std::cout << "Warning: iter exceeded " << checkmove << " in photon mover." 
+                << std::endl;
+      std::cout << "tau: " << tau0 << " " << tauremaining << std::endl;
+      pphot->PrintPhoton(ip);
+      pphot->statp[ip] = DESTROYED;
+    }
 
-#ifdef DEBUG
-  Real delta = sqrt(SQR(xf-pphot->x[IMC1])+SQR(yf-pphot->x[IMC2])+SQR(zf-pphot->x[IMC3]));
-  Real dmax = 1.e-6*(pco->x3f(pmcb->ke+1)-pco->x3f(pmcb->ks));
-  if ((delta > dmax)&&(iter < checkmove)) {
-    std::cout << "-----------------------" << std::endl;
-    std::cout << delta <<  ' ' << iter << std::endl;
-    std::cout << "k: " << pphot->k[IMC1] << ' ' << pphot->k[IMC2] << ' ' << pphot->k[IMC3] 
-              << std::endl;
-    std::cout << "xi: " << xi << ' ' << yi << ' ' << zi << std::endl;
-    std::cout << "xf: " << xf << ' ' << yf << ' ' << zf << ' ' << dl0 << std::endl;
-    std::cout << "xp: " << pphot->x[0] << ' ' <<  pphot->x[1] << ' ' <<  pphot->x[2] << std::endl;
-  }
-#endif
+  } // loop over photons
+
 }
 
-Real DistanceToNearestFace(MCCoord *pco, Photon *pphot) {
+Real DistanceToNearestFace(MCCoord *pco, Photon *pphot, int ip) {
 
-  Real dx1p = pco->x1f(pphot->i1+1) - pphot->x[IMC1];
-  Real dx1m = pphot->x[IMC1] - pco->x1f(pphot->i1);
-  Real dx2p = pco->x2f(pphot->i2+1) - pphot->x[IMC2];
-  Real dx2m = pphot->x[IMC2] - pco->x2f(pphot->i2);
-  Real dx3p = pco->x3f(pphot->i3+1) - pphot->x[IMC3];
-  Real dx3m = pphot->x[IMC3] - pco->x3f(pphot->i3);
+  int i1 = pphot->i1p[ip];
+  int i2 = pphot->i2p[ip];
+  int i3 = pphot->i3p[ip];
+
+  Real dx1p = pco->x1f(i1+1) - pphot->x1p[ip];
+  Real dx1m = pphot->x1p[ip] - pco->x1f(i1);
+  Real dx2p = pco->x2f(i2+1) - pphot->x2p[ip];
+  Real dx2m = pphot->x2p[ip] - pco->x2f(i2);
+  Real dx3p = pco->x3f(i3+1) - pphot->x3p[ip];
+  Real dx3m = pphot->x3p[ip] - pco->x3f(i3);
   dx1p = (dx1p < dx1m) ? dx1p : dx1m;
   dx2p = (dx2p < dx2m) ? dx2p : dx2m;
   dx3p = (dx3p < dx3m) ? dx3p : dx3m;
