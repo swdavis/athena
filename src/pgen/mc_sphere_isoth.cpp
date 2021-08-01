@@ -38,8 +38,8 @@ namespace {
   Real logemin, logemax;
 
   // function headers
-  void SphericalEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover);
-  void TimedEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover);
+  void SphericalEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover, int ip);
+  void TimedEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover, int ip);
 }
 
 
@@ -171,107 +171,124 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
 }
 
-void MonteCarloBlock::InitializePhoton(Photon *pphot) {
+void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
-  pphot->user_var[0] = 0.;
-  pphot->user_var[1] = 0.;
-  pphot->user_var[2] = 0.;
+  for (int ip=ips; ip<=ipe; ip++) {
 
-  // Set status flag
-  pphot->status = EVOLVING;
+    pphot->user[0][ip] = 0.;
+    pphot->user[1][ip] = 0.;
+    pphot->user[2][ip] = 0.;
 
-  // Initialize cell number
-  pphot->i1 = i1start;
-  pphot->i2 = i2start;
-  pphot->i3 = i3start;
+    // Set status flag
+    pphot->statp[ip] = EVOLVING;
 
-  // Initialize Photon weights, energy, direction, polarization
-  if (pmy_mc->emission_meth == EMISNONE) {
-    pphot->weight = 1.0;
-    if (planckdist)
-      pphot->energy = PlanckDist(tsource,pran);
-    else
-      pphot->energy = energy0;
-    // Initialize Stokes vector
-    pphot->stokes[0] = 1.0;
-    pphot->stokes[1] = 0.0;
-    pphot->stokes[2] = 0.0;
+    // Initialize cell number
+    int i1,i2,i3;
+    pphot->i1p[ip] = i1 = i1start;
+    pphot->i2p[ip] = i2 = i2start;
+    pphot->i3p[ip] = i3 = i3start;
+
+    // Initialize Photon weights, energy, direction, polarization
+    if (pmy_mc->emission_meth == EMISNONE) {
+      pphot->wp[ip] = 1.0;
+      if (planckdist)
+        pphot->ep[ip] = PlanckDist(tsource,pran);
+      else
+        pphot->ep[ip] = energy0;
+
+      // Initialize Stokes vector
+      pphot->sip[ip] = 1.0;
+      pphot->sqp[ip] = 0.0;
+      pphot->sup[ip] = 0.0;
     
-    // Generate initial angle parameters
-    Real phi = 2. * PI * pran->uniform();
-    Real cphi = cos(phi);
-    Real sphi = sin(phi);
-    
-    Real cth = 2. * pran->uniform() - 1.;
-    Real sth = sqrt(1. - SQR(cth));
-
-    // Initialize wave vector with isotropic distribution
-    pphot->k[IMC1] = sth*cphi;
-    pphot->k[IMC2] = sth*sphi;
-    pphot->k[IMC3] = cth;
-    pphot->k[IMC0] = 1. / 2.99792458e10;
-
-    // Get initial position of photon
-    if (srcdist) {
-      // Model an exponential weight time distribuion
-      Real x = pran->uniform();
-      while (x <= 0.)
-        x = pran->uniform();
-      Real dev = pran->uniform();
-      while (sin(PI*x)*x < 0.57923*dev) {
-      // Yields nearly exponential escape time distribution
-      //while (sin(PI*x)/(x*PI) < dev) {
-        x = pran->uniform();
-        while (x <= 0.)
-          x = pran->uniform();
-        dev = pran->uniform();
-      }
-      
-      Real r0 = x*rad0;
+      // Generate initial angle parameters
       Real phi = 2. * PI * pran->uniform();
       Real cphi = cos(phi);
       Real sphi = sin(phi);
-      
+    
       Real cth = 2. * pran->uniform() - 1.;
       Real sth = sqrt(1. - SQR(cth));
-      pphot->x[IMC1] = r0*sth*cphi;
-      pphot->x[IMC2] = r0*sth*sphi;
-      pphot->x[IMC3] = r0*cth;
-      pphot->x[IMC0] = 0.; //time
-    } else {
-      // Initialize photon at the origin
-      pphot->x[IMC1] = 0.;
-      pphot->x[IMC2] = 0.;
-      pphot->x[IMC3] = 0.;
-      pphot->x[IMC0] = 0.; //time
+
+      // Initialize wave vector with isotropic distribution
+      pphot->k1p[ip] = sth*cphi;
+      pphot->k2p[ip] = sth*sphi;
+      pphot->k3p[ip] = cth;
+      pphot->k0p[ip] = 1. / 2.99792458e10;
+
+      // Get initial position of photon
+      if (srcdist) {
+        // Model an exponential weight time distribuion
+        Real x = pran->uniform();
+        while (x <= 0.)
+          x = pran->uniform();
+        Real dev = pran->uniform();
+        while (sin(PI*x)*x < 0.57923*dev) {
+          // Yields nearly exponential escape time distribution
+          //while (sin(PI*x)/(x*PI) < dev) {
+          x = pran->uniform();
+          while (x <= 0.)
+            x = pran->uniform();
+          dev = pran->uniform();
+        }
+      
+        Real r0 = x*rad0;
+        Real phi = 2. * PI * pran->uniform();
+        Real cphi = cos(phi);
+        Real sphi = sin(phi);
+      
+        Real cth = 2. * pran->uniform() - 1.;
+        Real sth = sqrt(1. - SQR(cth));
+
+        pphot->x1p[ip] = r0*sth*cphi;
+        pphot->x2p[ip] = r0*sth*sphi;
+        pphot->x3p[ip] = r0*cth;
+        pphot->x0p[ip] = 0.; //time
+      } else {
+        // Initialize photon at the origin
+        pphot->x1p[ip] = 0.;
+        pphot->x2p[ip] = 0.;
+        pphot->x3p[ip] = 0.;
+        pphot->x0p[ip] = 0.; //time
+      }
+
+    } else if (pmy_mc->emission_meth == EMISFF) {
+      // Set weight according to the emission array, which is the relative number 
+      // of photons per unit time emitted in each cell
+      pphot->wp[ip] = emission(i3,i2,i1);
+
+      // Obtain intitial energy, polarization, direction and weight
+      // Utilize free-free emission function in emission.cpp
+      if(tnorm) {
+        Real logtg = log(tgas(i3,i2,i1));
+        PhotonEmitFreeFree(this,pphot,logemin+logtg,logemax+logtg,ip);
+      } else{
+        PhotonEmitFreeFree(this,pphot,logemin,logemax,ip);
+      }
+
+      Real r0 = pow(pran->uniform()*rad0*rad0*rad0,1./3.);
+      Real phi = 2. * PI * pran->uniform();
+      Real cphi = cos(phi);
+      Real sphi = sin(phi);      
+      Real cth = 2. * pran->uniform() - 1.;
+      Real sth = sqrt(1. - SQR(cth));
+      pphot->x1p[ip] = r0*sth*cphi;
+      pphot->x2p[ip] = r0*sth*sphi;
+      pphot->x3p[ip] = r0*cth;
+      pphot->x0p[ip] = 0.; //time
     }
 
-  } else if (pmy_mc->emission_meth == EMISFF) {
-    pphot->weight = emission(pphot->i3,pphot->i2,pphot->i1);
-    if(tnorm) {
-      Real logtg = log(tgas(pphot->i3,pphot->i2,pphot->i1));
-      PhotonEmitFreeFree(this,pphot,logemin+logtg,logemax+logtg);
-    } else{
-      PhotonEmitFreeFree(this,pphot,logemin,logemax);
-    }
-    Real r0 = pow(pran->uniform()*rad0*rad0*rad0,1./3.);
-    Real phi = 2. * PI * pran->uniform();
-    Real cphi = cos(phi);
-    Real sphi = sin(phi);      
-    Real cth = 2. * pran->uniform() - 1.;
-    Real sth = sqrt(1. - SQR(cth));
-    pphot->x[IMC1] = r0*sth*cphi;
-    pphot->x[IMC2] = r0*sth*sphi;
-    pphot->x[IMC3] = r0*cth;
-    pphot->x[IMC0] = 0.;
-  }
+    // Set status flag
+    if (pphot->wp[ip] < 0.0) 
+      pphot->statp[ip] = DESTROYED;
+    else
+      pphot->statp[ip] = EVOLVING;
 
-  if (pphot->weight < 0.0) pphot->status = DESTROYED;
   
-  // Initialize the absorption and scattering extinction coefficients
-  // to the values appropriate in the emitted zone
-  pphot->abs_coef = AbsorptionOpacity(this,pphot);
-  pphot->sct_coef = ScatteringOpacity(this,pphot);
+    // Initialize the absorption and scattering extinction coefficients
+    // to the values appropriate in the emitted zone
+    pphot->acp[ip] = AbsorptionOpacity(this,i1,i2,i3,pphot->ep[ip]);
+    pphot->scp[ip] = ScatteringOpacity(this,i1,i2,i3,pphot->ep[ip]);
+  } // loop over ip
 
 }
 
@@ -279,49 +296,56 @@ namespace {
 
 // Used to evalue photons time distribution as fixed spherical
 // escape surface
-void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
+void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover, 
+                     int ip) {
 
-  pphot->user_var[0] += pmover->dl * pphot->weight;
-  pphot->user_var[1] += pmover->dl * pphot->weight * pphot->energy;
-  pphot->user_var[2] += pmover->dl * pphot->weight * pphot->abs_coef;
+  pphot->user[0][ip] += pmover->dl * pphot->wp[ip];
+  pphot->user[1][ip] += pmover->dl * pphot->wp[ip] * pphot->ep[ip];
+  pphot->user[2][ip] += pmover->dl * pphot->wp[ip] * pphot->acp[ip];
 
   // First check radius condition
-  Real r = sqrt(SQR(pphot->x[0])+SQR(pphot->x[1])+SQR(pphot->x[2]));
+  Real r = sqrt(SQR(pphot->x1p[ip])+SQR(pphot->x2p[ip])+SQR(pphot->x3p[ip]));
   if (r >= rad0) {
     Real dr = r-rad0;
-    for (int i=0; i<4; i++) {
-      // assumes cartesian for now
-      pphot->x[i] -= pphot->k[i]*dr;
-    }
-    pphot->status = ESCAPED;
-    pphot->face = FACE_UNDEF;
+    // assume cartesian for now
+    pphot->x0p[ip] -= pphot->k0p[ip]*dr;
+    pphot->x1p[ip] -= pphot->k1p[ip]*dr;
+    pphot->x2p[ip] -= pphot->k2p[ip]*dr;
+    pphot->x3p[ip] -= pphot->k3p[ip]*dr;
+
+    pphot->statp[ip] = ESCAPED;
+    //pphot->face = FACE_UNDEF;
   } 
  
 }
 
 // Used to test photons radial distributions after a fixed travel time
-void TimedEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
+void TimedEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
+                 int ip) {
 
   // First check radius condition
-  Real r = sqrt(SQR(pphot->x[0])+SQR(pphot->x[1])+SQR(pphot->x[2]));
+  Real r = sqrt(SQR(pphot->x1p[ip])+SQR(pphot->x2p[ip])+SQR(pphot->x3p[ip]));
   if (r >= rad0) {
     Real dr = r-rad0;
-    for (int i=0; i<4; i++) {
-      // assume cartesian for now
-      pphot->x[i] -= pphot->k[i]*dr;
-    }
-    pphot->status = ESCAPED;
-    pphot->face = FACE_UNDEF;
+    // assume cartesian for now
+    pphot->x0p[ip] -= pphot->k0p[ip]*dr;
+    pphot->x1p[ip] -= pphot->k1p[ip]*dr;
+    pphot->x2p[ip] -= pphot->k2p[ip]*dr;
+    pphot->x3p[ip] -= pphot->k3p[ip]*dr;
+
+    pphot->statp[ip] = ESCAPED;
+    //pphot->face = FACE_UNDEF;
   }
   // Then check time condition -- ensures time is not over estimated
-  if (pphot->x[IMC0] >= time0) {
-    Real dt = pphot->x[IMC0] - time0;
-    for (int i=0; i<4; i++) {
-      // assume cartesian for now
-      pphot->x[i] -= pphot->k[i]*dt*2.99792458e10;;
-    }
-    pphot->status = ESCAPED;
-    pphot->face = FACE_UNDEF;
+  if (pphot->x0p[ip] >= time0) {
+    Real dt = pphot->x0p[ip] - time0;
+    pphot->x0p[ip] -= pphot->k0p[ip]*dt*2.99792458e10;
+    pphot->x1p[ip] -= pphot->k1p[ip]*dt*2.99792458e10;
+    pphot->x2p[ip] -= pphot->k2p[ip]*dt*2.99792458e10;
+    pphot->x3p[ip] -= pphot->k3p[ip]*dt*2.99792458e10;
+
+    pphot->statp[ip] = ESCAPED;
+    //pphot->face = FACE_UNDEF;
   }
 }
 

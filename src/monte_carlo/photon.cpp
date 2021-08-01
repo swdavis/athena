@@ -16,18 +16,18 @@
 #include "../athena_arrays.hpp"
 
 
-int Photon::nint = 5;
+int Photon::nint = 6;
 int Photon::nreal = 20;
 int Photon::naux = 0;
 int Photon::nwork = 0;
 int Photon::ipid = 0;
-int Photon::istatp = 1, Photon::ii1p = 2, Photon::ii2p = 3, Photon::ii3p = 4;
+int Photon::inscp = 1, Photon::istatp = 2;
+int Photon::ii1p = 3, Photon::ii2p = 4, Photon::ii3p = 5;
 int Photon::ix0p = 0, Photon::ix1p = 1, Photon::ix2p = 2, Photon::ix3p = 3;
 int Photon::ik0p = 4, Photon::ik1p = 5, Photon::ik2p = 6, Photon::ik3p = 7;
 int Photon::idk0p = 8, Photon::idk1p = 9, Photon::idk2p = 10, Photon::idk3p = 11;
 int Photon::iep = 12, Photon::iwp = 13, Photon::iscp = 14, Photon::iacp = 15;
 int Photon::isip = 16, Photon::isqp = 17, Photon::isup = 18, Photon::isvp = 19;
-
 
 // constructor, initializes data structures and parameters
 
@@ -35,7 +35,8 @@ Photon::Photon(MonteCarloBlock *pmcb, int nuser, int len_limit)
   // Allocate space for particle data.
   : intprop(new std::vector<int> [nint]), realprop(new std::vector<Real> [nreal]),
     aux(new std::vector<Real> [naux]), work(new std::vector<Real> [nwork]),
-    nphot(npar),pid(intprop[ipid]),
+    user(new std::vector<Real> [nuser]),
+    nphot(npar),pid(intprop[ipid]),nscp(intprop[inscp]),
     statp(intprop[istatp]), i1p(intprop[ii1p]), i2p(intprop[ii2p]), i3p(intprop[ii3p]),
     x0p(realprop[ix0p]), x1p(realprop[ix1p]), x2p(realprop[ix2p]), x3p(realprop[ix3p]),
     k0p(realprop[ik0p]), k1p(realprop[ik1p]), k2p(realprop[ik2p]), k3p(realprop[ik3p]),
@@ -212,7 +213,10 @@ void Photon::VectorsToWorkingArrays(int n) {
   stokes[1] = sqp[n];
   stokes[2] = sup[n];
   stokes[3] = svp[n];
-
+  if (nuser_var > 0) {
+    for(int i=0; i<nuser_var; ++i)
+      user_var[i] = user[i][n];
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -248,6 +252,10 @@ void Photon::WorkingArraysToVectors(int n) {
   sqp[n] = stokes[1];
   sup[n] = stokes[2];
   svp[n] = stokes[3];
+  if (nuser_var > 0) {
+    for(int i=0; i<nuser_var; ++i)
+      user[i][n] = user_var[i];
+  }
 
 }
 
@@ -294,6 +302,8 @@ void Photon::Resize(int new_npar) {
     aux[i].resize(new_npar);
   for (int i = 0; i < nwork; ++i)
     work[i].resize(new_npar);
+  for (int i = 0; i < nuser_var; ++i)
+    user[i].resize(new_npar);
 
   // Flag new particles.
   for (int k = npar; k < new_npar; ++k)

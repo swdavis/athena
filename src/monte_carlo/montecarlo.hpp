@@ -330,7 +330,8 @@ public:
   void MonteCarloProblemGenerator(ParameterInput *pin);
   void RayTracePhotons(int nphtot); // Ray trace photon on this block
   void TransferPhotons(int nphtot); // Transfer photons on this block
-  void LorentzTransform(Photon *pphot, const Real sign);
+  void TransferPhotonsOld(int nphtot); // Transfer photons on this block
+  void LorentzTransform(Photon *pphot, const Real sign, int ips, int ipe);
   Real LorentzTransformFrequencyShift(Photon *pphot, int ip);
   void TetradTransform(Photon *pphot, const Real sign);
   void InitializePhoton(Photon *pphot, int ips, int ipe);

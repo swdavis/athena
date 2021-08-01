@@ -396,19 +396,161 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
   Real const to_comv = 1.0;
   Real const to_eulr = -1.0; 
   int nscat = 0, nesc = 0, nabs = 0, ndes = 0;
+  int ntodo = (nphot > nphremain) ? nphremain : nphot;
+  nphdone += ntodo;
+
+  int nloop = 100;
+  int nprop = ntodo;
+  while(nprop > 0) {
+
+    // Emit photons to replace those that left meshblock or were terminated
+    nloop = (nloop > nprop) ? nprop : nloop;
+    int nold = pphot->nphot;
+    pphot->Resize(nloop);
+    //printf("nold: %d %d %d %d\n",nprop,nold,nprop,nloop);
+    // user definied photon initialization
+    InitializePhoton(pphot,nold,pphot->nphot-1);
+    
+    // Lorentz transform E, k to Eulerian frame and update opacities
+    // only for newly emitted photons
+    if (boosts) {
+      LorentzTransform(pphot,to_eulr,nold,pphot->nphot-1); 
+    }
+    if (moments_flag) {
+      // Update cooling to relect newly emitted photons
+      for (int ip=nold; ip<pphot->nphot; ip++) {
+        UpdateCooling(pphot,0.,0.,ip);
+      }
+    }
+
+    // move all photons to next interaction or boundary
+    pmover->Move(pphot,0,pphot->nphot-1);
+
+    for (int ip=0; ip<pphot->nphot; ip++) {
+
+      if (pphot->statp[ip] == EVOLVING) {
+        // Account for absorption
+        Real weight0 = pphot->wp[ip];
+        if (absorption_meth == ABSWEIGHT) {
+          pphot->wp[ip] *= (pphot->scp[ip]/(pphot->scp[ip]+pphot->acp[ip]));
+          if(pphot->wp[ip] <= minweight) {
+            pphot->statp[ip] = ABSORBED;
+          }
+        } else if (absorption_meth == ABSPROB) {
+          if (pran->uniform() > (pphot->scp[ip]/(pphot->scp[ip]+pphot->acp[ip])) )
+            pphot->wp[ip] = 0.;
+          pphot->statp[ip] = ABSORBED;
+        } else if (absorption_meth == ABSTAU) {
+          if(pphot->wp[ip] <= minweight) {
+            pphot->statp[ip] = ABSORBED;
+          }
+        }
+        if (moments_flag) {
+          UpdateCooling(pphot,0.,weight0,ip);
+        }
+      } // status == evolving
+   
+      if (pphot->statp[ip] == EVOLVING) {
+        // Scatter the photon
+        Real e_pre_scat = pphot->ep[ip];
+	// Lorentz transform to comoving frame for scattering
+	if (boosts) {
+          LorentzTransform(pphot,to_comv,ip,ip); 
+	}
+        Scatter(this,pphot,ip,ip);
+        nscat++;
+        pphot->nscp[ip]++;
+	if (pphot->nscp[ip] %  pmy_mc->checkscat == 0) {
+	  // Check for possible infinite loop due to NaN in photon
+	  if (pphot->IsNanPhoton(ip)) {
+	    pphot->statp[ip] = DESTROYED;
+	    std::cout << "Warning: IsNanPhoton() returned true, photon destroyed" 
+		      << std::endl;
+	    pphot->PrintPhoton(ip);
+	  }
+        }
+
+	// Update the absorption and scattering extinction coefficients
+	// with the new energy.
+	if (!coherent_scattering) {
+          int &i1 = pphot->i1p[ip];
+          int &i2 = pphot->i2p[ip];
+          int &i3 = pphot->i3p[ip];
+	  pphot->acp[ip] = AbsorptionOpacity(this,i1,i2,i3,pphot->ep[ip]);
+	  pphot->scp[ip] = ScatteringOpacity(this,i1,i2,i3,pphot->ep[ip]);
+	}
+	// Lorentz transform to Eulerian frame and shift opacities
+	if (boosts) {
+          LorentzTransform(pphot,to_eulr,ip,ip); 
+        }
+        if (moments_flag) {
+            UpdateCooling(pphot,e_pre_scat,0.,ip);
+        }
+      } // status == evolving
+
+    } // End loop over ip
+
+    for (int ip=0; ip<pphot->nphot; ip++) {
+      if (pphot->statp[ip] != EVOLVING) {
+
+        if (pphot->statp[ip] == ESCAPED) {
+          pphot->VectorsToWorkingArrays(ip);
+          
+          if (ptraj != NULL) ptraj->CompleteTrajectory(); //SWDFIX
+          // User defined completion work
+          FinalizePhoton(pphot);
+          // loop over spectra and update
+          Spectrum *pspect = pspec;
+          while (pspect != NULL) {
+            pspect->UpdateSpectrum(pphot);
+            pspect = pspect->next;
+          }
+          if (pphlist != NULL) {
+            pphlist->AddPhoton(pphot);
+          }
+          nesc++;
+        } else if (pphot->statp[ip] == ABSORBED) {
+          nabs++;
+        } else if (pphot->statp[ip] == DESTROYED) {
+          ndes++;
+        }
+        pphot->RemoveOneParticle(ip);
+        nprop--;
+      }
+    } // End loop over ip
+    
+  }
+  
+  std::cout  << "rank, nesc, nabs, ndes, nscat: " << Globals::my_rank << ' ' << nesc 
+             << ' ' << nabs << ' ' << ndes << ' '
+             << static_cast<Real>(nscat)/static_cast<Real>(ntodo) << std::endl;
+  //std::cout  << "nesc, nabs: " << nesc << ' ' << nabs << ' ' << Globals::my_rank << std::endl;
+  //std::cout << "nscat: " << nscat << ' ' << Globals::my_rank << std::endl;
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::TransferPhotons()
+//  \brief perform radiation transfer nphtot photons
+
+void MonteCarloBlock::TransferPhotonsOld(int nphot) {
+
+  Real const to_comv = 1.0;
+  Real const to_eulr = -1.0; 
+  int nscat = 0, nesc = 0, nabs = 0, ndes = 0;
   int nprop = (nphot > nphremain) ? nphremain : nphot;
 
   int nremain = nprop;
-  pphot->Resize(1);
+  pphot->Resize(10);
   while(nremain > 0) {
     //while (pphot->nphot < pphot->nphot_limit) {
       // user definied photon initialization
-    InitializePhoton(pphot,0,0);
+    InitializePhoton(pphot,0,pphot->nphot);
       //}
     
     // Lorentz transform E, k to Eulerian frame and update opacities.
     if (boosts) {
-      LorentzTransform(pphot,to_eulr); 
+      LorentzTransform(pphot,to_eulr,0,pphot->nphot); 
     }
 
     if (moments_flag) {
@@ -417,22 +559,22 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
       }
     }
     // move photon to next scattering/absorption or to boundary
-    pmover->Move(pphot,0,0);
+    pmover->Move(pphot,0,pphot->nphot);
 
     for (int ip=0; ip<pphot->nphot; ip++) {
 
     int iscat = 0;
-    Real xmax = 0.;
     while (pphot->statp[ip] == EVOLVING) {
+
       // Account for absorption
       Real weight0 = pphot->wp[ip];
       if (absorption_meth == ABSWEIGHT) {
-        pphot->wp[ip] *= (pphot->scp[ip] / (pphot->scp[ip]+pphot->acp[ip]));
+        pphot->wp[ip] *= (pphot->scp[ip]/(pphot->scp[ip]+pphot->acp[ip]));
         if(pphot->wp[ip] <= minweight) {
           pphot->statp[ip] = ABSORBED;
         }
       } else if (absorption_meth == ABSPROB) {
-        if (pran->uniform() > (pphot->scp[ip] / (pphot->scp[ip]+pphot->acp[ip])) )
+        if (pran->uniform() > (pphot->scp[ip]/(pphot->scp[ip]+pphot->acp[ip])) )
           pphot->wp[ip] = 0.;
           pphot->statp[ip] = ABSORBED;
       } else if (absorption_meth == ABSTAU) {
@@ -441,9 +583,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
         }
       }
       if (moments_flag) {
-        for (int ip=0; ip<pphot->nphot; ip++) {
           UpdateCooling(pphot,0.,weight0,ip);
-        }
       }
    
       // Scatter the photon packet
@@ -451,9 +591,9 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
         Real e_pre_scat = pphot->ep[ip];
 	// Lorentz transform to comoving frame for scattering
 	if (boosts) {
-          LorentzTransform(pphot,to_comv); 
+          LorentzTransform(pphot,to_comv,ip,ip); 
 	}
-        Scatter(this,pphot,0,0);
+        Scatter(this,pphot,ip,ip);
 	iscat++;
       
 	if (iscat %  pmy_mc->checkscat == 0) {
@@ -476,17 +616,15 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
 	}
 	// Lorentz transform to Eulerian frame and shift opacities
 	if (boosts) {
-          LorentzTransform(pphot,to_eulr); 
+          LorentzTransform(pphot,to_eulr,ip,ip); 
         }
         if (moments_flag) {
-          for (int ip=0; ip<pphot->nphot; ip++) {
             UpdateCooling(pphot,e_pre_scat,0.,ip);
-          }
         }
       }
 
       // move photon to next scattering/absorption or to boundary
-      pmover->Move(pphot,0,0);
+      pmover->Move(pphot,ip,ip);
 
     }
 
@@ -498,7 +636,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
     for (int ip=0; ip<pphot->nphot; ip++) {
 
     if (pphot->statp[ip] == ESCAPED) {
-      pphot->VectorsToWorkingArrays(0);
+      pphot->VectorsToWorkingArrays(ip);
       // User defined completion work
       FinalizePhoton(pphot);
       // loop over spectra and update
@@ -532,7 +670,8 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign)
+//! \fn void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign, int ips,
+//                                             int ipe)
 //  \brief Lorentz transform photon packet
 //
 // Does not transform stokes vectors but this seems
@@ -543,9 +682,10 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
 // to_comv: sign = 1.0;
 // to_eulr: sign = -1.0; 
 
-void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign) {
+void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign, int ips,
+                                       int ipe) {
 
-  for (int ip=0; ip<pphot->nphot; ip++) {
+  for (int ip=ips; ip<=ipe; ip++) {
 
     Real &k1 = pphot->k1p[ip];
     Real &k2 = pphot->k2p[ip];
@@ -704,9 +844,9 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
   
   // SWD: needs to be modifed for non general mover kvectors
 
-  Real k1 = pphot->k1p[IMC1];
-  Real k2 = pphot->k2p[IMC2];
-  Real k3 = pphot->k3p[IMC3];
+  Real k1 = pphot->k1p[ip];
+  Real k2 = pphot->k2p[ip];
+  Real k3 = pphot->k3p[ip];
   Real energy, abs_coef, step;
   if (moments_comoving) {
     // boost relevant quanitities to comoving frame
@@ -764,11 +904,12 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
     int j = pphot->i2p[ip];
     int k = pphot->i3p[ip];
 
-    // Add contribution to corresponding moments
-    // Energy density
     // SWD: Modify this appropriately
     //if (general_mover_flag) 
-    //  weight *= pphot->k[IMC0];
+    //  weight *= pphot->k0p[ip]
+
+    // Add contribution to corresponding moments
+    // Energy density
     moments(MCIER,k,j,i) += weight;
     // Flux
     moments(MCIFR1,k,j,i) += weight1 * 2.99792458e10;
