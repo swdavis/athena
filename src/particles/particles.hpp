@@ -50,6 +50,7 @@ friend class MeshBlock;  // Make writing initial conditions possible.
 friend class OutputType;
 friend class ParticleGravity;
 friend class ParticleMesh;
+friend class DustParticles;
 
  public:
   // Class methods
@@ -73,6 +74,8 @@ friend class ParticleMesh;
   virtual ~Particles();
 
   // Accessor
+  virtual AthenaArray<Real> GetMassDensity() const;
+  virtual AthenaArray<Real> GetVelocityField() const;
   Real GetMaximumWeight() const;
 
   // Instance methods
@@ -88,7 +91,7 @@ friend class ParticleMesh;
   void StartReceiving();
   bool ReceiveFromNeighbors();
   bool ReceiveParticleMesh(int step);
-  Real NewBlockTimeStep();
+  virtual Real NewBlockTimeStep();
 
   std::size_t GetSizeInBytes();
   void UnpackParticlesForRestart(char *mbdata, std::size_t &os);
@@ -191,6 +194,24 @@ friend class ParticleMesh;
   ParticleBuffer send_[56];  //!> particle send buffers
 #endif
 };
+
+//--------------------------------------------------------------------------------------
+//! \fn AthenaArray<Real> Particles::GetMassDensity()
+//! \brief returns the mass density of particles on the mesh.
+
+inline AthenaArray<Real> Particles::GetMassDensity() const {
+  RegionSize& block_size(pmy_block->block_size);
+  return AthenaArray<Real>(block_size.nx3, block_size.nx2, block_size.nx1);
+}
+
+//--------------------------------------------------------------------------------------
+//! \fn AthenaArray<Real> Particles::GetVelocityField()
+//! \brief returns the velocity field of particles on the mesh.
+
+inline AthenaArray<Real> Particles::GetVelocityField() const {
+  RegionSize& block_size(pmy_block->block_size);
+  return AthenaArray<Real>(3, block_size.nx3, block_size.nx2, block_size.nx1);
+}
 
 //--------------------------------------------------------------------------------------
 //! \fn Real Particles::GetMaximumWeight()

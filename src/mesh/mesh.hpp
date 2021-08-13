@@ -44,7 +44,7 @@ class Coordinates;
 class Reconstruction;
 class Hydro;
 class Field;
-class DustParticles;
+class Particles;
 class PassiveScalars;
 class Gravity;
 class MGGravity;
@@ -115,7 +115,7 @@ class MeshBlock {
   // physics-related objects (possibly containing their derived bvals classes)
   Hydro *phydro;
   Field *pfield;
-  DustParticles *ppar;
+  Particles *ppar;
   Gravity *pgrav;
   MGGravity* pmg;
   PassiveScalars *pscalars;

@@ -105,11 +105,4 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
       }
     }
   }
-
-  // Initialize the stopping time.
-  if (DustParticles::GetVariableTaus()) {
-    Real taus0 = DustParticles::GetStoppingTime();
-    for (int k = 0; k < npar; ++k)
-      ppar->taus[k] = taus0;
-  }
 }
