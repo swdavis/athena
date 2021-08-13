@@ -3,8 +3,8 @@
 // Copyright(C) 2014 James M. Stone <jmstone@princeton.edu> and other code contributors
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //======================================================================================
-//! \file one_particle.cpp
-//! \brief tests one particle.
+//! \file uniform_streaming.cpp
+//! \brief tests uniform streaming between gas and dust particles.
 
 // C++ standard libraries
 #include <cmath>    // round()
@@ -17,7 +17,7 @@
 #include "../hydro/hydro.hpp"
 #include "../mesh/mesh.hpp"
 #include "../parameter_input.hpp"
-#include "../particles/particles.hpp"
+#include "../particles/dust_particles.hpp"
 
 //======================================================================================
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)

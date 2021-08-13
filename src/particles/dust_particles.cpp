@@ -15,6 +15,7 @@
 #include "../coordinates/coordinates.hpp"
 #include "../gravity/gravity.hpp"
 #include "../hydro/hydro.hpp"
+#include "dust_particles.hpp"
 #include "particle_gravity.hpp"
 #include "particles.hpp"
 

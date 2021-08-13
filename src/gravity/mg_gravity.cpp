@@ -24,7 +24,7 @@
 #include "../mesh/mesh.hpp"
 #include "../multigrid/multigrid.hpp"
 #include "../parameter_input.hpp"
-#include "../particles/particles.hpp"
+#include "../particles/dust_particles.hpp"
 #include "gravity.hpp"
 #include "mg_gravity.hpp"
 

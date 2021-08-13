@@ -33,7 +33,7 @@
 #include "../hydro/hydro.hpp"
 #include "../orbital_advection/orbital_advection.hpp"
 #include "../parameter_input.hpp"
-#include "../particles/particles.hpp"
+#include "../particles/dust_particles.hpp"
 #include "../reconstruct/reconstruction.hpp"
 #include "../scalars/scalars.hpp"
 #include "../utils/buffer_utils.hpp"
