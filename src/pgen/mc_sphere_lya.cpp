@@ -211,7 +211,7 @@ void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) 
       pphot->x[i] -= pphot->k[i]*dr;
     }
     pphot->status = ESCAPED;
-    pphot->face = FACE_UNDEF;
+    pphot->face = BoundaryFace::undef;
   } 
  
 }
@@ -229,7 +229,7 @@ void TimedEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
       pphot->x[i] -= pphot->k[i]*dr;
     }
     pphot->status = ESCAPED;
-    pphot->face = FACE_UNDEF;
+    pphot->face = BoundaryFace::undef;
   }
   // Then check time condition -- ensures time is not over estimated
   if (pphot->x[IMC0] >= time0) {
@@ -239,7 +239,7 @@ void TimedEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
       pphot->x[i] -= pphot->k[i]*dt*2.99792458e10;
     }
     pphot->status = ESCAPED;
-    pphot->face = FACE_UNDEF;
+    pphot->face = BoundaryFace::undef;
   }
 }
 

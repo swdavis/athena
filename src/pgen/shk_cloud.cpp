@@ -3,22 +3,25 @@
 // Copyright(C) 2014 James M. Stone <jmstone@princeton.edu> and other code contributors
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
-//! \file shk_cloud.c
-//  \brief Problem generator for shock-cloud problem
-//
-// The shock-cloud problem consists of a planar shock impacting a single spherical cloud
-// Input parameters are:
-//    - problem/Mach   = Mach number of incident shock
-//    - problem/drat   = density ratio of cloud to ambient
-//    - problem/beta   = ratio of Pgas/Pmag
-//
-// The cloud radius is fixed at 1.0.  The center of the coordinate system defines the
-// center of the cloud, and should be in the middle of the cloud. The shock is initially
-// at x1=-2.0.  A typical grid domain should span x1 in [-3.0,7.0] , y and z in
-//[-2.5,2.5] (see input file in /tst).
+//! \file shk_cloud.cpp
+//! \brief Problem generator for shock-cloud problem
+//!
+//! The shock-cloud problem consists of a planar shock impacting a single spherical cloud
+//! Input parameters are:
+//!    - problem/Mach   = Mach number of incident shock
+//!    - problem/drat   = density ratio of cloud to ambient
+//!    - problem/beta   = ratio of Pgas/Pmag
+//!
+//! The cloud radius is fixed at 1.0.  The center of the coordinate system defines the
+//! center of the cloud, and should be in the middle of the cloud. The shock is initially
+//! at x1=-2.0.  A typical grid domain should span x1 in [-3.0,7.0] , y and z in
+//! [-2.5,2.5] (see input file in /tst).
 //========================================================================================
 
+// C headers
+
 // C++ headers
+#include <cmath>      // sqrt()
 #include <iostream>   // endl
 #include <sstream>    // stringstream
 #include <stdexcept>  // runtime_error
@@ -27,21 +30,24 @@
 // Athena++ headers
 #include "../athena.hpp"
 #include "../athena_arrays.hpp"
-#include "../parameter_input.hpp"
 #include "../bvals/bvals.hpp"
 #include "../coordinates/coordinates.hpp"
 #include "../eos/eos.hpp"
 #include "../field/field.hpp"
 #include "../hydro/hydro.hpp"
 #include "../mesh/mesh.hpp"
+#include "../parameter_input.hpp"
 
 // postshock flow variables are shared with IIB function
-static Real gmma1,dl,pl,ul;
-static Real bxl,byl,bzl;
+namespace {
+Real gmma1, dl, pl, ul;
+Real bxl, byl, bzl;
+} // namespace
 
 // fixes BCs on L-x1 (left edge) of grid to postshock flow.
 void ShockCloudInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-     FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+                       FaceField &b, Real time, Real dt,
+                       int il, int iu, int jl, int ju, int kl, int ku, int ngh);
 
 //========================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
@@ -51,8 +57,8 @@ void ShockCloudInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim
 //========================================================================================
 
 void Mesh::InitUserMeshData(ParameterInput *pin) {
-// Set IIB value function pointer
-  EnrollUserBoundaryFunction(INNER_X1, ShockCloudInnerX1);
+  // Set IIB value function pointer
+  EnrollUserBoundaryFunction(BoundaryFace::inner_x1, ShockCloudInnerX1);
   return;
 }
 
@@ -85,88 +91,99 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
   dl = dr*jump1;
   pl = pr*jump2;
-  ul = ur + jump3*mach*sqrt(gmma*pr/dr);
+  ul = ur + jump3*mach*std::sqrt(gmma*pr/dr);
 
   // Initialize the grid
   for (int k=ks; k<=ke; k++) {
-  for (int j=js; j<=je; j++) {
-  for (int i=is; i<=ie; i++) {
-    // postshock flow
-    if (pcoord->x1v(i) < xshock) {
-      phydro->u(IDN,k,j,i) = dl;
-      phydro->u(IM1,k,j,i) = ul*dl;
-      phydro->u(IM2,k,j,i) = 0.0;
-      phydro->u(IM3,k,j,i) = 0.0;
-      phydro->u(IEN,k,j,i) = pl/gmma1 + 0.5*dl*(ul*ul);
+    for (int j=js; j<=je; j++) {
+      for (int i=is; i<=ie; i++) {
+        // postshock flow
+        if (pcoord->x1v(i) < xshock) {
+          phydro->u(IDN,k,j,i) = dl;
+          phydro->u(IM1,k,j,i) = ul*dl;
+          phydro->u(IM2,k,j,i) = 0.0;
+          phydro->u(IM3,k,j,i) = 0.0;
+          phydro->u(IEN,k,j,i) = pl/gmma1 + 0.5*dl*(ul*ul);
 
-    // preshock ambient gas
-    } else {
-      phydro->u(IDN,k,j,i) = dr;
-      phydro->u(IM1,k,j,i) = ur*dr;
-      phydro->u(IM2,k,j,i) = 0.0;
-      phydro->u(IM3,k,j,i) = 0.0;
-      phydro->u(IEN,k,j,i) = pr/gmma1 + 0.5*dr*(ur*ur);
-    }
+          // preshock ambient gas
+        } else {
+          phydro->u(IDN,k,j,i) = dr;
+          phydro->u(IM1,k,j,i) = ur*dr;
+          phydro->u(IM2,k,j,i) = 0.0;
+          phydro->u(IM3,k,j,i) = 0.0;
+          phydro->u(IEN,k,j,i) = pr/gmma1 + 0.5*dr*(ur*ur);
+        }
 
-    // cloud interior
-    Real diag = sqrt(SQR(pcoord->x1v(i)) + SQR(pcoord->x2v(j)) + SQR(pcoord->x3v(k)));
-    if (diag < rad) {
-      phydro->u(IDN,k,j,i) = dr*drat;
-      phydro->u(IM1,k,j,i) = ur*dr*drat;
-      phydro->u(IM2,k,j,i) = 0.0;
-      phydro->u(IM3,k,j,i) = 0.0;
-      phydro->u(IEN,k,j,i) = pr/gmma1 + 0.5*dr*drat*(ur*ur);
+        // cloud interior
+        Real diag = std::sqrt(SQR(pcoord->x1v(i)) + SQR(pcoord->x2v(j))
+                              + SQR(pcoord->x3v(k)));
+        if (diag < rad) {
+          phydro->u(IDN,k,j,i) = dr*drat;
+          phydro->u(IM1,k,j,i) = ur*dr*drat;
+          phydro->u(IM2,k,j,i) = 0.0;
+          phydro->u(IM3,k,j,i) = 0.0;
+          phydro->u(IEN,k,j,i) = pr/gmma1 + 0.5*dr*drat*(ur*ur);
+        }
+      }
     }
-  }}}
+  }
 
   // initialize interface B, assuming longitudinal field only B=(1,0,0)
   if (MAGNETIC_FIELDS_ENABLED) {
-    Real bxr = sqrt(2.0/beta);
+    Real bxr = std::sqrt(2.0/beta);
     Real byr = 0.0;
     Real bzr = 0.0;
-    bxl = sqrt(2.0/beta);
+    bxl = std::sqrt(2.0/beta);
     byl = 0.0;
     bzl = 0.0;
 
     for (int k=ks; k<=ke; k++) {
-    for (int j=js; j<=je; j++) {
-    for (int i=is; i<=ie+1; i++) {
-      if (pcoord->x1v(i) < xshock) {
-        pfield->b.x1f(k,j,i) = bxl;
-      } else {
-        pfield->b.x1f(k,j,i) = bxr;
+      for (int j=js; j<=je; j++) {
+        for (int i=is; i<=ie+1; i++) {
+          if (pcoord->x1v(i) < xshock) {
+            pfield->b.x1f(k,j,i) = bxl;
+          } else {
+            pfield->b.x1f(k,j,i) = bxr;
+          }
+        }
       }
-    }}}
+    }
     for (int k=ks; k<=ke; k++) {
-    for (int j=js; j<=je+1; j++) {
-    for (int i=is; i<=ie; i++) {
-      if (pcoord->x1v(i) < xshock) {
-        pfield->b.x2f(k,j,i) = byl;
-      } else {
-        pfield->b.x2f(k,j,i) = byr;
+      for (int j=js; j<=je+1; j++) {
+        for (int i=is; i<=ie; i++) {
+          if (pcoord->x1v(i) < xshock) {
+            pfield->b.x2f(k,j,i) = byl;
+          } else {
+            pfield->b.x2f(k,j,i) = byr;
+          }
+        }
       }
-    }}}
+    }
     for (int k=ks; k<=ke+1; k++) {
-    for (int j=js; j<=je; j++) {
-    for (int i=is; i<=ie; i++) {
-      if (pcoord->x1v(i) < xshock) {
-        pfield->b.x3f(k,j,i) = bzl;
-      } else {
-        pfield->b.x3f(k,j,i) = bzr;
+      for (int j=js; j<=je; j++) {
+        for (int i=is; i<=ie; i++) {
+          if (pcoord->x1v(i) < xshock) {
+            pfield->b.x3f(k,j,i) = bzl;
+          } else {
+            pfield->b.x3f(k,j,i) = bzr;
+          }
+        }
       }
-    }}}
+    }
 
     // initialize total energy
 
     for (int k=ks; k<=ke; k++) {
-    for (int j=js; j<=je; j++) {
-    for (int i=is; i<=ie; i++) {
-      if (pcoord->x1v(i) < xshock) {
-        phydro->u(IEN,k,j,i) += 0.5*(bxl*bxl + byl*byl + bzl*bzl);
-      } else {
-        phydro->u(IEN,k,j,i) += 0.5*(bxr*bxr + byr*byr + bxr*bzr);
+      for (int j=js; j<=je; j++) {
+        for (int i=is; i<=ie; i++) {
+          if (pcoord->x1v(i) < xshock) {
+            phydro->u(IEN,k,j,i) += 0.5*(bxl*bxl + byl*byl + bzl*bzl);
+          } else {
+            phydro->u(IEN,k,j,i) += 0.5*(bxr*bxr + byr*byr + bxr*bzr);
+          }
+        }
       }
-    }}}
+    }
   }
   return;
 }
@@ -177,15 +194,17 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 // Note quantities at this boundary are held fixed at the downstream state
 
 void ShockCloudInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-     FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke) {
-  for (int k=ks; k<=ke; ++k) {
-  for (int j=js; j<=je; ++j) {
-    for (int i=1; i<=(NGHOST); ++i) {
-      prim(IDN,k,j,is-i) = dl;
-      prim(IVX,k,j,is-i) = ul;
-      prim(IVY,k,j,is-i) = 0.0;
-      prim(IVZ,k,j,is-i) = 0.0;
-      prim(IPR,k,j,is-i) = pl;
+                       FaceField &b, Real time, Real dt,
+                       int il, int iu, int jl, int ju, int kl, int ku, int ngh) {
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=1; i<=ngh; ++i) {
+        prim(IDN,k,j,il-i) = dl;
+        prim(IVX,k,j,il-i) = ul;
+        prim(IVY,k,j,il-i) = 0.0;
+        prim(IVZ,k,j,il-i) = 0.0;
+        prim(IPR,k,j,il-i) = pl;
+      }
     }
-  }}
+  }
 }

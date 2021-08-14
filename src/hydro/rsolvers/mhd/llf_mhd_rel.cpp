@@ -4,66 +4,79 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file llf_mhd_rel.cpp
-//  \brief Implements local Lax-Friedrichs Riemann solver for relativistic MHD.
+//! \brief Implements local Lax-Friedrichs Riemann solver for relativistic MHD.
+
+// C headers
 
 // C++ headers
 #include <algorithm>  // max(), min()
 #include <cmath>      // sqrt()
 
 // Athena++ headers
-#include "../../hydro.hpp"
 #include "../../../athena.hpp"                   // enums, macros
 #include "../../../athena_arrays.hpp"            // AthenaArray
 #include "../../../coordinates/coordinates.hpp"  // Coordinates
 #include "../../../eos/eos.hpp"                  // EquationOfState
 #include "../../../mesh/mesh.hpp"                // MeshBlock
+#include "../../hydro.hpp"
 
+namespace {
 // Declarations
-static void LLFTransforming(MeshBlock *pmb, const int k, const int j, const int il,
-    const int iu, const int ivx, const AthenaArray<Real> &bb,
-    AthenaArray<Real> &bb_normal, AthenaArray<Real> &lambdas_p_l,
-    AthenaArray<Real> &lambdas_m_l, AthenaArray<Real> &lambdas_p_r,
-    AthenaArray<Real> &lambdas_m_r, AthenaArray<Real> &g, AthenaArray<Real> &gi,
-    AthenaArray<Real> &prim_l, AthenaArray<Real> &prim_r, AthenaArray<Real> &cons,
-    AthenaArray<Real> &flux, AthenaArray<Real> &ey, AthenaArray<Real> &ez);
-static void LLFNonTransforming(MeshBlock *pmb, const int k, const int j, const int il,
-    const int iu, const AthenaArray<Real> &bb, AthenaArray<Real> &g,
-    AthenaArray<Real> &gi, AthenaArray<Real> &prim_l, AthenaArray<Real> &prim_r,
-    AthenaArray<Real> &flux, AthenaArray<Real> &ey, AthenaArray<Real> &ez);
+void LLFTransforming(MeshBlock *pmb, const int k, const int j,
+                     const int il, const int iu, const int ivx,
+                     const AthenaArray<Real> &bb, AthenaArray<Real> &bb_normal,
+                     AthenaArray<Real> &g, AthenaArray<Real> &gi,
+                     AthenaArray<Real> &prim_l, AthenaArray<Real> &prim_r,
+                     AthenaArray<Real> &cons, AthenaArray<Real> &flux,
+                     AthenaArray<Real> &ey, AthenaArray<Real> &ez);
+void LLFNonTransforming(MeshBlock *pmb, const int k, const int j,
+                        const int il, const int iu, const AthenaArray<Real> &bb,
+                        AthenaArray<Real> &g, AthenaArray<Real> &gi,
+                        AthenaArray<Real> &prim_l, AthenaArray<Real> &prim_r,
+                        AthenaArray<Real> &flux,
+                        AthenaArray<Real> &ey, AthenaArray<Real> &ez);
+} // namespace
 
 //----------------------------------------------------------------------------------------
 // Riemann solver
 // Inputs:
-//   kl,ku,jl,ju,il,iu: lower and upper x1-, x2-, and x3-indices
+//   k,j: x3- and x2-indices
+//   il,iu: lower and upper x1-indices
 //   ivx: type of interface (IVX for x1, IVY for x2, IVZ for x3)
 //   bb: 3D array of normal magnetic fields
-//   prim_l,prim_r: 3D arrays of left and right primitive states
+//   prim_l,prim_r: 1D arrays of left and right primitive states
+//   dxw: 1D array of mesh spacing in the x-direction
 // Outputs:
 //   flux: 3D array of hydrodynamical fluxes across interfaces
 //   ey,ez: 3D arrays of magnetic fluxes (electric fields) across interfaces
+//   wct: 3D array of weighting factors for CT
 // Notes:
 //   prim_l, prim_r overwritten
 //   implements LLF algorithm similar to that of fluxcalc() in step_ch.c in Harm
 
-void Hydro::RiemannSolver(const int kl, const int ku, const int jl, const int ju,
-    const int il, const int iu, const int ivx, const AthenaArray<Real> &bb,
-    AthenaArray<Real> &prim_l, AthenaArray<Real> &prim_r, AthenaArray<Real> &flux,
-    AthenaArray<Real> &ey, AthenaArray<Real> &ez) {
-  for (int k = kl; k <= ku; ++k) {
-    for (int j = jl; j <= ju; ++j) {
-      if (GENERAL_RELATIVITY and ivx == IVY and pmy_block->pcoord->IsPole(j)) {
-        LLFNonTransforming(pmy_block, k, j, il, iu, bb, g_, gi_, prim_l, prim_r, flux,
-            ey, ez);
-      } else {
-        LLFTransforming(pmy_block, k, j, il, iu, ivx, bb, bb_normal_, lambdas_p_l_,
-            lambdas_m_l_, lambdas_p_r_, lambdas_m_r_, g_, gi_, prim_l, prim_r, cons_,
-            flux, ey, ez);
-      }
-    }
+void Hydro::RiemannSolver(const int k, const int j, const int il, const int iu,
+                          const int ivx, const AthenaArray<Real> &bb,
+                          AthenaArray<Real> &prim_l, AthenaArray<Real> &prim_r,
+                          AthenaArray<Real> &flux,
+                          AthenaArray<Real> &ey, AthenaArray<Real> &ez,
+                          AthenaArray<Real> &wct, const AthenaArray<Real> &dxw) {
+  Real dt = pmy_block->pmy_mesh->dt;
+  if (GENERAL_RELATIVITY && ivx == IVY && pmy_block->pcoord->IsPole(j)) {
+    LLFNonTransforming(pmy_block, k, j, il, iu, bb, g_, gi_, prim_l, prim_r, flux,
+                       ey, ez);
+  } else {
+    LLFTransforming(pmy_block, k, j, il, iu, ivx, bb, bb_normal_,
+                    g_, gi_, prim_l, prim_r, cons_, flux,
+                    ey, ez);
+  }
+  for(int i=il; i<=iu; ++i) {
+    wct(k,j,i) = GetWeightForCT(flux(IDN,k,j,i), prim_l(IDN,i), prim_r(IDN,i), dxw(i),
+                                dt);
   }
   return;
 }
 
+namespace {
 //----------------------------------------------------------------------------------------
 // Frame-transforming LLF implementation
 // Inputs:
@@ -73,9 +86,8 @@ void Hydro::RiemannSolver(const int kl, const int ku, const int jl, const int ju
 //   ivx: type of interface (IVX for x1, IVY for x2, IVZ for x3)
 //   bb: 3D array of normal magnetic fields
 //   bb_normal: 1D scratch array for normal magnetic fields
-//   lambdas_p_l,lambdas_m_l,lambdas_p_r,lambdas_m_r: 1D scratch arrays for wavespeeds
 //   g,gi: 1D scratch arrays for metric coefficients
-//   prim_l,prim_r: 3D arrays of left and right primitive states
+//   prim_l,prim_r: 1D arrays of left and right primitive states
 //   cons: 1D scratch array for conserved quantities
 // Outputs:
 //   flux: 3D array of hydrodynamical fluxes across interfaces
@@ -86,15 +98,15 @@ void Hydro::RiemannSolver(const int kl, const int ku, const int jl, const int ju
 //   references Mignone & Bodo 2006, MNRAS 368 1040 (MB)
 //   references Mignone, Ugliano, & Bodo 2009, MNRAS 393 1141 (MUB)
 
-static void LLFTransforming(MeshBlock *pmb, const int k, const int j, const int il,
-    const int iu, const int ivx, const AthenaArray<Real> &bb,
-    AthenaArray<Real> &bb_normal, AthenaArray<Real> &lambdas_p_l,
-    AthenaArray<Real> &lambdas_m_l, AthenaArray<Real> &lambdas_p_r,
-    AthenaArray<Real> &lambdas_m_r, AthenaArray<Real> &g, AthenaArray<Real> &gi,
-    AthenaArray<Real> &prim_l, AthenaArray<Real> &prim_r, AthenaArray<Real> &cons,
-    AthenaArray<Real> &flux, AthenaArray<Real> &ey, AthenaArray<Real> &ez) {
+void LLFTransforming(MeshBlock *pmb, const int k, const int j,
+                     const int il, const int iu, const int ivx,
+                     const AthenaArray<Real> &bb, AthenaArray<Real> &bb_normal,
+                     AthenaArray<Real> &g, AthenaArray<Real> &gi,
+                     AthenaArray<Real> &prim_l, AthenaArray<Real> &prim_r,
+                     AthenaArray<Real> &cons, AthenaArray<Real> &flux,
+                     AthenaArray<Real> &ey, AthenaArray<Real> &ez) {
   // Transform primitives to locally flat coordinates if in GR
-  #if GENERAL_RELATIVITY
+#if GENERAL_RELATIVITY
   {
     switch (ivx) {
       case IVX:
@@ -108,20 +120,14 @@ static void LLFTransforming(MeshBlock *pmb, const int k, const int j, const int 
         break;
     }
   }
-  #else  // SR; need to populate 1D normal B array
+#else  // SR; need to populate 1D normal B array
   {
-    #pragma omp simd
-    for (int i = il; i <= iu; ++i) {
+#pragma omp simd simdlen(SIMD_WIDTH)
+    for (int i=il; i<=iu; ++i) {
       bb_normal(i) = bb(k,j,i);
     }
   }
-  #endif  // GENERAL_RELATIVITY
-
-  // Calculate wavespeeds
-  pmb->peos->FastMagnetosonicSpeedsSR(prim_l, bb_normal, k, j, il, iu, ivx, lambdas_p_l,
-      lambdas_m_l);
-  pmb->peos->FastMagnetosonicSpeedsSR(prim_r, bb_normal, k, j, il, iu, ivx, lambdas_p_r,
-      lambdas_m_r);
+#endif  // GENERAL_RELATIVITY
 
   // Calculate cyclic permutations of indices
   int ivy = IVX + ((ivx-IVX)+1)%3;
@@ -131,53 +137,38 @@ static void LLFTransforming(MeshBlock *pmb, const int k, const int j, const int 
   const Real gamma_adi = pmb->peos->GetGamma();
 
   // Go through each interface
-  #pragma omp simd
-  for (int i = il; i <= iu; ++i) {
-
+#pragma omp simd simdlen(SIMD_WIDTH)
+  for (int i=il; i<=iu; ++i) {
     // Extract left primitives
-    const Real &rho_l = prim_l(IDN,k,j,i);
-    const Real &pgas_l = prim_l(IPR,k,j,i);
+    Real rho_l = prim_l(IDN,i);
+    Real pgas_l = prim_l(IPR,i);
+    Real ux_l = prim_l(ivx,i);
+    Real uy_l = prim_l(ivy,i);
+    Real uz_l = prim_l(ivz,i);
     Real u_l[4];
-    if (GENERAL_RELATIVITY) {
-      u_l[1] = prim_l(ivx,k,j,i);
-      u_l[2] = prim_l(ivy,k,j,i);
-      u_l[3] = prim_l(ivz,k,j,i);
-      u_l[0] = std::sqrt(1.0 + SQR(u_l[1]) + SQR(u_l[2]) + SQR(u_l[3]));
-    } else {  // SR
-      const Real &vx_l = prim_l(ivx,k,j,i);
-      const Real &vy_l = prim_l(ivy,k,j,i);
-      const Real &vz_l = prim_l(ivz,k,j,i);
-      u_l[0] = std::sqrt(1.0 / (1.0 - SQR(vx_l) - SQR(vy_l) - SQR(vz_l)));
-      u_l[1] = u_l[0] * vx_l;
-      u_l[2] = u_l[0] * vy_l;
-      u_l[3] = u_l[0] * vz_l;
-    }
-    const Real &bb2_l = prim_l(IBY,k,j,i);
-    const Real &bb3_l = prim_l(IBZ,k,j,i);
+    u_l[0] = std::sqrt(1.0 + SQR(ux_l) + SQR(uy_l) + SQR(uz_l));
+    u_l[1] = ux_l;
+    u_l[2] = uy_l;
+    u_l[3] = uz_l;
+    Real bb2_l = prim_l(IBY,i);
+    Real bb3_l = prim_l(IBZ,i);
 
     // Extract right primitives
-    const Real &rho_r = prim_r(IDN,k,j,i);
-    const Real &pgas_r = prim_r(IPR,k,j,i);
+    Real rho_r = prim_r(IDN,i);
+    Real pgas_r = prim_r(IPR,i);
+    Real ux_r = prim_r(ivx,i);
+    Real uy_r = prim_r(ivy,i);
+    Real uz_r = prim_r(ivz,i);
     Real u_r[4];
-    if (GENERAL_RELATIVITY) {
-      u_r[1] = prim_r(ivx,k,j,i);
-      u_r[2] = prim_r(ivy,k,j,i);
-      u_r[3] = prim_r(ivz,k,j,i);
-      u_r[0] = std::sqrt(1.0 + SQR(u_r[1]) + SQR(u_r[2]) + SQR(u_r[3]));
-    } else {  // SR
-      const Real &vx_r = prim_r(ivx,k,j,i);
-      const Real &vy_r = prim_r(ivy,k,j,i);
-      const Real &vz_r = prim_r(ivz,k,j,i);
-      u_r[0] = std::sqrt(1.0 / (1.0 - SQR(vx_r) - SQR(vy_r) - SQR(vz_r)));
-      u_r[1] = u_r[0] * vx_r;
-      u_r[2] = u_r[0] * vy_r;
-      u_r[3] = u_r[0] * vz_r;
-    }
-    const Real &bb2_r = prim_r(IBY,k,j,i);
-    const Real &bb3_r = prim_r(IBZ,k,j,i);
+    u_r[0] = std::sqrt(1.0 + SQR(ux_r) + SQR(uy_r) + SQR(uz_r));
+    u_r[1] = ux_r;
+    u_r[2] = uy_r;
+    u_r[3] = uz_r;
+    Real bb2_r = prim_r(IBY,i);
+    Real bb3_r = prim_r(IBZ,i);
 
     // Extract normal magnetic field
-    const Real &bb1 = bb_normal(i);
+    Real bb1 = bb_normal(i);
 
     // Calculate 4-magnetic field in left state
     Real b_l[4];
@@ -195,14 +186,26 @@ static void LLFTransforming(MeshBlock *pmb, const int k, const int j, const int 
     b_r[3] = (bb3_r + b_r[0] * u_r[3]) / u_r[0];
     Real b_sq_r = -SQR(b_r[0]) + SQR(b_r[1]) + SQR(b_r[2]) + SQR(b_r[3]);
 
+    // Calculate left wavespeeds
+    Real wgas_l = rho_l + gamma_adi / (gamma_adi - 1.0) * pgas_l;
+    Real lambda_m_l, lambda_p_l;
+    pmb->peos->FastMagnetosonicSpeedsGR(wgas_l, pgas_l, u_l[0], u_l[1], b_sq_l, -1.0, 0.0,
+                                        1.0, &lambda_p_l, &lambda_m_l);
+
+    // Calculate right wavespeeds
+    Real wgas_r = rho_r + gamma_adi / (gamma_adi - 1.0) * pgas_r;
+    Real lambda_m_r, lambda_p_r;
+    pmb->peos->FastMagnetosonicSpeedsGR(wgas_r, pgas_r, u_r[0], u_r[1], b_sq_r, -1.0, 0.0,
+                                        1.0, &lambda_p_r, &lambda_m_r);
+
     // Calculate extremal wavespeeds
-    Real lambda_l = std::min(lambdas_m_l(i), lambdas_m_r(i));  // (MB 55)
-    Real lambda_r = std::max(lambdas_p_l(i), lambdas_p_r(i));  // (MB 55)
+    Real lambda_l = std::min(lambda_m_l, lambda_m_r);  // (MB 55)
+    Real lambda_r = std::max(lambda_p_l, lambda_p_r);  // (MB 55)
     Real lambda = std::max(lambda_r, -lambda_l);
 
     // Calculate conserved quantities in L region (MUB 8)
     Real cons_l[NWAVE];
-    Real wtot_l = rho_l + gamma_adi/(gamma_adi-1.0) * pgas_l + b_sq_l;
+    Real wtot_l = wgas_l + b_sq_l;
     Real ptot_l = pgas_l + 0.5*b_sq_l;
     cons_l[IDN] = rho_l * u_l[0];
     cons_l[IEN] = wtot_l * u_l[0] * u_l[0] - b_l[0] * b_l[0] - ptot_l;
@@ -224,7 +227,7 @@ static void LLFTransforming(MeshBlock *pmb, const int k, const int j, const int 
 
     // Calculate conserved quantities in R region (MUB 8)
     Real cons_r[NWAVE];
-    Real wtot_r = rho_r + gamma_adi/(gamma_adi-1.0) * pgas_r + b_sq_r;
+    Real wtot_r = wgas_r + b_sq_r;
     Real ptot_r = pgas_r + 0.5*b_sq_r;
     cons_r[IDN] = rho_r * u_r[0];
     cons_r[IEN] = wtot_r * u_r[0] * u_r[0] - b_r[0] * b_r[0] - ptot_r;
@@ -260,7 +263,7 @@ static void LLFTransforming(MeshBlock *pmb, const int k, const int j, const int 
   }
 
   // Transform fluxes to global coordinates if in GR
-  #if GENERAL_RELATIVITY
+#if GENERAL_RELATIVITY
   {
     switch (ivx) {
       case IVX:
@@ -274,7 +277,7 @@ static void LLFTransforming(MeshBlock *pmb, const int k, const int j, const int 
         break;
     }
   }
-  #endif  // GENERAL_RELATIVITY
+#endif  // GENERAL_RELATIVITY
   return;
 }
 
@@ -294,12 +297,13 @@ static void LLFTransforming(MeshBlock *pmb, const int k, const int j, const int 
 //   implements LLF algorithm similar to that of fluxcalc() in step_ch.c in Harm
 //   derived from RiemannSolver() in llf_mhd_rel_no_transform.cpp assuming ivx = IVY
 
-static void LLFNonTransforming(MeshBlock *pmb, const int k, const int j, const int il,
-    const int iu, const AthenaArray<Real> &bb, AthenaArray<Real> &g,
-    AthenaArray<Real> &gi, AthenaArray<Real> &prim_l, AthenaArray<Real> &prim_r,
-    AthenaArray<Real> &flux, AthenaArray<Real> &ey, AthenaArray<Real> &ez)
+void LLFNonTransforming(MeshBlock *pmb, const int k, const int j, const int il,
+                        const int iu, const AthenaArray<Real> &bb,
+                        AthenaArray<Real> &g, AthenaArray<Real> &gi,
+                        AthenaArray<Real> &prim_l, AthenaArray<Real> &prim_r,
+                        AthenaArray<Real> &flux,
+                        AthenaArray<Real> &ey, AthenaArray<Real> &ez) {
 #if GENERAL_RELATIVITY
-{
   // Extract ratio of specific heats
   const Real gamma_adi = pmb->peos->GetGamma();
 
@@ -307,9 +311,8 @@ static void LLFNonTransforming(MeshBlock *pmb, const int k, const int j, const i
   pmb->pcoord->Face2Metric(k, j, il, iu, g, gi);
 
   // Go through each interface
-  #pragma omp simd
-  for (int i = il; i <= iu; ++i) {
-
+#pragma omp simd
+  for (int i=il; i<=iu; ++i) {
     // Extract metric
     const Real &g_00 = g(I00,i), &g_01 = g(I01,i), &g_02 = g(I02,i), &g_03 = g(I03,i),
                &g_10 = g(I01,i), &g_11 = g(I11,i), &g_12 = g(I12,i), &g_13 = g(I13,i),
@@ -322,30 +325,30 @@ static void LLFNonTransforming(MeshBlock *pmb, const int k, const int j, const i
     Real alpha = std::sqrt(-1.0/g00);
 
     // Extract left primitives
-    const Real &rho_l = prim_l(IDN,k,j,i);
-    const Real &pgas_l = prim_l(IPR,k,j,i);
-    const Real &uu1_l = prim_l(IVX,k,j,i);
-    const Real &uu2_l = prim_l(IVY,k,j,i);
-    const Real &uu3_l = prim_l(IVZ,k,j,i);
+    const Real &rho_l = prim_l(IDN,i);
+    const Real &pgas_l = prim_l(IPR,i);
+    const Real &uu1_l = prim_l(IVX,i);
+    const Real &uu2_l = prim_l(IVY,i);
+    const Real &uu3_l = prim_l(IVZ,i);
     const Real &bb2_l = bb(k,j,i);
-    const Real &bb3_l = prim_l(IBY,k,j,i);
-    const Real &bb1_l = prim_l(IBZ,k,j,i);
+    const Real &bb3_l = prim_l(IBY,i);
+    const Real &bb1_l = prim_l(IBZ,i);
 
     // Extract right primitives
-    const Real &rho_r = prim_r(IDN,k,j,i);
-    const Real &pgas_r = prim_r(IPR,k,j,i);
-    const Real &uu1_r = prim_r(IVX,k,j,i);
-    const Real &uu2_r = prim_r(IVY,k,j,i);
-    const Real &uu3_r = prim_r(IVZ,k,j,i);
+    const Real &rho_r = prim_r(IDN,i);
+    const Real &pgas_r = prim_r(IPR,i);
+    const Real &uu1_r = prim_r(IVX,i);
+    const Real &uu2_r = prim_r(IVY,i);
+    const Real &uu3_r = prim_r(IVZ,i);
     const Real &bb2_r = bb(k,j,i);
-    const Real &bb3_r = prim_r(IBY,k,j,i);
-    const Real &bb1_r = prim_r(IBZ,k,j,i);
+    const Real &bb3_r = prim_r(IBY,i);
+    const Real &bb1_r = prim_r(IBZ,i);
 
     // Calculate 4-velocity in left state
     Real ucon_l[4], ucov_l[4];
     Real tmp = g_11*SQR(uu1_l) + 2.0*g_12*uu1_l*uu2_l + 2.0*g_13*uu1_l*uu3_l
-             + g_22*SQR(uu2_l) + 2.0*g_23*uu2_l*uu3_l
-             + g_33*SQR(uu3_l);
+               + g_22*SQR(uu2_l) + 2.0*g_23*uu2_l*uu3_l
+               + g_33*SQR(uu3_l);
     Real gamma_l = std::sqrt(1.0 + tmp);
     ucon_l[0] = gamma_l / alpha;
     ucon_l[1] = uu1_l - alpha * gamma_l * g01;
@@ -359,8 +362,8 @@ static void LLFNonTransforming(MeshBlock *pmb, const int k, const int j, const i
     // Calculate 4-velocity in right state
     Real ucon_r[4], ucov_r[4];
     tmp = g_11*SQR(uu1_r) + 2.0*g_12*uu1_r*uu2_r + 2.0*g_13*uu1_r*uu3_r
-        + g_22*SQR(uu2_r) + 2.0*g_23*uu2_r*uu3_r
-        + g_33*SQR(uu3_r);
+          + g_22*SQR(uu2_r) + 2.0*g_23*uu2_r*uu3_r
+          + g_33*SQR(uu3_r);
     Real gamma_r = std::sqrt(1.0 + tmp);
     ucon_r[0] = gamma_r / alpha;
     ucon_r[1] = uu1_r - alpha * gamma_r * g01;
@@ -374,9 +377,9 @@ static void LLFNonTransforming(MeshBlock *pmb, const int k, const int j, const i
     // Calculate 4-magnetic field in left state
     Real bcon_l[4], bcov_l[4];
     bcon_l[0] = ucon_l[0] * (g_01*bb1_l + g_02*bb2_l + g_03*bb3_l)
-              + ucon_l[1] * (g_11*bb1_l + g_12*bb2_l + g_13*bb3_l)
-              + ucon_l[2] * (g_21*bb1_l + g_22*bb2_l + g_23*bb3_l)
-              + ucon_l[3] * (g_31*bb1_l + g_32*bb2_l + g_33*bb3_l);
+                + ucon_l[1] * (g_11*bb1_l + g_12*bb2_l + g_13*bb3_l)
+                + ucon_l[2] * (g_21*bb1_l + g_22*bb2_l + g_23*bb3_l)
+                + ucon_l[3] * (g_31*bb1_l + g_32*bb2_l + g_33*bb3_l);
     bcon_l[1] = (bb1_l + bcon_l[0] * ucon_l[1]) / ucon_l[0];
     bcon_l[2] = (bb2_l + bcon_l[0] * ucon_l[2]) / ucon_l[0];
     bcon_l[3] = (bb3_l + bcon_l[0] * ucon_l[3]) / ucon_l[0];
@@ -385,14 +388,14 @@ static void LLFNonTransforming(MeshBlock *pmb, const int k, const int j, const i
     bcov_l[2] = g_20*bcon_l[0] + g_21*bcon_l[1] + g_22*bcon_l[2] + g_23*bcon_l[3];
     bcov_l[3] = g_30*bcon_l[0] + g_31*bcon_l[1] + g_32*bcon_l[2] + g_33*bcon_l[3];
     Real b_sq_l = bcon_l[0]*bcov_l[0] + bcon_l[1]*bcov_l[1] + bcon_l[2]*bcov_l[2]
-        + bcon_l[3]*bcov_l[3];
+                  + bcon_l[3]*bcov_l[3];
 
     // Calculate 4-magnetic field in right state
     Real bcon_r[4], bcov_r[4];
     bcon_r[0] = ucon_r[0] * (g_01*bb1_r + g_02*bb2_r + g_03*bb3_r)
-              + ucon_r[1] * (g_11*bb1_r + g_12*bb2_r + g_13*bb3_r)
-              + ucon_r[2] * (g_21*bb1_r + g_22*bb2_r + g_23*bb3_r)
-              + ucon_r[3] * (g_31*bb1_r + g_32*bb2_r + g_33*bb3_r);
+                + ucon_r[1] * (g_11*bb1_r + g_12*bb2_r + g_13*bb3_r)
+                + ucon_r[2] * (g_21*bb1_r + g_22*bb2_r + g_23*bb3_r)
+                + ucon_r[3] * (g_31*bb1_r + g_32*bb2_r + g_33*bb3_r);
     bcon_r[1] = (bb1_r + bcon_r[0] * ucon_r[1]) / ucon_r[0];
     bcon_r[2] = (bb2_r + bcon_r[0] * ucon_r[2]) / ucon_r[0];
     bcon_r[3] = (bb3_r + bcon_r[0] * ucon_r[3]) / ucon_r[0];
@@ -401,19 +404,19 @@ static void LLFNonTransforming(MeshBlock *pmb, const int k, const int j, const i
     bcov_r[2] = g_20*bcon_r[0] + g_21*bcon_r[1] + g_22*bcon_r[2] + g_23*bcon_r[3];
     bcov_r[3] = g_30*bcon_r[0] + g_31*bcon_r[1] + g_32*bcon_r[2] + g_33*bcon_r[3];
     Real b_sq_r = bcon_r[0]*bcov_r[0] + bcon_r[1]*bcov_r[1] + bcon_r[2]*bcov_r[2]
-        + bcon_r[3]*bcov_r[3];
+                  + bcon_r[3]*bcov_r[3];
 
     // Calculate wavespeeds in left state
     Real lambda_p_l, lambda_m_l;
     Real wgas_l = rho_l + gamma_adi/(gamma_adi-1.0) * pgas_l;
     pmb->peos->FastMagnetosonicSpeedsGR(wgas_l, pgas_l, ucon_l[0], ucon_l[IVY], b_sq_l,
-        g00, g02, g22, &lambda_p_l, &lambda_m_l);
+                                        g00, g02, g22, &lambda_p_l, &lambda_m_l);
 
     // Calculate wavespeeds in right state
     Real lambda_p_r, lambda_m_r;
     Real wgas_r = rho_r + gamma_adi/(gamma_adi-1.0) * pgas_r;
     pmb->peos->FastMagnetosonicSpeedsGR(wgas_r, pgas_r, ucon_r[0], ucon_r[IVY], b_sq_r,
-        g00, g02, g22, &lambda_p_r, &lambda_m_r);
+                                        g00, g02, g22, &lambda_p_r, &lambda_m_r);
 
     // Calculate extremal wavespeed
     Real lambda_l = std::min(lambda_m_l, lambda_m_r);
@@ -478,10 +481,6 @@ static void LLFNonTransforming(MeshBlock *pmb, const int k, const int j, const i
     ez(k,j,i) = 0.5 * (flux_l[IBZ] + flux_r[IBZ] - lambda * (cons_r[IBZ] - cons_l[IBZ]));
   }
   return;
-}
-
-#else
-{
-  return;
-}
 #endif  // GENERAL_RELATIVITY
+}
+} // namespace

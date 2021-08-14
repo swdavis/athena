@@ -1,5 +1,5 @@
-#ifndef TURBULENCE_HPP
-#define TURBULENCE_HPP
+#ifndef FFT_TURBULENCE_HPP_
+#define FFT_TURBULENCE_HPP_
 
 //========================================================================================
 // Athena++ astrophysical MHD code
@@ -9,7 +9,12 @@
 //! \file turbulence.hpp
 //  \brief defines Turbulence class
 
-// Athena++ classes headers
+// C headers
+
+// C++ headers
+#include <random>     // mt19937, normal_distribution, uniform_real_distribution
+
+// Athena++ headers
 #include "../athena.hpp"
 #include "../athena_arrays.hpp"
 #include "athena_fft.hpp"
@@ -25,21 +30,29 @@ class FFTDriver;
 //  \brief Turbulence Driver
 
 class TurbulenceDriver : public FFTDriver{
-public:
+ public:
   TurbulenceDriver(Mesh *pm, ParameterInput *pin);
   ~TurbulenceDriver();
-  void Driving(void);
-  void Generate(void);
-  void PowerSpectrum(AthenaFFTComplex *amp);
+  void Driving();
+  void Generate();
+  void PowerSpectrum(std::complex<Real> *amp);
   void Perturb(Real dt);
-  int64_t GetKcomp(int idx, int disp, int Nx);
-private:
-  int64_t rseed;
-  int nlow,nhigh;
-  bool impulsive;
-  Real dtdrive,tdrive;
-  Real expo,dedt,dvol;
-  AthenaArray<Real> *vel;
+  void OUProcess(Real dt);
+  void Project(std::complex<Real> **fv, Real f_shear);
+  void Project(std::complex<Real> **fv, std::complex<Real> **fv_sh,
+               std::complex<Real> **fv_co);
+  std::int64_t GetKcomp(int idx, int disp, int Nx);
+ private:
+  std::int64_t rseed;
+  int nlow, nhigh;
+  Real tdrive, dtdrive, tcorr, f_shear;
+  Real expo, dedt, dvol;
+  AthenaArray<Real> vel[3];
+  std::complex<Real> **fv_, **fv_new_;
+  std::complex<Real> **fv_sh_, **fv_co_;
+  bool initialized_ = false;
+  bool global_ps_ = false;
+  std::mt19937_64 rng_generator;
 };
 
-#endif // TURBULENCE_HPP
+#endif // FFT_TURBULENCE_HPP_

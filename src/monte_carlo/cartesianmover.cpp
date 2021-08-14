@@ -12,8 +12,6 @@
 #include "../mesh/mesh.hpp"
 #include "debug.hpp"
 
-//#define DEBUG
-
 Real DistanceToNearestFace(MCCoord *pco, Photon *pphot, int ip);
 
 CartesianMover::CartesianMover(MonteCarloBlock *pmcb) 

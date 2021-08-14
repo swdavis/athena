@@ -13,7 +13,7 @@
 #include "../mesh/mesh.hpp"
 #include "debug.hpp"
 
-//#define DEBUG
+//#define DEBUG_GM
 //#define NBUFFER 1000
 
 // SWD: remove all of these
@@ -51,7 +51,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
   // get number of mean free paths photon will travel
   Real tauremaining = GetOpticalDepth(pran);
  
-#ifdef DEBUG
+#ifdef DEBUG_GM
   typedef struct {
     Real dl, dlr, dlt, dlp;
     Real cth, sth, cph, sph;

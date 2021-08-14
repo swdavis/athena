@@ -6,30 +6,33 @@
 //! \file change_rundir.cpp
 //! \brief executes unix 'chdir' command to change dir in which Athena++ runs
 
-// Athena headers
-#include "../athena.hpp"
+// C headers
+// POSIX C extensions
+#include <sys/stat.h>  // mkdir()
+#include <unistd.h>    // chdir()
 
 // C++ headers
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
-#include <sys/stat.h>  // mkdir()
-#include <unistd.h>    // chdir()
+
+// Athena++ headers
+#include "../athena.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn void ChangeRunDir(const char *pdir)
-//  \brief change to input run directory; create if it does not exist yet
+//! \brief change to input run directory; create if it does not exist yet
 
 void ChangeRunDir(const char *pdir) {
   std::stringstream msg;
 
-  if (pdir == NULL || *pdir == '\0') return;
+  if (pdir == nullptr || *pdir == '\0') return;
 
   mkdir(pdir, 0775);
   if (chdir(pdir)) {
     msg << "### FATAL ERROR in function [ChangeToRunDir]" << std::endl
         << "Cannot cd to directory '" << pdir << "'";
-    throw std::runtime_error(msg.str().c_str());
+    ATHENA_ERROR(msg);
   }
 
   return;

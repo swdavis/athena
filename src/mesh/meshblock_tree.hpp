@@ -1,62 +1,71 @@
-#ifndef MESHBLOCK_TREE_HPP
-#define MESHBLOCK_TREE_HPP
+#ifndef MESH_MESHBLOCK_TREE_HPP_
+#define MESH_MESHBLOCK_TREE_HPP_
 //======================================================================================
 // Athena++ astrophysical MHD code
 // Copyright (C) 2014 James M. Stone  <jmstone@princeton.edu>
 // See LICENSE file for full public license information.
 //======================================================================================
 //! \file meshblock_tree.hpp
-//  \brief defines the LogicalLocation structure and MeshBlockTree class
+//! \brief defines the LogicalLocation structure and MeshBlockTree class
 //======================================================================================
 
-// Athena++ classes headers
+// C headers
+
+// C++ headers
+#include <unordered_map>
+#include <vector>
+
+// Athena++ headers
 #include "../athena.hpp"
 #include "../athena_arrays.hpp"
-#include "../defs.hpp"
 #include "../bvals/bvals.hpp"
+#include "../defs.hpp"
+#include "../multigrid/multigrid.hpp"
 
+class Mesh;
 
 //--------------------------------------------------------------------------------------
 //! \class MeshBlockTree
-//  \brief Objects are nodes in an AMR MeshBlock tree structure
+//! \brief Objects are nodes in an AMR MeshBlock tree structure
 
 class MeshBlockTree {
   friend class Mesh;
   friend class MeshBlock;
   friend class BoundaryBase;
-public:
-  MeshBlockTree();
-  MeshBlockTree(MeshBlockTree *parent, int ox, int oy, int oz);
+ public:
+  explicit MeshBlockTree(Mesh *pmesh);
+  MeshBlockTree(MeshBlockTree *parent, int ox1, int ox2, int ox3);
   ~MeshBlockTree();
 
   // accessor
-  MeshBlockTree* GetLeaf(int ox, int oy, int oz) {return pleaf[oz][oy][ox];}
+  MeshBlockTree* GetLeaf(int ox1, int ox2, int ox3)
+  { return pleaf_[(ox1 + (ox2<<1) + (ox3<<2))]; }
+  int GetGid() const {return gid_;}
 
   // functions
-  void CreateRootGrid(int64_t nx, int64_t ny, int64_t nz, int nl);
-  void AddMeshBlock(MeshBlockTree& root, LogicalLocation rloc, int dim,
-       enum BoundaryFlag* mesh_bcs, int64_t rbx, int64_t rby, int64_t rbz,
-       int rl, int &nnew);
-  void AddMeshBlockWithoutRefine(LogicalLocation rloc,
-                                 int64_t rbx, int64_t rby, int64_t rbz, int rl);
-  void Refine(MeshBlockTree& root, int dim, enum BoundaryFlag* mesh_bcs,
-              int64_t rbx, int64_t rby, int64_t rbz, int rl, int &nnew);
-  void Derefine(MeshBlockTree& root, int dim, enum BoundaryFlag* mesh_bcs,
-              int64_t rbx, int64_t rby, int64_t rbz, int rl, int &ndel);
+  void CreateRootGrid();
+  void AddMeshBlock(LogicalLocation rloc, int &nnew);
+  void AddMeshBlockWithoutRefine(LogicalLocation rloc);
+  void Refine(int &nnew);
+  void Derefine(int &ndel);
   MeshBlockTree* FindMeshBlock(LogicalLocation tloc);
   void CountMeshBlock(int& count);
   void GetMeshBlockList(LogicalLocation *list, int *pglist, int& count);
   MeshBlockTree* FindNeighbor(LogicalLocation myloc, int ox1, int ox2, int ox3,
-                 enum BoundaryFlag* bcs, int64_t rbx, int64_t rby, int64_t rbz,
-                 int rl, bool amrflag=false);
+                              bool amrflag=false);
+  void CountMGOctets(int *noct);
+  void GetMGOctetList(std::vector<MGOctet> *oct,
+       std::unordered_map<LogicalLocation, int, LogicalLocationHash> *octmap, int *noct);
 
-private:
+ private:
   // data
-  bool flag; // false: virtual node, has leaves; true: real node, is a leaf
-  MeshBlockTree* pparent;
-  MeshBlockTree* pleaf[2][2][2];
-  LogicalLocation loc;
-  int gid;
+  MeshBlockTree** pleaf_;
+  int gid_;
+  LogicalLocation loc_;
+
+  static Mesh* pmesh_;
+  static MeshBlockTree* proot_;
+  static int nleaf_;
 };
 
-#endif // MESHBLOCK_TREE_HPP
+#endif // MESH_MESHBLOCK_TREE_HPP_

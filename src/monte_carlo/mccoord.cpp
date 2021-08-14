@@ -21,10 +21,19 @@
 // constructor
 MCCoord::MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb) {
 
-  x1f.InitWithShallowCopy(pcoord->x1f);
-  x2f.InitWithShallowCopy(pcoord->x2f);
-  x3f.InitWithShallowCopy(pcoord->x3f);
+  // SWD This whole class needs to be reworked
+  int nx1 = pcoord->x1f.GetDim1();
+  int nx2 = pcoord->x2f.GetDim1();
+  int nx3 = pcoord->x3f.GetDim1();
 
+  x1f.NewAthenaArray(nx1);
+  x2f.NewAthenaArray(nx2);
+  x3f.NewAthenaArray(nx3);
+
+  x1f = pcoord->x1f;
+  x2f = pcoord->x2f;
+  x3f = pcoord->x3f;
+  
   // Needed for black hole coordinates
   if (GENERAL_RELATIVITY) {
     bh_mass_ = pcoord->GetMass();

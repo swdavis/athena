@@ -1042,16 +1042,16 @@ void MonteCarloBlock::UpdateCooling(Photon *pphot, Real energy0, Real weight0, i
 void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
 
   // set x1 boundaries
-  mcb_bcs[INNER_X1] = input_bcs[INNER_X1];
-  mcb_bcs[OUTER_X1] = input_bcs[OUTER_X1];
+  mcb_bcs[BoundaryFace::inner_x1] = input_bcs[BoundaryFace::inner_x1];
+  mcb_bcs[BoundaryFace::outer_x1] = input_bcs[BoundaryFace::outer_x1];
 
   // set x2 boundaries
-  mcb_bcs[INNER_X2] = input_bcs[INNER_X2];
-  mcb_bcs[OUTER_X2] = input_bcs[OUTER_X2];
+  mcb_bcs[BoundaryFace::inner_x2] = input_bcs[BoundaryFace::inner_x2];
+  mcb_bcs[BoundaryFace::outer_x2] = input_bcs[BoundaryFace::outer_x2];
 
   // set x3 boundaries
-  mcb_bcs[INNER_X3] = input_bcs[INNER_X3];
-  mcb_bcs[OUTER_X3] = input_bcs[OUTER_X3];
+  mcb_bcs[BoundaryFace::inner_x3] = input_bcs[BoundaryFace::inner_x3];
+  mcb_bcs[BoundaryFace::outer_x3] = input_bcs[BoundaryFace::outer_x3];
   
 }
 
@@ -1062,39 +1062,39 @@ void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
 /*void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
 
   // set x1 boundaries
-  if (pmy_block->pbval->block_bcs[INNER_X1] == BLOCK_BNDRY) {
-    mcb_bcs[INNER_X1] = MC_BLOCK_BNDRY;
+  if (pmy_block->pbval->block_bcs[BoundaryFace::inner_x1] == BLOCK_BNDRY) {
+    mcb_bcs[BoundaryFace::inner_x1] = MC_BLOCK_BNDRY;
   } else {
-    mcb_bcs[INNER_X1] = input_bcs[INNER_X1];
+    mcb_bcs[BoundaryFace::inner_x1] = input_bcs[BoundaryFace::inner_x1];
   }
-  if (pmy_block->pbval->block_bcs[OUTER_X1] == BLOCK_BNDRY) {
-    mcb_bcs[OUTER_X1] = MC_BLOCK_BNDRY;
+  if (pmy_block->pbval->block_bcs[BoundaryFace::outer_x1] == BLOCK_BNDRY) {
+    mcb_bcs[BoundaryFace::outer_x1] = MC_BLOCK_BNDRY;
   } else {
-    mcb_bcs[OUTER_X1] = input_bcs[OUTER_X1];
+    mcb_bcs[BoundaryFace::outer_x1] = input_bcs[BoundaryFace::outer_x1];
   }
 
   // set x2 boundaries
-  if (pmy_block->pbval->block_bcs[INNER_X2] == BLOCK_BNDRY) {
-    mcb_bcs[INNER_X2] = MC_BLOCK_BNDRY;
+  if (pmy_block->pbval->block_bcs[BoundaryFace::inner_x2] == BLOCK_BNDRY) {
+    mcb_bcs[BoundaryFace::inner_x2] = MC_BLOCK_BNDRY;
   } else {
-    mcb_bcs[INNER_X2] = input_bcs[INNER_X2];
+    mcb_bcs[BoundaryFace::inner_x2] = input_bcs[BoundaryFace::inner_x2];
   }
-  if (pmy_block->pbval->block_bcs[OUTER_X2] == BLOCK_BNDRY) {
-    mcb_bcs[OUTER_X2] = MC_BLOCK_BNDRY;
+  if (pmy_block->pbval->block_bcs[BoundaryFace::outer_x2] == BLOCK_BNDRY) {
+    mcb_bcs[BoundaryFace::outer_x2] = MC_BLOCK_BNDRY;
   } else {
-    mcb_bcs[OUTER_X2] = input_bcs[OUTER_X2];
+    mcb_bcs[BoundaryFace::outer_x2] = input_bcs[BoundaryFace::outer_x2];
   }
 
   // set x3 boundaries
-  if (pmy_block->pbval->block_bcs[INNER_X3] == BLOCK_BNDRY) {
-    mcb_bcs[INNER_X3] = MC_BLOCK_BNDRY;
+  if (pmy_block->pbval->block_bcs[BoundaryFace::inner_x3] == BLOCK_BNDRY) {
+    mcb_bcs[BoundaryFace::inner_x3] = MC_BLOCK_BNDRY;
   } else {
-    mcb_bcs[INNER_X3] = input_bcs[INNER_X3];
+    mcb_bcs[BoundaryFace::inner_x3] = input_bcs[BoundaryFace::inner_x3];
   }
-  if (pmy_block->pbval->block_bcs[OUTER_X3] == BLOCK_BNDRY) {
-    mcb_bcs[OUTER_X3] = MC_BLOCK_BNDRY;
+  if (pmy_block->pbval->block_bcs[BoundaryFace::outer_x3] == BLOCK_BNDRY) {
+    mcb_bcs[BoundaryFace::outer_x3] = MC_BLOCK_BNDRY;
   } else {
-    mcb_bcs[OUTER_X3] = input_bcs[OUTER_X3];
+    mcb_bcs[BoundaryFace::outer_x3] = input_bcs[BoundaryFace::outer_x3];
   }
   }*/
 

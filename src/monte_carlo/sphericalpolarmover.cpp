@@ -12,7 +12,7 @@
 #include "../mesh/mesh.hpp"
 #include "debug.hpp"
 
-//#define DEBUG
+//#define DEBUG_SM
 //#define NBUFFER 50
 
 // Implementation of Sphericalpolar Photon mover
@@ -51,7 +51,7 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
   Real& kph = pphot->k[2];
   bool thface = false;
 
-#ifdef DEBUG
+#ifdef DEBUG_SM
   typedef struct {
     Real dlr, dlt, dlp;
     Real cth, sth, cph, sph;
@@ -221,7 +221,7 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
       Real det = b2 * SQR(cthi) * (cth_ext2 - SQR(cthi)); //det should be positive
       Real lm = (-bz*kz - sqrt(det)) / (SQR(kz) - SQR(cthi)) - kr*r0;
       Real lp = (-bz*kz + sqrt(det)) / (SQR(kz) - SQR(cthi)) - kr*r0; 
-#ifdef DEBUG
+#ifdef DEBUG_SM
       if (iter < NBUFFER) {
         db[iter-1].lm = lm;
         db[iter-1].lp = lp;
@@ -246,7 +246,7 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
 
     int face;
     NextFace(dlr,dlt,dlp,face,dl);
-#ifdef DEBUG
+#ifdef DEBUG_SM
     if (iter < NBUFFER) {
       db[iter-1].dl = dl; db[iter-1].dlr = dlr; db[iter-1].dlt = dlt; db[iter-1].dlp = dlp;
       db[iter-1].cth = cth; db[iter-1].sth = sth; db[iter-1].cph = cph; db[iter-1].sph = sph;
@@ -355,7 +355,7 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
   // -------------------------- Debugging -------------------------------------------
   if (iter >= checkmove) {
     std::cout << "Warning: iter exceeded " << checkmove << " in photon mover." << std::endl;
-#ifdef DEBUG
+#ifdef DEBUG_SM
     int nmax = (NBUFFER > iter) ? iter : NBUFFER;
     for (int i=0; i < nmax; ++i) {
       // printf("dl: %16.12e %16.12e %16.12e %16.12e\n");

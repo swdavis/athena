@@ -19,177 +19,177 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
 
 // Set BC functions for each of the 6 boundaries -----------------------------------------
   // Inner x1
-  switch(pmcb->mcb_bcs[INNER_X1]) {
+  switch(pmcb->mcb_bcs[BoundaryFace::inner_x1]) {
     case MC_PERIODIC_BNDRY:
-      BoundaryFunction_[INNER_X1] = PeriodicInnerX1;
+      BoundaryFunction_[BoundaryFace::inner_x1] = PeriodicInnerX1;
       break;
     case MC_ESCAPE_BNDRY:
-      BoundaryFunction_[INNER_X1] = Escape;
+      BoundaryFunction_[BoundaryFace::inner_x1] = Escape;
       break;
     case MC_ABSORB_BNDRY:
-      BoundaryFunction_[INNER_X1] = Absorb;
+      BoundaryFunction_[BoundaryFace::inner_x1] = Absorb;
       break;
     case MC_DESTROY_BNDRY:
-      BoundaryFunction_[INNER_X1] = Destroy;
+      BoundaryFunction_[BoundaryFace::inner_x1] = Destroy;
       break;
     case MC_POLAR_BNDRY:
-      BoundaryFunction_[INNER_X1] = Polar;
+      BoundaryFunction_[BoundaryFace::inner_x1] = Polar;
       break;
     case MC_REFLECT_BNDRY:
-      BoundaryFunction_[INNER_X1] = ReflectMCInnerX1;
+      BoundaryFunction_[BoundaryFace::inner_x1] = ReflectMCInnerX1;
       break;
     case MC_USER_BNDRY:
-      BoundaryFunction_[INNER_X1] = pmcb->pmy_mc->BoundaryFunction_[INNER_X1];
+      BoundaryFunction_[BoundaryFace::inner_x1] = pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::inner_x1];
       break;
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
-          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[INNER_X1] << " not valid" << std::endl;
+          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[BoundaryFace::inner_x1] << " not valid" << std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
   // outer x1
-  switch(pmcb->mcb_bcs[OUTER_X1]) {
+  switch(pmcb->mcb_bcs[BoundaryFace::outer_x1]) {
     case MC_PERIODIC_BNDRY:
-      BoundaryFunction_[OUTER_X1] = PeriodicOuterX1;
+      BoundaryFunction_[BoundaryFace::outer_x1] = PeriodicOuterX1;
       break;
     case MC_ESCAPE_BNDRY:
-      BoundaryFunction_[OUTER_X1] = Escape;
+      BoundaryFunction_[BoundaryFace::outer_x1] = Escape;
       break;
     case MC_ABSORB_BNDRY:
-      BoundaryFunction_[OUTER_X1] = Absorb;
+      BoundaryFunction_[BoundaryFace::outer_x1] = Absorb;
       break;
     case MC_DESTROY_BNDRY:
-      BoundaryFunction_[OUTER_X1] = Destroy;
+      BoundaryFunction_[BoundaryFace::outer_x1] = Destroy;
       break;
     case MC_POLAR_BNDRY:
-      BoundaryFunction_[OUTER_X1] = Polar;
+      BoundaryFunction_[BoundaryFace::outer_x1] = Polar;
       break;
     case MC_REFLECT_BNDRY:
-      BoundaryFunction_[OUTER_X1] = ReflectMCOuterX1;
+      BoundaryFunction_[BoundaryFace::outer_x1] = ReflectMCOuterX1;
       break;
     case MC_USER_BNDRY:
-      BoundaryFunction_[OUTER_X1] = pmcb->pmy_mc->BoundaryFunction_[OUTER_X1];
+      BoundaryFunction_[BoundaryFace::outer_x1] = pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::outer_x1];
       break;
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
-          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[OUTER_X1] << " not valid" << std::endl;
+          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[BoundaryFace::outer_x1] << " not valid" << std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
   // Inner x2
-  switch(pmcb->mcb_bcs[INNER_X2]) {
+  switch(pmcb->mcb_bcs[BoundaryFace::inner_x2]) {
     case MC_PERIODIC_BNDRY:
-      BoundaryFunction_[INNER_X2] = PeriodicInnerX2;
+      BoundaryFunction_[BoundaryFace::inner_x2] = PeriodicInnerX2;
       break;
     case MC_ESCAPE_BNDRY:
-      BoundaryFunction_[INNER_X2] = Escape;
+      BoundaryFunction_[BoundaryFace::inner_x2] = Escape;
       break;
     case MC_ABSORB_BNDRY:
-      BoundaryFunction_[INNER_X2] = Absorb;
+      BoundaryFunction_[BoundaryFace::inner_x2] = Absorb;
       break;
     case MC_DESTROY_BNDRY:
-      BoundaryFunction_[INNER_X2] = Destroy;
+      BoundaryFunction_[BoundaryFace::inner_x2] = Destroy;
       break;
     case MC_POLAR_BNDRY:
-      BoundaryFunction_[INNER_X2] = Polar;
+      BoundaryFunction_[BoundaryFace::inner_x2] = Polar;
       break;
     case MC_REFLECT_BNDRY:
-      BoundaryFunction_[INNER_X2] = ReflectMCInnerX2;
+      BoundaryFunction_[BoundaryFace::inner_x2] = ReflectMCInnerX2;
       break;
     case MC_USER_BNDRY:
-      BoundaryFunction_[INNER_X2] = pmcb->pmy_mc->BoundaryFunction_[INNER_X2];
+      BoundaryFunction_[BoundaryFace::inner_x2] = pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::inner_x2];
       break;
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
-          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[INNER_X2] << " not valid" << std::endl;
+          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[BoundaryFace::inner_x2] << " not valid" << std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
   // outer x2
-  switch(pmcb->mcb_bcs[OUTER_X2]) {
+  switch(pmcb->mcb_bcs[BoundaryFace::outer_x2]) {
     case MC_PERIODIC_BNDRY:
-      BoundaryFunction_[OUTER_X2] = PeriodicOuterX2;
+      BoundaryFunction_[BoundaryFace::outer_x2] = PeriodicOuterX2;
       break;
     case MC_ESCAPE_BNDRY:
-      BoundaryFunction_[OUTER_X2] = Escape;
+      BoundaryFunction_[BoundaryFace::outer_x2] = Escape;
       break;
     case MC_ABSORB_BNDRY:
-      BoundaryFunction_[OUTER_X2] = Absorb;
+      BoundaryFunction_[BoundaryFace::outer_x2] = Absorb;
       break;
    case MC_DESTROY_BNDRY:
-      BoundaryFunction_[OUTER_X2] = Destroy;
+      BoundaryFunction_[BoundaryFace::outer_x2] = Destroy;
       break;
     case MC_POLAR_BNDRY:
-      BoundaryFunction_[OUTER_X2] = Polar;
+      BoundaryFunction_[BoundaryFace::outer_x2] = Polar;
       break;
     case MC_REFLECT_BNDRY:
-      BoundaryFunction_[OUTER_X2] = ReflectMCOuterX2;
+      BoundaryFunction_[BoundaryFace::outer_x2] = ReflectMCOuterX2;
       break;
     case MC_USER_BNDRY:
-      BoundaryFunction_[OUTER_X2] = pmcb->pmy_mc->BoundaryFunction_[OUTER_X2];
+      BoundaryFunction_[BoundaryFace::outer_x2] = pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::outer_x2];
       break;
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
-          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[OUTER_X2] << " not valid" << std::endl;
+          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[BoundaryFace::outer_x2] << " not valid" << std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
   // Inner x3
-  switch(pmcb->mcb_bcs[INNER_X3]) {
+  switch(pmcb->mcb_bcs[BoundaryFace::inner_x3]) {
     case MC_PERIODIC_BNDRY:
-      BoundaryFunction_[INNER_X3] = PeriodicInnerX3;
+      BoundaryFunction_[BoundaryFace::inner_x3] = PeriodicInnerX3;
       break;
     case MC_ESCAPE_BNDRY:
-      BoundaryFunction_[INNER_X3] = Escape;
+      BoundaryFunction_[BoundaryFace::inner_x3] = Escape;
       break;
     case MC_ABSORB_BNDRY:
-      BoundaryFunction_[INNER_X3] = Absorb;
+      BoundaryFunction_[BoundaryFace::inner_x3] = Absorb;
       break;
     case MC_DESTROY_BNDRY:
-      BoundaryFunction_[INNER_X3] = Destroy;
+      BoundaryFunction_[BoundaryFace::inner_x3] = Destroy;
       break;
     case MC_POLAR_BNDRY:
-      BoundaryFunction_[INNER_X3] = Polar;
+      BoundaryFunction_[BoundaryFace::inner_x3] = Polar;
       break;
     case MC_REFLECT_BNDRY:
-      BoundaryFunction_[INNER_X3] = ReflectMCInnerX3;
+      BoundaryFunction_[BoundaryFace::inner_x3] = ReflectMCInnerX3;
       break;
     case MC_USER_BNDRY:
-      BoundaryFunction_[OUTER_X3] = pmcb->pmy_mc->BoundaryFunction_[OUTER_X3];
+      BoundaryFunction_[BoundaryFace::outer_x3] = pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::outer_x3];
       break;
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
-          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[INNER_X3] << " not valid" << std::endl;
+          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[BoundaryFace::inner_x3] << " not valid" << std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
   // outer x3
-  switch(pmcb->mcb_bcs[OUTER_X3]) {
+  switch(pmcb->mcb_bcs[BoundaryFace::outer_x3]) {
     case MC_PERIODIC_BNDRY:
-      BoundaryFunction_[OUTER_X3] = PeriodicOuterX3;
+      BoundaryFunction_[BoundaryFace::outer_x3] = PeriodicOuterX3;
       break;
     case MC_ESCAPE_BNDRY:
-      BoundaryFunction_[OUTER_X3] = Escape;
+      BoundaryFunction_[BoundaryFace::outer_x3] = Escape;
       break;
     case MC_ABSORB_BNDRY:
-      BoundaryFunction_[OUTER_X3] = Absorb;
+      BoundaryFunction_[BoundaryFace::outer_x3] = Absorb;
       break;
     case MC_DESTROY_BNDRY:
-      BoundaryFunction_[OUTER_X3] = Destroy;
+      BoundaryFunction_[BoundaryFace::outer_x3] = Destroy;
       break;
     case MC_POLAR_BNDRY:
-      BoundaryFunction_[OUTER_X3] = Polar;
+      BoundaryFunction_[BoundaryFace::outer_x3] = Polar;
       break;
     case MC_REFLECT_BNDRY:
-      BoundaryFunction_[OUTER_X3] = ReflectMCOuterX3;
+      BoundaryFunction_[BoundaryFace::outer_x3] = ReflectMCOuterX3;
       break;
     case MC_USER_BNDRY:
-      BoundaryFunction_[OUTER_X3] = pmcb->pmy_mc->BoundaryFunction_[OUTER_X3];
+      BoundaryFunction_[BoundaryFace::outer_x3] = pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::outer_x3];
       break;
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
-          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[OUTER_X3] << " not valid" << std::endl;
+          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[BoundaryFace::outer_x3] << " not valid" << std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
 

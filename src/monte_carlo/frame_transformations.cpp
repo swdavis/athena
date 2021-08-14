@@ -13,7 +13,7 @@
 #include "montecarlo.hpp"
 
 #define SMALL_NUMBER 1.e-30
-//#define DEBUG
+//#define DEBUG_FT
 
 //----------------------------------------------------------------------------------------
 //! \fn void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD],
@@ -69,7 +69,7 @@ void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD],
   // covariant tetrad construction complete
 
   // check for orthonormality
-#ifdef DEBUG
+#ifdef DEBUG_FT
   printf("--------------------------------------------------\n");
   printf("Othonormality check:\n");
   printf("econ[IMC0]: %g %g %g %g\n", econ[IMC0][IMC0], econ[IMC0][IMC1], econ[IMC0][IMC2], econ[IMC0][IMC3]);
@@ -367,10 +367,10 @@ void ProjectVecSub(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOOR
 
   if (fabs(vcon_dot_vcon) < SMALL_NUMBER) {
     printf("Warning: attempted to project out using a zero vector. Vector left as is.\n");
-#ifdef DEBUG
+#ifdef DEBUG_FT
     printf("vdotv: %g\n", vcon_dot_vcon);
     printf("vcon: %g %g %g %g\n", vcon[IMC0], vcon[IMC1], vcon[IMC2], vcon[IMC3]);
-    printf("gcov[IMC0]: %g %g %g %g\n", gcoConv[IMC0][IMC0], gcov[IMC0][IMC1], gcov[IMC0][IMC2], gcov[IMC0][IMC3]);
+    printf("gcov[IMC0]: %g %g %g %g\n", gcov[IMC0][IMC0], gcov[IMC0][IMC1], gcov[IMC0][IMC2], gcov[IMC0][IMC3]);
     printf("gcov[IMC1]: %g %g %g %g\n", gcov[IMC1][IMC0], gcov[IMC1][IMC1], gcov[IMC1][IMC2], gcov[IMC1][IMC3]);
     printf("gcov[IMC2]: %g %g %g %g\n", gcov[IMC2][IMC0], gcov[IMC2][IMC1], gcov[IMC2][IMC2], gcov[IMC2][IMC3]);
     printf("gcov[IMC3]: %g %g %g %g\n", gcov[IMC3][IMC0], gcov[IMC3][IMC1], gcov[IMC3][IMC2], gcov[IMC3][IMC3]);

@@ -15,7 +15,7 @@ void FinalPositionCartesian(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot,
   Real dlx, dly, dlz;
   Real xw=-1.,yw=-1.,zw=-1.;
 
-  if (pmcb->mcb_bcs[INNER_X1] != MC_PERIODIC_BNDRY) {
+  if (pmcb->mcb_bcs[BoundaryFace::inner_x1] != MC_PERIODIC_BNDRY) {
     if(pphot->k[0] > 0.0) {
       dlx = (pco->x1f(pmcb->ie+1) - pphot->x[0]) / pphot->k[0];
     } else if(pphot->k[0] < 0.0) {
@@ -28,7 +28,7 @@ void FinalPositionCartesian(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot,
     xw = pco->x1f(pmcb->ie+1)-pco->x1f(pmcb->is);
   }
 
-  if (pmcb->mcb_bcs[INNER_X2] != MC_PERIODIC_BNDRY) {
+  if (pmcb->mcb_bcs[BoundaryFace::inner_x2] != MC_PERIODIC_BNDRY) {
     if(pphot->k[1] > 0.0) {
       dly = (pco->x2f(pmcb->je+1)  - pphot->x[1]) / pphot->k[1];
     } else if(pphot->k[1] < 0.0) {
@@ -41,7 +41,7 @@ void FinalPositionCartesian(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot,
     yw = pco->x2f(pmcb->je+1)-pco->x2f(pmcb->js);
   }
 
-  if (pmcb->mcb_bcs[INNER_X3] != MC_PERIODIC_BNDRY) {
+  if (pmcb->mcb_bcs[BoundaryFace::inner_x3] != MC_PERIODIC_BNDRY) {
     if(pphot->k[2] > 0.0) {
       dlz = (pco->x3f(pmcb->ke+1) - pphot->x[2])/pphot->k[2];
     } else if(pphot->k[2] < 0.0) {

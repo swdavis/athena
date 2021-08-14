@@ -1,20 +1,22 @@
-#ifndef OUTPUTS_HPP
-#define OUTPUTS_HPP
+#ifndef OUTPUTS_OUTPUTS_HPP_
+#define OUTPUTS_OUTPUTS_HPP_
 //========================================================================================
 // Athena++ astrophysical MHD code
 // Copyright(C) 2014 James M. Stone <jmstone@princeton.edu> and other code contributors
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file outputs.hpp
-//  \brief provides classes to handle ALL types of data output
+//! \brief provides classes to handle ALL types of data output
 
-// C/C++ headers
-#include <stdio.h>  // size_t
+// C headers
+
+// C++ headers
+#include <cstdio>  // std::size_t
 #include <string>
 
 // Athena++ headers
-#include "io_wrapper.hpp"
 #include "../athena.hpp"
+#include "io_wrapper.hpp"
 
 #ifdef HDF5OUTPUT
 #include <hdf5.h>
@@ -27,9 +29,9 @@ class Coordinates;
 
 //----------------------------------------------------------------------------------------
 //! \struct OutputParameters
-//  \brief  container for parameters read from <output> block in the input file
+//! \brief  container for parameters read from `<output>` block in the input file
 
-typedef struct OutputParameters {
+struct OutputParameters {
   int block_number;
   std::string block_name;
   std::string file_basename;
@@ -42,40 +44,55 @@ typedef struct OutputParameters {
   bool output_slicex1, output_slicex2, output_slicex3;
   bool output_sumx1, output_sumx2, output_sumx3;
   bool include_ghost_zones, cartesian_vector;
+  bool orbital_system_output;
   int islice, jslice, kslice;
   Real x1_slice, x2_slice, x3_slice;
-
-  OutputParameters() : output_slicex1(false),output_slicex2(false),output_slicex3(false),
+  // TODO(felker): some of the parameters in this class are not initialized in constructor
+  OutputParameters() : block_number(0), next_time(0.0), dt(0.0), file_number(0),
+                       output_slicex1(false),output_slicex2(false),output_slicex3(false),
                        output_sumx1(false), output_sumx2(false), output_sumx3(false),
-                       include_ghost_zones(false) {}
-} OutputParameters;
+                       include_ghost_zones(false), cartesian_vector(false),
+                       islice(0), jslice(0), kslice(0) {}
+};
 
 //----------------------------------------------------------------------------------------
 //! \struct OutputData
-//  \brief container for output data and metadata; used as node in linked list
+//! \brief container for output data and metadata; node in nested doubly linked list
 
-typedef struct OutputData {
+struct OutputData {
   std::string type;        // one of (SCALARS,VECTORS) used for vtk outputs
   std::string name;
   AthenaArray<Real> data;  // array containing data (usually shallow copy/slice)
-  struct OutputData *pnext, *pprev; // ptrs to next and previous nodes in list
+  // ptrs to previous and next nodes in doubly linked list:
+  OutputData *pnext, *pprev;
 
-  OutputData() : pnext(NULL),  pprev(NULL) {}
-} OutputData;
+  OutputData() : pnext(nullptr),  pprev(nullptr) {}
+};
 
 //----------------------------------------------------------------------------------------
-//  \brief abstract base class for different output types (modes).  Each OutputType
-//  is designed to be a node in a linked list created and stored in the Outputs class.
+//! \brief abstract base class for different output types (modes/formats). Each OutputType
+//! is designed to be a node in a singly linked list created & stored in the Outputs class
 
 class OutputType {
-public:
-  OutputType(OutputParameters oparams);
-  virtual ~OutputType();
+ public:
+  // mark single parameter constructors as "explicit" to prevent them from acting as
+  // implicit conversion functions: for f(OutputType arg), prevent f(anOutputParameters)
+  explicit OutputType(OutputParameters oparams);
+
+  // rule of five:
+  virtual ~OutputType() = default;
+  // copy constructor and assignment operator (pnext_type, pfirst_data, etc. are shallow
+  // copied)
+  OutputType(const OutputType& copy_other) = default;
+  OutputType& operator=(const OutputType& copy_other) = default;
+  // move constructor and assignment operator
+  OutputType(OutputType&&) = default;
+  OutputType& operator=(OutputType&&) = default;
 
   // data
-  int out_is,out_ie,out_js,out_je,out_ks,out_ke;  // OutputData array start/end indices
+  int out_is, out_ie, out_js, out_je, out_ks, out_ke;  // OutputData array start/end index
   OutputParameters output_params; // control data read from <output> block
-  OutputType *pnext_type;         // ptr to next node in linked list of OutputTypes
+  OutputType *pnext_type;         // ptr to next node in singly linked list of OutputTypes
 
   // functions
   void LoadOutputData(MeshBlock *pmb);
@@ -90,70 +107,66 @@ public:
   // following pure virtual function must be implemented in all derived classes
   virtual void WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) = 0;
 
-protected:
+ protected:
   int num_vars_;             // number of variables in output
-  OutputData *pfirst_data_;  // ptr to first OutputData in linked list
-  OutputData *plast_data_;   // ptr to last OutputData in linked list
+  // nested doubly linked list of OutputData nodes (of the same OutputType):
+  OutputData *pfirst_data_;  // ptr to head OutputData node in doubly linked list
+  OutputData *plast_data_;   // ptr to tail OutputData node in doubly linked list
 };
 
 //----------------------------------------------------------------------------------------
-//! \class HistoryFile
-//  \brief derived OutputType class for history dumps
+//! \class HistoryOutput
+//! \brief derived OutputType class for history dumps
 
 class HistoryOutput : public OutputType {
-public:
-  HistoryOutput(OutputParameters oparams);
-  ~HistoryOutput() {};
-  void WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag);
+ public:
+  explicit HistoryOutput(OutputParameters oparams) : OutputType(oparams) {}
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) override;
 };
 
 //----------------------------------------------------------------------------------------
 //! \class FormattedTableOutput
-//  \brief derived OutputType class for formatted table (tabular) data
+//! \brief derived OutputType class for formatted table (tabular) data
 
 class FormattedTableOutput : public OutputType {
-public:
-  FormattedTableOutput(OutputParameters oparams);
-  ~FormattedTableOutput() {};
-  void WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag);
+ public:
+  explicit FormattedTableOutput(OutputParameters oparams) : OutputType(oparams) {}
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) override;
 };
 
 //----------------------------------------------------------------------------------------
 //! \class VTKOutput
-//  \brief derived OutputType class for vtk dumps
+//! \brief derived OutputType class for vtk dumps
 
 class VTKOutput : public OutputType {
-public:
-  VTKOutput(OutputParameters oparams);
-  ~VTKOutput() {};
-  void WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag);
+ public:
+  explicit VTKOutput(OutputParameters oparams) : OutputType(oparams) {}
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) override;
 };
 
 //----------------------------------------------------------------------------------------
 //! \class RestartOutput
-//  \brief derived OutputType class for restart dumps
+//! \brief derived OutputType class for restart dumps
 
 class RestartOutput : public OutputType {
-public:
-  RestartOutput(OutputParameters oparams);
-  ~RestartOutput() {};
-  void WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag);
+ public:
+  explicit RestartOutput(OutputParameters oparams) : OutputType(oparams) {}
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) override;
 };
 
 #ifdef HDF5OUTPUT
 //----------------------------------------------------------------------------------------
 //! \class ATHDF5Output
-//  \brief derived OutputType class for Athena HDF5 files
+//! \brief derived OutputType class for Athena HDF5 files
 
 class ATHDF5Output : public OutputType {
-public:
+ public:
   // Function declarations
-  ATHDF5Output(OutputParameters oparams);
-  ~ATHDF5Output() {};
-  void WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag);
+  explicit ATHDF5Output(OutputParameters oparams) : OutputType(oparams) {}
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) override;
   void MakeXDMF();
 
-private:
+ private:
   // Parameters
   static const int max_name_length = 20;  // maximum length of names excluding \0
 
@@ -171,17 +184,18 @@ private:
 
 //----------------------------------------------------------------------------------------
 //! \class Outputs
-//  \brief root class for all Athena++ outputs.  Provides a linked list of OutputTypes,
-//  with each node representing one mode of output to be made during a simulation.
+//! \brief root class for all Athena++ outputs. Provides a singly linked list of
+//! OutputTypes, with each node representing one mode/format of output to be made.
 
 class Outputs {
-public:
+ public:
   Outputs(Mesh *pm, ParameterInput *pin);
   ~Outputs();
 
   void MakeOutputs(Mesh *pm, ParameterInput *pin, bool wtflag=false);
 
-private:
-  OutputType *pfirst_type_; // ptr to first OutputType in linked list
+ private:
+  OutputType *pfirst_type_; // ptr to head OutputType node in singly linked list
+  // (not storing a reference to the tail node)
 };
-#endif
+#endif // OUTPUTS_OUTPUTS_HPP_

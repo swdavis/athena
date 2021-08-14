@@ -51,7 +51,7 @@ namespace mcoutput {
 Spectrum::Spectrum(MomentumRange input_range, bool pol, bool xlog) {
 
   next = NULL;
-  face = FACE_UNDEF;
+  face = BoundaryFace::undef;
   range = input_range;
   polarized = pol;
   logarithmic = xlog;
@@ -157,19 +157,19 @@ void Spectrum::BuildEnergyGrid(Real emin, Real emax, int nen, bool logarthmic) {
 void Spectrum::SetSurface(std::string input_face) {
 
   if (input_face == "inner_x1") {
-    face = INNER_X1;
+    face = BoundaryFace::inner_x1;
   } else if (input_face == "outer_x1") {
-    face = OUTER_X1;
+    face = BoundaryFace::outer_x1;
   } else if (input_face == "inner_x2") {
-    face = INNER_X2;
+    face = BoundaryFace::inner_x2;
   } else if (input_face == "outer_x2") {
-    face = OUTER_X2;
+    face = BoundaryFace::outer_x2;
   } else if (input_face == "inner_x3") {
-    face = INNER_X3;
+    face = BoundaryFace::inner_x3;
   } else if (input_face == "outer_x3") {
-    face = OUTER_X3;
+    face = BoundaryFace::outer_x3;
   } else if (input_face == "none") {
-    face = FACE_UNDEF;
+    face = BoundaryFace::undef;
   } else {
     std::stringstream msg;
       msg << "### FATAL ERROR in function [Spectrum::SetSurface]" << std::endl
@@ -192,49 +192,49 @@ bool Spectrum::AngleBinsCartesian(Real k[4], int &phibin, int &cthbin) {
   if (COORDINATE_SYSTEM == "cartesian") {
     // Set ctheta, phi according to face
     switch(face) {
-      case INNER_X1:
+      case BoundaryFace::inner_x1:
 	ctheta = -kx;
 	stheta = sqrt(SQR(ky)+SQR(kz));
 	phi = acos(ky/stheta);
 	if(kz < 0.0)
 	  phi = 2 * PI - phi;
 	break;
-      case OUTER_X1:
+      case BoundaryFace::outer_x1:
 	ctheta = kx;
 	stheta = sqrt(SQR(ky)+SQR(kz));
 	phi = acos(ky/stheta);
 	if(kz < 0.0)
 	  phi = 2 * PI - phi;
 	break;
-      case INNER_X2:
+      case BoundaryFace::inner_x2:
 	ctheta = -ky;
 	stheta = sqrt(SQR(kx)+SQR(kz));
 	phi = acos(kx/stheta);
 	if(kz < 0.0)
 	  phi = 2 * PI - phi;
 	break;
-      case OUTER_X2:
+      case BoundaryFace::outer_x2:
 	ctheta = ky;
 	stheta = sqrt(SQR(kx)+SQR(kz));
 	phi = acos(kx/stheta);
 	if(kz < 0.0)
 	  phi = 2 * PI - phi;
 	break; 
-     case INNER_X3:
+     case BoundaryFace::inner_x3:
 	ctheta = -kz;
 	stheta = sqrt(SQR(kx)+SQR(ky));
 	phi = acos(kx/stheta);
 	if(ky < 0.0)
 	  phi = 2 * PI - phi;
 	break;
-      case OUTER_X3:
+      case BoundaryFace::outer_x3:
 	ctheta = kz;
 	stheta = sqrt(SQR(kx)+SQR(ky));
 	phi = acos(kx/stheta);
 	if(ky < 0.0)
 	  phi = 2 * PI - phi;
 	break;
-      case FACE_UNDEF:
+      case BoundaryFace::undef:
 	ctheta=fabs(kz);
 	phi = 0.;
 	break;
@@ -311,42 +311,42 @@ bool Spectrum::AngleBinsSphericalPolar(Real k[4], int &phibin, int &cthbin) {
   Real ctheta, phi, stheta;
   // Set ctheta, phi according to face
   switch(face) {
-    case INNER_X1:
+    case BoundaryFace::inner_x1:
       ctheta = -kr;
       stheta = sqrt(SQR(kth)+SQR(kph));
       phi = acos(kth/stheta);
       if(kph < 0.0)
 	phi = 2 * PI - phi;
       break;
-    case OUTER_X1:
+    case BoundaryFace::outer_x1:
       ctheta = kr;
       stheta = sqrt(SQR(kth)+SQR(kph));
       phi = acos(kth/stheta);
       if(kph < 0.0)
 	phi = 2 * PI - phi;
       break;
-    case INNER_X2:
+    case BoundaryFace::inner_x2:
       ctheta = -kth;
       stheta = sqrt(SQR(kr)+SQR(kph));
       phi = acos(kr/stheta);
       if(kph < 0.0)
 	phi = 2 * PI - phi;
       break;
-    case OUTER_X2:
+    case BoundaryFace::outer_x2:
       ctheta = kth;
       stheta = sqrt(SQR(kr)+SQR(kph));
       phi = acos(kr/stheta);
       if(kph < 0.0)
 	phi = 2 * PI - phi;
       break;
-    case INNER_X3:
+    case BoundaryFace::inner_x3:
       ctheta = -kph;
       stheta = sqrt(SQR(kr)+SQR(kth));
       phi = acos(kr/stheta);
       if(kth < 0.0)
 	phi = 2 * PI - phi;
       break;
-    case OUTER_X3:
+    case BoundaryFace::outer_x3:
       ctheta = kph;
       stheta = sqrt(SQR(kr)+SQR(kth));
       phi = acos(kr/stheta);
@@ -425,7 +425,7 @@ bool Spectrum::ScreenCoordinates(Photon *pphot) {
 
 void Spectrum::UpdateSpectrum(Photon *pphot) {
  
-  if ((face != pphot->face) && (pphot->face != FACE_UNDEF))
+  if ((face != pphot->face) && (pphot->face != BoundaryFace::undef))
     return;
 
   Real weight = pphot->weight;

@@ -32,7 +32,7 @@ int Photon::isip = 16, Photon::isqp = 17, Photon::isup = 18, Photon::isvp = 19;
 // constructor, initializes data structures and parameters
 
 Photon::Photon(MonteCarloBlock *pmcb, int nuser, int len_limit)
-  // Allocate space for particle data.
+  // Allocate space for photon data.
   : intprop(new std::vector<int> [nint]), realprop(new std::vector<Real> [nreal]),
     aux(new std::vector<Real> [naux]), work(new std::vector<Real> [nwork]),
     user(new std::vector<Real> [nuser]),
@@ -46,7 +46,7 @@ Photon::Photon(MonteCarloBlock *pmcb, int nuser, int len_limit)
 
   pmy_mcb = pmcb;
   weight = 1.0;
-  face = FACE_UNDEF;
+  face = BoundaryFace::undef;
   nphot_limit = len_limit;
   nuser_var = nuser;
   npar = 0;

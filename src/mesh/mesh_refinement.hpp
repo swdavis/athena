@@ -1,14 +1,20 @@
-#ifndef MESH_REFINEMENT_HPP
-#define MESH_REFINEMENT_HPP
+#ifndef MESH_MESH_REFINEMENT_HPP_
+#define MESH_MESH_REFINEMENT_HPP_
 //========================================================================================
 // Athena++ astrophysical MHD code
 // Copyright(C) 2014 James M. Stone <jmstone@princeton.edu> and other code contributors
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file mesh_refinement.hpp
-//  \brief defines MeshRefinement class used for static/adaptive mesh refinement
+//! \brief defines MeshRefinement class used for static/adaptive mesh refinement
 
-// Athena++ classes headers
+// C headers
+
+// C++ headers
+#include <tuple>
+#include <vector>
+
+// Athena++ headers
 #include "../athena.hpp"         // Real
 #include "../athena_arrays.hpp"  // AthenaArray
 
@@ -22,16 +28,23 @@ class ParameterInput;
 class Coordinates;
 struct FaceField;
 class BoundaryValues;
+class FaceCenteredBoundaryVariable;
+class HydroBoundaryVariable;
+class OrbitalAdvection;
 
 //----------------------------------------------------------------------------------------
 //! \class MeshRefinement
-//  \brief
+//! \brief
 
 class MeshRefinement {
+  // needs to access pcoarsec in ProlongateBoundaries() for passing to BoundaryFunc()
   friend class BoundaryValues;
-  friend class MeshBlock;
+  // needs to access refine_flag_ in Mesh::AdaptiveMeshRefinement(). Make var public?
   friend class Mesh;
-public:
+  // needs to access pcoarsec
+  friend class OrbitalAdvection;
+
+ public:
   MeshRefinement(MeshBlock *pmb, ParameterInput *pin);
   ~MeshRefinement();
 
@@ -56,19 +69,30 @@ public:
                                int si, int ei, int sj, int ej, int sk, int ek);
   void ProlongateInternalField(FaceField &fine,
                                int si, int ei, int sj, int ej, int sk, int ek);
-  void CheckRefinementCondition(void);
+  void CheckRefinementCondition();
 
-private:
+  // setter functions for "enrolling" variable arrays in refinement via Mesh::AMR()
+  // and/or in BoundaryValues::ProlongateBoundaries() (for SMR and AMR)
+  int AddToRefinement(AthenaArray<Real> *pvar_cc, AthenaArray<Real> *pcoarse_cc);
+  int AddToRefinement(FaceField *pvar_fc, FaceField *pcoarse_fc);
+
+  // for switching first entry in pvars_cc_ to/from: (w, coarse_prim); (u, coarse_cons_)
+  void SetHydroRefinement(HydroBoundaryQuantity hydro_type);
+
+ private:
   // data
   MeshBlock *pmy_block_;
   Coordinates *pcoarsec;
-  AthenaArray<Real> coarse_cons_, coarse_prim_, coarse_bcc_;
-  FaceField coarse_b_;
+
   AthenaArray<Real> fvol_[2][2], sarea_x1_[2][2], sarea_x2_[2][3], sarea_x3_[3][2];
   int refine_flag_, neighbor_rflag_, deref_count_, deref_threshold_;
 
   // functions
-  AMRFlagFunc_t AMRFlag_;
+  AMRFlagFunc AMRFlag_; // duplicate of Mesh class member
+
+  // tuples of references to AMR-enrolled arrays (quantity, coarse_quantity)
+  std::vector<std::tuple<AthenaArray<Real> *, AthenaArray<Real> *>> pvars_cc_;
+  std::vector<std::tuple<FaceField *, FaceField *>> pvars_fc_;
 };
 
-#endif // MESH_REFINEMENT_HPP
+#endif // MESH_MESH_REFINEMENT_HPP_
