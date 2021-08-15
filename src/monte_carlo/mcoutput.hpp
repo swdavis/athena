@@ -6,7 +6,7 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file photon.hpp
-//  \brief definitions for MCOutput class
+//! \brief definitions for MCOutput and output classes
 
 // Athena++ classes headers
 #include "../athena.hpp"
@@ -16,7 +16,7 @@ class Photon;
 
 //----------------------------------------------------------------------------------------
 //! \struct MomentumRange
-//  \brief physical ranges of photon momentum grid
+//! \brief physical ranges of photon momentum grid
 
 typedef struct MomentumRange {
   int ne, ncth, nphi;
@@ -28,7 +28,7 @@ typedef struct MomentumRange {
 
 //----------------------------------------------------------------------------------------
 //! \class Spectrum
-//  \brief spectral bins for outputs
+//! \brief spectral output
 
 class Spectrum {
 public:
@@ -74,7 +74,7 @@ public:
 
 //----------------------------------------------------------------------------------------
 //! \class PhotonList
-//  \brief List of Photon properties (usually escaping photons)
+//! \brief List of output Photon properties
 
 class PhotonList {
 public:
@@ -96,7 +96,7 @@ public:
 
 private:
   int len_limit;  // number of photons allowed with current allocated memory
-  void ResizeList(int new_size); 
+  void ResizeList(int new_size);
 
 };
 
@@ -116,7 +116,7 @@ public:
   int maxstep;
   int nparams; // number of properties for each photon trajectory
   int output_number;// current output number
-  int nuser_out; 
+  int nuser_out;
 
   int *nsteps;  // step number for each trajectory
   AthenaArray<Real> trajectories;  // array of photon properies
@@ -128,14 +128,14 @@ public:
 
 private:
   int len_limit;  // number of trajectories allowed with current allocated memory
-  int step_limit; // maximum number of steps to 
-  void ResizeList(int new_len_limit, int new_step_limit); 
+  int step_limit; // maximum number of steps
+  void ResizeList(int new_len_limit, int new_step_limit);
 
 };
 
 //----------------------------------------------------------------------------------------
 //! \class Image
-//  \brief Image created using ray traced photons
+//  \brief Image created using ray traced photons (SWD: in progress)
 
 class Image {
 public:
@@ -162,13 +162,12 @@ public:
 
   //private:
 
-
 };
 
-// SWD: Maybe should be made to better mirror Athena++ Output structure
+// SWD: Will need to be modifed with new parallelization scheme
 //----------------------------------------------------------------------------------------
 //! \class MCOutput
-//  \brief class for handling monte carlo specific spectral outputs
+//! \brief class for managing monte carlo specific spectral outputs
 
 class MCOutput {
 public:

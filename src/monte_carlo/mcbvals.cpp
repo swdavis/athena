@@ -4,17 +4,18 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file montecarloblock.cpp
-//  \brief implementation of functions in class MCBoundaryValues
+//! \brief implementation of functions in class MCBoundaryValues
 
 #include <stdexcept>  // runtime_error
 
 // Athena++ headers
 #include "mcbvals.hpp"
 
-// constructor, initializes data structures and parameters
+//----------------------------------------------------------------------------------------
+//! MCBoundaryValues class constructor, built from ParameterInput and MonteCarloBlock
 
 MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
-  
+
   pmy_mcb = pmcb;
 
 // Set BC functions for each of the 6 boundaries -----------------------------------------
@@ -39,12 +40,14 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
       BoundaryFunction_[BoundaryFace::inner_x1] = ReflectMCInnerX1;
       break;
     case MC_USER_BNDRY:
-      BoundaryFunction_[BoundaryFace::inner_x1] = pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::inner_x1];
+      BoundaryFunction_[BoundaryFace::inner_x1] =
+        pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::inner_x1];
       break;
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
-          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[BoundaryFace::inner_x1] << " not valid" << std::endl;
+          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[BoundaryFace::inner_x1] << " not valid"
+          << std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
   // outer x1
@@ -68,12 +71,14 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
       BoundaryFunction_[BoundaryFace::outer_x1] = ReflectMCOuterX1;
       break;
     case MC_USER_BNDRY:
-      BoundaryFunction_[BoundaryFace::outer_x1] = pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::outer_x1];
+      BoundaryFunction_[BoundaryFace::outer_x1] =
+        pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::outer_x1];
       break;
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
-          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[BoundaryFace::outer_x1] << " not valid" << std::endl;
+          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[BoundaryFace::outer_x1] << " not valid"
+          << std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
   // Inner x2
@@ -97,12 +102,14 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
       BoundaryFunction_[BoundaryFace::inner_x2] = ReflectMCInnerX2;
       break;
     case MC_USER_BNDRY:
-      BoundaryFunction_[BoundaryFace::inner_x2] = pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::inner_x2];
+      BoundaryFunction_[BoundaryFace::inner_x2] =
+        pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::inner_x2];
       break;
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
-          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[BoundaryFace::inner_x2] << " not valid" << std::endl;
+          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[BoundaryFace::inner_x2] << " not valid"
+          << std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
   // outer x2
@@ -126,12 +133,14 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
       BoundaryFunction_[BoundaryFace::outer_x2] = ReflectMCOuterX2;
       break;
     case MC_USER_BNDRY:
-      BoundaryFunction_[BoundaryFace::outer_x2] = pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::outer_x2];
+      BoundaryFunction_[BoundaryFace::outer_x2] =
+        pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::outer_x2];
       break;
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
-          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[BoundaryFace::outer_x2] << " not valid" << std::endl;
+          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[BoundaryFace::outer_x2] << " not valid"
+          << std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
   // Inner x3
@@ -155,12 +164,14 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
       BoundaryFunction_[BoundaryFace::inner_x3] = ReflectMCInnerX3;
       break;
     case MC_USER_BNDRY:
-      BoundaryFunction_[BoundaryFace::outer_x3] = pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::outer_x3];
+      BoundaryFunction_[BoundaryFace::outer_x3] =
+        pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::outer_x3];
       break;
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
-          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[BoundaryFace::inner_x3] << " not valid" << std::endl;
+          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[BoundaryFace::inner_x3] << " not valid"
+          << std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
   // outer x3
@@ -184,30 +195,31 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
       BoundaryFunction_[BoundaryFace::outer_x3] = ReflectMCOuterX3;
       break;
     case MC_USER_BNDRY:
-      BoundaryFunction_[BoundaryFace::outer_x3] = pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::outer_x3];
+      BoundaryFunction_[BoundaryFace::outer_x3] =
+        pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::outer_x3];
       break;
     default:
       std::stringstream msg;
       msg << "### FATAL ERROR in MCBoundaryValues constructor" << std::endl
-          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[BoundaryFace::outer_x3] << " not valid" << std::endl;
+          << "Flag ix1_mc_bc=" << pmcb->mcb_bcs[BoundaryFace::outer_x3] << " not valid"
+          << std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
 
 }
 
-
-// destructor
+//----------------------------------------------------------------------------------------
+//!  destructor
 
 MCBoundaryValues::~MCBoundaryValues() {
 
 }
 
-
 // SWD: Currently assumes single block -- ***will need to be changed***
 
 //----------------------------------------------------------------------------------------
 //! \fn void PeriodicInnerX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
-//  \brief periodic boundary conditions, inner x1 boundary
+//! \brief periodic boundary conditions, inner x1 boundary
 
 void PeriodicInnerX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
@@ -218,7 +230,7 @@ void PeriodicInnerX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
 
 //----------------------------------------------------------------------------------------
 //! \fn void PeriodicOuterX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
-//  \brief periodic boundary conditions, outer x1 boundary
+//! \brief periodic boundary conditions, outer x1 boundary
 
 void PeriodicOuterX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
@@ -229,7 +241,7 @@ void PeriodicOuterX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
 
 //----------------------------------------------------------------------------------------
 //! \fn void PeriodicInnerX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
-//  \brief periodic boundary conditions, inner x2 boundary
+//! \brief periodic boundary conditions, inner x2 boundary
 
 void PeriodicInnerX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
@@ -240,7 +252,7 @@ void PeriodicInnerX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
 
 //----------------------------------------------------------------------------------------
 //! \fn void PeriodicOuterX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
-//  \brief periodic boundary conditions, outer x2 boundary
+//! \brief periodic boundary conditions, outer x2 boundary
 
 void PeriodicOuterX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
@@ -251,7 +263,7 @@ void PeriodicOuterX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
 
 //----------------------------------------------------------------------------------------
 //! \fn void PeriodicInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
-//  \brief periodic boundary conditions, inner x3 boundary
+//! \brief periodic boundary conditions, inner x3 boundary
 
 void PeriodicInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
@@ -262,7 +274,7 @@ void PeriodicInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
 
 //----------------------------------------------------------------------------------------
 //! \fn void PeriodicOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
-//  \brief periodic boundary conditions, outer x3 boundary
+//! \brief periodic boundary conditions, outer x3 boundary
 
 void PeriodicOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
@@ -274,22 +286,22 @@ void PeriodicOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
 
 //----------------------------------------------------------------------------------------
 //! \fn void ReflectMCInnerX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
-//  \brief periodic boundary conditions, inner x1 boundary
+//! \brief periodic boundary conditions, inner x1 boundary
 
 void ReflectMCInnerX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
   pphot->k1p[ip] *= -1.;
   pphot->i1p[ip]++;
   pphot->x1p[ip] = pco->x1f(pphot->i1p[ip]);
- 
+
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void ReflectMCOuterX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
-//  \brief periodic boundary conditions, outer x1 boundary
+//! \brief periodic boundary conditions, outer x1 boundary
 
 void ReflectMCOuterX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
-  
+
   pphot->k1p[ip] *= -1.;
   pphot->i1p[ip]--;
   pphot->x1p[ip] = pco->x1f(pphot->i1p[ip]+1);
@@ -298,7 +310,7 @@ void ReflectMCOuterX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip
 
 //----------------------------------------------------------------------------------------
 //! \fn void ReflectMCInnerX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
-//  \brief periodic boundary conditions, inner x2 boundary
+//! \brief periodic boundary conditions, inner x2 boundary
 
 void ReflectMCInnerX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
@@ -310,7 +322,7 @@ void ReflectMCInnerX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip
 
 //----------------------------------------------------------------------------------------
 //! \fn void ReflectMCOuterX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
-//  \brief periodic boundary conditions, outer x2 boundary
+//! \brief periodic boundary conditions, outer x2 boundary
 
 void ReflectMCOuterX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
@@ -322,7 +334,7 @@ void ReflectMCOuterX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip
 
 //----------------------------------------------------------------------------------------
 //! \fn void ReflectMCInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
-//  \brief periodic boundary conditions, inner x3 boundary
+//! \brief periodic boundary conditions, inner x3 boundary
 
 void ReflectMCInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
@@ -334,7 +346,7 @@ void ReflectMCInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip
 
 //----------------------------------------------------------------------------------------
 //! \fn void ReflectMCOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
-//  \brief periodic boundary conditions, outer x3 boundary
+//! \brief periodic boundary conditions, outer x3 boundary
 
 void ReflectMCOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
@@ -345,8 +357,9 @@ void ReflectMCOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PeriodicWedgeInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
-//  \brief periodic wedge boundary conditions, inner x3 boundary
+//! \fn void PeriodicWedgeInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot,
+//!                               int ip)
+//! \brief periodic wedge boundary conditions, inner x3 boundary
 
 /*void PeriodicWedgeInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
@@ -354,19 +367,20 @@ void ReflectMCOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip
   pphot->x[2] = pco->x3f(pphot->i3+1);
 
   // Flip kx,ky when domain is not full 2*pi
-  Real phib = pco->x3f(pmcb->ks); 
+  Real phib = pco->x3f(pmcb->ks);
   Real cphib = cos(phib);
   Real sphib = sin(phib);
   Real kphib = pphot->ky * cphib - pphot->kx * sphib;
   Real krb = pphot->kx * cphib + pphot->ky * sphib;
   cphib = cos(pphot->x3);
-  sphib = sin(pphot->x3);            
+  sphib = sin(pphot->x3);
   pphot->kc[0] = cphib * krb - sphib * kphib;
   pphot->kc[1] = sphib * krb + cphib * kphib;
   }*/
 
 //----------------------------------------------------------------------------------------
-//! \fn void PeriodicWedgeOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
+//! \fn void PeriodicWedgeOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot,
+//!                               int ip)
 //  \brief periodic wedgeboundary conditions, outer x3 boundary
 
 /*void PeriodicWedgeOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
@@ -374,13 +388,12 @@ void ReflectMCOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip
   pphot->i3 = pmcb->ks;
   pphot->x[2] = pco->x3f(pphot->i3);
 
-  
   }*/
 
 
 //----------------------------------------------------------------------------------------
 //! \fn void Escape(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
-//  \brief mark photon as escaped
+//! \brief mark photon as escaped
 
 void Escape(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
@@ -389,7 +402,7 @@ void Escape(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Absorb(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
-//  \brief mark photon as absorbed
+//! \brief mark photon as absorbed
 
 void Absorb(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
@@ -399,7 +412,7 @@ void Absorb(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Destroy(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
-//  \brief mark photon as destroyed
+//! \brief mark photon as destroyed
 
 void Destroy(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
@@ -409,7 +422,7 @@ void Destroy(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Polar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
-//  \brief mark photon as destroyed and print warning message
+//! \brief mark photon as destroyed and print warning message
 
 void Polar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 

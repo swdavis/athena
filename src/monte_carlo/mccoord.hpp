@@ -6,7 +6,7 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file mccoord.hpp
-//  \brief definitions for MCCoord class
+//! \brief definitions for MCCoord base class and derived classes
 
 // Athena++ classes headers
 #include "../athena.hpp"
@@ -16,7 +16,7 @@
 
 //----------------------------------------------------------------------------------------
 //! \class MCCoord
-//  \brief monte carlo specific coordinate values
+//! \brief monte carlo specific coordinate value, base class
 
 class MCCoord {
 public:
@@ -46,19 +46,20 @@ protected:
 
 };
 
+//----------------------------------------------------------------------------------------
 //! \class MCCartesian
-//  \brief derived class for Cartesian coordinates
+//! \brief derived class for Cartesian coordinates
 
 class MCCartesian : public MCCoord {
 public:
   MCCartesian(Coordinates *pcoord, MonteCarloBlock *pmcb);
   MCCartesian(int ncells1, int ncells2, int ncells3, bool acc);
   ~MCCartesian();
- 
 };
 
+//----------------------------------------------------------------------------------------
 //! \class MCSphericalPolar
-//  \brief derived class for Spherical coordinates
+//! \brief derived class for Spherical coordinates
 
 class MCSphericalPolar : public MCCoord {
 public:
@@ -71,8 +72,9 @@ public:
   void Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
 };
 
+//----------------------------------------------------------------------------------------
 //! \class MCKerrSchild
-//  \brief derived class for Kerr-Schild coordinates
+//! \brief derived class for Kerr-Schild coordinates
 
 class MCKerrSchild: public MCCoord {
 public:
@@ -87,8 +89,9 @@ public:
 
 };
 
+//----------------------------------------------------------------------------------------
 //! \class MCCylindrical
-//  \brief derived class for Cylindrical coordinates
+//! \brief derived class for Cylindrical coordinates
 
 class MCCylindrical : public MCCoord {
 public:
@@ -102,8 +105,9 @@ public:
 
 };
 
+//----------------------------------------------------------------------------------------
 //! \class MCBoyerLindquist
-//  \brief derived class for Boyer-Lindquist coordinates
+//! \brief derived class for Boyer-Lindquist coordinates
 
 class MCBoyerLindquist : public MCCoord {
 public:
@@ -117,16 +121,15 @@ public:
   void InverseMetric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
 };
 
+//----------------------------------------------------------------------------------------
 //! \class MCMinkowski
-//  \brief derived class for Minkowski coordinates
+//! \brief derived class for Minkowski coordinates
 
 class MCMinkowski : public MCCoord {
 public:
   MCMinkowski(Coordinates *pcoord, MonteCarloBlock *pmcb);
   MCMinkowski(int ncells1, int ncells2, int ncells3, bool acc);
   ~MCMinkowski();
- 
 };
-
 
 #endif // MCCOORD_HPP

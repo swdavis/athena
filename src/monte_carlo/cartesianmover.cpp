@@ -12,12 +12,19 @@
 #include "../mesh/mesh.hpp"
 #include "debug.hpp"
 
+// function prototypes
 Real DistanceToNearestFace(MCCoord *pco, Photon *pphot, int ip);
 
-CartesianMover::CartesianMover(MonteCarloBlock *pmcb) 
+//----------------------------------------------------------------------------------------
+//! CartesianMover class constructor, derived from PhotonMover base class
+
+CartesianMover::CartesianMover(MonteCarloBlock *pmcb)
   : PhotonMover(pmcb) {
 
 }
+
+//----------------------------------------------------------------------------------------
+//! destructor
 
 CartesianMover::~CartesianMover() {
 
@@ -25,8 +32,7 @@ CartesianMover::~CartesianMover() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void CartesianMover::Move(Photon *pphot, int ips, int ipe)
-//  \brief Moves photon along straight line specified number of mean free paths or until
-//         photon leave monte carlo block
+//! \brief Moves photon using cell-by-cell approach through spherical polar grid
 
 void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
 
@@ -35,7 +41,7 @@ void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
   MCCoord *pco = pmy_mcb->pcoord;
 
   for (int ip=ips; ip<=ipe; ip++) {
-    
+
     // get number of mean free paths photon will travel
     Real tauremaining = GetOpticalDepth(pran);
     Real tau0 = tauremaining;
@@ -50,7 +56,7 @@ void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
     // in optically thin, periodic domains.
     while( (tauremaining > 0.) && (pphot->statp[ip] == EVOLVING) && (iter < checkmove)) {
       iter++;
-      
+
       // Compute distance to all faces
       Real dlx, dly, dlz;
       bool ascend[3];
@@ -75,7 +81,7 @@ void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
         dly = HUGE_NUMBER;
         ascend[1] = false;
       }
-    
+
       if(kz > 0.0) {
         dlz = (pco->x3f(pphot->i3p[ip]+1) - pphot->x3p[ip]) / kz;
         ascend[2] = true;
@@ -104,7 +110,7 @@ void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
               accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
           } else {
             Real tauacc = 10.;
-            if (pmcb->planck_inv_opacity(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]) 
+            if (pmcb->planck_inv_opacity(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip])
                 * dist > tauacc)
               accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
           }
@@ -148,13 +154,13 @@ void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
         tauremaining -= chi * dl;
 
         // Perform any user work
-        if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this,ip);     
+        if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this,ip);
         MovePhotonToNextZone(pphot,pco,pmcb,face,ascend,ip);
       }
     }
 
     if (iter >= checkmove) {
-      std::cout << "Warning: iter exceeded " << checkmove << " in photon mover." 
+      std::cout << "Warning: iter exceeded " << checkmove << " in photon mover."
                 << std::endl;
       std::cout << "tau: " << tau0 << " " << tauremaining << std::endl;
       pphot->PrintPhoton(ip);
@@ -164,6 +170,10 @@ void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
   } // loop over photons
 
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn Real DistanceToNearestFace(MCCoord *pco, Photon *pphot, int ip)
+//! \brief Computes distance to nearest face along current trajectory
 
 Real DistanceToNearestFace(MCCoord *pco, Photon *pphot, int ip) {
 

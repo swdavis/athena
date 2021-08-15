@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file mcoutput.cpp
-//  \brief implementation of functions in class MCOutput
+//! \brief implementation of functions in class MCOutput
 
 // C++ headers
 #include <stdio.h>
@@ -46,11 +46,12 @@ namespace mcoutput {
   }
 }
 
+//----------------------------------------------------------------------------------------
+//! Spectrum constructor from input
 
-// constructor
 Spectrum::Spectrum(MomentumRange input_range, bool pol, bool xlog) {
 
-  next = NULL;
+  next = nullptr;
   face = BoundaryFace::undef;
   range = input_range;
   polarized = pol;
@@ -73,11 +74,13 @@ Spectrum::Spectrum(MomentumRange input_range, bool pol, bool xlog) {
   }
 }
 
-// constructor from copy
+//----------------------------------------------------------------------------------------
+//! Spectrum constructor from copy
+
 Spectrum::Spectrum(Spectrum *pspec) {
 
   base_name.assign(pspec->base_name);
-  next = NULL;
+  next = nullptr;
   range = pspec->range;
   polarized = pspec->polarized;
   logarithmic = pspec->logarithmic;
@@ -93,7 +96,7 @@ Spectrum::Spectrum(Spectrum *pspec) {
   x1max = pspec->x1max;
   x2max = pspec->x2max;
   x3max = pspec->x3max;
-  
+
   // Allocate and intialize energy bins
   energies.NewAthenaArray(range.ne+1);
   BuildEnergyGrid(range.emin,range.emax,range.ne,logarithmic);
@@ -109,7 +112,9 @@ Spectrum::Spectrum(Spectrum *pspec) {
   }
 }
 
-// destructor
+//----------------------------------------------------------------------------------------
+// !destructor
+
 Spectrum::~Spectrum() {
 
   energies.DeleteAthenaArray();
@@ -125,7 +130,7 @@ Spectrum::~Spectrum() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Spectrum::BuildEnergyGrid(Real emin, Real emax, int nen, bool logarithmic)
-//  \brief initialize energy bins
+//! \brief initialize energy bins
 
 void Spectrum::BuildEnergyGrid(Real emin, Real emax, int nen, bool logarthmic) {
 
@@ -152,7 +157,7 @@ void Spectrum::BuildEnergyGrid(Real emin, Real emax, int nen, bool logarthmic) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Spectrum::SetSurface(std::string input_face)
-//  \brief set corresponding surface
+//! \brief set corresponding surface
 
 void Spectrum::SetSurface(std::string input_face) {
 
@@ -180,7 +185,7 @@ void Spectrum::SetSurface(std::string input_face) {
 
 //----------------------------------------------------------------------------------------
 //! \fn bool Spectrum::AngleBinsCarteisan(Real kx[4], int &phibin, int &cthbin)
-//  \brief set index of phi and cth bins relative to cartesian axis
+//! \brief set index of phi and cth bins relative to cartesian axis
 
 bool Spectrum::AngleBinsCartesian(Real k[4], int &phibin, int &cthbin) {
 
@@ -193,57 +198,57 @@ bool Spectrum::AngleBinsCartesian(Real k[4], int &phibin, int &cthbin) {
     // Set ctheta, phi according to face
     switch(face) {
       case BoundaryFace::inner_x1:
-	ctheta = -kx;
-	stheta = sqrt(SQR(ky)+SQR(kz));
-	phi = acos(ky/stheta);
-	if(kz < 0.0)
-	  phi = 2 * PI - phi;
-	break;
+        ctheta = -kx;
+        stheta = sqrt(SQR(ky)+SQR(kz));
+        phi = acos(ky/stheta);
+        if(kz < 0.0)
+          phi = 2 * PI - phi;
+        break;
       case BoundaryFace::outer_x1:
-	ctheta = kx;
-	stheta = sqrt(SQR(ky)+SQR(kz));
-	phi = acos(ky/stheta);
-	if(kz < 0.0)
-	  phi = 2 * PI - phi;
-	break;
+        ctheta = kx;
+        stheta = sqrt(SQR(ky)+SQR(kz));
+        phi = acos(ky/stheta);
+        if(kz < 0.0)
+          phi = 2 * PI - phi;
+        break;
       case BoundaryFace::inner_x2:
-	ctheta = -ky;
-	stheta = sqrt(SQR(kx)+SQR(kz));
-	phi = acos(kx/stheta);
-	if(kz < 0.0)
-	  phi = 2 * PI - phi;
-	break;
+        ctheta = -ky;
+        stheta = sqrt(SQR(kx)+SQR(kz));
+        phi = acos(kx/stheta);
+        if(kz < 0.0)
+          phi = 2 * PI - phi;
+        break;
       case BoundaryFace::outer_x2:
-	ctheta = ky;
-	stheta = sqrt(SQR(kx)+SQR(kz));
-	phi = acos(kx/stheta);
-	if(kz < 0.0)
-	  phi = 2 * PI - phi;
-	break; 
-     case BoundaryFace::inner_x3:
-	ctheta = -kz;
-	stheta = sqrt(SQR(kx)+SQR(ky));
-	phi = acos(kx/stheta);
-	if(ky < 0.0)
-	  phi = 2 * PI - phi;
-	break;
+        ctheta = ky;
+        stheta = sqrt(SQR(kx)+SQR(kz));
+        phi = acos(kx/stheta);
+        if(kz < 0.0)
+          phi = 2 * PI - phi;
+        break;
+      case BoundaryFace::inner_x3:
+        ctheta = -kz;
+        stheta = sqrt(SQR(kx)+SQR(ky));
+        phi = acos(kx/stheta);
+        if(ky < 0.0)
+          phi = 2 * PI - phi;
+        break;
       case BoundaryFace::outer_x3:
-	ctheta = kz;
-	stheta = sqrt(SQR(kx)+SQR(ky));
-	phi = acos(kx/stheta);
-	if(ky < 0.0)
-	  phi = 2 * PI - phi;
-	break;
+        ctheta = kz;
+        stheta = sqrt(SQR(kx)+SQR(ky));
+        phi = acos(kx/stheta);
+        if(ky < 0.0)
+          phi = 2 * PI - phi;
+        break;
       case BoundaryFace::undef:
-	ctheta=fabs(kz);
-	phi = 0.;
-	break;
+        ctheta=fabs(kz);
+        phi = 0.;
+        break;
       default:
-	std::stringstream msg;
-	msg << "### FATAL ERROR in function [Spectrum::AngleBinsCartesian]" << std::endl
-	    << "Face not valid" << std::endl;
-	throw std::runtime_error(msg.str().c_str());
-	break;
+        std::stringstream msg;
+        msg << "### FATAL ERROR in function [Spectrum::AngleBinsCartesian]" << std::endl
+            << "Face not valid" << std::endl;
+        throw std::runtime_error(msg.str().c_str());
+        break;
     }
   } else if (COORDINATE_SYSTEM == "spherical_polar") {
     if (kz >= 0.0) {
@@ -251,13 +256,13 @@ bool Spectrum::AngleBinsCartesian(Real k[4], int &phibin, int &cthbin) {
       stheta = sqrt(SQR(kx)+SQR(ky));
       phi = acos(kx/stheta);
       if(ky < 0.0)
-	phi = 2 * PI - phi;
+        phi = 2 * PI - phi;
     } else {
       ctheta = -kz;
       stheta = sqrt(SQR(kx)+SQR(ky));
       phi = acos(kx/stheta);
       if(ky < 0.0)
-	phi = 2 * PI - phi;
+        phi = 2 * PI - phi;
     }
   }
 
@@ -274,7 +279,6 @@ bool Spectrum::AngleBinsCartesian(Real k[4], int &phibin, int &cthbin) {
               << ctheta << ' ' << kx << ' ' << ky << ' ' << kz << std::endl;
     return false;
   }
-
 
   // Get phi bin
   int nphi = range.nphi;
@@ -300,7 +304,7 @@ bool Spectrum::AngleBinsCartesian(Real k[4], int &phibin, int &cthbin) {
 
 //----------------------------------------------------------------------------------------
 //! \fn bool Spectrum::AngleBinsSphericalPolar(Real k[4], int &phibin, int &cthbin)
-//  \brief set index of phi and cth bins relative to spherical-polar axis
+//! \brief set index of phi and cth bins relative to spherical-polar axis
 
 bool Spectrum::AngleBinsSphericalPolar(Real k[4], int &phibin, int &cthbin) {
 
@@ -316,42 +320,42 @@ bool Spectrum::AngleBinsSphericalPolar(Real k[4], int &phibin, int &cthbin) {
       stheta = sqrt(SQR(kth)+SQR(kph));
       phi = acos(kth/stheta);
       if(kph < 0.0)
-	phi = 2 * PI - phi;
+        phi = 2 * PI - phi;
       break;
     case BoundaryFace::outer_x1:
       ctheta = kr;
       stheta = sqrt(SQR(kth)+SQR(kph));
       phi = acos(kth/stheta);
       if(kph < 0.0)
-	phi = 2 * PI - phi;
+        phi = 2 * PI - phi;
       break;
     case BoundaryFace::inner_x2:
       ctheta = -kth;
       stheta = sqrt(SQR(kr)+SQR(kph));
       phi = acos(kr/stheta);
       if(kph < 0.0)
-	phi = 2 * PI - phi;
+        phi = 2 * PI - phi;
       break;
     case BoundaryFace::outer_x2:
       ctheta = kth;
       stheta = sqrt(SQR(kr)+SQR(kph));
       phi = acos(kr/stheta);
       if(kph < 0.0)
-	phi = 2 * PI - phi;
+        phi = 2 * PI - phi;
       break;
     case BoundaryFace::inner_x3:
       ctheta = -kph;
       stheta = sqrt(SQR(kr)+SQR(kth));
       phi = acos(kr/stheta);
       if(kth < 0.0)
-	phi = 2 * PI - phi;
+        phi = 2 * PI - phi;
       break;
     case BoundaryFace::outer_x3:
       ctheta = kph;
       stheta = sqrt(SQR(kr)+SQR(kth));
       phi = acos(kr/stheta);
       if(kth < 0.0)
-	phi = 2 * PI - phi;
+        phi = 2 * PI - phi;
       break;
     default:
       std::stringstream msg;
@@ -383,14 +387,14 @@ bool Spectrum::AngleBinsSphericalPolar(Real k[4], int &phibin, int &cthbin) {
   }
   if(phibin >= nphi) {
     std::cout << "Warning: phibin > nphi (phibin, phi, k1, k2, k3): " << phibin << ' '
-              << phi << ' ' << kr << ' ' << kth << ' ' 
-	      << kph << std::endl;
+              << phi << ' ' << kr << ' ' << kth << ' '
+              << kph << std::endl;
     return false;
   }
   if(phibin < 0) {
     std::cout << "Warning: phibin < 0 (phibin, phi, k1, k2, k3): " << phibin << ' '
-              << phi << ' ' << kr << ' ' << kth << ' ' 
-	      << kph << std::endl;
+              << phi << ' ' << kr << ' ' << kth << ' '
+              << kph << std::endl;
     return false;
   }
   return true;
@@ -399,11 +403,11 @@ bool Spectrum::AngleBinsSphericalPolar(Real k[4], int &phibin, int &cthbin) {
 
 //----------------------------------------------------------------------------------------
 //! \fn bool Spectrum::ScreenCoordinates(Photon *pphot)
-//  \brief Returns true if photon is not within specified coordinate ranges
+//! \brief Returns true if photon is not within specified coordinate ranges
 
 bool Spectrum::ScreenCoordinates(Photon *pphot) {
 
-  if (pphot->x[0] < x1min) 
+  if (pphot->x[0] < x1min)
     return true;
   else if (pphot->x[0] > x1max)
     return true;
@@ -421,10 +425,10 @@ bool Spectrum::ScreenCoordinates(Photon *pphot) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Spectrum::UpdateSpectrum(Photon *pphot)
-//  \brief add photon contribution to spectrum
+//! \brief add photon contribution to spectrum
 
 void Spectrum::UpdateSpectrum(Photon *pphot) {
- 
+
   if ((face != pphot->face) && (pphot->face != BoundaryFace::undef))
     return;
 
@@ -436,37 +440,37 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
     if (coordinates) {
       //Apply coordinate cuts
       if (ScreenCoordinates(pphot))
-	return;
+        return;
     }
 
     int ebin;
     // SWD: covariant mover requires: ebin = EnergyBin(pphot->k[0]);
     ebin = EnergyBinUniform(pphot->energy,logarithmic);
     if (ebin < 0) return;
-  
+
     // Get angle bins
     int phibin, mubin;
     if (polar_axis) {
       Real kcart[4];
       pphot->pmy_mcb->pmover->CurvalinearToCartesian(pphot,kcart);
       if (!AngleBinsCartesian(kcart,phibin,mubin))
-	return;
+        return;
     } else {
       if (COORDINATE_SYSTEM == "spherical_polar") {
-	if (pphot->pmy_mcb->general_mover_flag) {
-	  Real kn[4];
-	  kn[IMC1] = pphot->k[IMC1];
-	  kn[IMC2] = pphot->k[IMC2]*pphot->x[IMC1];
-	  kn[IMC3] = pphot->k[IMC3]*pphot->x[IMC1]*sin(pphot->x[IMC2]);
-	  Real norm = sqrt(SQR(kn[IMC1])+SQR(kn[IMC2])+SQR(kn[IMC3]));
-	  for (int i=0; i<4; ++i)
-	    kn[i] /= norm;
-	  if(!AngleBinsSphericalPolar(kn,phibin,mubin))
-	    return;
-	} else {
-	  if(!AngleBinsSphericalPolar(pphot->k,phibin,mubin))
-	    return;
-	}
+        if (pphot->pmy_mcb->general_mover_flag) {
+          Real kn[4];
+          kn[IMC1] = pphot->k[IMC1];
+          kn[IMC2] = pphot->k[IMC2]*pphot->x[IMC1];
+          kn[IMC3] = pphot->k[IMC3]*pphot->x[IMC1]*sin(pphot->x[IMC2]);
+          Real norm = sqrt(SQR(kn[IMC1])+SQR(kn[IMC2])+SQR(kn[IMC3]));
+          for (int i=0; i<4; ++i)
+            kn[i] /= norm;
+          if(!AngleBinsSphericalPolar(kn,phibin,mubin))
+            return;
+        } else {
+          if(!AngleBinsSphericalPolar(pphot->k,phibin,mubin))
+            return;
+        }
       }
     }
     //Real tauabs = -log(weight);
@@ -474,10 +478,10 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
     intensity(phibin,mubin,ebin) += weight;
     intensity_sq(phibin,mubin,ebin) += weight*weight;
     //intensity(phibin,mubin,ebin) += pphot->stokes[0] * weight;
-    //intensity_sq(phibin,mubin,ebin) += SQR(pphot->stokes[0] * weight);  
+    //intensity_sq(phibin,mubin,ebin) += SQR(pphot->stokes[0] * weight);
     if (polarized) {
       stokesq(phibin,mubin,ebin) += pphot->stokes[1] * weight;
-      stokesq_sq(phibin,mubin,ebin) += SQR(pphot->stokes[1] * weight); 
+      stokesq_sq(phibin,mubin,ebin) += SQR(pphot->stokes[1] * weight);
       stokesu(phibin,mubin,ebin) += pphot->stokes[2] * weight;
       stokesu_sq(phibin,mubin,ebin) += SQR(pphot->stokes[2] * weight);
     }
@@ -486,7 +490,7 @@ void Spectrum::UpdateSpectrum(Photon *pphot) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Spectrum::EnergyBinUniform(Real energy, bool loge)
-//  \brief return bin number corresponding to energy
+//! \brief return bin number corresponding to energy
 
 int Spectrum::EnergyBinUniform(Real energy, bool loge)
 {
@@ -507,7 +511,7 @@ int Spectrum::EnergyBinUniform(Real energy, bool loge)
 
 //----------------------------------------------------------------------------------------
 //! \fn void Spectrum::EnergyBin(Real energy)
-//  \brief return bin number corresponding to energy
+//! \brief return bin number corresponding to energy
 
 int Spectrum::EnergyBin(Real energy)
 {
@@ -523,7 +527,6 @@ int Spectrum::EnergyBin(Real energy)
     mid = (low + high) / 2;
     if(energies(mid) <= energy) {
       if(energies(mid+1) > energy) {
-	//printf("%d %g %g %g\n",mid,energies(mid)/1.6021772e-12,energies(mid+1)/1.6021772e-12,energy/1.6021772e-12);
         return mid;
       } else
         low = mid+1;
@@ -543,34 +546,35 @@ int Spectrum::EnergyBin(Real energy)
 
 //----------------------------------------------------------------------------------------
 //! \fn void Spectrum::ResetSpectrum()
-//  \brief zero elements of output spectrum
+//! \brief zero elements of output spectrum
 
 void Spectrum::ResetSpectrum() {
 
   for(int i=0; i<range.nphi; ++i) {
     for(int j=0; j<range.ncth; ++j) {
       for(int k=0; k<range.ne; ++k) {
-	intensity(i,j,k) = 0.;
-	intensity_sq(i,j,k) = 0.;
-	if (polarized) {
-	  stokesq(i,j,k) = 0.;
-	  stokesq_sq(i,j,k) = 0.;
-	  stokesu(i,j,k) = 0.;
-	  stokesu_sq(i,j,k) = 0.;
-	}
+        intensity(i,j,k) = 0.;
+        intensity_sq(i,j,k) = 0.;
+        if (polarized) {
+          stokesq(i,j,k) = 0.;
+          stokesq_sq(i,j,k) = 0.;
+          stokesu(i,j,k) = 0.;
+          stokesu_sq(i,j,k) = 0.;
+        }
       }}}
 
 }
+
 //----------------------------------------------------------------------------------------
 //! \fn void Spectrum::AddSpectrum(Spectrum *pspec)
-//  \brief return add contents of another spectrum
+//! \brief return add contents of another spectrum
 
 void Spectrum::AddSpectrum(Spectrum *pspec) {
 
   if (pspec->id != id) {
     std::stringstream msg;
     msg << "### FATAL ERROR in AddSpectrum" << std::endl
-        << "Input spectrum id ="  << pspec->id << " but this spectrum id = " 
+        << "Input spectrum id ="  << pspec->id << " but this spectrum id = "
         << id << std::endl;
     throw std::runtime_error(msg.str().c_str());
   } else {
@@ -587,12 +591,12 @@ void Spectrum::AddSpectrum(Spectrum *pspec) {
           }
         }}}
   }
-
 }
 
-// constructor
-PhotonList::PhotonList(int list_mem_size, bool pol, int nuser) {
+//----------------------------------------------------------------------------------------
+//! PhotonList constructor from input
 
+PhotonList::PhotonList(int list_mem_size, bool pol, int nuser) {
 
   // Allocate memory for photon list
   len_limit = list_mem_size;
@@ -606,7 +610,8 @@ PhotonList::PhotonList(int list_mem_size, bool pol, int nuser) {
 
 }
 
-// destructor
+//----------------------------------------------------------------------------------------
+//! destructor
 PhotonList::~PhotonList() {
 
   photons.DeleteAthenaArray();
@@ -615,7 +620,7 @@ PhotonList::~PhotonList() {
 
 //----------------------------------------------------------------------------------------
 //! \fn PhotonList::AddPhoton(Photon *pphot)
-//  \brief add photon to list
+//! \brief add photon to list
 
 void PhotonList::AddPhoton(Photon *pphot) {
 
@@ -643,7 +648,7 @@ void PhotonList::AddPhoton(Photon *pphot) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void PhotonList::WriteList(std::string filename, Real ntot)
-//  \brief write photon list to binary file
+//! \brief write photon list to binary file
 
 void PhotonList::WriteList(std::string filename, int ntot) {
   // Since list lengths are variable each process writes its own list
@@ -652,10 +657,10 @@ void PhotonList::WriteList(std::string filename, int ntot) {
   FILE *pfile;
   std::stringstream msg;
 
-  //if ((pfile = fopen("temp.out","w")) == NULL) {
-  if ((pfile = fopen(filename.c_str(),"w")) == NULL) {
+  //if ((pfile = fopen("temp.out","w")) == nullptr) {
+  if ((pfile = fopen(filename.c_str(),"w")) == nullptr) {
     msg << "### FATAL ERROR in function [PhotonList::WriteList]" << std::endl
-	<< "Output file '" << filename << "' could not be opened";
+        << "Output file '" << filename << "' could not be opened";
     throw std::runtime_error(msg.str().c_str());
   }
 
@@ -674,7 +679,10 @@ void PhotonList::WriteList(std::string filename, int ntot) {
       data[n++] = static_cast<double>(photons(i,j));
     }}
   // write data in big endian order
-  if (!(mcoutput::IsBigEndian())) {for (int i=0; i<ndata; ++i) mcoutput::Swap8Bytes(&data[i]);}
+  if (!(mcoutput::IsBigEndian())) {
+    for (int i=0; i<ndata; ++i)
+      mcoutput::Swap8Bytes(&data[i]);
+  }
   fwrite(data,sizeof(double),static_cast<size_t>(ndata),pfile);
   fclose(pfile);
   delete [] data;
@@ -683,12 +691,12 @@ void PhotonList::WriteList(std::string filename, int ntot) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void PhotonList::ResizeList(int new_len)
-//  \brief resize a photon list
+//!  \brief resize a photon list
 
 void PhotonList::ResizeList(int new_len) {
-  
+
   if (new_len < len_limit) {
-    std::cout << "Warning: new list length " << new_len << " < len_limit " 
+    std::cout << "Warning: new list length " << new_len << " < len_limit "
               << len_limit << ".  Aborting ResizeList()" << std::endl;
     return;
   }
@@ -703,9 +711,11 @@ void PhotonList::ResizeList(int new_len) {
   len_limit = new_len;
 }
 
+//----------------------------------------------------------------------------------------
+//! PhotonTrajectoryList constructor from input
 
-// constructor
-PhotonTrajectoryList::PhotonTrajectoryList(int init_len_limit, int init_step_limit, int nuser) {
+PhotonTrajectoryList::PhotonTrajectoryList(int init_len_limit, int init_step_limit,
+                                           int nuser) {
 
   // Allocate memory for trajectory list
   len_limit = init_len_limit;
@@ -717,7 +727,9 @@ PhotonTrajectoryList::PhotonTrajectoryList(int init_len_limit, int init_step_lim
   nsteps = new int[len_limit];
 }
 
-// destructor
+//----------------------------------------------------------------------------------------
+//! destructor
+
 PhotonTrajectoryList::~PhotonTrajectoryList() {
 
   trajectories.DeleteAthenaArray();
@@ -727,7 +739,7 @@ PhotonTrajectoryList::~PhotonTrajectoryList() {
 
 //----------------------------------------------------------------------------------------
 //! \fn PhotonTrajectoryList::CompleteTrajectory()
-//  \brief add location to trajectory
+//! \brief add location to trajectory
 
 void PhotonTrajectoryList::CompleteTrajectory() {
 
@@ -739,19 +751,18 @@ void PhotonTrajectoryList::CompleteTrajectory() {
     ResizeList(2*len_limit,step_limit);
   }
   step = 0;
-
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn PhotonTrajectoryList::AddToTrajectory(Photon *pphot)
-//  \brief add photon location to trajectory
+//! \brief add photon location to trajectory
 
 void PhotonTrajectoryList::AddToTrajectory(Photon *pphot) {
- 
+
   if (step == step_limit)
     return;
- 
-  int n = 0; 
+
+  int n = 0;
   for (int i=0; i<4; i++) {
     trajectories(length,step,n++) = pphot->x[i];
   }
@@ -763,7 +774,7 @@ void PhotonTrajectoryList::AddToTrajectory(Photon *pphot) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void PhotonTrajectoryList::WriteList(std::string filename, Real ntot)
-//  \brief write photon trajectory list to binary file with header
+//! \brief write photon trajectory list to binary file with header
 
 void PhotonTrajectoryList::WriteList(std::string filename) {
   // Since list lengths are variable each process writes its own list
@@ -772,10 +783,10 @@ void PhotonTrajectoryList::WriteList(std::string filename) {
   FILE *pfile;
   std::stringstream msg;
 
-  //if ((pfile = fopen("temp.out","w")) == NULL) {
-  if ((pfile = fopen(filename.c_str(),"w")) == NULL) {
+  //if ((pfile = fopen("temp.out","w")) == nullptr) {
+  if ((pfile = fopen(filename.c_str(),"w")) == nullptr) {
     msg << "### FATAL ERROR in function [PhotonTrajectoryList::WriteList]" << std::endl
-	<< "Output file '" << filename << "' could not be opened";
+        << "Output file '" << filename << "' could not be opened";
     throw std::runtime_error(msg.str().c_str());
   }
 
@@ -816,12 +827,12 @@ void PhotonTrajectoryList::WriteList(std::string filename) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void PhotonTrajectoryList::ResizeList(int new_len_limit, int new_step_limit)
-//  \brief resize a photon trajectory list
+//! \brief resize a photon trajectory list
 
 void PhotonTrajectoryList::ResizeList(int new_len_limit, int new_step_limit) {
-  
+
   if (new_len_limit < len_limit) {
-    std::cout << "Warning: new list length " << new_len_limit << " < len_limit " 
+    std::cout << "Warning: new list length " << new_len_limit << " < len_limit "
               << len_limit << ".  Aborting ResizeList()" << std::endl;
     return;
   }
@@ -848,8 +859,9 @@ void PhotonTrajectoryList::ResizeList(int new_len_limit, int new_step_limit) {
 
 }
 
+//----------------------------------------------------------------------------------------
+//! MCOutput constructor from ParameterInput and MonteCarlo
 
-// constructor
 MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
 
   pmy_mc = pmc;
@@ -857,15 +869,15 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
   InputBlock *pib = pin->pfirst_block;
 
   moments = false;
-  pspec = NULL;
-  pphlist = NULL;
-  ptraj = NULL;
+  pspec = nullptr;
+  pphlist = nullptr;
+  ptraj = nullptr;
   // loop over input block names.  Find those that start with "output", read parameters,
   // and construct linked list of spectra if present, set moments flag if moments output
   // present
-  Spectrum *pfirst = NULL, *plast;
+  Spectrum *pfirst = nullptr, *plast;
   int id =0;
-  while (pib != NULL) {
+  while (pib != nullptr) {
     if (pib->block_name.compare(0,6,"output") == 0) {
       // Look for spectra
       std::string type = pin->GetString(pib->block_name,"file_type");
@@ -884,58 +896,58 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         range.cthmin = pin->GetOrAddReal(pib->block_name,"cthmin",0.);
         range.cthmax = pin->GetOrAddReal(pib->block_name,"cthmax",1.);
         bool polarized = pin->GetOrAddBoolean(pib->block_name,"polarized",pmc->polarized);
-	bool xlog = pin->GetOrAddBoolean(pib->block_name,"xlog",true);
-	// Create spectrum
+        bool xlog = pin->GetOrAddBoolean(pib->block_name,"xlog",true);
+        // Create spectrum
         pspec = new Spectrum(range,polarized,xlog);
-	pspec->id = id++;
-	pspec->output_number = 0;
-	// Generate file name
-	std::string outn = pib->block_name.substr(6); // 6 because counting starts at 0!
-	int outid = atoi(outn.c_str());
-	// set file name
-	std::string basename = pin->GetString("job","problem_id");
-	pspec->base_name.assign(basename);
-	pspec->base_name.append(".");
-	char define_id[10];
+        pspec->id = id++;
+        pspec->output_number = 0;
+        // Generate file name
+        std::string outn = pib->block_name.substr(6); // 6 because counting starts at 0!
+        int outid = atoi(outn.c_str());
+        // set file name
+        std::string basename = pin->GetString("job","problem_id");
+        pspec->base_name.assign(basename);
+        pspec->base_name.append(".");
+        char define_id[10];
         sprintf(define_id,"out%d",outid);  // default id="outN"
-	pspec->base_name.append(define_id);
-	// Select legacy output format if desired
+        pspec->base_name.append(define_id);
+        // Select legacy output format if desired
         pspec->legacy = pin->GetOrAddBoolean(pib->block_name,"legacy",false);
-	// set output face if specified
+        // set output face if specified
         std::string face = pin->GetOrAddString(pib->block_name,"face","none");
-	pspec->SetSurface(face);
-	// Check for coordinate ranges for spectrum
-	if (pin->DoesParameterExist(pib->block_name,"x1min")) {
-	  pspec->x1min = pin->GetReal(pib->block_name,"x1min");
-	  pspec->coordinates = true;
-	}
-	if (pin->DoesParameterExist(pib->block_name,"x1max")) {
-	  pspec->x1max = pin->GetReal(pib->block_name,"x1max");
-	  pspec->coordinates = true;
-	}
-	if (pin->DoesParameterExist(pib->block_name,"x2min")) {
-	  pspec->x2min = pin->GetReal(pib->block_name,"x2min");
-	  pspec->coordinates = true;
-	}
-	if (pin->DoesParameterExist(pib->block_name,"x2max")) {
-	  pspec->x2max = pin->GetReal(pib->block_name,"x2max");
-	  pspec->coordinates = true;
-	}
-	if (pin->DoesParameterExist(pib->block_name,"x3min")) {
-	  pspec->x3min = pin->GetReal(pib->block_name,"x3min");
-	  pspec->coordinates = true;
-	}
-	if (pin->DoesParameterExist(pib->block_name,"x3max")) {
-	  pspec->x3max = pin->GetReal(pib->block_name,"x3max");
-	  pspec->coordinates = true;
-	}	  
-	// Set axis for determining output angles
-	if (COORDINATE_SYSTEM == "cartesian")
-	  pspec->polar_axis = true;
-	else
-	  pspec->polar_axis = pin->GetOrAddBoolean(pib->block_name,"polar_axis",false);
-	// Check for coordinate range
-        if (pfirst == NULL)
+        pspec->SetSurface(face);
+        // Check for coordinate ranges for spectrum
+        if (pin->DoesParameterExist(pib->block_name,"x1min")) {
+          pspec->x1min = pin->GetReal(pib->block_name,"x1min");
+          pspec->coordinates = true;
+        }
+        if (pin->DoesParameterExist(pib->block_name,"x1max")) {
+          pspec->x1max = pin->GetReal(pib->block_name,"x1max");
+          pspec->coordinates = true;
+        }
+        if (pin->DoesParameterExist(pib->block_name,"x2min")) {
+          pspec->x2min = pin->GetReal(pib->block_name,"x2min");
+          pspec->coordinates = true;
+        }
+        if (pin->DoesParameterExist(pib->block_name,"x2max")) {
+          pspec->x2max = pin->GetReal(pib->block_name,"x2max");
+          pspec->coordinates = true;
+        }
+        if (pin->DoesParameterExist(pib->block_name,"x3min")) {
+          pspec->x3min = pin->GetReal(pib->block_name,"x3min");
+          pspec->coordinates = true;
+        }
+        if (pin->DoesParameterExist(pib->block_name,"x3max")) {
+          pspec->x3max = pin->GetReal(pib->block_name,"x3max");
+          pspec->coordinates = true;
+        }
+        // Set axis for determining output angles
+        if (COORDINATE_SYSTEM == "cartesian")
+          pspec->polar_axis = true;
+        else
+          pspec->polar_axis = pin->GetOrAddBoolean(pib->block_name,"polar_axis",false);
+        // Check for coordinate range
+        if (pfirst == nullptr)
           pfirst = pspec;
         else
           plast->next = pspec;
@@ -949,25 +961,25 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
           std::stringstream msg;
           msg << "### ERROR in MCOutput constructor" << std::endl
               << "User output variables: " << nuser_out
-              << " greater than user variables: " << pmy_mc->nuser_var << std::endl; 
+              << " greater than user variables: " << pmy_mc->nuser_var << std::endl;
           throw std::runtime_error(msg.str().c_str());
         }
         //bool rel = pin->GetOrAddBoolean(pib->block_name,"relativistic",false);
         pphlist = new PhotonList(pmc->max_list_size,pmc->polarized,nuser_out);
         // Initialize photon list
         pphlist->length = 0;
-	pphlist->output_number = 0;
-	// Generate file name
-	std::string outn = pib->block_name.substr(6); // 6 because counting starts at 0!
-	int outid = atoi(outn.c_str());
-	// set file name
-	std::string basename = pin->GetString("job","problem_id");
-	pphlist->base_name.assign(basename);
+        pphlist->output_number = 0;
+        // Generate file name
+        std::string outn = pib->block_name.substr(6); // 6 because counting starts at 0!
+        int outid = atoi(outn.c_str());
+        // set file name
+        std::string basename = pin->GetString("job","problem_id");
+        pphlist->base_name.assign(basename);
         pphlist->base_name.append(".");
-	char define_id[10];
+        char define_id[10];
         sprintf(define_id,"out%d",outid);  // default id="outN"
-	pphlist->base_name.append(define_id);
-	pphlist->base_name.append(".");
+        pphlist->base_name.append(define_id);
+        pphlist->base_name.append(".");
         char proc_id[11];
         sprintf(proc_id,"proc%d",Globals::my_rank);
         pphlist->base_name.append(proc_id);
@@ -980,7 +992,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
           std::stringstream msg;
           msg << "### ERROR in MCOutput constructor" << std::endl
               << "User output variables: " << nuser_out
-              << " greater than user variables: " << pmy_mc->nuser_var << std::endl; 
+              << " greater than user variables: " << pmy_mc->nuser_var << std::endl;
           throw std::runtime_error(msg.str().c_str());
         }
         int step_limit = pin->GetOrAddInteger(pib->block_name,"steplimit",10000);
@@ -989,18 +1001,18 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         // Initialize photon list
         ptraj->length = 0;
         ptraj->maxstep = ptraj->step = 0;
-	ptraj->output_number = 0;
-	// Generate file name
-	std::string outn = pib->block_name.substr(6); // 6 because counting starts at 0!
-	int outid = atoi(outn.c_str());
-	// set file name
-	std::string basename = pin->GetString("job","problem_id");
-	ptraj->base_name.assign(basename);
+        ptraj->output_number = 0;
+        // Generate file name
+        std::string outn = pib->block_name.substr(6); // 6 because counting starts at 0!
+        int outid = atoi(outn.c_str());
+        // set file name
+        std::string basename = pin->GetString("job","problem_id");
+        ptraj->base_name.assign(basename);
         ptraj->base_name.append(".");
-	char define_id[10];
+        char define_id[10];
         sprintf(define_id,"out%d",outid);  // default id="outN"
-	ptraj->base_name.append(define_id);
-	ptraj->base_name.append(".");
+        ptraj->base_name.append(define_id);
+        ptraj->base_name.append(".");
         char proc_id[11];
         sprintf(proc_id,"proc%d",Globals::my_rank);
         ptraj->base_name.append(proc_id);
@@ -1022,7 +1034,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
   }
   // set pspec to head node of specrum list
   pspec = pfirst;
- 
+
 }
 
 // destructor
@@ -1030,21 +1042,21 @@ MCOutput::~MCOutput() {
 
 }
 
+// SWD: remove this now?
 //----------------------------------------------------------------------------------------
 //! \fn void Spectrum::WriteSpectrumLegacy(std::string fname, Real norm)
-//  \brief output intensity spectrum in original mcgrid format
+//! \brief output intensity spectrum in original mcgrid format
 
 void Spectrum::WriteSpectrumLegacy(std::string filename, Real norm) {
 
   // open file for output
   FILE *pfile;
   std::stringstream msg;
-  if ((pfile = fopen(filename.c_str(),"w")) == NULL) {
+  if ((pfile = fopen(filename.c_str(),"w")) == nullptr) {
     msg << "### FATAL ERROR in function [MCOutput::OutputSpectrum]" << std::endl
-	<< "Output file '" << filename << "' could not be opened";
+        << "Output file '" << filename << "' could not be opened";
     throw std::runtime_error(msg.str().c_str());
   }
-   
   // Write header information
   Real everg = 1.602176634e-12;
   Real emin = range.emin / everg; // output in eV
@@ -1056,14 +1068,13 @@ void Spectrum::WriteSpectrumLegacy(std::string filename, Real norm) {
   for(int k=0; k<range.ne; ++k) {
     for(int j=0; j<range.ncth; ++j) {
       for(int i=0; i<range.nphi; ++i) {
-	fprintf(pfile,"%G %G ",intensity(i,j,k),intensity_sq(i,j,k));
-	if (polarized) {
-	  fprintf(pfile,"%G %G %G %G\n",stokesq(i,j,k),stokesq_sq(i,j,k),stokesu(i,j,k),
+        fprintf(pfile,"%G %G ",intensity(i,j,k),intensity_sq(i,j,k));
+        if (polarized) {
+          fprintf(pfile,"%G %G %G %G\n",stokesq(i,j,k),stokesq_sq(i,j,k),stokesu(i,j,k),
                   stokesu_sq(i,j,k));
-	} else {
-	  fprintf(pfile,"\n");
-	}
-	
+        } else {
+          fprintf(pfile,"\n");
+        }
       }
     }
   }
@@ -1072,16 +1083,16 @@ void Spectrum::WriteSpectrumLegacy(std::string filename, Real norm) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Spectrum::WriteSpectrum(Real norm, std::string fname)
-//  \brief output intensity spectrum in original mcgrid format
+//! \brief output intensity spectrum in original mcgrid format
 
 void Spectrum::WriteSpectrum(std::string fname, int nphot) {
 
   // open file for output
   FILE *pfile;
   std::stringstream msg;
-  if ((pfile = fopen(fname.c_str(),"w")) == NULL) {
+  if ((pfile = fopen(fname.c_str(),"w")) == nullptr) {
     msg << "### FATAL ERROR in function [Spectrum::WriteSpectrum]" << std::endl
-	<< "Output file '" << fname << "' could not be opened";
+        << "Output file '" << fname << "' could not be opened";
     throw std::runtime_error(msg.str().c_str());
   }
   // Write header information
@@ -1099,7 +1110,7 @@ void Spectrum::WriteSpectrum(std::string fname, int nphot) {
   if (polarized) nintens += 2;
   fprintf(pfile,"nintens=%d\n",nintens);
   fprintf(pfile,"units=ev\n");
-  if (polarized) 
+  if (polarized)
     fprintf(pfile,"polarized=true\n");
   else
     fprintf(pfile,"polarized=false\n");
@@ -1129,7 +1140,7 @@ void Spectrum::WriteSpectrum(std::string fname, int nphot) {
   emid = new double[ne];
   dnu = new double[ne];
   Real h = 6.62607015e-27;
-  for(int i=0; i<ne; ++i) { 
+  for(int i=0; i<ne; ++i) {
     emid[i] = 0.5*(energies(i)+energies(i+1));
     dnu[i] = (energies(i+1)-energies(i))/h;
   }
@@ -1205,12 +1216,12 @@ void Spectrum::WriteSpectrum(std::string fname, int nphot) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MCOutput::CollectSpectrum(MonteCarlo *pmc)
-//  \brief collect all spectra on this process for output
+//! \brief collect all spectra on this process for output
 
 void MCOutput::CollectSpectrum(MonteCarlo *pmc) {
 
   Spectrum *poutspec=pspec, *pblockspec;
-  while (poutspec != NULL) {
+  while (poutspec != nullptr) {
     int id = poutspec->id;
     poutspec->ResetSpectrum();
     // loop over monte carlo blocks
@@ -1227,11 +1238,11 @@ void MCOutput::CollectSpectrum(MonteCarlo *pmc) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MCOutput::OutputSpectrum(MonteCarlo *pmc)
-//  \brief output all intensity spectra
+//! \brief output all intensity spectra
 
 void MCOutput::OutputSpectrum(MonteCarlo *pmc) {
 
-  if (pspec == NULL)
+  if (pspec == nullptr)
     return;
   CollectSpectrum(pmc);
 #ifdef MPI_PARALLEL
@@ -1245,7 +1256,7 @@ void MCOutput::OutputSpectrum(MonteCarlo *pmc) {
   if (Globals::my_rank == 0) {
     Spectrum *pspect = pspec;
     int nphot = pmc->nphrun;
-    while (pspect != NULL) {
+    while (pspect != nullptr) {
       std::string filename;
       filename.assign(pspect->base_name);
       filename.append(".");
@@ -1267,11 +1278,11 @@ void MCOutput::OutputSpectrum(MonteCarlo *pmc) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MCOutput::OutputPhotonList(MonteCarlo *pmc)
-//  \brief output list of photon properties
+//! \brief output list of photon properties
 
 void MCOutput::OutputPhotonList(int nphtot) {
 
-  if (pphlist == NULL)
+  if (pphlist == nullptr)
     return;
 
   std::string filename;
@@ -1290,11 +1301,11 @@ void MCOutput::OutputPhotonList(int nphtot) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MCOutput::OutputTrajectoryList()
-//  \brief output list of photon trajectories
+//! \brief output list of photon trajectories
 
 void MCOutput::OutputTrajectoryList() {
 
-  if (ptraj == NULL)
+  if (ptraj == nullptr)
     return;
 
   std::string filename;

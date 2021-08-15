@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //!  \file scattering.cp
-
+//!  \brief implementation of scattering functions
 
 // Athena++ headers
 #include "montecarlo.hpp"
@@ -12,7 +12,7 @@
 
 //----------------------------------------------------------------------------------------
 //! \fn void NoScatter(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe)
-//  \brief prints warning, should not be called
+//! \brief prints warning, should not be called
 
 void NoScatter(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
 
@@ -25,7 +25,7 @@ void NoScatter(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe)
-//  \brief isotropic scattering of unpolarized radiation
+//! \brief isotropic scattering of unpolarized radiation
 
 void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
 
@@ -51,8 +51,8 @@ void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
-//                                   int ipe)
-//  \brief Thomson scattering of polarized radiation
+//!                                  int ipe)
+//! \brief Thomson scattering of polarized radiation
 //  See Chandrasekhar(1960) Chapter 1 figure 8
 //  Rotation matrix (r):  L(\pi-i2)R(\Theta)L(-i1)
 //  Here \Theta=smu
@@ -74,7 +74,7 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int 
     // SWD: should be done outside of scattering -- i.e. transform to tetrad
     //pmover->CurvalinearToCartesian(pphot);
 
-    // Polarized scattering must be computed relative to cartesian bases due to 
+    // Polarized scattering must be computed relative to cartesian bases due to
     // definition of stokes vectors
     Real &kx = pphot->k1p[ip];
     Real &ky = pphot->k2p[ip];
@@ -85,7 +85,7 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int 
     Real phio = acos(kx / stheta);
     if(ky < 0.0)
       phio = 2.*PI - phio;
-  
+
     Real smu, sstheta, s1, s2, s3, i1;
     Real ci1, si1, ci2, si2, s2i1, c2i1;
     Real intensi;
@@ -227,20 +227,20 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int 
 
     // SWD: Should be done outside of scattering
     //pmover->CartesianToCurvalinear(pphot);
-  } // end loop over ip 
+  } // end loop over ip
 
 }
 
 
 //----------------------------------------------------------------------------------------
 //! \fn void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
-//                                   int ipe)
-//  \brief Thomson scattering of unpolarized radiation
+//!                                  int ipe)
+//! \brief Thomson scattering of unpolarized radiation
 
 void ScatterThomsonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
 
   MCRandom *pran = pmcb->pran;
-  
+
   for (int ip=ips; ip<=ipe; ip++) {
 
     Real &k1 = pphot->k1p[ip];
@@ -249,19 +249,18 @@ void ScatterThomsonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, in
 
     Real k1p,k2p,k3p,cths;
     do {
-     
       Real cthp = 2.0 * pran->uniform() - 1.;
       Real phip = 2.*PI * pran->uniform();
       Real cphip = cos(phip);
       Real sphip = sin(phip);
       Real sthp = sqrt(1. - SQR(cthp));
-    
+
       k1p = sthp * cphip;
       k2p = sthp * sphip;
       k3p = cthp;
-    
+
       cths = k1 * k1p + k2 * k2p + k3 * k3p;
-    
+
     } while(pran->uniform() > SQR(cths));
 
     k1 = k1p;
@@ -269,13 +268,12 @@ void ScatterThomsonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, in
     k3 = k3p;
 
   } // end loop over ip
-  
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
-//                                     int ipe)
-//  \brief Unpolarized Compton scattering
+//!                                    int ipe)
+//! \brief Unpolarized Compton scattering
 
 void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
 
@@ -347,13 +345,12 @@ void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, in
     k3 = k3p;
 
   } //end loop over ip
-
 }
 
 
 //------------------------------------------------------------------------------
-//! \fn void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot, 
-//                                   int ips, int ipe)
+//! \fn void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot,
+//!                                  int ips, int ipe)
 //  \brief Polarized Compton scattering
 //
 // Note that this uses the correct R matrix expressions -- not the incorrect
@@ -375,7 +372,7 @@ void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
 
     // SWD: needs to be generalized
     //pmover->CurvalinearToCartesian(pphot);
-    // Polarized scattering must be computed relative to cartesian basis due 
+    // Polarized scattering must be computed relative to cartesian basis due
     // to definition of stokes vectors
     Real &kx = pphot->k1p[ip];
     Real &ky = pphot->k2p[ip];
@@ -384,7 +381,7 @@ void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
     int &i1 = pphot->i1p[ip];
     int &i2 = pphot->i2p[ip];
     int &i3 = pphot->i3p[ip];
-  
+
     Real stheta = sqrt(1. - SQR(kz));
     Real mec2 = 8.18711e-7;
     Real v1,v2,v3,vdc,mom,gamma,bgamma,x,vdotk;
@@ -515,15 +512,13 @@ void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
     // SWD: move outside of scattering
     //pmover->CartesianToCurvalinear(pphot);
   } // end loop over ip
-
 }
 
 
 //----------------------------------------------------------------------------
-//! \fn void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, 
-//                                int ips, int ipe)
-//  \brief Implements resonance line scattering
-//
+//! \fn void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot,
+//!                               int ips, int ipe)
+//! \brief Implements resonance line scattering
 
 void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips,
                           int ipe) {
@@ -555,34 +550,34 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips,
     Real h = 6.62607015e-27;
     Real nu = pphot->ep[ip] / h;
     Real x = (nu - nu0) / doppwidth;
-  
+
     // Parallel and perpendicular velocities
     Real vperp = vth * sqrt(-log(pran->uniform())) * cos(2.*PI*pran->uniform());
     Real vpar = vth * SampleVelocityParallel(a, x, pran);
-  
+
     //Compute incoming angles
     Real sth_in = sqrt(1. - SQR(kz));
     Real phi_in = atan2(ky , kx);
- 
+
     // Sample outgoing angles
     Real cth,sth,phi,cgam;
     do {
       // sample uniform in cos theta
       cth = 2. * pran->uniform() - 1.;
       sth = sqrt(1. - SQR(cth));
-  
+
       // sample uniform phi
       phi = 2. * PI * pran->uniform();
 
       // evaluate scattering angle
       cgam = sth_in * sth * cos(phi_in - phi) + cth * kz;
-   
-    } while (pran->uniform()*2. > (1.+SQR(cgam))); 
-    
+
+    } while (pran->uniform()*2. > (1.+SQR(cgam)));
+
     kx = sth * cos(phi);
     ky = sth * sin(phi);
     kz = cth;
-  
+
     // Evaluate outgoing photon energy
     Real sgam = sqrt(1. - SQR(cgam));
     pphot->ep[ip] = h * (nu + nu0 * ( (cgam - 1.) * vpar + sgam * vperp ) / c);
@@ -593,7 +588,7 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips,
 
 //----------------------------------------------------------------------------------------
 //! \fn Real Bigy(Real x, Real xp)
-//  \brief Helper function for compton scattering functions
+//! \brief Helper function for compton scattering functions
 
 Real Bigy(Real x, Real xp)
 {
@@ -607,7 +602,7 @@ Real Bigy(Real x, Real xp)
 
 //----------------------------------------------------------------------------------------
 //! \fn Real SigmaHat(Real x)
-//  \brief Helper function used by Compton scattering routines
+//! \brief Helper function used by Compton scattering routines
 
 Real SigmaHat(Real x)
 {
@@ -619,9 +614,8 @@ Real SigmaHat(Real x)
 }
 
 //----------------------------------------------------------------------------------------
-
 //! \fn Real ElectronDistPzdnyakov(Real tgas, MCRandom *pran)
-//  \brief Return momentum for electon distribution
+//! \brief Return momentum for electon distribution
 //
 //  Method is from Pozdnyakov et al. page 317 for low temperaure electrons
 
@@ -629,7 +623,7 @@ Real ElectronDistPozdnyakov(Real tgas, MCRandom *pran) {
 
   Real kmec2 = 1.68638e-10;
   Real ktgmec2 = kmec2 * tgas;
- 
+
   if( ktgmec2 <= 0.29) {
     Real xi,nxi,x1,x2,x3;
     do {
@@ -660,9 +654,8 @@ Real ElectronDistPozdnyakov(Real tgas, MCRandom *pran) {
 
 
 //----------------------------------------------------------------------------------------
-
 //! \fn Real ElectronDist(Real tgas, MCRandom *pran)
-//  \brief Return momentum for electon distribution
+//! \brief Return momentum for electon distribution
 //
 //  Method is from Canfield et al. 1987, ApJ 323, 565
 
@@ -708,15 +701,17 @@ Real ElectronDist(Real tgas, MCRandom *pran) {
 
 }
 
-//----------------------------------------------------------------------------
-//! \fn void SampleDipole(Real theta_in, Real phi_in, Real *theta_out, Real *phi_out, MCRandom *pran)
-//  \brief Sample angular distribution dipole scattering
+//----------------------------------------------------------------------------------------
+//! \fn void SampleDipole(Real theta_in, Real phi_in, Real *theta_out, Real *phi_out,
+//!                       MCRandom *pran)
+//! \brief Sample angular distribution dipole scattering
 //
-// SWD: ported from Phil's code -- not used and should be removed
-void SampleDipole(Real theta_in, Real phi_in, Real &theta_out, Real &phi_out, MCRandom *pran){
+// SWD: ported from Phil's code -- not used and can be removed after testing completed
+void SampleDipole(Real theta_in, Real phi_in, Real &theta_out, Real &phi_out,
+                  MCRandom *pran){
 
   // theta_out -> (*theta_out);
-  Real f;  
+  Real f;
 
   int it = 0;
   do{
@@ -729,27 +724,25 @@ void SampleDipole(Real theta_in, Real phi_in, Real &theta_out, Real &phi_out, MC
     phi_out = 2. * PI * pran->uniform();
 
     // compute distribution
-    Real cosgam = sin(theta_in)*sin(theta_out)*cos(phi_in-phi_out) + cos(theta_in)*cos(theta_out);
+    Real cosgam = sin(theta_in)*sin(theta_out)*cos(phi_in-phi_out) +
+                  cos(theta_in)*cos(theta_out);
     f = 1. + SQR(cosgam);
 
     // test if ok to accept
-    if (2. <= f){ 
+    if (2. <= f){
       printf("max not big enough\n");
     }
-   
-  } while (pran->uniform()*2. > f); 
-   
+  } while (pran->uniform()*2. > f);
+
 }
 
 //----------------------------------------------------------------------------
 //! \fn Real SampleVelocityParallel(Real a, Real x_in, MCRandom *pran)
-//  \brief Return parallel velocity for scattering atom
-//
-
+//! \brief Return parallel velocity for scattering atom
 
 Real SampleVelocityParallel(Real a, Real x_in, MCRandom *pran) {
 
-  Real x = fabs(x_in);                     // switch sign at end
+  Real x = fabs(x_in); // switch sign at end
   Real u0 = 0.96 * x;
   Real th0 = atan((u0-x) / a);
   Real p = (th0 + PI/2.) / (th0 + PI/2. + exp(-SQR(u0)) * (PI/2. - th0));

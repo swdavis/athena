@@ -6,12 +6,13 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file mcutils.hpp
-//  \brief prototypes for monte carlo related utility functions
+//! \brief prototypes for monte carlo related utility functions
 //
 // Athena++ classes headers
 #include "montecarlo.hpp"
 #include <complex>
 
+// function prototypes
 Real BessI0(Real x);
 Real BessI1(Real x);
 Real BessK0(Real x);

@@ -9,7 +9,7 @@
 //  \brief defines MCBoundaryValues prototypes for boundary condtion functions
 //
 // Current design focusses on implementing static post-processing so this implementation
-// will evolve
+// will need to evolve
 
 // Athena++ classes headers
 #include "../athena.hpp"
@@ -18,10 +18,8 @@
 class Photon;
 class MCCoord;
 
-
 // function pointer prototypes for user-defined modules set at runtime
 typedef void (*MCBValFunc_t)(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
-
 
 //---------------------- prototypes for boundary functions -------------------------------
 void PeriodicInnerX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
@@ -42,9 +40,10 @@ void Escape(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
 void Absorb(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
 void Destroy(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
 void Polar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
+
 //----------------------------------------------------------------------------------------
 //! \class MCBoundaryValues
-//  \brief BVals data and functions for monte carlo
+//! \brief BVals data and functions for monte carlo
 
 class MCBoundaryValues {
 public:
@@ -52,9 +51,8 @@ public:
   ~MCBoundaryValues();
 
   MonteCarloBlock *pmy_mcb;
-
   MCBValFunc_t BoundaryFunction_[6];
-  
+
 };
 
 #endif // MCBVALS_HPP

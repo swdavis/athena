@@ -4,8 +4,9 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //!  \file opacity.cpp
-//   \brief contains functions related to setting absorption and scattering opacity
-// C/C++ headers
+//!  \brief contains functions related to setting absorption and scattering opacity
+
+// C++ headers
 #include <stdexcept>
 
 // Athena++ headers
@@ -28,7 +29,7 @@ Real dle, dlt, lmine, lmint;
 
 //----------------------------------------------------------------------------------------
 //! \fn Real NoOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy)
-//  \brief return zero for extinction coeffictent
+//! \brief return zero for extinction coeffictent
 
 Real NoOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy) {
 
@@ -36,11 +37,12 @@ Real NoOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, 
-//                                     Real energy)
-//  \brief calculation extinction coefficient for free-free absorption
+//! \fn Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3,
+//!                                    Real energy)
+//! \brief calculation extinction coefficient for free-free absorption
 
-Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy) {
+Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3,
+                               Real energy) {
 
   Real ffnrm = 3.692146e8;
   Real heabund = 0.09; //hardcode for now (should be parameter)
@@ -65,10 +67,10 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Re
 
 //----------------------------------------------------------------------------------------
 //! \fn Real ThomsonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy)
-//  \brief calculation extinction coefficient for Thomson scattering
+//! \brief calculation extinction coefficient for Thomson scattering
 
 Real ThomsonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy) {
-  
+
   Real heabund = 0.09; //hardcode for now (should be parameter)
   Real mp = 1.67262192369e-24;
   Real sigmat = 6.65248e-25;
@@ -79,16 +81,16 @@ Real ThomsonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy) 
 
 //----------------------------------------------------------------------------------------
 //! \fn Real ComptonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy)
-//  \brief Returns compton cross section via lookup table
+//! \brief Returns compton cross section via lookup table
 
 Real ComptonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy) {
-  
+
   Real heabund = 0.09; //hardcode for now (should be parameter)
   Real mp = 1.67262192369e-24;
   Real sigmat = 6.65248e-25;
   Real kmec2 = 1.68638e-10;
   Real mec2 = 8.18711e-7;
-  
+
   Real kappa0 = 1./mp/(1. + 4.*heabund) * (1. + 2.*heabund);
   Real theta = pmcb->tgas(i3,i2,i1)* kmec2;
   Real dens = pmcb->rho(i3,i2,i1);
@@ -129,10 +131,10 @@ Real ComptonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy) 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real ResonanceLineOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, 
-//                                Real energy)
-//  \brief opacity due resonance line for thermal distribution of atoms
-//
+//! \fn Real ResonanceLineOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3,
+//!                               Real energy)
+//! \brief opacity due resonance line for thermal distribution of atoms
+
 Real ResonanceLineOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy) {
 
   Real h = 6.62607015e-27;
@@ -147,11 +149,11 @@ Real ResonanceLineOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real en
 
 //----------------------------------------------------------------------------------------
 //! \fn void GenerateComptonTable(int io)
-//  \brief Generates lookup table used by ComptonOpacity()
+//! \brief Generates lookup table used by ComptonOpacity()
 //
-// Computes look up table for integrated cross section of a Maxwellian 
-// distribution of electrons. Current version uses direct integration as 
-// in GRMONTY rather than approximate method of PSS.  Values are chosen to 
+// Computes look up table for integrated cross section of a Maxwellian
+// distribution of electrons. Current version uses direct integration as
+// in GRMONTY rather than approximate method of PSS.  Values are chosen to
 // match GRMONTY (Dolence et al. 2009) defaults
 
 void GenerateComptonTable(int io) {
@@ -166,8 +168,8 @@ void GenerateComptonTable(int io) {
     for (int i = 0; i <= NE; ++i) {
       Real energy = pow(10.,lmine + i * dle);
       for (int j = 0; j <= NT; ++j) {
-	Real theta = pow(10.,lmint + j * dlt);
-	xsect[i][j] = log10( ComptonCrossSection(energy,theta) );
+        Real theta = pow(10.,lmint + j * dlt);
+        xsect[i][j] = log10( ComptonCrossSection(energy,theta) );
       }}
     if (io == 2) {
       // open file for output
@@ -176,19 +178,18 @@ void GenerateComptonTable(int io) {
       fname.assign("comptontable.out");
       std::stringstream msg;
       if ((pfile = fopen(fname.c_str(),"w")) == NULL) {
-	msg << "### FATAL ERROR in function [GenerateComptonTable]"
+        msg << "### FATAL ERROR in function [GenerateComptonTable]"
           <<std::endl<< "Output file '" <<fname<< "' could not be opened" <<std::endl;
-	throw std::runtime_error(msg.str().c_str());
+        throw std::runtime_error(msg.str().c_str());
       }
 
       // write table
       Real data[NT+1];
       for (int i=0; i<=NE; ++i) {
-	for (int j=0; j<=NT; ++j) {
-	  data[j] = xsect[i][j];
-	  //if (i==0) printf("%g ",data[j]);
-	}
-	fwrite(data,sizeof(Real),static_cast<size_t>(NT+1),pfile);
+        for (int j=0; j<=NT; ++j) {
+          data[j] = xsect[i][j];
+        }
+        fwrite(data,sizeof(Real),static_cast<size_t>(NT+1),pfile);
       }
       fclose(pfile);
     }
@@ -214,10 +215,10 @@ void GenerateComptonTable(int io) {
     // read table from file
     for (int i = 0; i <= NE; ++i) {
       for (int j = 0; j <= NT; ++j) {
-	Real data;
-	fread(&data, sizeof(Real), 1, pfile);
-	//if (i == 0) printf("%g ",data);
-	xsect[i][j] = data;
+        Real data;
+        fread(&data, sizeof(Real), 1, pfile);
+        //if (i == 0) printf("%g ",data);
+        xsect[i][j] = data;
       }}
 
     fclose(pfile);
@@ -226,19 +227,19 @@ void GenerateComptonTable(int io) {
 }
 //----------------------------------------------------------------------------------------
 //! \fn Real ComptonCrossSection(Real energy, Real theta)
-//  \brief Computes compton cross section for GenerateComptonTable
+//! \brief Computes compton cross section for GenerateComptonTable
 
 Real ComptonCrossSection(Real energy, Real theta) {
 
   Real sigmat = 6.65248e-25;
-  
+
   if (theta < MINT) {
     if (energy < MINE)
       return sigmat;
     else
       return KleinNishina(2.*energy) * sigmat;
   }
-  
+
   Real dmu = 0.05;
   Real dgam = theta * 0.05;
   Real xsect = 0.;
@@ -256,14 +257,14 @@ Real ComptonCrossSection(Real energy, Real theta) {
 
 //----------------------------------------------------------------------------------------
 //! \fn Real Maxwell(Real theta, Real gamma)
-//  \brief Computes maxwell distribution for total_compton_xsect
+//! \brief Computes maxwell distribution for total_compton_xsect
 
 Real Maxwell(Real theta, Real gamma)
 {
   Real K2exp;
   if (theta < 0.01)
     K2exp = sqrt(0.5 * PI * theta);// * (1. + 1.875 * theta);
-  else 
+  else
     K2exp = BessK(2,1. / theta) * exp(1. / theta);
 
   return gamma * sqrt(SQR(gamma) - 1.) * exp((1. - gamma) / theta) / (theta * K2exp);
@@ -271,7 +272,7 @@ Real Maxwell(Real theta, Real gamma)
 
 //----------------------------------------------------------------------------------------
 //! \fn Real KleinNishina(Real x)
-//  \brief Computes Klein-Nishina correction for total_compton_xsect
+//! \brief Computes Klein-Nishina correction for total_compton_xsect
 
 Real KleinNishina(Real x)
 {
@@ -286,17 +287,17 @@ Real KleinNishina(Real x)
 
 //----------------------------------------------------------------------------------------
 //! \fn void InitializeAccelerationOpacity(MonteCarloBlock *pmcb)
-//  \brief Computes mean opacity arrays used by acceleration routines
+//! \brief Computes mean opacity arrays used by acceleration routines
 
-void InitializeAccelerationOpacity(MonteCarloBlock *pmcb)
-{
+void InitializeAccelerationOpacity(MonteCarloBlock *pmcb) {
+
   int nx = 500;
   Real x[500], dx[500];
 
   // Make grid in x=hnu/kT space from 10^-4 to 10^2
   for(int i=0; i<nx; ++i) {
     Real log10x = static_cast<Real>(i)/(static_cast<Real>(nx)-1.0)*6.0;
-    x[i] = pow(10.0,log10x)*1.0e-4;   
+    x[i] = pow(10.0,log10x)*1.0e-4;
   }
 
   // compute dx
@@ -305,7 +306,7 @@ void InitializeAccelerationOpacity(MonteCarloBlock *pmcb)
   for(int i=1; i<nx-1; i++) {
     dx[i] = 0.5 * (x[i+1]-x[i-1]);
   }
- 
+
   // Loop over grid zones
   int il = pmcb->is; int iu = pmcb->ie;
   int jl = pmcb->js; int ju = pmcb->je;
@@ -315,65 +316,58 @@ void InitializeAccelerationOpacity(MonteCarloBlock *pmcb)
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
       for (int i=il; i<=iu+1; ++i) {
-	Real temp = pmcb->tgas(k,j,i);
-	Real dens = pmcb->rho(k,j,i);
-	Real Bint = 0.0;
-	Real planck = 0.0;
-	Real planck_inv = 0.0;
-	for(int l=0; l<nx; ++l) {
-	  Real energy = x[l] * kb * temp;
-	  Real abs_coef = pmcb->AbsorptionOpacity(pmcb,i,j,k,energy);
-	  //printf("%g %g %g\n",abs_coef,2.44955e-23*dens*dens*(1.-exp(-7.2427e15*phot.energy/temp))/(pow(phot.energy,3)*sqrt(temp)),phot.energy);
-	  Real sct_coef = pmcb->ScatteringOpacity(pmcb,i,j,k,energy);
-	  Real Bx = pow(x[l],3)/(exp(x[l])-1.0) *dx[l];
-	  Bint += Bx;
-	  planck += Bx * abs_coef;
-	  planck_inv += Bx / (abs_coef+sct_coef);
-	}
-	pmcb->planck_inv_opacity(k,j,i) = Bint/planck_inv;
-	pmcb->planck_opacity(k,j,i) = planck/Bint;
-	//if ((il==i)&&(jl==j))
-	//  printf("%g %g %g %g %g\n",dens,temp,pmcb->planck_opacity(k,j,i),pmcb->planck_inv_opacity(k,j,i),1.43311e24*dens*dens/pow(temp,3.5));
+        Real temp = pmcb->tgas(k,j,i);
+        Real dens = pmcb->rho(k,j,i);
+        Real Bint = 0.0;
+        Real planck = 0.0;
+        Real planck_inv = 0.0;
+        for(int l=0; l<nx; ++l) {
+          Real energy = x[l] * kb * temp;
+          Real abs_coef = pmcb->AbsorptionOpacity(pmcb,i,j,k,energy);
+          Real sct_coef = pmcb->ScatteringOpacity(pmcb,i,j,k,energy);
+          Real Bx = pow(x[l],3)/(exp(x[l])-1.0) *dx[l];
+          Bint += Bx;
+          planck += Bx * abs_coef;
+          planck_inv += Bx / (abs_coef+sct_coef);
+        }
+        pmcb->planck_inv_opacity(k,j,i) = Bint/planck_inv;
+        pmcb->planck_opacity(k,j,i) = planck/Bint;
       }}}
-     //double ffnrm = 3.692146e8;
-     //double nhii=dens/(mp*(1.0+4.0*heabund));
-     //double ne=(1.0+2.0*heabund)*nhii;
-     //double alphacomp = ffnrm*ne*nhii*15.*pow(h/kb,3)/pow(temp,3.5)/pow(pi,4);
 }
 
-// SWD: Useful to retain ability to do different lines but 
-// should ensure computation only occurs once
+// SWD: Useful to retain ability to do different lines but should ensure
+// computation only occurs once
 //----------------------------------------------------------------------------
 //! \fn Real ResLinePre()
-//  \brief Species dependent prefactor
+//! \brief Species dependent prefactor
 
 Real ResLinePre() {
-  
+
   Real charge = 4.80320427e-10;
   Real melectron = 9.10938215e-28;
   Real clight = 2.99792458e10;
   Real osc_strength = 0.4164;
-  
+
   return PI*charge*charge / (melectron*clight) * osc_strength;
 }
 
 //----------------------------------------------------------------------------
 //! \fn Real xsec_lorentzian(Real nu)
-//  \brief 
-//
+//! \brief lorentzian cross section, used for testing
+
 Real XsecLorentzian(Real nu) {
 
   Real lorwidth = 6.265e8/(4.*PI);
   Real nu0 = 2.468e15;
-  
   Real lineprofile = lorwidth/ PI / ( SQR(nu-nu0) + SQR(lorwidth) );
   Real sigmatot = ResLinePre() * lineprofile;
 
   return sigmatot;
 }
+
 //-------------------------------------------------------------------------
 //! \fn Real XsecDoppler(Real nu, Real tgas)
-//  \brief Doppler cross section, used for testing
+//! \brief Doppler cross section, used for testing
 
 Real XsecDoppler(Real nu, Real tgas) {
 
@@ -397,7 +391,7 @@ Real XsecDoppler(Real nu, Real tgas) {
 
 //------------------------------------------------------------
 //! \fn Real XsecVoigt(Real nu, Real tgas)
-//  \brief Voigt cross section
+//! \brief Voigt cross section
 
 Real XsecVoigt(Real nu, Real tgas) {
 
@@ -420,7 +414,7 @@ Real XsecVoigt(Real nu, Real tgas) {
   Real H = f.imag() / sqrt(PI);
 
   Real lineprofile = H / sqrt(PI) / doppwidth;
-  //printf("%e %e %e %e %e %e\n",tgas,x,a,H,doppwidth,lineprofile);
+
   Real sigmatot = ResLinePre() * lineprofile;
 
   return sigmatot;

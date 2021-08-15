@@ -6,9 +6,9 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file photon.hpp
-//  \brief definitions for Photon class
+//! \brief definitions for Photon class
 
-// C/C++ Standard Libraries
+// C++ libraries
 #include <complex>
 #include <vector>
 
@@ -22,8 +22,9 @@ class MonteCarloBlock;
 enum PhotonStatus {EVOLVING = 0, ESCAPED = 1, ABSORBED = 2, DESTROYED = 3};
 enum {IMC1 = 0, IMC2 = 1, IMC3 = 2, IMC0 = 3};
 
+//---------------------------------------------------------------------------------------
 //! \class Photon
-//  \brief phton data and functions
+//! \brief phton data and functions
 
 class Photon {
 public:
@@ -56,8 +57,7 @@ public:
   bool IsNanPhoton();
   void AllocateUserVariables(int n);
 
-  
-  // New
+  // ---------- New implementation -------------------------------------
 
   int npar;
   int nphot_limit;

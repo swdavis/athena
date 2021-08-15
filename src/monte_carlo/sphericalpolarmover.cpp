@@ -15,12 +15,16 @@
 //#define DEBUG_SM
 //#define NBUFFER 50
 
-// Implementation of Sphericalpolar Photon mover
+//----------------------------------------------------------------------------------------
+//! SphericalPolarMover class constructor, derived from PhotonMover base class
 
-SphericalPolarMover::SphericalPolarMover(MonteCarloBlock *pmcb) 
+SphericalPolarMover::SphericalPolarMover(MonteCarloBlock *pmcb)
   : PhotonMover(pmcb) {
 
 }
+
+//----------------------------------------------------------------------------------------
+//! destructor
 
 SphericalPolarMover::~SphericalPolarMover() {
 
@@ -28,8 +32,7 @@ SphericalPolarMover::~SphericalPolarMover() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe)
-//  \brief Moves photon along straight line specified number of mean free paths or until
-//         photon leave monte carlo block
+//! \brief Moves photon using cell-by-cell approach
 
 void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
 
@@ -108,21 +111,21 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
         // ray intersects inner sphere first
         // one or two solutions -- pick shorter dlr
         dlr = r0 * kr * (sqrt(det) - 1.);
-        ascend[0] = false;   
+        ascend[0] = false;
       }
     } else { // kr == 0
       Real ri = pco->x1f(pphot->i1+1) / r0;
       if (ri > 1.) {
         dlr = r0 * sqrt(SQR(ri) - 1.);
-	ascend[0] = true;
+        ascend[0] = true;
       } else {
-	std::cout << "Warning: kr == 0 and ri < r0, absorbing photon" << std::endl;
-	pphot->PrintPhoton();
+        std::cout << "Warning: kr == 0 and ri < r0, absorbing photon" << std::endl;
+        pphot->PrintPhoton();
         pphot->status = DESTROYED;
         return;
       }
     }
-    
+
     // theta face
     Real thi;
     if (kth > 0) {
@@ -134,10 +137,10 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
     } else {
       if (pphot->x[IMC2] < 0.5*PI) {
         thi = pco->x2f(pphot->i2+1);
-	ascend[1] = true;
+        ascend[1] = true;
       } else {
         thi = pco->x2f(pphot->i2);
-	ascend[1] = false;
+        ascend[1] = false;
       }
     }
     Real cthi = cos(thi);
@@ -170,7 +173,7 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
       } else if (lp <= 0) {
         dlt = lm;
       } else {
-        if (lp >= lm) 
+        if (lp >= lm)
           dlt = lm;
         else
           dlt = lp;
@@ -195,11 +198,9 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
         dlp = r0 * sth * (sph-tphii*cph) / (kx*tphii-ky);
         if (dlp < 0.) dlp = HUGE_NUMBER;
       }
-    } else
+    } else {
       dlp = HUGE_NUMBER;
-    //if (fabs(dlp) < 1.e-8)
-    //if (dlp == 0.0)
-    // printf("dlp=0: %g %g %g %g %g %g %g %d\n",phii,tphii,kph,(sph-tphii*cph),(kx*tphii-ky),sth,r0,pphot->i2);
+    }
 
     if ((dlr <= dlt) && (dlr <= dlp)) {
       dl = dlr;
@@ -220,7 +221,7 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
       bz = r0 * (cth - kr * kz);
       Real det = b2 * SQR(cthi) * (cth_ext2 - SQR(cthi)); //det should be positive
       Real lm = (-bz*kz - sqrt(det)) / (SQR(kz) - SQR(cthi)) - kr*r0;
-      Real lp = (-bz*kz + sqrt(det)) / (SQR(kz) - SQR(cthi)) - kr*r0; 
+      Real lp = (-bz*kz + sqrt(det)) / (SQR(kz) - SQR(cthi)) - kr*r0;
 #ifdef DEBUG_SM
       if (iter < NBUFFER) {
         db[iter-1].lm = lm;
@@ -235,12 +236,12 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
           dlt = HUGE_NUMBER;
       } else {
         if (lp > 0)
-	  dlt = (lm > lp) ? lm : lp;
+          dlt = (lm > lp) ? lm : lp;
         else
           dlt = lm;
       }
       if (dlt <= dl) {
-	ascend[1] = !(ascend[1]);
+        ascend[1] = !(ascend[1]);
       }
     }
 
@@ -258,7 +259,6 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
       db[iter-1].l_ext = l_ext;
     }
 #endif
-    
 
     //Real chi = pphot->sct_coef + pphot->abs_coef;
     Real chi = GetExtinctionCoefficient(pphot->abs_coef,pphot->sct_coef);
@@ -267,72 +267,72 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
     if (dl > tauremaining / chi) { // Photon remains in zone
       bool accel_success = false;
       if (acceleration) {
-	/*Real drp,drm,dtp,dtm,dpp,dpm;
-	drp = pco->x1f(pphot->i1+1) - pphot->x[0];
-	drm = pphot->x[0] - pco->x1f(pphot->i1);
-	dtp = pco->x2f(pphot->i2+1) - pphot->x[1];
-	dtm = pphot->x[1] - pco->x2f(pphot->i2);
-	dpp = pco->x3f(pphot->i3+1) - pphot->x[2];
-	dpm = pphot->x[2] - pco->x3f(pphot->i3);
-	drp = (drp < drm) ? drp : drm;
-	dtp = (dtp < dtm) ? dtp : dtm;
-	dpp = (dpp < dpm) ? dpp : dpm;
-	dtp = 2.*pphot->x[0]*sin(0.5*dtp);
-	dpp = 2.*pphot->x[0]*sin(pphot->x[1])*sin(0.5*dpp);
-	Real dist = (drp < dtp) ? drp : dtp;
-	dist = (dist < dpp) ? dist : dpp;
-	dist = (dist > 0.) ? dist : 0.;*/
-	Real dist = pco->dmin(pphot->i3,pphot->i2,pphot->i1);
-	//Real dist = dl;
-	// Try/perform MRW acceleration if optical depth is large enough
-	if (pmcb->coherent_scattering) {
-	  Real tauacc = 10.;
-	  if ((pphot->abs_coef+pphot->sct_coef) * dist > tauacc)
-	    accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
-	} else {
-	  Real tauacc = 10.;
-	  if (pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) * dist > tauacc)
-	    accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
-	}
+        /*Real drp,drm,dtp,dtm,dpp,dpm;
+        drp = pco->x1f(pphot->i1+1) - pphot->x[0];
+        drm = pphot->x[0] - pco->x1f(pphot->i1);
+        dtp = pco->x2f(pphot->i2+1) - pphot->x[1];
+        dtm = pphot->x[1] - pco->x2f(pphot->i2);
+        dpp = pco->x3f(pphot->i3+1) - pphot->x[2];
+        dpm = pphot->x[2] - pco->x3f(pphot->i3);
+        drp = (drp < drm) ? drp : drm;
+        dtp = (dtp < dtm) ? dtp : dtm;
+        dpp = (dpp < dpm) ? dpp : dpm;
+        dtp = 2.*pphot->x[0]*sin(0.5*dtp);
+        dpp = 2.*pphot->x[0]*sin(pphot->x[1])*sin(0.5*dpp);
+        Real dist = (drp < dtp) ? drp : dtp;
+        dist = (dist < dpp) ? dist : dpp;
+        dist = (dist > 0.) ? dist : 0.;*/
+        Real dist = pco->dmin(pphot->i3,pphot->i2,pphot->i1);
+        //Real dist = dl;
+        // Try/perform MRW acceleration if optical depth is large enough
+        if (pmcb->coherent_scattering) {
+          Real tauacc = 10.;
+          if ((pphot->abs_coef+pphot->sct_coef) * dist > tauacc)
+            accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
+        } else {
+          Real tauacc = 10.;
+          if (pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) * dist > tauacc)
+            accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
+        }
       }
 
       if (!accel_success) {
-	if (pphot->status != EVOLVING)
-	  return;
-	// compute distance remaining in zone
-	dl = tauremaining/chi;
-	// Update moments
-	if (pmcb->moments_flag)
-	  pmcb->UpdateMoments(pphot,dl,1.,0);
-	// Update postions
-	pphot->x[IMC1] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
-	pphot->x[IMC2] = acos((z0 + kz * dl) / pphot->x[IMC1]);
-	pphot->x[IMC3] = atan2(y0 + ky * dl,x0 + kx * dl);
-	if (pphot->x[IMC3] < 0.)
-	  pphot->x[IMC3] += 2.*PI;
+        if (pphot->status != EVOLVING)
+          return;
+        // compute distance remaining in zone
+        dl = tauremaining/chi;
+        // Update moments
+        if (pmcb->moments_flag)
+          pmcb->UpdateMoments(pphot,dl,1.,0);
+        // Update postions
+        pphot->x[IMC1] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
+        pphot->x[IMC2] = acos((z0 + kz * dl) / pphot->x[IMC1]);
+        pphot->x[IMC3] = atan2(y0 + ky * dl,x0 + kx * dl);
+        if (pphot->x[IMC3] < 0.)
+          pphot->x[IMC3] += 2.*PI;
         pphot->x[IMC0] += pphot->k[IMC0] * dl;
 
-	// Update k vector
-	cth = cos(pphot->x[IMC2]);
-	sth = sqrt(1. - SQR(cth));
-	cph = cos(pphot->x[IMC3]);
-	sph = sin(pphot->x[IMC3]);
-	kr  = kx * sth * cph + ky * sth * sph + kz * cth;
-	kth = kx * cth * cph + ky * cth * sph - kz * sth;
-	kph = -kx * sph + ky * cph;
+        // Update k vector
+        cth = cos(pphot->x[IMC2]);
+        sth = sqrt(1. - SQR(cth));
+        cph = cos(pphot->x[IMC3]);
+        sph = sin(pphot->x[IMC3]);
+        kr  = kx * sth * cph + ky * sth * sph + kz * cth;
+        kth = kx * cth * cph + ky * cth * sph - kz * sth;
+        kph = -kx * sph + ky * cph;
       }
       if (ptraj != NULL) ptraj->AddToTrajectory(pphot);
       return;
     } else { // Photon moves to next zone and reduce tauremaining
       // Update moments
       if (pmcb->moments_flag)
-	pmcb->UpdateMoments(pphot,dl,1.,0);
+        pmcb->UpdateMoments(pphot,dl,1.,0);
       // Update positions
       pphot->x[IMC1] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
       pphot->x[IMC2] = acos((z0 + kz * dl) / pphot->x[IMC1]);
       pphot->x[IMC3] = atan2(y0 + ky * dl,x0 + kx * dl);
       if (pphot->x[IMC3] < 0.)
-	pphot->x[IMC3] += 2.*PI;
+        pphot->x[IMC3] += 2.*PI;
       pphot->x[IMC0] += pphot->k[IMC0] * dl;
 
       tauremaining -= chi * dl;
@@ -352,16 +352,19 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
 
   }
 
-  // -------------------------- Debugging -------------------------------------------
+  // -------------------------- Debugging ------------------------------------------------
   if (iter >= checkmove) {
-    std::cout << "Warning: iter exceeded " << checkmove << " in photon mover." << std::endl;
+    std::cout << "Warning: iter exceeded " << checkmove << " in photon mover."
+              << std::endl;
 #ifdef DEBUG_SM
     int nmax = (NBUFFER > iter) ? iter : NBUFFER;
     for (int i=0; i < nmax; ++i) {
       // printf("dl: %16.12e %16.12e %16.12e %16.12e\n");
       printf("--------------------------------\n %d\n",i);
-      printf("dl: %16.12e %16.12e %16.12e %16.12e\n",db[i].dl,db[i].dlr,db[i].dlt,db[i].dlp);
-      printf("ang: %16.12e %16.12e %16.12e %16.12e\n", db[i].cth,db[i].sth,db[i].cph,db[i].sph);
+      printf("dl: %16.12e %16.12e %16.12e %16.12e\n",db[i].dl,db[i].dlr,db[i].dlt,
+             db[i].dlp);
+      printf("ang: %16.12e %16.12e %16.12e %16.12e\n", db[i].cth,db[i].sth,db[i].cph,
+             db[i].sph);
       printf("k: %16.12e %16.12e %16.12e\n",db[i].kr,db[i].kth,db[i].kph);
       printf("kc: %16.12e %16.12e %16.12e\n",db[i].kx,db[i].ky,db[i].kz);
       printf("x: %16.12e %16.12e %16.12e\n",db[i].x,db[i].y,db[i].z);
@@ -370,11 +373,11 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
       printf("l_ext: %g %g %g %g\n",db[i].l_ext,db[i].lm,db[i].lp,db[i].det);
       printf("xf: ");
       if ((db[i].i >= pmcb->is) && (db[i].i <= pmcb->ie))
-	printf("%16.12e %16.12e ",pco->x1f(db[i].i),pco->x1f(db[i].i+1));
+        printf("%16.12e %16.12e ",pco->x1f(db[i].i),pco->x1f(db[i].i+1));
       if ((db[i].j >= pmcb->js) && (db[i].j <= pmcb->je))
-	printf("%16.12e %16.12e ",pco->x2f(db[i].j),pco->x2f(db[i].j+1));
+        printf("%16.12e %16.12e ",pco->x2f(db[i].j),pco->x2f(db[i].j+1));
       if ((db[i].k >= pmcb->ks) && (db[i].k <= pmcb->ke))
-	printf("%16.12e %16.12e ",pco->x3f(db[i].k),pco->x3f(db[i].k+1));
+        printf("%16.12e %16.12e ",pco->x3f(db[i].k),pco->x3f(db[i].k+1));
       printf("\n");
     }
 #endif
@@ -385,7 +388,7 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void SphericalPolarMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4])
-//  \brief convert k vector from curvalinear to cartesian
+//! \brief convert k vector from curvalinear to cartesian
 
 void SphericalPolarMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
 
@@ -398,4 +401,3 @@ void SphericalPolarMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
   kcart[IMC2] = pphot->k[IMC1]*sth*sph + pphot->k[IMC2]*cth*sph + pphot->k[IMC3]*cph;
   kcart[IMC3] = pphot->k[IMC1]*cth - pphot->k[IMC2]*sth;
 }
-

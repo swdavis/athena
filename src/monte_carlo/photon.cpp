@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file monte_carlo.cpp
-//  \brief implementation of functions in class Photon
+//! \brief implementation of functions in class Photon
 
 // C++ Standard Libraries
 #include <vector>
@@ -29,7 +29,8 @@ int Photon::idk0p = 8, Photon::idk1p = 9, Photon::idk2p = 10, Photon::idk3p = 11
 int Photon::iep = 12, Photon::iwp = 13, Photon::iscp = 14, Photon::iacp = 15;
 int Photon::isip = 16, Photon::isqp = 17, Photon::isup = 18, Photon::isvp = 19;
 
-// constructor, initializes data structures and parameters
+//----------------------------------------------------------------------------------------
+//! Photon constructor
 
 Photon::Photon(MonteCarloBlock *pmcb, int nuser, int len_limit)
   // Allocate space for photon data.
@@ -40,7 +41,8 @@ Photon::Photon(MonteCarloBlock *pmcb, int nuser, int len_limit)
     statp(intprop[istatp]), i1p(intprop[ii1p]), i2p(intprop[ii2p]), i3p(intprop[ii3p]),
     x0p(realprop[ix0p]), x1p(realprop[ix1p]), x2p(realprop[ix2p]), x3p(realprop[ix3p]),
     k0p(realprop[ik0p]), k1p(realprop[ik1p]), k2p(realprop[ik2p]), k3p(realprop[ik3p]),
-    dk0p(realprop[idk0p]), dk1p(realprop[idk1p]), dk2p(realprop[idk2p]), dk3p(realprop[idk3p]),
+    dk0p(realprop[idk0p]), dk1p(realprop[idk1p]), dk2p(realprop[idk2p]),
+    dk3p(realprop[idk3p]),
     ep(realprop[iep]), wp(realprop[iwp]), scp(realprop[iscp]), acp(realprop[iacp]),
     sip(realprop[isip]), sqp(realprop[isqp]), sup(realprop[isup]), svp(realprop[isvp]) {
 
@@ -57,17 +59,18 @@ Photon::Photon(MonteCarloBlock *pmcb, int nuser, int len_limit)
 
 }
 
-// destructor
+//----------------------------------------------------------------------------------------
+//! destructor
 
 Photon::~Photon() {
-  
+
   if (user_var != NULL) delete [] user_var;
 
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void Photon::CopyPhoton()
-//  \brief Initialize photon from another photon
+//! \brief Initialize photon from another photon
 
 // rewrite this as a constructor? Not currently used
 void Photon::CopyPhoton(Photon *pphot) {
@@ -85,12 +88,12 @@ void Photon::CopyPhoton(Photon *pphot) {
   energy = pphot->energy;
   sct_coef = pphot->sct_coef;
   abs_coef = pphot->abs_coef;
-    
+
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void Photon::IsNanPhoton()
-//  \brief check for Nan in photon properties
+//! \brief check for Nan in photon properties
 
 bool Photon::IsNanPhoton() {
 
@@ -109,19 +112,19 @@ bool Photon::IsNanPhoton() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Photon::PrintPhoton(int ip)
-//  \brief print key properites
+//! \brief print key properites
 
 void Photon::PrintPhoton(int ip) {
   // Used primarily for debugging
   std::cout << "----------------------------" << std::endl
             << "Energy, weight: " << ep[ip] << " " << wp[ip] << std::endl
-	    << "i: " << i1p[ip] << " " << i2p[ip] << " " << i3p[ip] <<std::endl
-	    << "x: " << x1p[ip] << " " << x2p[ip] << " " << x3p[ip] << " " << x0p[ip] 
+            << "i: " << i1p[ip] << " " << i2p[ip] << " " << i3p[ip] <<std::endl
+            << "x: " << x1p[ip] << " " << x2p[ip] << " " << x3p[ip] << " " << x0p[ip]
             << std::endl
-	    << "k: " << k1p[ip] << " " << k2p[ip] << " " << k3p[ip] << " " << k0p[ip] 
+            << "k: " << k1p[ip] << " " << k2p[ip] << " " << k3p[ip] << " " << k0p[ip]
             << std::endl
-	    << "stokes: " << sip[ip] << " " << sqp[ip] << " " << sup[ip] << std::endl
-	    << "opacity: " << scp[ip] << " " << acp[ip] << std::endl;
+            << "stokes: " << sip[ip] << " " << sqp[ip] << " " << sup[ip] << std::endl
+            << "opacity: " << scp[ip] << " " << acp[ip] << std::endl;
   if (nuser_var > 0) {
     std::cout << "User vars:";
       for (int i=0; i<nuser_var; i++) {
@@ -139,18 +142,18 @@ void Photon::PrintPhoton(int ip) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Photon::PrintPhoton()
-//  \brief print key properites
+//! \brief print key properites
 
 void Photon::PrintPhoton() {
   // Used primarily for debugging
   std::cout << "----------------------------" << std::endl
             << "Energy, weight: " << energy << " " << weight << std::endl
-	    << "i: " << i1 << " " << i2 << " " << i3 <<std::endl
-	    << "x: " << x[0] << " " << x[1] << " " << x[2] << " " << x[3] << std::endl
-	    << "k: " << k[0] << " " << k[1] << " " << k[2] << " " << k[3] << std::endl
-	    << "stokes: " << stokes[0] << " " << stokes[1] << " "
-	    << stokes[2] << std::endl
-	    << "opacity: " << sct_coef << " " << abs_coef << std::endl;
+            << "i: " << i1 << " " << i2 << " " << i3 <<std::endl
+            << "x: " << x[0] << " " << x[1] << " " << x[2] << " " << x[3] << std::endl
+            << "k: " << k[0] << " " << k[1] << " " << k[2] << " " << k[3] << std::endl
+            << "stokes: " << stokes[0] << " " << stokes[1] << " "
+            << stokes[2] << std::endl
+            << "opacity: " << sct_coef << " " << abs_coef << std::endl;
   if (nuser_var > 0) {
     std::cout << "User vars:";
       for (int i=0; i<nuser_var; i++) {
@@ -168,24 +171,23 @@ void Photon::PrintPhoton() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Photon::AllocateUserVariables(int n)
-//  \brief allocate memory for user variables
+//! \brief allocate memory for user variables
 
 void Photon::AllocateUserVariables(int n) {
-  
+
   if (n > 0)
     user_var = new Real[n];
   nuser_var = n;
-  
 
 }
 
 
 //----------------------------------------------------------------------------------------
 //! \fn void Photon::PopulateWorkingArrays(int n)
-//  \brief Copies vector element n to arrays used by scattering functions
+//! \brief Copies vector element n to arrays used by scattering functions
 
 void Photon::VectorsToWorkingArrays(int n) {
-   
+
   // Copy integer variables
   status = statp[n];
   i1 = i1p[n];
@@ -221,7 +223,7 @@ void Photon::VectorsToWorkingArrays(int n) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Photon::WorkingArraysToVectors(int n)
-//  \brief Copies vector element n to arrays used by scattering functions
+//! \brief Copies vector element n to arrays used by scattering functions
 
 void Photon::WorkingArraysToVectors(int n) {
 
@@ -235,7 +237,7 @@ void Photon::WorkingArraysToVectors(int n) {
   x0p[n] = x[IMC0];
   x1p[n] = x[IMC1];
   x2p[n] = x[IMC2];
-  x3p[n] = x[IMC3]; 
+  x3p[n] = x[IMC3];
   k0p[n] = k[IMC0];
   k1p[n] = k[IMC1];
   k2p[n] = k[IMC2];
@@ -261,7 +263,7 @@ void Photon::WorkingArraysToVectors(int n) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Photon::IsNanPhoton(int ip)
-//  \brief check for Nan in photon properties
+//! \brief check for Nan in photon properties
 
 bool Photon::IsNanPhoton(int ip) {
 

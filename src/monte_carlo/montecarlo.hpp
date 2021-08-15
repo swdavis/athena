@@ -46,11 +46,11 @@ enum AbsorptionMethodFlag {ABSWEIGHT = 0, ABSPROB = 1, ABSTAU = 2};
 enum ScatteringFlag {SCATUSER = 0, SCATNONE =1, SCATISO = 2, SCATTHOM = 3, SCATCOMP =4,
                      SCATRES = 5};
 enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY = 2,
-                     MC_DESTROY_BNDRY = 3, MC_POLAR_BNDRY = 4, MC_REFLECT_BNDRY = 5, 
+                     MC_DESTROY_BNDRY = 3, MC_POLAR_BNDRY = 4, MC_REFLECT_BNDRY = 5,
                      MC_USER_BNDRY = 6, MC_BLOCK_BNDRY = 7};
 // Array indices for monte carlo radiation moments
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
-      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCINET = 10, MCIEN = 11, MCIKJ = 12, MCIPR21=13, 
+      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCINET = 10, MCIEN = 11, MCIKJ = 12, MCIPR21=13,
       MCIPR31=14, MCIPR32=15};
 //----------------------------------------------------------------------------------------
 // function pointer prototypes for user-defined modules set at runtime
@@ -67,7 +67,7 @@ typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, MCCoord *pco, int ip)
 void DefaultGetTemperature(MonteCarloBlock *pmcb);
 //--------------------- prototypes for opacity.cpp functions -----------------------------
 Real NoOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
-Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
+Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3,Real energy);
 Real ThomsonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
 Real ComptonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
 Real ResonanceLineOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
@@ -97,7 +97,7 @@ void SampleDipole(Real theta_in, Real phi_in, Real &theta_out, Real &phi_out,
 Real SampleVelocityParallel(Real a, Real x_in, MCRandom *pran);
 //--------------------- prototypes for emission.cpp functions ----------------------------
 Real InitializeEmissionFreeFree(MonteCarloBlock *pmcb);
-void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real lemax, 
+void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real lemax,
                         int ip);
 Real PlanckDist(Real temp,MCRandom *pran);
 void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pco, int ip);
@@ -107,11 +107,11 @@ void GetZonePositionCylindrical(Photon *pphot, MCRandom *pran, MCCoord *pco, int
 //------------------ prototypes for frame_transformations.cpp functions ------------------
 // SWD:  Add these to MCCoord class, utils, keep here?
 void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD],
-		      Real econ[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD]);
-void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD], 
+                     Real econ[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD]);
+void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD],
                      Real econ[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD]);
 void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real wcon[NCOORD],
-                     Real gcov[NCOORD][NCOORD], Real econ[NCOORD][NCOORD], 
+                     Real gcov[NCOORD][NCOORD], Real econ[NCOORD][NCOORD],
                      Real ecov[NCOORD][NCOORD]);
 void InitializeLeviCivita(Real levi[NCOORD][NCOORD][NCOORD][NCOORD]);
 void ImposeRightHanded(Real econ[NCOORD][NCOORD], Real gcov[NCOORD][NCOORD]);
@@ -125,7 +125,7 @@ void CoordinateToTetrad(Real ucoord[NCOORD],Real utet[NCOORD],Real ecov[NCOORD][
 void TetradToCoordinate(Real utet[NCOORD],Real ucoord[NCOORD],Real econ[NCOORD][NCOORD]);
 void StokesToTensor(Real stokes[NCOORD], std::complex<Real> tensor[NCOORD][NCOORD]);
 void TensorToStokes(std::complex<Real> tensor[NCOORD][NCOORD], Real stokes[NCOORD]);
-void ComplexCoordinateToTetrad(std::complex<Real> tcoord[NCOORD][NCOORD], 
+void ComplexCoordinateToTetrad(std::complex<Real> tcoord[NCOORD][NCOORD],
                                std::complex<Real> ttet[NCOORD][NCOORD],
                                Real ecov[NCOORD][NCOORD]);
 void ComplexTetradToCoordinate(std::complex<Real> ttet[NCOORD][NCOORD],
@@ -140,7 +140,7 @@ enum ScatteringFlag GetScatteringFlag(std::string input_string);
 
 //----------------------------------------------------------------------------------------
 //! \struct MCBlockSize
-//  \brief physical size of monte carlo block
+//! \brief physical size of monte carlo block
 
 typedef struct MCBlockSize {
   int nx1,nx2,nx3;
@@ -150,7 +150,7 @@ typedef struct MCBlockSize {
 
 //----------------------------------------------------------------------------------------
 //! \class MCRandom
-//  \brief monte carlo random number generator
+//! \brief monte carlo random number generator
 
 class MCRandom {
 public:
@@ -158,14 +158,13 @@ public:
   ~MCRandom();
 
   gsl_rng *dev;
-  
   Real uniform();
   Real chisquare(int n);
 };
 
 //----------------------------------------------------------------------------------------
 //! \class MonteCarlo
-//  \brief monte carlo functions and data
+//! \brief monte carlo functions and data
 
 class MonteCarlo {
   friend class MCBoundaryValues;
@@ -251,11 +250,11 @@ private:
 
 //----------------------------------------------------------------------------------------
 //! \class MonteCarloBlock
-//  \brief monte carlo functions and data contained on each mesh block
+//! \brief monte carlo functions and data contained on each mesh block
 
 class MonteCarloBlock {
 public:
-  MonteCarloBlock(MeshBlock *pmb, MCBlockSize *pblsize, MonteCarlo *pmc, 
+  MonteCarloBlock(MeshBlock *pmb, MCBlockSize *pblsize, MonteCarlo *pmc,
                   ParameterInput *pin);
   ~MonteCarloBlock();
 
@@ -309,7 +308,7 @@ public:
   // SWD some of these should be eliminated others moved to MonteCarlo?
   bool general_mover_flag; // use general integration (default for all but
                            // cartesian, spherical
-  bool boyerlindquist_flag; // use Boyer-Lindquist coordinates 
+  bool boyerlindquist_flag; // use Boyer-Lindquist coordinates
   bool orthotet_flag; // use orthonormal tetrad for TransferPhotons()
   bool varystep_flag; // use variable (true) or constant (false) step
 
@@ -345,9 +344,6 @@ public:
 
 private:
    void SetBoundaryValues(enum MCBoundaryFlag *input_bcs);
- 
 };
-
-
 
 #endif // MONTECARLO_HPP

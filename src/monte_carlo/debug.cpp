@@ -4,10 +4,15 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file debug.cpp
-//  \brief temporary functions for debugging and testing during initial development
+//! \brief temporary functions for debugging and testing during initial development
 
 // Athena++ headers
 #include "debug.hpp"
+
+//----------------------------------------------------------------------------------------
+//! \fn void FinalPositionCartesian(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot,
+//!                                 Real &xf, Real &yf, Real &zf, Real &dl)
+//! \brief set absorption opacity flag
 
 void FinalPositionCartesian(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot,
                             Real &xf, Real &yf, Real &zf, Real &dl) {
@@ -59,7 +64,7 @@ void FinalPositionCartesian(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot,
     dl = dly;
   if (dlz < dl)
     dl = dlz;
-  
+
   // Compute final position
   xf = pphot->x[0] + pphot->k[0] * dl;
   yf = pphot->x[1] + pphot->k[1] * dl;
@@ -83,4 +88,3 @@ void FinalPositionCartesian(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot,
   }
   //std::cout << xf << ' ' << xw << ' ' << yf << ' ' << yw << std::endl;
 }
-

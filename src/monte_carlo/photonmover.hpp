@@ -6,9 +6,9 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file photonmover.hpp
-//  \brief defines abstract base derived classes for moving photons
+//! \brief defines abstract base derived classes for moving photons
 
-// Athena++ classes headers
+// Athena++ headers
 #include "../athena.hpp"
 #include "../mesh/mesh.hpp"
 #include "../coordinates/coordinates.hpp"
@@ -24,10 +24,10 @@ class Coordinate;
 
 //---------------------- prototypes for photon moving ------------------------------------
 Real GetOpticalDepth(MCRandom *pran);
-//---------------------- prototypes for accleration via mrw ------------------------------
 
+//----------------------------------------------------------------------------------------
 //! \class PhotonMover
-//  \brief abstract base class for all derived classes
+//! \brief abstract base class for all derived classes
 
 class PhotonMover {
 public:
@@ -86,8 +86,9 @@ public:
   virtual Real InterpPathTime(Real tau, Real prob);
 };
 
+//----------------------------------------------------------------------------------------
 //! \class CartesianMover
-//  \brief derived class for Cartesian coordinates
+//! \brief derived class for moving in Cartesian coordinates
 
 class CartesianMover : public PhotonMover {
 public:
@@ -99,8 +100,9 @@ public:
 
 };
 
+//----------------------------------------------------------------------------------------
 //! \class SphericalPolarMover
-//  \brief derived class for spherical-polar coordinates
+//! \brief derived class for moving in spherical-polar coordinates
 
 class SphericalPolarMover : public PhotonMover {
 public:
@@ -112,8 +114,9 @@ public:
   void CurvalinearToCartesian(Photon *pphot, Real kcart[4]);
 };
 
+//----------------------------------------------------------------------------------------
 //! \class GeneralMover
-//  \brief derived class for general covariant coordinates
+//! \brief derived class for moving in general coordinates
 
 class GeneralMover : public PhotonMover {
 public:

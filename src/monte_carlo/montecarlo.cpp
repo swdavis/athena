@@ -4,21 +4,24 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file monte_carlo.cpp
-//  \brief implementation of functions in class MonteCarlo, MCRandom
+//! \brief implementation of functions in class MonteCarlo, MCRandom
 
+// GSL library
 #include <gsl/gsl_randist.h>
+
+// C++ headers
 #include <stdexcept>  // runtime_error
 
 // Athena++ headers
 #include "montecarlo.hpp"
-
 #include "../globals.hpp"
 #include "../parameter_input.hpp"
 #include "../mesh/mesh.hpp"
 #include "../hydro/hydro.hpp"
 #include "../utils/buffer_utils.hpp"
 
-// constructor, initializes data structures and parameters
+//----------------------------------------------------------------------------------------
+//! MonteCarlo constructor, builds monte carlo using parameters in input file
 
 MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
 
@@ -182,7 +185,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   int myblockid = pmesh->nslist[my_mesh_rank];
   MonteCarloBlock *pmcb = pblock;
   while (pmcb != NULL) {
-    pmcb->myblockid = myblockid;
+    //pmcb->myblockid = myblockid;
     // allocates an even number of photons per monte carlo block
     // SWD: should be modified to allow block to have different amounts of photons
 #ifdef MPI_PARALLEL
@@ -196,7 +199,8 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   }
 }
 
-// destructor
+//----------------------------------------------------------------------------------------
+//! destructor
 
 MonteCarlo::~MonteCarlo() {
 
@@ -212,7 +216,7 @@ MonteCarlo::~MonteCarlo() {
 
 //----------------------------------------------------------------------------------------
 //! \fn enum AbsorptionOpacityFlag GetAbsorptionOpacityFlag(std::string input_string)
-//  \brief set absorption opacity flag
+//! \brief set absorption opacity flag
 
 enum AbsorptionOpacityFlag GetAbsorptionOpacityFlag(std::string input_string) {
   if (input_string == "user") {
@@ -228,12 +232,11 @@ enum AbsorptionOpacityFlag GetAbsorptionOpacityFlag(std::string input_string) {
         << std::endl;
     throw std::runtime_error(msg.str().c_str());
   }
-
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn enum AbsorptionMethodFlag GetAbsorptionMethodFlag(std::string input_string)
-//  \brief set absorption method flag
+//! \brief set absorption method flag
 
 enum AbsorptionMethodFlag GetAbsorptionMethodFlag(std::string input_string) {
   if (input_string == "weight") {
@@ -251,10 +254,9 @@ enum AbsorptionMethodFlag GetAbsorptionMethodFlag(std::string input_string) {
 
 }
 
-
 //----------------------------------------------------------------------------------------
 //! \fn enum ScatteringFlag GetScatteringFlag(std::string input_string)
-//  \brief set scatering flag
+//! \brief set scatering flag
 
 enum ScatteringFlag GetScatteringFlag(std::string input_string) {
   if (input_string == "user") {
@@ -280,7 +282,7 @@ enum ScatteringFlag GetScatteringFlag(std::string input_string) {
 
 //----------------------------------------------------------------------------------------
 //! \fn enum EmissionFlag GetEmissionFlag(std::string input_string)
-//  \brief set emission flag
+//! \brief set emission flag
 
 enum EmissionFlag GetEmissionFlag(std::string input_string) {
 
@@ -323,47 +325,43 @@ void MonteCarlo::EnrollUserMCBoundaryFunction(enum BoundaryFace dir, MCBValFunc_
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::EnrollUserEmissionInitialization(EmisFunc_t emissfunc)
-//  \brief Enroll a user-defined function for initializing emission methods
+//! \brief Enroll a user-defined function for initializing emission methods
 
 void MonteCarlo::EnrollUserEmissionInitialization(EmisFunc_t emissfunc) {
 
   InitEmission = emissfunc;
-
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::EnrollUserGetTemperature(TempFunc_t tempfunc)
-//  \brief Enroll a user-defined function for computing temperature
+//! \brief Enroll a user-defined function for computing temperature
 
 void MonteCarlo::EnrollUserGetTemperature(TempFunc_t tempfunc) {
 
   GetTemperature = tempfunc;
-
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::EnrollUserWorkInMove(UserMoveFunc_t userfunc)
-//  \brief Enroll a user-defined condition to be called during photon moves
+//! \brief Enroll a user-defined condition to be called during photon moves
 
 void MonteCarlo::EnrollUserWorkInMove(UserMoveFunc_t userfunc) {
 
   UserWorkInMove = userfunc;
-
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::EnrollUserScatteringFunction(ScatFunc_t scatfunc)
-//  \brief Enroll a user-defined scattering function
+//! \brief Enroll a user-defined scattering function
 
 void MonteCarlo::EnrollUserScatteringFunction(ScatFunc_t scatfunc) {
 
   UserScattering = scatfunc;
-
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::EnrollUserOpacityFunction(OpacFunc_t opacfunc, bool abs)
-//  \brief Enroll a user-defined opacity function
+//! \brief Enroll a user-defined opacity function
 
 void MonteCarlo::EnrollUserOpacityFunction(OpacFunc_t opacfunc, bool abs) {
 
@@ -375,7 +373,7 @@ void MonteCarlo::EnrollUserOpacityFunction(OpacFunc_t opacfunc, bool abs) {
 
 //----------------------------------------------------------------------------------------
 //! \fn enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string)
-//  \brief set boundary flag
+//! \brief set boundary flag
 
 enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string) {
 
@@ -404,8 +402,8 @@ enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::GetDensity(MonteCarloBlock *pmcb)
-//  \brief Make hard copy of density from MeshBlock to MonteCarloBlock. Uses hard copy
-//  so that rho is always in cgs units
+//! \brief Make hard copy of density from MeshBlock to MonteCarloBlock.
+//  Uses hard copy so that rho is always in cgs units
 
 void MonteCarlo::GetDensity(MonteCarloBlock *pmcb) {
 
@@ -423,8 +421,8 @@ void MonteCarlo::GetDensity(MonteCarloBlock *pmcb) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::GetVelocities(MonteCarloBlock *pmcb)
-//  \brief Make hard copy of velocites from MeshBlock to MonteCarloBlock. Uses hard copy
-//  so that velocities is always fraction of speed of light
+//! \brief Make hard copy of velocites from MeshBlock to MonteCarloBlock.
+//  Uses hard copy so that velocities is always fraction of speed of light
 
 void MonteCarlo::GetVelocity(MonteCarloBlock *pmcb) {
 
@@ -448,7 +446,7 @@ void MonteCarlo::GetVelocity(MonteCarloBlock *pmcb) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void DefaultGetTemperature(MonteCarloBlock *pmcb)
-//  \brief default function for computing temperature if no user function provided.
+//! \brief default function for computing temperature if no user function provided.
 //  Assumes EOS of from P=RTd.
 
 void DefaultGetTemperature(MonteCarloBlock *pmcb) {
@@ -468,12 +466,11 @@ void DefaultGetTemperature(MonteCarloBlock *pmcb) {
         pmcb->tgas(k,j,i) = pmcb->codetocgs_tgas * phydro->w(IEN,k,j,i) /
                             phydro->w(IDN,k,j,i)/rideal;
       }}}
-
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::SendMonteCarloBlocks(int dest)
-//  \brief send all monte carlo blocks to another process
+//! \brief send all monte carlo blocks to another process
 
 void MonteCarlo::SendMonteCarloBlocks(int dest) {
 
@@ -509,7 +506,7 @@ void MonteCarlo::SendMonteCarloBlocks(int dest) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::ReveiveMonteCarloBlocks(ParameterInput *pin, int source)
-//  \brief initialize monte carlo blocks from another process
+//! \brief initialize monte carlo blocks from another process
 
 void MonteCarlo::ReceiveMonteCarloBlocks(ParameterInput *pin, int source) {
 
@@ -550,7 +547,7 @@ void MonteCarlo::ReceiveMonteCarloBlocks(ParameterInput *pin, int source) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::SendMonteCarloData(int dest)
-//  \brief send all monte carlo blocks to another process
+//! \brief send all monte carlo blocks to another process
 
 void MonteCarlo::SendMonteCarloData(int dest) {
 #ifdef MPI_PARALLEL
@@ -595,7 +592,7 @@ void MonteCarlo::SendMonteCarloData(int dest) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::ReceiveMonteCarloData(int source)
-//  \brief initialize monte carlo data from another process
+//! \brief initialize monte carlo data from another process
 
 void MonteCarlo::ReceiveMonteCarloData(int source) {
 
@@ -645,7 +642,7 @@ void MonteCarlo::ReceiveMonteCarloData(int source) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::SendMonteCarloSpectra(int dest)
-//  \brief send all monte carlo spectra to another process
+//! \brief send all monte carlo spectra to another process
 
 void MonteCarlo::SendMonteCarloSpectra(int dest) {
 #ifdef MPI_PARALLEL
@@ -699,7 +696,7 @@ void MonteCarlo::SendMonteCarloSpectra(int dest) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::ReceiveMonteCarloSpectra(int dest)
-//  \brief receive monte carlo spectra from another process
+//! \brief receive monte carlo spectra from another process
 
 void MonteCarlo::ReceiveMonteCarloSpectra(int source) {
 #ifdef MPI_PARALLEL
@@ -753,7 +750,7 @@ void MonteCarlo::ReceiveMonteCarloSpectra(int source) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::CollectMoments(void)
-//  \brief collect moments from other processes for output
+//! \brief collect moments from other processes for output
 
 void MonteCarlo::CollectMoments(void) {
 
@@ -782,7 +779,7 @@ void MonteCarlo::CollectMoments(void) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::SendMoments(int dest)
-//  \brief receive momdents
+//! \brief receive momdents
 
 void MonteCarlo::SendMoments(int dest) {
 #ifdef MPI_PARALLEL
@@ -807,7 +804,7 @@ void MonteCarlo::SendMoments(int dest) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::ReceiveMoments(int source, bool sum_moments)
-//  \brief receive moments from source
+//! \brief receive moments from source
 
 void MonteCarlo::ReceiveMoments(int source, bool sum_moments) {
 #ifdef MPI_PARALLEL
@@ -836,7 +833,7 @@ void MonteCarlo::ReceiveMoments(int source, bool sum_moments) {
 
 //----------------------------------------------------------------------------------------
 //! \fn unsigned int MonteCarlo::CreateMCMPITag(int bid)
-//  \brief calculate an MPI tag for monte carlo communications
+//! \brief calculate an MPI tag for monte carlo communications
 
 unsigned int MonteCarlo::CreateMCMPITag(int bid) {
   return bid;
@@ -845,7 +842,7 @@ unsigned int MonteCarlo::CreateMCMPITag(int bid) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::InitializeMonteCarloBlocks(ParameterInput *pinput)
-//  \brief initialize grid data in each monte carlo block
+//! \brief initialize grid data in each monte carlo block
 
 void MonteCarlo::InitializeMonteCarloBlocks(ParameterInput *pinput) {
 
@@ -890,8 +887,8 @@ void MonteCarlo::InitializeMonteCarloBlocks(ParameterInput *pinput) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
-//                                           ParameterInput *pinput)
-//  \brief Finish Initialization of MonteCarloBlocks and run steady-state MC calculation
+//!                                          ParameterInput *pinput)
+//! \brief Finish Initialization of MonteCarloBlocks and run steady-state MC calculation
 
 void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
                                      ParameterInput *pinput) {
@@ -981,7 +978,10 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
   return;
 }
 
-// constructor
+
+//----------------------------------------------------------------------------------------
+//! MCRandom constructor, builds Athena++ random number generator
+//  current implementation is wrapper for gsl function
 
 MCRandom::MCRandom(int iseed) {
   if (MONTE_CARLO_ENABLED) {
@@ -990,7 +990,9 @@ MCRandom::MCRandom(int iseed) {
   }
 }
 
-// destructor
+//----------------------------------------------------------------------------------------
+//! destructor
+
 MCRandom::~MCRandom() {
 
 }

@@ -4,8 +4,7 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file mcutils.cpp
-//  \brief implementation of utility functions
-
+//! \brief implementation of monte carlo utility functions
 
 // Athena++ headers
 #include "mcutils.hpp"
@@ -13,7 +12,7 @@
 
 //------------------------------------------------------------------------------
 //! \fn Real BessI0(Real x)
-//  \brief Evaluate modified Bessel function In(x) and n=0
+//! \brief Evaluate modified Bessel function In(x) and n=0
 
 Real BessI0(Real x)
 {
@@ -36,7 +35,7 @@ Real BessI0(Real x)
 
 //------------------------------------------------------------------------------
 //! \fn Real BessI1(Real x)
-//  \brief Evaluate modified Bessel function In(x) and n=1.
+//! \brief Evaluate modified Bessel function In(x) and n=1.
 
 Real BessI1(Real x)
 {
@@ -60,7 +59,7 @@ Real BessI1(Real x)
 
 //------------------------------------------------------------------------------
 //! \fn Real BessK0(Real x)
-//  \brief Evaluate modified Bessel function Kn(x) and n=0.
+//! \brief Evaluate modified Bessel function Kn(x) and n=0.
 
 Real BessK0(Real x)
 {
@@ -104,7 +103,7 @@ Real BessK1(Real x)
 
 //------------------------------------------------------------------------------
 //! \fn Real BessK(int n, Real x)
-//  \brief Evaluate modified Bessel function Kn(x) and n >= 0
+//! \brief Evaluate modified Bessel function Kn(x) and n >= 0
 //
 // Note that for x == 0 the functions bessy and bessk are not
 // defined and a blank is returned.
@@ -118,7 +117,7 @@ Real BessK(int n, Real x) {
     return( BessK0(x) );
   if (n == 1)
     return( BessK1(x) );
- 
+
   Real tox = 2.0/x;
   Real bkm = BessK0(x);
   Real bk = BessK1(x);
@@ -132,7 +131,7 @@ Real BessK(int n, Real x) {
 
 //----------------------------------------------------------------------------------------
 //! \fn int mcbisect(Real x, AthenaArray<Real> &array)
-// use bisection to search array and return bin
+//! \brief  use bisection to search array and return bin
 
 int mcbisect(Real x, AthenaArray<Real> &array) {
 
@@ -161,7 +160,7 @@ int mcbisect(Real x, AthenaArray<Real> &array) {
 
 //----------------------------------------------------------------------------------------
 //! \fn std::complex<Real> ZetaFast(std::complex<Real> arg)
-//  \brief fast but approximate evaluation of zeta function
+//! \brief fast but approximate evaluation of zeta function
 
 std::complex<Real> ZetaFast(std::complex<Real> arg) {
 
@@ -169,7 +168,7 @@ std::complex<Real> ZetaFast(std::complex<Real> arg) {
   std::complex<Real> a=(0.50556,-0.81462);
   std::complex<Real> d2=(0.,7.08981540362206);
   std::complex<Real> aux0 = arg;
-  if(aux0.imag() < 0.) 
+  if(aux0.imag() < 0.)
     aux0 = std::conj(aux0);
   std::complex<Real> zeta = b / (a-aux0) - std::conj(b) / (std::conj(a)+aux0);
   if (aux0.imag() < 0.)
@@ -179,12 +178,11 @@ std::complex<Real> ZetaFast(std::complex<Real> arg) {
 
 //----------------------------------------------------------------------------------------
 //! \fn std::complex<Real> ZetaVoigt(std::complex<Real> arg)
-//  \brief fast but approximate evaluation of zeta function
+//! \brief fast but approximate evaluation of zeta function
 
 std::complex<Real> ZetaVoigt(std::complex<Real> arg) {
   // Attempted C++ conversion of the code P. Arras obtained from Hammet
-
-  // SWD: May not work if Real = float
+  // SWD: not tested with Real = float -- may not work?
   std::complex<Real> d1(0.,1.77245385090551); //   i sqrt(pi)
   std::complex<Real> d2(0.,3.54490770181103); // 2 i sqrt(pi)
   std::complex<Real> d3(0.,7.08981540362206); // 4 i sqrt(pi)
@@ -194,11 +192,11 @@ std::complex<Real> ZetaVoigt(std::complex<Real> arg) {
   //Authors- Bill Sharp modified for PDP-10 by C. F. F. Karney.
   // (This code has evolved from something Gary Swanson wrote in the
   // mid-60's!  Hence the archaic fortran branch commands.)
-  // Modified for the VAX by Greg Hammett (also fixed the asymptotic 
+  // Modified for the VAX by Greg Hammett (also fixed the asymptotic
   // formula choice of imaginary part and put in an improved power series
   // solution.)  This routine has been checked against the tables in
   // Fried-Conte.
-  // 
+  //
   //     This routine computes the fried-conte plasma dispersion function,
   // f(z), where
   //       f(z) = 1 / sqrt(pi) * def. integral from minus infinity
@@ -232,8 +230,8 @@ std::complex<Real> ZetaVoigt(std::complex<Real> arg) {
     // formulas came from.  Fried-Conte, Barberio-Coresetti, and Abramowitz and
     // Stegun all have what appear to be different formulas.  But I have
     // checked the results against the tables in Fried-Conte, and against the
-    // other two methods along the borders. 
- 
+    // other two methods along the borders.
+
     std::complex<Real> z0 = z;
     // the following operate on the conjugate of z
     if (z.imag() < 0.)
@@ -269,12 +267,12 @@ std::complex<Real> ZetaVoigt(std::complex<Real> arg) {
       c2 = a3 / b3;
       c3 = c2 - c1;
     }
-    if (z0.imag() < 0.0) {      
+    if (z0.imag() < 0.0) {
       z = z0;
       c2 = std::conj(c2) - d3 * z * exp(-zsq);
     }
 
-    return -(0.5*c2 + 1.) / z; 
+    return -(0.5*c2 + 1.) / z;
 
   } else {
     // ASYMPTOTIC SERIES METHOD: ABS(X).GE.4.0 AND ABS(Y).LT.1.0
@@ -288,9 +286,9 @@ std::complex<Real> ZetaVoigt(std::complex<Real> arg) {
 
       // Use the proper Stokes lines, the Fried and Conte choices are wrong.
       // A derivation of the proper choice of Stokes' lines for the asymptotic
-      // formulas can be found in Stix's Plasma Waves book, Miyamoto, or 
+      // formulas can be found in Stix's Plasma Waves book, Miyamoto, or
       // Greg Hammett's notes. in practice this doesn't matter since
-      // cexp(-z**2) is so small: 
+      // cexp(-z**2) is so small:
       if (z.imag() < -xmag)
         aux0 += d2 * exp(-SQR(z));
       if ((z.imag() >= -xmag) && (z.imag() < xmag))
@@ -310,19 +308,19 @@ std::complex<Real> ZetaVoigt(std::complex<Real> arg) {
       // POWER SERIES METHOD: ABS(X).LT.4.0 AND ABS(Y).LT.1.0
 
       // instead of the Fried and Conte power series, use the one suggested by
-      // Barberio-Corsetti in MATT-773 (1970) based on the other of the two 
+      // Barberio-Corsetti in MATT-773 (1970) based on the other of the two
       // power series representations for the error function.  The Fried and
-      // Conte power series has numerical problems for x as large as 4.0. 
- 
+      // Conte power series has numerical problems for x as large as 4.0.
+
       Real nterm = 0.;
       std::complex<Real> aux0(1.,0.);
       std::complex<Real> aux1(1.,0.);
       std::complex<Real> term;
       do {
         nterm += 1.;
-	aux1 = aux1 * SQR(z) / nterm;
-	term = aux1 / (2.*nterm+1.); 
-	aux0 += term;
+        aux1 = aux1 * SQR(z) / nterm;
+        term = aux1 / (2.*nterm+1.);
+        aux0 += term;
       } while (fabs(term.imag())+fabs(term.real()) >= eps);
       return exp(-SQR(z)) * (d1 - 2. * z * aux0);
     }

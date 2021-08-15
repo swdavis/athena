@@ -4,9 +4,9 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file frame_transformations.hpp
-//  \brief implementation of functions for constructing and transforming tetrads
-//         frame
+//! \brief implementation of functions for constructing and transforming tetrad frames
 
+// C++ libraries
 #include <complex>
 
 // Athena++ classes headers
@@ -17,11 +17,11 @@
 
 //----------------------------------------------------------------------------------------
 //! \fn void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD],
-//                           Real ecov[NCOORD][NCOORD], Real econ[NCOORD][NCOORD]
-//  \brief construct an orthonormal tetrad from one trial vector with
-//         the Gram-Schmidt algorithm
+//!                          Real ecov[NCOORD][NCOORD], Real econ[NCOORD][NCOORD]
+//! \brief construct an orthonormal tetrad from one trial vector
+// uses the Gram-Schmidt algorithm
 
-void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD], 
+void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD],
                      Real econ[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD]) {
 
   // make a trial tetrad where time component is parallel to ucon, usually chosen
@@ -29,11 +29,11 @@ void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD],
   Real mag = sqrt(fabs(DotVec(ucon, ucon, gcov)));
   if (mag > SMALL_NUMBER) {
     //set 0 vector to normalized ucon
-    for (int j = 0; j < NCOORD; j++) 
+    for (int j = 0; j < NCOORD; j++)
       econ[IMC0][j] = ucon[j]/mag;
   } else {
     // set 0 vector to time direction
-    econ[IMC0][IMC0] = 1.; econ[IMC0][IMC1] = 0.; 
+    econ[IMC0][IMC0] = 1.; econ[IMC0][IMC1] = 0.;
     econ[IMC0][IMC2] = 0.; econ[IMC0][IMC3] = 0.;
     NormalizeVec(econ[IMC0], gcov);
   }
@@ -90,8 +90,8 @@ void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD],
     for (int j = 0; j < NCOORD; j++) {
       sum = 0.;
       for (int k = 0; k < NCOORD; k++) {
-	sum += econ[i][k] * ecov[j][k];
-      } 
+        sum += econ[i][k] * ecov[j][k];
+      }
     }
     printf("sum: %g  index: %d\n",sum, i);
 
@@ -104,13 +104,14 @@ void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD],
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD],
-//                              Real ecov[NCOORD][NCOORD], Real econ[NCOORD][NCOORD]
-//  \brief construct an orthonormal tetrad from two trial vectors with
-//         the Gram-Schmidt algorithm
+//! \fn void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD],
+//!                          Real gcov[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD],
+//!                          Real econ[NCOORD][NCOORD]
+//! \brief construct an orthonormal tetrad from two trial vectors
+// uses the Gram-Schmidt algorithm
 
 //SWD: Make calculation of ecov optional, could overload?
-void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD], 
+void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD],
                      Real econ[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD]) {
 
 
@@ -119,30 +120,30 @@ void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCO
   Real mag = sqrt(fabs(DotVec(ucon, ucon, gcov)));
   if (mag > SMALL_NUMBER) {
     //set 0 vector to normalized ucon
-    for (int j = 0; j < NCOORD; j++) 
+    for (int j = 0; j < NCOORD; j++)
       econ[IMC0][j] = ucon[j]/mag;
   } else {
     // set 0 vector to time direction
-    econ[IMC0][IMC0] = 1.; econ[IMC0][IMC1] = 0.; 
+    econ[IMC0][IMC0] = 1.; econ[IMC0][IMC1] = 0.;
     econ[IMC0][IMC2] = 0.; econ[IMC0][IMC3] = 0.;
     NormalizeVec(econ[IMC0], gcov);
   }
   // make a trial tetrad where 3rd coordinate is pararallel to vcon
-  for (int j = 0; j < NCOORD; j++) 
+  for (int j = 0; j < NCOORD; j++)
     econ[IMC3][j] = vcon[j];
   ProjectVecSub(econ[IMC3], econ[IMC0], gcov);
   mag = sqrt(fabs(DotVec(econ[IMC3], econ[IMC3], gcov)));
   if (mag > SMALL_NUMBER) {
     //set 3 vector to normalized vcon
-    for (int j = 0; j < NCOORD; j++) 
+    for (int j = 0; j < NCOORD; j++)
       econ[IMC3][j] /= mag;
   } else {
     // set 3 vector to coordinate direction
-    econ[IMC3][IMC0] = 0.; econ[IMC3][IMC1] = 0.; 
+    econ[IMC3][IMC0] = 0.; econ[IMC3][IMC1] = 0.;
     econ[IMC3][IMC2] = 0.; econ[IMC3][IMC3] = 1.;
     ProjectVecSub(econ[IMC3], econ[IMC0], gcov);
     mag = sqrt(fabs(DotVec(econ[IMC3], econ[IMC3], gcov)));
-    for (int j = 0; j < NCOORD; j++) 
+    for (int j = 0; j < NCOORD; j++)
       econ[IMC3][j] /= mag;
   }
   // Construct rest of contravariant tetrad using coordinate directions as defaults
@@ -175,13 +176,13 @@ void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCO
 
 //----------------------------------------------------------------------------------------
 //! \fn void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real wcon[NCOORD],
-//                           Real gcov[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD], 
+//                           Real gcov[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD],
 //                           Real econ[NCOORD][NCOORD])
 //  \brief construct an orthonormal tetrad using the fluid frame vector ucon and defining
-//         e^mu_(3) = k^\mu 
+//         e^mu_(3) = k^\mu
 
 void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real wcon[NCOORD],
-                     Real gcov[NCOORD][NCOORD], Real econ[NCOORD][NCOORD], 
+                     Real gcov[NCOORD][NCOORD], Real econ[NCOORD][NCOORD],
                      Real ecov[NCOORD][NCOORD]) {
 
   // make a trial vector where time component is parallel to ucon, usually chosen
@@ -190,7 +191,7 @@ void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real wcon[NCOORD],
   Real mag = sqrt(fabs(DotVec(ucon, ucon, gcov)));
   if (mag > SMALL_NUMBER) {
     //set 0 vector to normalized ucon
-    for (int j = 0; j < NCOORD; j++) 
+    for (int j = 0; j < NCOORD; j++)
       econ[IMC0][j] = ucon[j]/mag;
   } else {
     // set 0 vector to time direction
@@ -200,13 +201,13 @@ void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real wcon[NCOORD],
   }
 
   // make a trial vector where 3 coordinate is pararallel to vcon
-  for (int j = 0; j < NCOORD; j++) 
+  for (int j = 0; j < NCOORD; j++)
     econ[IMC3][j] = vcon[j];
   ProjectVecSub(econ[IMC3], econ[IMC0], gcov);
   mag = sqrt(fabs(DotVec(econ[IMC3], econ[IMC3], gcov)));
   if (mag > SMALL_NUMBER) {
     //set 3 vector to normalized vcon
-    for (int j = 0; j < NCOORD; j++) 
+    for (int j = 0; j < NCOORD; j++)
       econ[IMC3][j] /= mag;
   } else {
     // set 3 vector to coordinate direction
@@ -214,19 +215,19 @@ void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real wcon[NCOORD],
     econ[IMC3][IMC2] = 0.; econ[IMC3][IMC3] = 1.;
     ProjectVecSub(econ[IMC3], econ[IMC0], gcov);
     mag = sqrt(fabs(DotVec(econ[IMC3], econ[IMC3], gcov)));
-    for (int j = 0; j < NCOORD; j++) 
+    for (int j = 0; j < NCOORD; j++)
       econ[IMC3][j] /= mag;
   }
 
   // make a trial vector where 2 coordinate is pararallel to wcon
-  for (int j = 0; j < NCOORD; j++) 
+  for (int j = 0; j < NCOORD; j++)
     econ[IMC2][j] = wcon[j];
   ProjectVecSub(econ[IMC2], econ[IMC0], gcov);
   ProjectVecSub(econ[IMC2], econ[IMC3], gcov);
   mag = sqrt(fabs(DotVec(econ[IMC2], econ[IMC2], gcov)));
   if (mag > SMALL_NUMBER) {
     //set 2 vector to normalized wcon
-    for (int j = 0; j < NCOORD; j++) 
+    for (int j = 0; j < NCOORD; j++)
       econ[IMC2][j] /=mag;
   } else {
     // set 2 vector to coordinate direction
@@ -234,11 +235,11 @@ void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real wcon[NCOORD],
     ProjectVecSub(econ[IMC2], econ[IMC0], gcov);
     ProjectVecSub(econ[IMC2], econ[IMC3], gcov);
     mag = sqrt(fabs(DotVec(econ[IMC2], econ[IMC2], gcov)));
-    for (int j = 0; j < NCOORD; j++) 
+    for (int j = 0; j < NCOORD; j++)
       econ[IMC2][j] /= mag;
   }
 
-  // make a trial vector 
+  // make a trial vector
   econ[IMC1][IMC0] = 1.; econ[IMC1][IMC1] = 1.;
   econ[IMC1][IMC2] = 1.; econ[IMC1][IMC3] = 1.;
   ProjectVecSub(econ[IMC1], econ[IMC0], gcov);
@@ -258,18 +259,18 @@ void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real wcon[NCOORD],
     ConToCov(econ[i], ecov[i], gcov);
   }
   for (int j = 0; j < NCOORD; j++) ecov[IMC0][j] *= -1;
-  
+
   /*Real sum1,sum2;
   for (int i = 0; i < NCOORD; i++) {
     for (int j = 0; j < NCOORD; j++) {
       sum1 = 0.;
       sum2 = 0.;
       for (int k = 0; k < NCOORD; k++) {
-	sum1 += econ[i][k] * ecov[j][k];
+        sum1 += econ[i][k] * ecov[j][k];
         for (int l = 0; l < NCOORD; l++) {
           sum2 += econ[i][k]*gcov[k][l]*econ[j][l];
         }
-      } 
+      }
       printf("orth: %d %d %g %g\n",i,j,sum1,sum2);
       }}*/
 
@@ -279,7 +280,7 @@ void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real wcon[NCOORD],
 //SWD: Modify so this function is called only once
 //----------------------------------------------------------------------------------------
 //! \fn void ImposeRightHanded(Real econ[NCOORD][NCOORD], Real gcov[NCOORD][NCOORD])
-//  \brief Check if tetrad is right-handed and reverse if not
+//! \brief Check if tetrad is right-handed and reverse if not
 
 void InitializeLeviCivita(Real levi[NCOORD][NCOORD][NCOORD][NCOORD]) {
 
@@ -315,7 +316,7 @@ void InitializeLeviCivita(Real levi[NCOORD][NCOORD][NCOORD][NCOORD]) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void ImposeRightHanded(Real econ[NCOORD][NCOORD], Real gcov[NCOORD][NCOORD])
-//  \brief Check if tetrad is right-handed and reverse if not
+//! \brief Check if tetrad is right-handed and reverse if not
 
 void ImposeRightHanded(Real econ[NCOORD][NCOORD], Real gcov[NCOORD][NCOORD]) {
 
@@ -338,25 +339,24 @@ void ImposeRightHanded(Real econ[NCOORD][NCOORD], Real gcov[NCOORD][NCOORD]) {
     for (int i = 0; i < NCOORD; i++)
       econ[IMC1][i] *= -1.;
   }
-  
 }
 
 
 //----------------------------------------------------------------------------------------
 //! \fn Real KroneckerDelta(int i, int j)
-//  \brief Kronecker Delta function
+//! \brief Kronecker Delta function
 
 Real KroneckerDelta(int i, int j) {
 
-  if (i == j) 
+  if (i == j)
     return 1.;
-  else 
+  else
     return 0.0;
 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ProjectVecSub(Real ucon[NCOORD], Real vcon[NCOORD], 
+//! \fn void ProjectVecSub(Real ucon[NCOORD], Real vcon[NCOORD],
 //                          Real gcov[NCOORD][NCOORD])
 //  \brief subtract four-vector projection of ucon onto vcon from ucon in metric gcov
 
@@ -377,8 +377,8 @@ void ProjectVecSub(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOOR
 #endif
     return;
   }
-  
-  for (int i = 0; i < NCOORD; i++) 
+
+  for (int i = 0; i < NCOORD; i++)
     ucon[i] -= vcon[i] * ucon_dot_vcon / vcon_dot_vcon;
 
 }
@@ -386,14 +386,14 @@ void ProjectVecSub(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOOR
 
 //----------------------------------------------------------------------------------------
 //! \fn Real DotVec(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD])
-//  \brief return dot (scalar) product of <ucon, vcon> in metric gcov
+//! \brief return dot (scalar) product of <ucon, vcon> in metric gcov
 
 Real DotVec(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD]) {
 
   Real dot = 0;
 
-  for (int i = 0; i < NCOORD; i++) 
-    for (int j = 0; j < NCOORD; j++) 
+  for (int i = 0; i < NCOORD; i++)
+    for (int j = 0; j < NCOORD; j++)
       dot += ucon[i] * gcov[i][j] * vcon[j];
 
   return dot;
@@ -402,7 +402,7 @@ Real DotVec(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD]) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void NormalizeVec(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD])
-//  \brief normalize vector ucon in metric gcov
+//! \brief normalize vector ucon in metric gcov
 
 void NormalizeVec(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD]) {
 
@@ -421,13 +421,13 @@ void NormalizeVec(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD]) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void ConToCov(Real ucon[NCOORD], Real ucov[NCOORD], Real gcov[NCOORD][NCOORD])
-//  \brief converts contravariant vector ucon to covariant vector ucov in metric gcov
+//! \brief converts contravariant vector ucon to covariant vector ucov in metric gcov
 
 void ConToCov(Real ucon[NCOORD], Real ucov[NCOORD], Real gcov[NCOORD][NCOORD]) {
 
   for (int i = 0; i < NCOORD; i++) {
     ucov[i] = 0.;
-    for (int j = 0; j < NCOORD; j++) 
+    for (int j = 0; j < NCOORD; j++)
       ucov[i] += gcov[i][j] * ucon[j];
   }
 
@@ -435,13 +435,13 @@ void ConToCov(Real ucon[NCOORD], Real ucov[NCOORD], Real gcov[NCOORD][NCOORD]) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void CovToCon(Real ucov[NCOORD], Real ucon[NCOORD], Real gcon[NCOORD][NCOORD])
-//  \brief converts covariant vector ucov to contravariant vector ucon in metric gcon
+//! \brief converts covariant vector ucov to contravariant vector ucon in metric gcon
 
 void CovToCon(Real ucov[NCOORD], Real ucon[NCOORD], Real gcon[NCOORD][NCOORD]) {
 
   for (int i = 0; i < NCOORD; i++) {
     ucon[i] = 0.;
-    for (int j = 0; j < NCOORD; j++) 
+    for (int j = 0; j < NCOORD; j++)
       ucon[i] += gcon[i][j] * ucov[j];
   }
 
@@ -449,32 +449,31 @@ void CovToCon(Real ucov[NCOORD], Real ucon[NCOORD], Real gcon[NCOORD][NCOORD]) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void CoordinateToTetrad(Real ucoord[NCOORD], Real utet[NCOORD],
-//                              Real ecov[NCOORD][NCOORD])
-//  \brief transform vector ucoord from coordinate frame to utet in the tetrad frame
+//!                             Real ecov[NCOORD][NCOORD])
+//! \brief transform vector ucoord from coordinate frame to utet in the tetrad frame
 
-void CoordinateToTetrad(Real ucoord[NCOORD], Real utet[NCOORD], 
-			Real ecov[NCOORD][NCOORD]) {
-  
+void CoordinateToTetrad(Real ucoord[NCOORD], Real utet[NCOORD],
+                        Real ecov[NCOORD][NCOORD]) {
+
   for (int i = 0; i < NCOORD; i++) {
     utet[i] = 0.;
-    for (int j = 0; j< NCOORD; j++) 
+    for (int j = 0; j< NCOORD; j++)
       utet[i] += ecov[i][j] * ucoord[j];
   }
-
 }
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void TetradToCoordinate(Real utet[NCOORD], Real ucoord[NCOORD], 
-//                              Real econ[NCOORD][NCOORD])
-//  \brief transform vector utet from tetrad frame to ucoord in the coordinate frame
+//! \fn void TetradToCoordinate(Real utet[NCOORD], Real ucoord[NCOORD],
+//!                             Real econ[NCOORD][NCOORD])
+//! \brief transform vector utet from tetrad frame to ucoord in the coordinate frame
 
-void TetradToCoordinate(Real utet[NCOORD], Real ucoord[NCOORD], 
-			Real econ[NCOORD][NCOORD]) {
+void TetradToCoordinate(Real utet[NCOORD], Real ucoord[NCOORD],
+                        Real econ[NCOORD][NCOORD]) {
 
   for (int i = 0; i < NCOORD; i++) {
     ucoord[i] = 0.;
-    for (int j = 0; j < NCOORD; j++) 
+    for (int j = 0; j < NCOORD; j++)
       ucoord[i] += econ[j][i] * utet[j];
   }
 
@@ -483,7 +482,7 @@ void TetradToCoordinate(Real utet[NCOORD], Real ucoord[NCOORD],
 // SWD: make purely real version for linear polarization
 //----------------------------------------------------------------------------------------
 //! \fn void StokesToTensor(Real stokes[NCOORD],std::complex<Real> tensor[NCOORD][NCOORD])
-//  \brief transform stokes vector invariant polarization tensor
+//! \brief transform stokes vector invariant polarization tensor
 
 void StokesToTensor(Real stokes[NCOORD], std::complex<Real> tensor[NCOORD][NCOORD]) {
 
@@ -500,10 +499,10 @@ void StokesToTensor(Real stokes[NCOORD], std::complex<Real> tensor[NCOORD][NCOOR
 }
 //----------------------------------------------------------------------------------------
 //! \fn void TensorToStokes(Real stokes[NCOORD],std::complex<Real> tensor[NCOORD][NCOORD])
-//  \brief transform invariant polarization tensor to stokes vector
+//! \brief transform invariant polarization tensor to stokes vector
 
 void TensorToStokes(std::complex<Real> tensor[NCOORD][NCOORD], Real stokes[NCOORD]) {
- 
+
   // Follows the conventions defined in Moscibrodzka&Gammie 2018
   stokes[0] = 0.5 * (tensor[IMC1][IMC1] + tensor[IMC2][IMC2]).real();
   stokes[1] = 0.5 * (tensor[IMC1][IMC1] - tensor[IMC2][IMC2]).real();
@@ -520,16 +519,15 @@ void TensorToStokes(std::complex<Real> tensor[NCOORD][NCOORD], Real stokes[NCOOR
 
 //----------------------------------------------------------------------------------------
 //! \fn void ComplexCoordinateToTetrad(std::complex<Real> tensor[NCOORD][NCOORD],
-//                             std::complex<Real> polten[NCOORD][NCOORD],
-//                             Real Ecov[NCOORD][NCOORD])
-//  \brief transform complex tensor from coordinate frame to tetrad frame
+//!                            std::complex<Real> polten[NCOORD][NCOORD],
+//!                            Real Ecov[NCOORD][NCOORD])
+//! \brief transform complex tensor from coordinate frame to tetrad frame
 
 
-void ComplexCoordinateToTetrad(std::complex<Real> tcoord[NCOORD][NCOORD], 
+void ComplexCoordinateToTetrad(std::complex<Real> tcoord[NCOORD][NCOORD],
                                std::complex<Real> ttet[NCOORD][NCOORD],
-                               Real ecov[NCOORD][NCOORD])
-{
- 
+                               Real ecov[NCOORD][NCOORD]) {
+
   for (int i = 0; i < NCOORD; i++)
     for (int j = 0; j < NCOORD; j++)
       ttet[i][j] = std::complex<Real>(0.,0.);
@@ -537,12 +535,8 @@ void ComplexCoordinateToTetrad(std::complex<Real> tcoord[NCOORD][NCOORD],
   for (int i = 0; i < NCOORD; i++)
     for (int j = 0; j < NCOORD; j++)
       for (int k = 0; k < NCOORD; k++)
-	for (int l = 0; l < NCOORD; l++) {
-          //if ((i == IMC1) && (j == IMC1))
-            //printf("conv11: %d %d %e %e %e %e\n",k,l,tcoord[k][l].real() * ecov[i][k] * ecov[j][l],tcoord[k][l].real(),ecov[i][k],ecov[j][l]);
-          //else if ((i == IMC2) && (j == IMC2))
-          //  printf("conv22: %d %d %e %e %e %e\n",k,l,tcoord[k][l].real() * ecov[i][k] * ecov[j][l],tcoord[k][l].real(),ecov[i][k],ecov[j][l]);
-	  ttet[i][j] += tcoord[k][l] * ecov[i][k] * ecov[j][l];
+        for (int l = 0; l < NCOORD; l++) {
+          ttet[i][j] += tcoord[k][l] * ecov[i][k] * ecov[j][l];
         }
 
 }
@@ -550,9 +544,9 @@ void ComplexCoordinateToTetrad(std::complex<Real> tcoord[NCOORD][NCOORD],
 
 //----------------------------------------------------------------------------------------
 //! \fn void ComplexTetradToCoordinate(std::complex<Real> ttet[NCOORD][NCOORD],
-//                                     std::complex<Real> tcoord[NCOORD][NCOORD],
-//                                     Real econ[NCOORD][NCOORD])
-//  \brief transform complex tensor from tetrad frame to coordinate frame
+//!                                    std::complex<Real> tcoord[NCOORD][NCOORD],
+//!                                    Real econ[NCOORD][NCOORD])
+//! \brief transform complex tensor from tetrad frame to coordinate frame
 
 void ComplexTetradToCoordinate(std::complex<Real> ttet[NCOORD][NCOORD],
                                std::complex<Real> tcoord[NCOORD][NCOORD],
@@ -565,16 +559,7 @@ void ComplexTetradToCoordinate(std::complex<Real> ttet[NCOORD][NCOORD],
   for(int i = 0; i < NCOORD; i++)
     for(int j = 0; j < NCOORD; j++)
       for(int k = 0; k < NCOORD; k++)
-	for(int l = 0; l < NCOORD; l++) {
-          //if ((i == IMC3) && (j == IMC3))
-            //printf("i33: %d %d %e %e %e %e\n",k,l,ttet[k][l].real() * econ[k][i] * econ[l][j],ttet[k][l].real(),econ[k][i],econ[l][j]);
-	  tcoord[i][j] += ttet[k][l] * econ[k][i] * econ[l][j];
+        for(int l = 0; l < NCOORD; l++) {
+          tcoord[i][j] += ttet[k][l] * econ[k][i] * econ[l][j];
         }
 }
-
-
-
-			     
-			    
-							   
-							    

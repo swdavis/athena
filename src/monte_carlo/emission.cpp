@@ -4,6 +4,7 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //!  \file emission.cpp
+//!  \brief implementation of photon emission functions
 
 // Athena++ headers
 #include "montecarlo.hpp"
@@ -15,7 +16,7 @@
 
 //----------------------------------------------------------------------------------------
 //! \fn Real InitializeEmissionFreefree(MonteCarloBlock *pmcb)
-//  \brief Initialize emission array and return minimum
+//! \brief Initialize emission array and return minimum
 
 Real InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
 
@@ -25,7 +26,6 @@ Real InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
   Real eta0 = 1.032521e-11;
   Real g = 1.0; // Gaunt factor
 
-  
   //eta0 *= 12.;  // Added to match the Athena++ prescription
 
   Real ncells = static_cast<Real>(pmcb->pmy_mc->ncells);
@@ -45,21 +45,20 @@ Real InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
         Real ne = nh + 2.*nhe;
         Real vol = pmcb->pcoord->vol(k,j,i);
         pmcb->emission(k,j,i) = eta0/sqrt(temp)*ne*(nh+4.*nhe)*g*vol*ncells;
-	if (pmcb->emission(k,j,i) > emm_max) emm_max = pmcb->emission(k,j,i);
-	if (pmcb->emission(k,j,i) < emm_min) emm_min = pmcb->emission(k,j,i); 
+        if (pmcb->emission(k,j,i) > emm_max) emm_max = pmcb->emission(k,j,i);
+        if (pmcb->emission(k,j,i) < emm_min) emm_min = pmcb->emission(k,j,i);
       }}}
   if (Globals::my_rank == 0) {
     std::cout << "Emission array range (min, max): " << emm_min << " " << emm_max
-	      << std::endl;
+              << std::endl;
   }
   return emm_min;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PhotonInitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, 
-//                              Real lemax, int ips, int ipe))
-//  \brief initialize energy, direction, polarization and weight of the photon
-//         consistent with free-free emission, 
+//! \fn void PhotonInitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin,
+//!                             Real lemax, int ips, int ipe))
+//! \brief initialize photon consistent with free-free emission
 
 void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real lemax,
                         int ip)
@@ -85,7 +84,6 @@ void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real l
   Real phi = 2. * PI * pran->uniform();
   Real cphi = cos(phi);
   Real sphi = sin(phi);
-  
   Real cth = 2. * pran->uniform() - 1.;
   Real sth = sqrt(1. - SQR(cth));
 
@@ -93,14 +91,13 @@ void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real l
   pphot->k1p[ip] = sth*cphi;
   pphot->k2p[ip] = sth*sphi;
   pphot->k3p[ip] = cth;
-  
 }
 
 
 //----------------------------------------------------------------------------------------
 //! \fn void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pcoord,
-//                                    int ip)
-//  \brief choose random position within cartesian gridzone ip
+//!                                   int ip)
+//! \brief choose random position within cartesian gridzone ip
 
 void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pcoord, int ip) {
 
@@ -112,17 +109,17 @@ void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pcoord, in
   pphot->x1p[ip] = xl+pran->uniform()*dx;
   pphot->x2p[ip] = yl+pran->uniform()*dy;
   pphot->x3p[ip] = zl+pran->uniform()*dz;
-  
+
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pcoord, 
-//                                         int ip)
-//  \brief choose random position within spherical-polar gridzone ip
+//! \fn void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pcoord,
+//!                                        int ip)
+//! \brief choose random position within spherical-polar gridzone ip
 
 void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pcoord,
                                    int ip) {
-  
+
   Real rl = pcoord->x1f(pphot->i1p[ip]), rh = pcoord->x1f(pphot->i1p[ip]+1);
   pphot->x1p[ip]  = pow(pran->uniform()*(rh*rh*rh-rl*rl*rl)+rl*rl*rl,1./3.);
   Real cthh = cos(pcoord->x2f(pphot->i2p[ip]));
@@ -131,17 +128,17 @@ void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pcoor
   pphot->x2p[ip] = acos(cth);
   Real pl = pcoord->x3f(pphot->i3p[ip]); Real dp = pcoord->x3f(pphot->i3p[ip]+1)-pl;
   pphot->x3p[ip] = pl+pran->uniform()*dp;
-  
 
 }
+
 //----------------------------------------------------------------------------------------
 //! \fn Real PlanckDist(Real temp, MCRandom *pran)
-//  \brief returns energy distributed according to Planck function
+//! \brief returns energy distributed according to Planck function
 
 Real PlanckDist(Real temp, MCRandom *pran)
 {
-// Method of choosing the energy of the initial photon which a Planck spectrum 
-// distribution. See Pozdnyakov et al. sec 9.4.  Originally, Fleck and Cumming (1971)
+  // Method of choosing the energy of the initial photon which a Planck spectrum
+  // distribution. See Pozdnyakov et al. sec 9.4.  Originally, Fleck and Cumming (1971)
 
   Real x1 = 1.202 * pran->uniform();
   Real x2 = pran->uniform();

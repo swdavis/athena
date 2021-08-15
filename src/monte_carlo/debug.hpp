@@ -6,12 +6,13 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file debug.hpp
-//  \brief temporary functions for debugging and testing during initial development
+//! \brief temporary functions for debugging and testing during initial development
 
 // Athena++ classes headers
 #include "../athena.hpp"
 #include "montecarlo.hpp"
 
+// function headers
 void FinalPositionCartesian(MonteCarloBlock *pmb, MCCoord *pco, Photon *pphot,
                             Real &xf, Real &yf, Real &zf, Real &dl);
 
