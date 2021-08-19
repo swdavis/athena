@@ -325,10 +325,13 @@ int Particles::GetTotalNumber(Mesh *pm) {
 
 Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
   // Allocate space for particle data.
-  : intprop(new std::vector<int> [nint]), rp(new std::vector<Real> [nreal]),
+  : intprop(new std::vector<int> [nint]),
+    rp(new std::vector<Real> [nreal]), drp(new std::vector<Real> [nreal]),
     aux(new std::vector<Real> [naux]), work(new std::vector<Real> [nwork]),
     pid(intprop[ipid]),
     xp(rp[ixp]), yp(rp[iyp]), zp(rp[izp]), vpx(rp[ivpx]), vpy(rp[ivpy]), vpz(rp[ivpz]),
+    dxp(drp[ixp]), dyp(drp[iyp]), dzp(drp[izp]),
+    dvpx(drp[ivpx]), dvpy(drp[ivpy]), dvpz(drp[ivpz]),
     xi1(work[ixi1]), xi2(work[ixi2]), xi3(work[ixi3]),
     xp0(aux[ixp0]), yp0(aux[iyp0]), zp0(aux[izp0]),
     vpx0(aux[ivpx0]), vpy0(aux[ivpy0]), vpz0(aux[ivpz0]) {
@@ -357,7 +360,7 @@ Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
 Particles::~Particles() {
   // Free dynamically allocated space.
   delete [] intprop;
-  delete [] rp;
+  delete [] rp, drp;
   delete [] aux;
   delete [] work;
 

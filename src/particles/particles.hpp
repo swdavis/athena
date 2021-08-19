@@ -134,7 +134,7 @@ friend class DustParticles;
 
                                // Data attached to the particles:
   std::vector<int> *intprop;   //!>   integer properties
-  std::vector<Real> *rp;       //!>   real properties
+  std::vector<Real> *rp, *drp; //!>   real properties
   std::vector<Real> *aux;      //!>   auxiliary properties (communicated when
                                //!>     particles moving to another meshblock)
   std::vector<Real> *work;     //!>   working arrays (not communicated)
@@ -145,6 +145,8 @@ friend class DustParticles;
   std::vector<int> &pid;                  //!>   particle ID
   std::vector<Real> &xp, &yp, &zp;        //   position
   std::vector<Real> &vpx, &vpy, &vpz;     //   velocity
+  std::vector<Real> &dxp, &dyp, &dzp;     //   rate of position change
+  std::vector<Real> &dvpx, &dvpy, &dvpz;  //   rate of velocity change
   std::vector<Real> &xi1, &xi2, &xi3;     //   position indices in local meshblock
   std::vector<Real> &xp0, &yp0, &zp0;     //   beginning position
   std::vector<Real> &vpx0, &vpy0, &vpz0;  //   beginning velocity
