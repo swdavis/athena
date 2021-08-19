@@ -134,7 +134,7 @@ friend class DustParticles;
 
                                // Data attached to the particles:
   std::vector<int> *intprop;   //!>   integer properties
-  std::vector<Real> *realprop; //!>   real properties
+  std::vector<Real> *rp;       //!>   real properties
   std::vector<Real> *aux;      //!>   auxiliary properties (communicated when
                                //!>     particles moving to another meshblock)
   std::vector<Real> *work;     //!>   working arrays (not communicated)

@@ -80,7 +80,7 @@ void Particles::AMRCoarseToFine(MeshBlock* pmbc, MeshBlock* pmbf) {
       for (int j = 0; j < nint; ++j)
         pparf->intprop[j][nparf] = pparc->intprop[j][k];
       for (int j = 0; j < nreal; ++j)
-        pparf->realprop[j][nparf] = pparc->realprop[j][k];
+        pparf->rp[j][nparf] = pparc->rp[j][k];
       for (int j = 0; j < naux; ++j)
         pparf->aux[j][nparf] = pparc->aux[j][k];
       ++nparf;
@@ -104,7 +104,7 @@ void Particles::AMRFineToCoarse(MeshBlock* pmbf, MeshBlock* pmbc) {
       pparc->intprop[j][nparc+k] = pparf->intprop[j][k];
   for (int j = 0; j < nreal; ++j)
     for (int k = 0; k < nparf; ++k)
-      pparc->realprop[j][nparc+k] = pparf->realprop[j][k];
+      pparc->rp[j][nparc+k] = pparf->rp[j][k];
   for (int j = 0; j < naux; ++j)
     for (int k = 0; k < nparf; ++k)
       pparc->aux[j][nparc+k] = pparf->aux[j][k];
@@ -209,7 +209,7 @@ void Particles::FindDensityOnMesh(Mesh *pm, bool include_momentum) {
             ppar->vpx[k], ppar->vpy[k], ppar->vpz[k], vp1[k], vp2[k], vp3[k]);
       ppm->AssignParticlesToMeshAux(vp, 0, imom1, 3);
     } else {
-      ppm->AssignParticlesToMeshAux(ppar->realprop, 0, ppm->iweight, 0);
+      ppm->AssignParticlesToMeshAux(ppar->rp, 0, ppm->iweight, 0);
     }
     ppm->SendBoundary();
   }
@@ -325,11 +325,10 @@ int Particles::GetTotalNumber(Mesh *pm) {
 
 Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
   // Allocate space for particle data.
-  : intprop(new std::vector<int> [nint]), realprop(new std::vector<Real> [nreal]),
+  : intprop(new std::vector<int> [nint]), rp(new std::vector<Real> [nreal]),
     aux(new std::vector<Real> [naux]), work(new std::vector<Real> [nwork]),
     pid(intprop[ipid]),
-    xp(realprop[ixp]), yp(realprop[iyp]), zp(realprop[izp]),
-    vpx(realprop[ivpx]), vpy(realprop[ivpy]), vpz(realprop[ivpz]),
+    xp(rp[ixp]), yp(rp[iyp]), zp(rp[izp]), vpx(rp[ivpx]), vpy(rp[ivpy]), vpz(rp[ivpz]),
     xi1(work[ixi1]), xi2(work[ixi2]), xi3(work[ixi3]),
     xp0(aux[ixp0]), yp0(aux[iyp0]), zp0(aux[izp0]),
     vpx0(aux[ivpx0]), vpy0(aux[ivpy0]), vpz0(aux[ivpz0]) {
@@ -358,7 +357,7 @@ Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
 Particles::~Particles() {
   // Free dynamically allocated space.
   delete [] intprop;
-  delete [] realprop;
+  delete [] rp;
   delete [] aux;
   delete [] work;
 
@@ -529,7 +528,7 @@ void Particles::RemoveOneParticle(int k) {
       for (int j = 0; j < nint; ++j)
         intprop[j][k] = intprop[j].back();
       for (int j = 0; j < nreal; ++j)
-        realprop[j][k] = realprop[j].back();
+        rp[j][k] = rp[j].back();
       for (int j = 0; j < naux; ++j)
         aux[j][k] = aux[j].back();
       for (int j = 0; j < nwork; ++j)
@@ -539,7 +538,7 @@ void Particles::RemoveOneParticle(int k) {
     for (int j = 0; j < nint; ++j)
       intprop[j].pop_back();
     for (int j = 0; j < nreal; ++j)
-      realprop[j].pop_back();
+      rp[j].pop_back();
     for (int j = 0; j < naux; ++j)
       aux[j].pop_back();
     for (int j = 0; j < nwork; ++j)
@@ -632,7 +631,7 @@ void Particles::SendToNeighbors() {
       *pi++ = intprop[j][k];
     Real *pr = ppb->rbuf + ParticleBuffer::nreal * ppb->npar;
     for (int j = 0; j < nreal; ++j)
-      *pr++ = realprop[j][k];
+      *pr++ = rp[j][k];
     for (int j = 0; j < naux; ++j)
       *pr++ = aux[j][k];
     ++ppb->npar;
@@ -1027,7 +1026,7 @@ void Particles::FlushReceiveBuffer(ParticleBuffer& recv) {
     for (int j = 0; j < nint; ++j)
       intprop[j][k] = *pi++;
     for (int j = 0; j < nreal; ++j)
-      realprop[j][k] = *pr++;
+      rp[j][k] = *pr++;
     for (int j = 0; j < naux; ++j)
       aux[j][k] = *pr++;
   }
@@ -1080,7 +1079,7 @@ void Particles::Resize(int new_npar) {
   for (int i = 0; i < nint; ++i)
     intprop[i].resize(new_npar);
   for (int i = 0; i < nreal; ++i)
-    realprop[i].resize(new_npar);
+    rp[i].resize(new_npar);
   for (int i = 0; i < naux; ++i)
     aux[i].resize(new_npar);
   for (int i = 0; i < nwork; ++i)
@@ -1149,7 +1148,7 @@ void Particles::UnpackParticlesForRestart(char *mbdata, std::size_t &os) {
     // Read real properties.
     size = npar * sizeof(Real);
     for (int k = 0; k < nreal; ++k) {
-      std::memcpy(&(realprop[k]), &(mbdata[os]), size);
+      std::memcpy(&(rp[k]), &(mbdata[os]), size);
       os += size;
     }
   }
@@ -1174,7 +1173,7 @@ void Particles::PackParticlesForRestart(char *&pdata) {
     // Write real properties.
     size = npar * sizeof(Real);
     for (int k = 0; k < nreal; ++k) {
-      std::memcpy(pdata, &(realprop[k]), size);
+      std::memcpy(pdata, &(rp[k]), size);
       pdata += size;
     }
   }
