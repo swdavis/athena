@@ -519,84 +519,84 @@ bool PhotonMover::UpdateZone(Photon *pphot, int ip) {
   MonteCarloBlock *pmcb = pmy_mcb;
   bool update = false;
 
-  if (pphot->x[IMC1] >= pcoord->x1f(pphot->i1+1)) {
+  if (pphot->x1p[ip] >= pcoord->x1f(pphot->i1p[ip]+1)) {
     update = true;
-    while (pphot->x[IMC1] >= pcoord->x1f(pphot->i1+1)) {
-      pphot->i1++;
-      if(pphot->i1 > pmcb->ie)
+    while (pphot->x1p[ip] >= pcoord->x1f(pphot->i1p[ip]+1)) {
+      pphot->i1p[ip]++;
+      if(pphot->i1p[ip] > pmcb->ie)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::outer_x1](pmcb,pcoord,pphot,ip);
-      if (pphot->status == ESCAPED) {
+      if (pphot->statp[ip] == ESCAPED) {
         pphot->face = BoundaryFace::outer_x1;
         break;
       }
-      if (pphot->status == DESTROYED)
+      if (pphot->statp[ip] == DESTROYED)
         break;
     }
-  } else if (pphot->x[IMC1] < pcoord->x1f(pphot->i1)) {
+  } else if (pphot->x1p[ip] < pcoord->x1f(pphot->i1p[ip])) {
     update = true;
-    while (pphot->x[IMC1] < pcoord->x1f(pphot->i1)) {
-      pphot->i1--;
-      if(pphot->i1 < pmcb->is)
+    while (pphot->x1p[ip] < pcoord->x1f(pphot->i1p[ip])) {
+      pphot->i1p[ip]--;
+      if(pphot->i1p[ip] < pmcb->is)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::inner_x1](pmcb,pcoord,pphot,ip);
-      if (pphot->status == ESCAPED) {
+      if (pphot->statp[ip] == ESCAPED) {
         pphot->face = BoundaryFace::inner_x1;
         break;
       }
-      if (pphot->status == DESTROYED)
+      if (pphot->statp[ip] == DESTROYED)
         break;
     }
   }
-  if (pphot->x[IMC2] >= pcoord->x2f(pphot->i2+1)) {
+  if (pphot->x2p[ip] >= pcoord->x2f(pphot->i2p[ip]+1)) {
     update = true;
-    while (pphot->x[IMC2] >= pcoord->x2f(pphot->i2+1)) {
-      pphot->i2++;
-      if(pphot->i2 > pmcb->je)
+    while (pphot->x2p[ip] >= pcoord->x2f(pphot->i2p[ip]+1)) {
+      pphot->i2p[ip]++;
+      if(pphot->i2p[ip] > pmcb->je)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::outer_x2](pmcb,pcoord,pphot,ip);
-      if (pphot->status == ESCAPED) {
+      if (pphot->statp[ip] == ESCAPED) {
         pphot->face = BoundaryFace::outer_x2;
         break;
       }
-      if (pphot->status == DESTROYED)
+      if (pphot->statp[ip] == DESTROYED)
         break;
     }
-  } else if (pphot->x[IMC2] < pcoord->x2f(pphot->i2)) {
+  } else if (pphot->x2p[ip] < pcoord->x2f(pphot->i2p[ip])) {
     update = true;
-    while (pphot->x[IMC2] < pcoord->x2f(pphot->i2)) {
-      pphot->i2--;
-      if(pphot->i2 < pmcb->js)
+    while (pphot->x2p[ip] < pcoord->x2f(pphot->i2p[ip])) {
+      pphot->i2p[ip]--;
+      if(pphot->i2p[ip] < pmcb->js)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::inner_x2](pmcb,pcoord,pphot,ip);
-      if (pphot->status == ESCAPED) {
+      if (pphot->statp[ip] == ESCAPED) {
         pphot->face = BoundaryFace::inner_x2;
         break;
       }
-      if (pphot->status == DESTROYED)
+      if (pphot->statp[ip] == DESTROYED)
         break;
     }
   }
-  if (pphot->x[IMC3] >= pcoord->x3f(pphot->i3+1)) {
+  if (pphot->x3p[ip] >= pcoord->x3f(pphot->i3p[ip]+1)) {
     update = true;
-    while (pphot->x[IMC3] >= pcoord->x3f(pphot->i3+1)) {
-      pphot->i3++;
-      if(pphot->i3 > pmcb->ke)
+    while (pphot->x3p[ip] >= pcoord->x3f(pphot->i3p[ip]+1)) {
+      pphot->i3p[ip]++;
+      if(pphot->i3p[ip] > pmcb->ke)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::outer_x3](pmcb,pcoord,pphot,ip);
-      if (pphot->status == ESCAPED) {
+      if (pphot->statp[ip] == ESCAPED) {
         pphot->face = BoundaryFace::outer_x3;
         break;
       }
-      if (pphot->status == DESTROYED)
+      if (pphot->statp[ip] == DESTROYED)
         break;
     }
-  } else if (pphot->x[IMC3] < pcoord->x3f(pphot->i3)) {
+  } else if (pphot->x3p[ip] < pcoord->x3f(pphot->i3p[ip])) {
     update = true;
-    while (pphot->x[IMC3] < pcoord->x3f(pphot->i3)) {
-      pphot->i3--;
-      if(pphot->i3 < pmcb->ks)
+    while (pphot->x3p[ip] < pcoord->x3f(pphot->i3p[ip])) {
+      pphot->i3p[ip]--;
+      if(pphot->i3p[ip] < pmcb->ks)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::inner_x3](pmcb,pcoord,pphot,ip);
-      if (pphot->status == ESCAPED) {
+      if (pphot->statp[ip] == ESCAPED) {
         pphot->face = BoundaryFace::inner_x3;
         break;
       }
-      if (pphot->status == DESTROYED)
+      if (pphot->statp[ip] == DESTROYED)
         break;
     }
   }

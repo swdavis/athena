@@ -216,8 +216,9 @@ void Photon::VectorsToWorkingArrays(int n) {
   stokes[2] = sup[n];
   stokes[3] = svp[n];
   if (nuser_var > 0) {
-    for(int i=0; i<nuser_var; ++i)
+    for(int i=0; i<nuser_var; ++i) {
       user_var[i] = user[i][n];
+    }
   }
 }
 
@@ -331,6 +332,8 @@ void Photon::RemoveOneParticle(int k) {
         aux[j][k] = aux[j].back();
       for (int j = 0; j < nwork; ++j)
         work[j][k] = work[j].back();
+      for (int j = 0; j < nuser_var; ++j)
+        user[j][k] = user[j].back();
     }
     // Remove the last particle.
     for (int j = 0; j < nint; ++j)
@@ -341,6 +344,8 @@ void Photon::RemoveOneParticle(int k) {
       aux[j].pop_back();
     for (int j = 0; j < nwork; ++j)
       work[j].pop_back();
+    for (int j = 0; j < nuser_var; ++j)
+      user[j].pop_back();
   } else {
     // Throw error when index k is invalid.
     std::stringstream msg;

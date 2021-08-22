@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file mc_isoth.cpp
-//  \brief Problem generator for monte carlo isothermal atmosphere 
+//! \brief Problem generator for monte carlo isothermal atmosphere
 //
 //========================================================================================
 
@@ -36,7 +36,7 @@ namespace {
 
 //========================================================================================
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
-//  \brief monte carlo test problem generator
+//! \brief monte carlo test problem generator
 //========================================================================================
 
 void MeshBlock::ProblemGenerator(ParameterInput *pin) {
@@ -53,7 +53,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   }
 
   Real heabund = 0.09; //hardcode for now (should be parameter)
-  Real mp = 1.6726e-24; 
+  Real mp = 1.6726e-24;
   Real sigmat = 6.65248e-25;
   Real kappaes = sigmat * (1. + 2.*heabund) / (mp * (1.+4.*heabund) );
   if (tau > 0.) {
@@ -84,7 +84,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         nx = pin->GetInteger("mesh","nx1");
       }
     }
-    tau1d.NewAthenaArray(nx); 
+    tau1d.NewAthenaArray(nx);
     dens1d.NewAthenaArray(nx);
     Real dx = (xhigh-xlow) / static_cast<Real>(nx);
     Real step = log10(taumax/taumin) / static_cast<Real>(nx-1);
@@ -113,13 +113,13 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     for (int k=ks; k<=ke; k++) {
       if (!constdens) rho = dens1d(ke-k);
       for (int j=js; j<=je; j++) {
-	for (int i=is; i<=ie; i++) {
-	  phydro->u(IDN,k,j,i) = rho;
-	  phydro->u(IM1,k,j,i) = 0.0;
-	  phydro->u(IM2,k,j,i) = 0.0;
-	  phydro->u(IM3,k,j,i) = rho*vel;
-	  phydro->u(IEN,k,j,i) = rideal*rho*tgas/(gamma-1.0);
-	}
+        for (int i=is; i<=ie; i++) {
+          phydro->u(IDN,k,j,i) = rho;
+          phydro->u(IM1,k,j,i) = 0.0;
+          phydro->u(IM2,k,j,i) = 0.0;
+          phydro->u(IM3,k,j,i) = rho*vel;
+          phydro->u(IEN,k,j,i) = rideal*rho*tgas/(gamma-1.0);
+        }
       }
     }
   } else if  (COORDINATE_SYSTEM == "spherical_polar") {
@@ -128,16 +128,16 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     if (radial) {
       // density varies in the r direction
       for (int k=ks; k<=ke; k++) {
-	for (int j=js; j<=je; j++) {
-	  for (int i=is; i<=ie; i++) {
-	    if (!constdens) rho = dens1d(ie-i);
-	    phydro->u(IDN,k,j,i) = rho;
-	    phydro->u(IM1,k,j,i) = rho*vel;
-	    phydro->u(IM2,k,j,i) = 0.0;
-	    phydro->u(IM3,k,j,i) = 0.0;
-	    phydro->u(IEN,k,j,i) = rideal*rho*tgas/(gamma-1.0);
-	  }
-	}
+        for (int j=js; j<=je; j++) {
+          for (int i=is; i<=ie; i++) {
+            if (!constdens) rho = dens1d(ie-i);
+            phydro->u(IDN,k,j,i) = rho;
+            phydro->u(IM1,k,j,i) = rho*vel;
+            phydro->u(IM2,k,j,i) = 0.0;
+            phydro->u(IM3,k,j,i) = 0.0;
+            phydro->u(IEN,k,j,i) = rideal*rho*tgas/(gamma-1.0);
+          }
+        }
       }
     }
   }
@@ -151,10 +151,14 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
       }}}
 }
 
+//========================================================================================
+//! \fn void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe)
+//! \brief Initializes Photon packets before integration
+//========================================================================================
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
-  // Choose a random cell for emission
+  // Get meshblock dimensions
   Real nx1 = static_cast<Real>(ie-is+1);
   Real nx2 = static_cast<Real>(je-js+1);
   Real nx3 = static_cast<Real>(ke-ks+1);
@@ -195,7 +199,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     }
 
     // Set status flag
-    if (pphot->wp[ip] < 0.0) 
+    if (pphot->wp[ip] < 0.0)
       pphot->statp[ip] = DESTROYED;
     else
       pphot->statp[ip] = EVOLVING;
@@ -211,6 +215,11 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
   //pphot->nphot++;
 
 }
+
+//========================================================================================
+//! \fn void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin)
+//! \brief Analogous to problem generator but used in support of InitializePhoton
+//========================================================================================
 
 void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
@@ -233,4 +242,3 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
   //logemax = log(everg*pin->GetReal("problem", "emax"));
 
 }
-

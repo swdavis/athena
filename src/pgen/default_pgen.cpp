@@ -141,17 +141,17 @@ void __attribute__((weak)) MonteCarloBlock::MonteCarloProblemGenerator(Parameter
 //! \fn void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe)
 //! \brief Initializes Photon packets before integration
 //========================================================================================
-  
-void __attribute__((weak)) MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, 
+
+void __attribute__((weak)) MonteCarloBlock::InitializePhoton(Photon *pphot, int ips,
                                                              int ipe) {
 
 }
 
 //========================================================================================
-//! \fn void MonteCarloBlock::FinalizePhoton(Photon *pphot)
+//! \fn void MonteCarloBlock::FinalizePhoton(Photon *pphot, ip)
 //! \brief Complete work at end of photon packets before integration
 //========================================================================================
-  
-void __attribute__((weak)) MonteCarloBlock::FinalizePhoton(Photon *pphot) {
+
+void __attribute__((weak)) MonteCarloBlock::FinalizePhoton(Photon *pphot, int ip) {
 
 }
