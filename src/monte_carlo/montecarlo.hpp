@@ -334,7 +334,7 @@ public:
   Real LorentzTransformFrequencyShift(Photon *pphot, int ip);
   void TetradTransform(Photon *pphot, const Real sign);
   void InitializePhoton(Photon *pphot, int ips, int ipe);
-  void FinalizePhoton(Photon *pphot, int ip);
+  void FinalizePhoton(Photon *pphot);
   void UpdateMoments(Photon *pphot, Real dl, Real etau, int ip);
   void NormalizeMoments(bool normalize);
   void ResetMoments();

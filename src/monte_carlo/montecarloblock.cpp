@@ -364,7 +364,7 @@ void MonteCarloBlock::RayTracePhotons(int nphot) {
       pmover->Move(pphot,0,0);
       if (ptraj != nullptr) ptraj->CompleteTrajectory();
       // User defined completion work
-      FinalizePhoton(pphot,0);
+      FinalizePhoton(pphot);
       if (pphot->status == ESCAPED) {
         // loop over spectra and update
         Spectrum *pspect = pspec;
@@ -498,12 +498,11 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
       if (pphot->statp[ip] != EVOLVING) {
 
         if (pphot->statp[ip] == ESCAPED) {
-          if (ptraj != nullptr) ptraj->CompleteTrajectory(); //SWDFIX
-          // User defined completion work
-          FinalizePhoton(pphot,ip);
-          // SWD: temporary, needed for output
           pphot->VectorsToWorkingArrays(ip);
 
+          if (ptraj != nullptr) ptraj->CompleteTrajectory(); //SWDFIX
+          // User defined completion work
+          FinalizePhoton(pphot);
           // loop over spectra and update
           Spectrum *pspect = pspec;
           while (pspect != nullptr) {
@@ -640,7 +639,7 @@ void MonteCarloBlock::TransferPhotonsOld(int nphot) {
     if (pphot->statp[ip] == ESCAPED) {
       pphot->VectorsToWorkingArrays(ip);
       // User defined completion work
-      FinalizePhoton(pphot,ip);
+      FinalizePhoton(pphot);
       // loop over spectra and update
       Spectrum *pspect = pspec;
       while (pspect != nullptr) {
