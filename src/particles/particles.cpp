@@ -18,6 +18,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>  // swap()
 #include <vector>
 
 // Athena++ headers
@@ -440,12 +441,7 @@ void Particles::Integrate(int stage) {
       RealPropCopy(rp1, rp);
       break;
     case 2:
-      xp = rp1[ixp];
-      yp = rp1[iyp];
-      zp = rp1[izp];
-      vpx = rp1[ivpx];
-      vpy = rp1[ivpy];
-      vpz = rp1[ivpz];
+      RealPropSwap(rp, rp1);
       break;
   }
 
@@ -976,6 +972,15 @@ void Particles::GetPositionIndices(int ibegin, int iend,
 void Particles::RealPropCopy(std::vector<Real> *rp1, std::vector<Real> *rp2) {
   for (int i = 0; i < nreal; ++i)
     rp1[i] = rp2[i];
+}
+
+//--------------------------------------------------------------------------------------
+//! \fn void Particles::RealPropSwap(std::vector<Real> *rp1, std::vector<Real> *rp2)
+//! \brief swap rp1 and rp2.
+
+void Particles::RealPropSwap(std::vector<Real> *rp1, std::vector<Real> *rp2) {
+  for (int i = 0; i < nreal; ++i)
+    std::swap(rp1[i], rp2[i]);
 }
 
 //--------------------------------------------------------------------------------------
