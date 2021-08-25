@@ -115,9 +115,6 @@ friend class DustParticles;
   static int ixp, iyp, izp;        // indices for the position components
   static int ivpx, ivpy, ivpz;     // indices for the velocity components
 
-  static int ixp0, iyp0, izp0;     // indices for beginning position components
-  static int ivpx0, ivpy0, ivpz0;  // indices for beginning velocity components
-
   static int ixi1, ixi2, ixi3;     // indices for position indices
 
   static int imom1, imom2, imom3;  // indices for momentum components on mesh
@@ -132,12 +129,12 @@ friend class DustParticles;
   // Instance variables
   int npar;     //!> number of particles
 
-                               // Data attached to the particles:
-  std::vector<int> *intprop;   //!>   integer properties
-  std::vector<Real> *rp, *drp; //!>   real properties
-  std::vector<Real> *aux;      //!>   auxiliary properties (communicated when
-                               //!>     particles moving to another meshblock)
-  std::vector<Real> *work;     //!>   working arrays (not communicated)
+                                     // Data attached to the particles:
+  std::vector<int> *intprop;         //!>   integer properties
+  std::vector<Real> *rp, *rp1, *drp; //!>   real properties
+  std::vector<Real> *aux;            //!>   auxiliary properties (communicated when
+                                     //!>     particles moving to another meshblock)
+  std::vector<Real> *work;           //!>   working arrays (not communicated)
 
   ParticleMesh *ppm;  //!> ptr to particle-mesh
 
@@ -148,8 +145,6 @@ friend class DustParticles;
   std::vector<Real> &dxp, &dyp, &dzp;     //   rate of position change
   std::vector<Real> &dvpx, &dvpy, &dvpz;  //   rate of velocity change
   std::vector<Real> &xi1, &xi2, &xi3;     //   position indices in local meshblock
-  std::vector<Real> &xp0, &yp0, &zp0;     //   beginning position
-  std::vector<Real> &vpx0, &vpy0, &vpz0;  //   beginning velocity
 
   MeshBlock* pmy_block;  //!> MeshBlock pointer
   Mesh* pmy_mesh;        //!> Mesh pointer

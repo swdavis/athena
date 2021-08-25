@@ -38,8 +38,6 @@ int Particles::nwork = 0;
 int Particles::ipid = -1;
 int Particles::ixp = -1, Particles::iyp = -1, Particles::izp = -1;
 int Particles::ivpx = -1, Particles::ivpy = -1, Particles::ivpz = -1;
-int Particles::ixp0 = -1, Particles::iyp0 = -1, Particles::izp0 = -1;
-int Particles::ivpx0 = -1, Particles::ivpy0 = -1, Particles::ivpz0 = -1;
 int Particles::ixi1 = -1, Particles::ixi2 = -1, Particles::ixi3 = -1;
 int Particles::imom1 = -1, Particles::imom2 = -1, Particles::imom3 = -1;
 Real Particles::cfl_par = 1;
@@ -79,8 +77,10 @@ void Particles::AMRCoarseToFine(MeshBlock* pmbc, MeshBlock* pmbf) {
       pparf->Resize(nparf + 1);
       for (int j = 0; j < nint; ++j)
         pparf->intprop[j][nparf] = pparc->intprop[j][k];
-      for (int j = 0; j < nreal; ++j)
+      for (int j = 0; j < nreal; ++j) {
         pparf->rp[j][nparf] = pparc->rp[j][k];
+        pparf->rp1[j][nparf] = pparc->rp1[j][k];
+      }
       for (int j = 0; j < naux; ++j)
         pparf->aux[j][nparf] = pparc->aux[j][k];
       ++nparf;
@@ -103,8 +103,10 @@ void Particles::AMRFineToCoarse(MeshBlock* pmbf, MeshBlock* pmbc) {
     for (int k = 0; k < nparf; ++k)
       pparc->intprop[j][nparc+k] = pparf->intprop[j][k];
   for (int j = 0; j < nreal; ++j)
-    for (int k = 0; k < nparf; ++k)
+    for (int k = 0; k < nparf; ++k) {
       pparc->rp[j][nparc+k] = pparf->rp[j][k];
+      pparc->rp1[j][nparc+k] = pparf->rp1[j][k];
+    }
   for (int j = 0; j < naux; ++j)
     for (int k = 0; k < nparf; ++k)
       pparc->aux[j][nparc+k] = pparf->aux[j][k];
@@ -129,16 +131,6 @@ void Particles::Initialize(Mesh *pm, ParameterInput *pin) {
   ivpx = AddRealProperty();
   ivpy = AddRealProperty();
   ivpz = AddRealProperty();
-
-  // Add old particle position.
-  ixp0 = AddAuxProperty();
-  iyp0 = AddAuxProperty();
-  izp0 = AddAuxProperty();
-
-  // Add old particle velocity.
-  ivpx0 = AddAuxProperty();
-  ivpy0 = AddAuxProperty();
-  ivpz0 = AddAuxProperty();
 
   // Add particle position indices.
   ixi1 = AddWorkingArray();
@@ -326,15 +318,14 @@ int Particles::GetTotalNumber(Mesh *pm) {
 Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
   // Allocate space for particle data.
   : intprop(new std::vector<int> [nint]),
-    rp(new std::vector<Real> [nreal]), drp(new std::vector<Real> [nreal]),
+    rp(new std::vector<Real> [nreal]), rp1(new std::vector<Real> [nreal]),
+    drp(new std::vector<Real> [nreal]),
     aux(new std::vector<Real> [naux]), work(new std::vector<Real> [nwork]),
     pid(intprop[ipid]),
     xp(rp[ixp]), yp(rp[iyp]), zp(rp[izp]), vpx(rp[ivpx]), vpy(rp[ivpy]), vpz(rp[ivpz]),
     dxp(drp[ixp]), dyp(drp[iyp]), dzp(drp[izp]),
     dvpx(drp[ivpx]), dvpy(drp[ivpy]), dvpz(drp[ivpz]),
-    xi1(work[ixi1]), xi2(work[ixi2]), xi3(work[ixi3]),
-    xp0(aux[ixp0]), yp0(aux[iyp0]), zp0(aux[izp0]),
-    vpx0(aux[ivpx0]), vpy0(aux[ivpy0]), vpz0(aux[ivpz0]) {
+    xi1(work[ixi1]), xi2(work[ixi2]), xi3(work[ixi3]) {
   // Point to the calling MeshBlock.
   pmy_block = pmb;
   pmy_mesh = pmb->pmy_mesh;
@@ -350,7 +341,7 @@ Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
   ppm = new ParticleMesh(this);
 
   // Initiate ParticleBuffer class.
-  ParticleBuffer::SetNumberOfProperties(nint, nreal + naux);
+  ParticleBuffer::SetNumberOfProperties(nint, 2 * nreal + naux);
 }
 
 //--------------------------------------------------------------------------------------
@@ -360,7 +351,9 @@ Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
 Particles::~Particles() {
   // Free dynamically allocated space.
   delete [] intprop;
-  delete [] rp, drp;
+  delete [] rp;
+  delete [] rp1;
+  delete [] drp;
   delete [] aux;
   delete [] work;
 
@@ -447,12 +440,12 @@ void Particles::Integrate(int stage) {
       SaveStatus();
       break;
     case 2:
-      xp = xp0;
-      yp = yp0;
-      zp = zp0;
-      vpx = vpx0;
-      vpy = vpy0;
-      vpz = vpz0;
+      xp = rp1[ixp];
+      yp = rp1[iyp];
+      zp = rp1[izp];
+      vpx = rp1[ivpx];
+      vpy = rp1[ivpy];
+      vpz = rp1[ivpz];
       break;
   }
 
@@ -554,8 +547,10 @@ void Particles::RemoveOneParticle(int k) {
       // Replace the k-th particle by the last particle.
       for (int j = 0; j < nint; ++j)
         intprop[j][k] = intprop[j].back();
-      for (int j = 0; j < nreal; ++j)
+      for (int j = 0; j < nreal; ++j) {
         rp[j][k] = rp[j].back();
+        rp1[j][k] = rp1[j].back();
+      }
       for (int j = 0; j < naux; ++j)
         aux[j][k] = aux[j].back();
       for (int j = 0; j < nwork; ++j)
@@ -564,8 +559,10 @@ void Particles::RemoveOneParticle(int k) {
     // Remove the last particle.
     for (int j = 0; j < nint; ++j)
       intprop[j].pop_back();
-    for (int j = 0; j < nreal; ++j)
+    for (int j = 0; j < nreal; ++j) {
       rp[j].pop_back();
+      rp1[j].pop_back();
+    }
     for (int j = 0; j < naux; ++j)
       aux[j].pop_back();
     for (int j = 0; j < nwork; ++j)
@@ -656,9 +653,11 @@ void Particles::SendToNeighbors() {
     int *pi = ppb->ibuf + ParticleBuffer::nint * ppb->npar;
     for (int j = 0; j < nint; ++j)
       *pi++ = intprop[j][k];
-    Real *pr = ppb->rbuf + ParticleBuffer::nreal * ppb->npar;
-    for (int j = 0; j < nreal; ++j)
+    Real *pr(ppb->rbuf + ParticleBuffer::nreal * ppb->npar);
+    for (int j = 0; j < nreal; ++j) {
       *pr++ = rp[j][k];
+      *pr++ = rp1[j][k];
+    }
     for (int j = 0; j < naux; ++j)
       *pr++ = aux[j][k];
     ++ppb->npar;
@@ -890,14 +889,14 @@ void Particles::ApplyBoundaryConditions(int k, Real &x1, Real &x2, Real &x3) {
   // Find the mesh coordinates.
   Real x10, x20, x30;
   pcoord->IndicesToMeshCoords(xi1[k], xi2[k], xi3[k], x1, x2, x3);
-  pcoord->CartesianToMeshCoords(xp0[k], yp0[k], zp0[k], x10, x20, x30);
+  pcoord->CartesianToMeshCoords(rp1[ixp][k], rp1[iyp][k], rp1[izp][k], x10, x20, x30);
 
   // Convert velocity vectors in mesh coordinates.
   Real vp1, vp2, vp3, vp10, vp20, vp30;
   pcoord->CartesianToMeshCoordsVector(xp[k], yp[k], zp[k],
-                                      vpx[k], vpy[k], vpz[k], vp1, vp2, vp3);
-  pcoord->CartesianToMeshCoordsVector(xp0[k], yp0[k], zp0[k],
-                                      vpx0[k], vpy0[k], vpz0[k], vp10, vp20, vp30);
+      vpx[k], vpy[k], vpz[k], vp1, vp2, vp3);
+  pcoord->CartesianToMeshCoordsVector(rp1[ixp][k], rp1[iyp][k], rp1[izp][k],
+      rp1[ivpx][k], rp1[ivpy][k], rp1[ivpz][k], vp10, vp20, vp30);
 
   // Apply periodic boundary conditions in X1.
   if (x1 < mesh_size.x1min) {
@@ -941,11 +940,11 @@ void Particles::ApplyBoundaryConditions(int k, Real &x1, Real &x2, Real &x3) {
   if (flag) {
     // Convert positions and velocities back in Cartesian coordinates.
     pcoord->MeshCoordsToCartesian(x1, x2, x3, xp[k], yp[k], zp[k]);
-    pcoord->MeshCoordsToCartesian(x10, x20, x30, xp0[k], yp0[k], zp0[k]);
+    pcoord->MeshCoordsToCartesian(x10, x20, x30, rp1[ixp][k], rp1[iyp][k], rp1[izp][k]);
     pcoord->MeshCoordsToCartesianVector(x1, x2, x3,
-                                        vp1, vp2, vp3, vpx[k], vpy[k], vpz[k]);
+        vp1, vp2, vp3, vpx[k], vpy[k], vpz[k]);
     pcoord->MeshCoordsToCartesianVector(x10, x20, x30,
-                                        vp10, vp20, vp30, vpx0[k], vpy0[k], vpz0[k]);
+        vp10, vp20, vp30, rp1[ivpx][k], rp1[ivpy][k], rp1[ivpz][k]);
   }
 }
 
@@ -986,14 +985,14 @@ void Particles::SetNewParticleID(int id) {
 void Particles::SaveStatus() {
   for (int k = 0; k < npar; ++k) {
     // Save current positions.
-    xp0[k] = xp[k];
-    yp0[k] = yp[k];
-    zp0[k] = zp[k];
+    rp1[ixp][k] = xp[k];
+    rp1[iyp][k] = yp[k];
+    rp1[izp][k] = zp[k];
 
     // Save current velocities.
-    vpx0[k] = vpx[k];
-    vpy0[k] = vpy[k];
-    vpz0[k] = vpz[k];
+    rp1[ivpx][k] = vpx[k];
+    rp1[ivpy][k] = vpy[k];
+    rp1[ivpz][k] = vpz[k];
   }
 }
 
@@ -1041,8 +1040,10 @@ void Particles::FlushReceiveBuffer(ParticleBuffer& recv) {
   for (int k = npar_old; k < npar; ++k) {
     for (int j = 0; j < nint; ++j)
       intprop[j][k] = *pi++;
-    for (int j = 0; j < nreal; ++j)
+    for (int j = 0; j < nreal; ++j) {
       rp[j][k] = *pr++;
+      rp1[j][k] = *pr++;
+    }
     for (int j = 0; j < naux; ++j)
       aux[j][k] = *pr++;
   }
@@ -1094,8 +1095,10 @@ void Particles::Resize(int new_npar) {
   // Resize the particle arrays.
   for (int i = 0; i < nint; ++i)
     intprop[i].resize(new_npar);
-  for (int i = 0; i < nreal; ++i)
+  for (int i = 0; i < nreal; ++i) {
     rp[i].resize(new_npar);
+    rp1[i].resize(new_npar);
+  }
   for (int i = 0; i < naux; ++i)
     aux[i].resize(new_npar);
   for (int i = 0; i < nwork; ++i)
