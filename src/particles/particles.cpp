@@ -437,7 +437,7 @@ void Particles::Integrate(int stage) {
   // TODO(ccyang): replace this with weighted average.
   switch (stage) {
     case 1:
-      SaveStatus();
+      RealPropCopy(rp1, rp);
       break;
     case 2:
       xp = rp1[ixp];
@@ -967,6 +967,15 @@ void Particles::GetPositionIndices(int ibegin, int iend,
     // Convert to the index space.
     pmy_block->pcoord->MeshCoordsToIndices(x1, x2, x3, xi1[k], xi2[k], xi3[k]);
   }
+}
+
+//--------------------------------------------------------------------------------------
+//! \fn void Particles::RealPropCopy(std::vector<Real> *rp1, std::vector<Real> *rp2)
+//! \brief copies all properties in rp2 into rp1.
+
+void Particles::RealPropCopy(std::vector<Real> *rp1, std::vector<Real> *rp2) {
+  for (int i = 0; i < nreal; ++i)
+    rp1[i] = rp2[i];
 }
 
 //--------------------------------------------------------------------------------------
