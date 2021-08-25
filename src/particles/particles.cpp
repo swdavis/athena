@@ -988,24 +988,6 @@ void Particles::SetNewParticleID(int id) {
 }
 
 //--------------------------------------------------------------------------------------
-//! \fn void Particles::SaveStatus()
-//! \brief saves the current positions and velocities for later use.
-
-void Particles::SaveStatus() {
-  for (int k = 0; k < npar; ++k) {
-    // Save current positions.
-    rp1[ixp][k] = xp[k];
-    rp1[iyp][k] = yp[k];
-    rp1[izp][k] = zp[k];
-
-    // Save current velocities.
-    rp1[ivpx][k] = vpx[k];
-    rp1[ivpy][k] = vpy[k];
-    rp1[ivpz][k] = vpz[k];
-  }
-}
-
-//--------------------------------------------------------------------------------------
 //! \fn MeshBlock* Particles::FindTargetNeighbor(
 //!         int ox1, int ox2, int ox3, int xi1, int xi2, int xi3)
 //! \brief finds the neighbor to send a particle to.

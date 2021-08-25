@@ -171,7 +171,6 @@ friend class DustParticles;
       std::vector<Real>& xi1, std::vector<Real>& xi2, std::vector<Real>& xi3);
   void RealPropCopy(std::vector<Real> *rp1, std::vector<Real> *rp2);
   void SetNewParticleID(int id);
-  void SaveStatus();
   struct Neighbor* FindTargetNeighbor(
       int ox1, int ox2, int ox3, int xi1, int xi2, int xi3);
 
