@@ -159,7 +159,7 @@ friend class DustParticles;
   static void ProcessNewParticles(Mesh *pmesh);
 
   // Instance methods
-  virtual void SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsrc) {}
+  virtual void SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsrc);
   virtual void UserSourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsrc) {}
   virtual void ReactToMeshAux(Real t, Real dt, const AthenaArray<Real>& meshsrc) {}
   virtual void DepositToMesh(Real t, Real dt, const AthenaArray<Real>& meshsrc,
@@ -167,7 +167,6 @@ friend class DustParticles;
 
   int CountNewParticles() const;
   void ApplyBoundaryConditions(int k, Real &x1, Real &x2, Real &x3);
-  void EulerStep(Real t, Real dt, const AthenaArray<Real>& meshsrc);
   void FlushReceiveBuffer(ParticleBuffer& recv);
   void GetPositionIndices(
       int ibegin, int iend,

@@ -212,6 +212,9 @@ Real DustParticles::NewBlockTimeStep() {
 //! \brief adds acceleration to particles.
 
 void DustParticles::SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsrc) {
+  // Call back parent class first.
+  Particles::SourceTerms(t, dt, meshsrc);
+
   if (dragforce) {
     // Interpolate gas velocity onto particles.
     ppm->InterpolateMeshToParticles(meshsrc, IVX, work, iwx, 3);
@@ -220,9 +223,7 @@ void DustParticles::SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsr
     const Coordinates *pc = pmy_block->pcoord;
     for (int k = 0; k < npar; ++k) {
       Real x1, x2, x3;
-      //! \todo (ccyang):
-      //! - using (xp0, yp0, zp0) is a temporary hack.
-      pc->CartesianToMeshCoords(xp0[k], yp0[k], zp0[k], x1, x2, x3);
+      pc->CartesianToMeshCoords(xp[k], yp[k], zp[k], x1, x2, x3);
       pc->MeshCoordsToCartesianVector(x1, x2, x3, wx[k], wy[k], wz[k],
                                                   wx[k], wy[k], wz[k]);
     }
@@ -232,38 +233,22 @@ void DustParticles::SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsr
       // Variable stopping time
       UserStoppingTime(t, dt, meshsrc);
       for (int k = 0; k < npar; ++k) {
-        //! \todo (ccyang):
-        //! - This is a temporary hack; to be fixed.
-        Real tmpx(vpx[k]), tmpy(vpy[k]), tmpz(vpz[k]);
-        //
-        Real c = dt / taus[k];
-        wx[k] = c * (vpx[k] - wx[k]);
-        wy[k] = c * (vpy[k] - wy[k]);
-        wz[k] = c * (vpz[k] - wz[k]);
-        vpx[k] = vpx0[k] - wx[k];
-        vpy[k] = vpy0[k] - wy[k];
-        vpz[k] = vpz0[k] - wz[k];
-        //
-        vpx0[k] = tmpx; vpy0[k] = tmpy; vpz0[k] = tmpz;
-        //
+        wx[k] = (vpx[k] - wx[k]) / taus[k];
+        wy[k] = (vpy[k] - wy[k]) / taus[k];
+        wz[k] = (vpz[k] - wz[k]) / taus[k];
+        dvpx[k] -= wx[k];
+        dvpy[k] -= wy[k];
+        dvpz[k] -= wz[k];
       }
     } else if (taus0 > 0.0) {
       // Constant stopping time
-      Real c = dt / taus0;
       for (int k = 0; k < npar; ++k) {
-        //! \todo (ccyang):
-        //! - This is a temporary hack; to be fixed.
-        Real tmpx(vpx[k]), tmpy(vpy[k]), tmpz(vpz[k]);
-        //
-        wx[k] = c * (vpx[k] - wx[k]);
-        wy[k] = c * (vpy[k] - wy[k]);
-        wz[k] = c * (vpz[k] - wz[k]);
-        vpx[k] = vpx0[k] - wx[k];
-        vpy[k] = vpy0[k] - wy[k];
-        vpz[k] = vpz0[k] - wz[k];
-        //
-        vpx0[k] = tmpx; vpy0[k] = tmpy; vpz0[k] = tmpz;
-        //
+        wx[k] = (vpx[k] - wx[k]) / taus0;
+        wy[k] = (vpy[k] - wy[k]) / taus0;
+        wz[k] = (vpz[k] - wz[k]) / taus0;
+        dvpx[k] -= wx[k];
+        dvpy[k] -= wy[k];
+        dvpz[k] -= wz[k];
       }
     } else if (taus0 == 0.0) {
       // Tracer particles
@@ -272,14 +257,6 @@ void DustParticles::SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsr
         vpy[k] = wy[k];
         vpz[k] = wz[k];
       }
-    }
-  } else {
-    for (int k = 0; k < npar; ++k) {
-      //! \todo (ccyang):
-      //! - This is a temporary hack; to be fixed.
-      Real tmpx(vpx[k]), tmpy(vpy[k]), tmpz(vpz[k]);
-      vpx[k] = vpx0[k]; vpy[k] = vpy0[k]; vpz[k] = vpz0[k];
-      vpx0[k] = tmpx; vpy0[k] = tmpy; vpz0[k] = tmpz;
     }
   }
 
@@ -319,11 +296,10 @@ void DustParticles::ReactToMeshAux(Real t, Real dt, const AthenaArray<Real>& mes
 
   // Transform the momentum change in mesh coordinates.
   const Coordinates *pc = pmy_block->pcoord;
+  Real c(mass * dt);
   for (int k = 0; k < npar; ++k)
-    //! \todo (ccyang):
-    //! - using (xp0, yp0, zp0) is a temporary hack.
-    pc->CartesianToMeshCoordsVector(xp0[k], yp0[k], zp0[k],
-        mass * wx[k], mass * wy[k], mass * wz[k], wx[k], wy[k], wz[k]);
+    pc->CartesianToMeshCoordsVector(xp[k], yp[k], zp[k], c * wx[k], c * wy[k], c * wz[k],
+        wx[k], wy[k], wz[k]);
 
   // Assign the momentum change onto mesh.
   ppm->AssignParticlesToMeshAux(work, iwx, idpx1, 3);

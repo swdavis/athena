@@ -419,14 +419,13 @@ void Particles::ClearNeighbors() {
 //! \brief updates all particle positions and velocities from t to t + dt.
 
 void Particles::Integrate(int stage) {
-  Real t = 0, dt = 0;
-
   // Determine the integration cofficients.
+  // TODO(ccyang): use those by time integrator.
+  Real t(0), dt(0);
   switch (stage) {
   case 1:
     t = pmy_mesh->time;
     dt = 0.5 * pmy_mesh->dt;
-    SaveStatus();
     break;
 
   case 2:
@@ -435,9 +434,34 @@ void Particles::Integrate(int stage) {
     break;
   }
 
-  // Conduct one stage of the integration.
-  EulerStep(t, dt, pmy_block->phydro->w);
+  // Compute the rates of change.
+  for (int i = 0; i < nreal; ++i)
+    drp[i].assign(npar, 0);
+  SourceTerms(t, dt, pmy_block->phydro->w);
+  UserSourceTerms(t, dt, pmy_block->phydro->w);
   ReactToMeshAux(t, dt, pmy_block->phydro->w);
+
+  // TODO(ccyang): replace this with weighted average.
+  switch (stage) {
+    case 1:
+      SaveStatus();
+      break;
+    case 2:
+      xp = xp0;
+      yp = yp0;
+      zp = zp0;
+      vpx = vpx0;
+      vpy = vpy0;
+      vpz = vpz0;
+      break;
+  }
+
+  // Evolve the particle properties.
+  for (int i = 0; i < nreal; ++i) {
+    std::vector<Real> &rpi(rp[i]), &drpi(drp[i]);
+    for (int k = 0; k < npar; ++k)
+      rpi[k] += dt * drpi[k];
+  }
 
   // Update the position index.
   SetPositionIndices();
@@ -829,6 +853,18 @@ void Particles::ProcessNewParticles(Mesh *pmesh) {
 }
 
 //--------------------------------------------------------------------------------------
+//! \fn void Particles::SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsrc)
+//! \brief computes and adds the rate of change for each dynamical variable.
+
+void Particles::SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsrc) {
+  for (int k = 0; k < npar; ++k) {
+    dxp[k] += vpx[k];
+    dyp[k] += vpy[k];
+    dzp[k] += vpz[k];
+  }
+}
+
+//--------------------------------------------------------------------------------------
 //! \fn int Particles::CountNewParticles()
 //! \brief counts new particles in the block.
 
@@ -911,29 +947,6 @@ void Particles::ApplyBoundaryConditions(int k, Real &x1, Real &x2, Real &x3) {
     pcoord->MeshCoordsToCartesianVector(x10, x20, x30,
                                         vp10, vp20, vp30, vpx0[k], vpy0[k], vpz0[k]);
   }
-}
-
-//--------------------------------------------------------------------------------------
-//! \fn void Particles::EulerStep(Real t, Real dt, const AthenaArray<Real>& meshsrc)
-//! \brief evolves the particle positions and velocities by one Euler step.
-
-void Particles::EulerStep(Real t, Real dt, const AthenaArray<Real>& meshsrc) {
-  // Update positions.
-  for (int k = 0; k < npar; ++k) {
-    //! \todo (ccyang):
-    //! - This is a temporary hack.
-    Real tmpx(xp[k]), tmpy(yp[k]), tmpz(zp[k]);
-    xp[k] = xp0[k] + dt * vpx[k];
-    yp[k] = yp0[k] + dt * vpy[k];
-    zp[k] = zp0[k] + dt * vpz[k];
-    xp0[k] = tmpx;
-    yp0[k] = tmpy;
-    zp0[k] = tmpz;
-  }
-
-  // Integrate the source terms (e.g., acceleration).
-  SourceTerms(t, dt, meshsrc);
-  UserSourceTerms(t, dt, meshsrc);
 }
 
 //--------------------------------------------------------------------------------------
