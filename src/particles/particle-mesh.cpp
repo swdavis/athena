@@ -203,18 +203,14 @@ void ParticleMesh::InterpolateMeshToParticles(
       imb3v[kk] = imb3;
 
       // Weigh each cell.
-#pragma loop count (NPC)
       for (int i = 0; i < npc1_; ++i)
         w1[i][kk] = active1_ ? _WeightFunction(xi1 + i) : 1.0;
-#pragma loop count (NPC)
       for (int i = 0; i < npc2_; ++i)
         w2[i][kk] = active2_ ? _WeightFunction(xi2 + i) : 1.0;
-#pragma loop count (NPC)
       for (int i = 0; i < npc3_; ++i)
         w3[i][kk] = active3_ ? _WeightFunction(xi3 + i) : 1.0;
     }
 
-#pragma ivdep
     for (int kk = 0; kk < std::min(SIMD_WIDTH, npar-k); ++kk) {
       int kkk = k + kk;
 
@@ -225,11 +221,8 @@ void ParticleMesh::InterpolateMeshToParticles(
 
       int imb1 = imb1v[kk], imb2 = imb2v[kk], imb3 = imb3v[kk];
 
-#pragma loop count (NPC)
       for (int ipc3 = 0; ipc3 < npc3_; ++ipc3) {
-#pragma loop count (NPC)
         for (int ipc2 = 0; ipc2 < npc2_; ++ipc2) {
-#pragma loop count (NPC)
           for (int ipc1 = 0; ipc1 < npc1_; ++ipc1) {
             Real w = w1[ipc1][kk] * w2[ipc2][kk] * w3[ipc3][kk];
 
@@ -270,9 +263,7 @@ void ParticleMesh::InterpolateMeshToParticles(
 void ParticleMesh::AssignParticlesToMeshAux(
          const std::vector<Real> par[], int p1, int ma1, int nprop) {
   // Zero out meshaux.
-#pragma ivdep
   std::fill(&weight(0,0,0), &weight(0,0,0) + ncells_, 0.0);
-#pragma ivdep
   std::fill(&meshaux(ma1,0,0,0), &meshaux(ma1+nprop,0,0,0), 0.0);
 
   // Allocate space for SIMD.
@@ -310,18 +301,14 @@ void ParticleMesh::AssignParticlesToMeshAux(
       imb3v[kk] = imb3;
 
       // Weigh each cell.
-#pragma loop count (NPC)
       for (int i = 0; i < npc1_; ++i)
         w1[i][kk] = active1_ ? _WeightFunction(xi1 + i) : 1.0;
-#pragma loop count (NPC)
       for (int i = 0; i < npc2_; ++i)
         w2[i][kk] = active2_ ? _WeightFunction(xi2 + i) : 1.0;
-#pragma loop count (NPC)
       for (int i = 0; i < npc3_; ++i)
         w3[i][kk] = active3_ ? _WeightFunction(xi3 + i) : 1.0;
     }
 
-#pragma ivdep
     for (int kk = 0; kk < std::min(SIMD_WIDTH, npar-k); ++kk) {
       int kkk = k + kk;
 
@@ -332,11 +319,8 @@ void ParticleMesh::AssignParticlesToMeshAux(
 
       int imb1 = imb1v[kk], imb2 = imb2v[kk], imb3 = imb3v[kk];
 
-#pragma loop count (NPC)
       for (int ipc3 = 0; ipc3 < npc3_; ++ipc3) {
-#pragma loop count (NPC)
         for (int ipc2 = 0; ipc2 < npc2_; ++ipc2) {
-#pragma loop count (NPC)
           for (int ipc1 = 0; ipc1 < npc1_; ++ipc1) {
             Real w = w1[ipc1][kk] * w2[ipc2][kk] * w3[ipc3][kk];
 
@@ -385,9 +369,7 @@ void ParticleMesh::InterpolateMeshAndAssignParticles(
          std::vector<Real> pardst[], int pd1, int ni,
          const std::vector<Real> parsrc[], int ps1, int ma1, int na) {
   // Zero out meshaux.
-#pragma ivdep
   std::fill(&weight(0,0,0), &weight(0,0,0) + ncells_, 0.0);
-#pragma ivdep
   std::fill(&meshaux(ma1,0,0,0), &meshaux(ma1+na,0,0,0), 0.0);
 
   // Transpose meshsrc.
@@ -435,18 +417,14 @@ void ParticleMesh::InterpolateMeshAndAssignParticles(
       imb3v[kk] = imb3;
 
       // Weigh each cell.
-#pragma loop count (NPC)
       for (int i = 0; i < npc1_; ++i)
         w1[i][kk] = active1_ ? _WeightFunction(xi1 + i) : 1.0;
-#pragma loop count (NPC)
       for (int i = 0; i < npc2_; ++i)
         w2[i][kk] = active2_ ? _WeightFunction(xi2 + i) : 1.0;
-#pragma loop count (NPC)
       for (int i = 0; i < npc3_; ++i)
         w3[i][kk] = active3_ ? _WeightFunction(xi3 + i) : 1.0;
     }
 
-#pragma ivdep
     for (int kk = 0; kk < std::min(SIMD_WIDTH, npar-k); ++kk) {
       int kkk = k + kk;
 
@@ -460,11 +438,8 @@ void ParticleMesh::InterpolateMeshAndAssignParticles(
 
       int imb1 = imb1v[kk], imb2 = imb2v[kk], imb3 = imb3v[kk];
 
-#pragma loop count (NPC)
       for (int ipc3 = 0; ipc3 < npc3_; ++ipc3) {
-#pragma loop count (NPC)
         for (int ipc2 = 0; ipc2 < npc2_; ++ipc2) {
-#pragma loop count (NPC)
           for (int ipc1 = 0; ipc1 < npc1_; ++ipc1) {
             Real w = w1[ipc1][kk] * w2[ipc2][kk] * w3[ipc3][kk];
 
@@ -517,7 +492,6 @@ void ParticleMesh::InterpolateMeshAndAssignParticles(
 void ParticleMesh::DepositMeshAux(AthenaArray<Real>& u, int ma1, int mb1, int nprop) {
   Coordinates *pc = pmb_->pcoord;
 
-#pragma ivdep
   for (int n = 0; n < nprop; ++n)
     for (int k = ks; k <= ke; ++k)
       for (int j = js; j <= je; ++j)
@@ -893,12 +867,8 @@ void ParticleMesh::AssignParticlesToDifferentLevels(
       }
 
       // Assign the particle.
-#pragma ivdep
-#pragma loop count (NPC)
       for (int ix3 = ix3s; ix3 <= ix3e; ++ix3) {
-#pragma loop count (NPC)
         for (int ix2 = ix2s; ix2 <= ix2e; ++ix2) {
-#pragma loop count (NPC)
           for (int ix1 = ix1s; ix1 <= ix1e; ++ix1) {
             Real w = (active1_ ? _WeightFunction(ix1 + 0.5 - xi1) : 1.0) *
                      (active2_ ? _WeightFunction(ix2 + 0.5 - xi2) : 1.0) *
