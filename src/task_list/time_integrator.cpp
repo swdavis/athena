@@ -1990,8 +1990,13 @@ TaskStatus TimeIntegratorTaskList::ReceiveEMFShear(MeshBlock *pmb, int stage) {
 // Functions to manage particles
 
 enum TaskStatus TimeIntegratorTaskList::ParticlesIntegrate(MeshBlock *pmb, int stage) {
-  if (integrator == "vl2") {
-    pmb->ppar->Integrate(stage);
+  if (stage <= nstages) {
+    IntegratorWeight &weight(stage_wghts[stage-1]);
+    if (weight.main_stage) {
+      Real t(pmb->pmy_mesh->time + weight.sbeta * pmb->pmy_mesh->dt);
+      Real dt(weight.beta * pmb->pmy_mesh->dt);
+      pmb->ppar->Integrate(stage, t, dt);
+    }
     return TaskStatus::next;
   }
   return TaskStatus::fail;

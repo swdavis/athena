@@ -409,25 +409,10 @@ void Particles::ClearNeighbors() {
 }
 
 //--------------------------------------------------------------------------------------
-//! \fn void Particles::Integrate(int step)
+//! \fn void Particles::Integrate(int stage, Real t, Real dt)
 //! \brief updates all particle positions and velocities from t to t + dt.
 
-void Particles::Integrate(int stage) {
-  // Determine the integration cofficients.
-  // TODO(ccyang): use those by time integrator.
-  Real t(0), dt(0);
-  switch (stage) {
-  case 1:
-    t = pmy_mesh->time;
-    dt = 0.5 * pmy_mesh->dt;
-    break;
-
-  case 2:
-    t = pmy_mesh->time + 0.5 * pmy_mesh->dt;
-    dt = pmy_mesh->dt;
-    break;
-  }
-
+void Particles::Integrate(int stage, Real t, Real dt) {
   // Compute the rates of change.
   for (int i = 0; i < nreal; ++i)
     drp[i].assign(npar, 0);
