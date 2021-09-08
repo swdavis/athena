@@ -409,10 +409,10 @@ void Particles::ClearNeighbors() {
 }
 
 //--------------------------------------------------------------------------------------
-//! \fn void Particles::Integrate(int stage, Real t, Real dt)
+//! \fn void Particles::Integrate(int stage, Real t, Real dt, Real gamma[])
 //! \brief updates all particle positions and velocities from t to t + dt.
 
-void Particles::Integrate(int stage, Real t, Real dt) {
+void Particles::Integrate(int stage, Real t, Real dt, Real gamma[]) {
   // Compute the rates of change.
   for (int i = 0; i < nreal; ++i)
     drp[i].assign(npar, 0);
@@ -421,13 +421,16 @@ void Particles::Integrate(int stage, Real t, Real dt) {
   ReactToMeshAux(t, dt, pmy_block->phydro->w);
 
   // TODO(ccyang): replace this with weighted average.
-  switch (stage) {
-    case 1:
-      RealPropCopy(rp1, rp);
-      break;
-    case 2:
-      RealPropSwap(rp, rp1);
-      break;
+  if (stage == 1)
+    RealPropCopy(rp1, rp);
+
+  if (gamma[0] == 0.0 && gamma[1] == 1.0 && gamma[2] == 0.0) {
+    RealPropSwap(rp, rp1);
+  } else {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in function [Particles::Integrate]" << std::endl
+        << "Weighted averages are not implemented yet. " << std::endl;
+    ATHENA_ERROR(msg);
   }
 
   // Evolve the particle properties.

@@ -1995,7 +1995,8 @@ enum TaskStatus TimeIntegratorTaskList::ParticlesIntegrate(MeshBlock *pmb, int s
     if (weight.main_stage) {
       Real t(pmb->pmy_mesh->time + weight.sbeta * pmb->pmy_mesh->dt);
       Real dt(weight.beta * pmb->pmy_mesh->dt);
-      pmb->ppar->Integrate(stage, t, dt);
+      Real gamma[] = {weight.gamma_1, weight.gamma_2, weight.gamma_3};
+      pmb->ppar->Integrate(stage, t, dt, gamma);
     }
     return TaskStatus::next;
   }
