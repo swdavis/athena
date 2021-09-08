@@ -420,16 +420,20 @@ void Particles::Integrate(int stage, Real t, Real dt, Real gamma[]) {
   UserSourceTerms(t, dt, pmy_block->phydro->w);
   ReactToMeshAux(t, dt, pmy_block->phydro->w);
 
-  // TODO(ccyang): replace this with weighted average.
   if (stage == 1)
+    // Initiate multiple copies of particle data.
     RealPropCopy(rp1, rp);
 
-  if (gamma[0] == 0.0 && gamma[1] == 1.0 && gamma[2] == 0.0) {
-    RealPropSwap(rp, rp1);
+  // Compute weighted averages of the two copies of particle data.
+  if (gamma[2] == 0.0) {
+    if (gamma[0] == 0.0 && gamma[1] == 1.0)
+      RealPropSwap(rp, rp1);
+    else
+      WeightedAverage(rp, rp1, gamma);
   } else {
     std::stringstream msg;
     msg << "### FATAL ERROR in function [Particles::Integrate]" << std::endl
-        << "Weighted averages are not implemented yet. " << std::endl;
+        << ">3-stage integrator is not implemented yet. " << std::endl;
     ATHENA_ERROR(msg);
   }
 
@@ -978,6 +982,49 @@ void Particles::RealPropSwap(std::vector<Real> *rp1, std::vector<Real> *rp2) {
 void Particles::SetNewParticleID(int id) {
   for (int i = 0; i < npar; ++i)
     if (pid[i] <= 0) pid[i] = ++id;
+}
+
+//--------------------------------------------------------------------------------------
+//! \fn void Particles::WeightedAverage(
+//    std::vector<Real> *rp_out, const std::vector<Real> *rp_in1, const Real weights[])
+//! \brief computes weighted averages of particle arrays.
+
+void Particles::WeightedAverage(
+    std::vector<Real> *rp_out, const std::vector<Real> *rp_in1, const Real weights[]) {
+  const Real a(weights[0]), b(weights[1]);
+  if (a == 0.0) { // rp_out = b * rp_in1;
+    if (b == 1.0) {
+      RealPropCopy(rp_out, rp_in1);
+    } else {
+      for (int i = 0; i < nreal; ++i)
+        for (int k = 0; k < npar; ++k)
+          rp_out[i][k] = b * rp_in1[i][k];
+    }
+  } else if (a == 1.0) { // rp_out += b * rp_in1;
+    if (b == 1.0) {
+      for (int i = 0; i < nreal; ++i)
+        for (int k = 0; k < npar; ++k)
+          rp_out[i][k] += rp_in1[i][k];
+    } else if (b != 0.0) {
+      for (int i = 0; i < nreal; ++i)
+        for (int k = 0; k < npar; ++k)
+          rp_out[i][k] += b * rp_in1[i][k];
+    }
+  } else { // rp_out = a * rp_out + b * rp_in1;
+    if (b == 0.0) {
+      for (int i = 0; i < nreal; ++i)
+        for (int k = 0; k < npar; ++k)
+          rp_out[i][k] *= a;
+    } else if (b == 1.0) {
+      for (int i = 0; i < nreal; ++i)
+        for (int k = 0; k < npar; ++k)
+          rp_out[i][k] = a * rp_out[i][k] + rp_in1[i][k];
+    } else {
+      for (int i = 0; i < nreal; ++i)
+        for (int k = 0; k < npar; ++k)
+          rp_out[i][k] = a * rp_out[i][k] + b * rp_in1[i][k];
+    }
+  }
 }
 
 //--------------------------------------------------------------------------------------

@@ -172,6 +172,8 @@ friend class DustParticles;
   void RealPropCopy(std::vector<Real> *rp1, const std::vector<Real> *rp2);
   void RealPropSwap(std::vector<Real> *rp1, std::vector<Real> *rp2);
   void SetNewParticleID(int id);
+  void WeightedAverage(std::vector<Real> *rp_out,
+      const std::vector<Real> *rp_in1, const Real weights[]);
   struct Neighbor* FindTargetNeighbor(
       int ox1, int ox2, int ox3, int xi1, int xi2, int xi3);
 
