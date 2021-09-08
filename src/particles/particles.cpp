@@ -954,10 +954,10 @@ void Particles::GetPositionIndices(int ibegin, int iend,
 }
 
 //--------------------------------------------------------------------------------------
-//! \fn void Particles::RealPropCopy(std::vector<Real> *rp1, std::vector<Real> *rp2)
+//! \fn void Particles::RealPropCopy(std::vector<Real> *rp1, const std::vector<Real> *rp2)
 //! \brief copies all properties in rp2 into rp1.
 
-void Particles::RealPropCopy(std::vector<Real> *rp1, std::vector<Real> *rp2) {
+void Particles::RealPropCopy(std::vector<Real> *rp1, const std::vector<Real> *rp2) {
   for (int i = 0; i < nreal; ++i)
     rp1[i] = rp2[i];
 }
