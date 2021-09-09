@@ -994,7 +994,7 @@ TimeIntegratorTaskList::TimeIntegratorTaskList(ParameterInput *pin, Mesh *pm) {
       AddTask(SEND_PAR, INT_PAR);
       AddTask(RECV_PAR, NONE);
       AddTask(SEND_PM, INT_PAR);
-      AddTask(RECV_PM, NONE);
+      AddTask(RECV_PM, INT_HYD);
     }
 
     if (MAGNETIC_FIELDS_ENABLED) { // MHD
