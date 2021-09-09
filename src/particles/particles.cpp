@@ -778,11 +778,11 @@ bool Particles::ReceiveFromNeighbors() {
 }
 
 //--------------------------------------------------------------------------------------
-//! \fn bool Particles::ReceiveParticleMesh(int step)
+//! \fn bool Particles::ReceiveParticleMesh(Real t, Real dt)
 //! \brief receives ParticleMesh meshaux near boundaries from neighbors and returns a
 //!        flag indicating if all receives are completed.
 
-bool Particles::ReceiveParticleMesh(int stage) {
+bool Particles::ReceiveParticleMesh(Real t, Real dt) {
   if (ppm->nmeshaux <= 0) return true;
 
   // Flush ParticleMesh receive buffers.
@@ -790,24 +790,9 @@ bool Particles::ReceiveParticleMesh(int stage) {
 
   if (flag) {
     // Deposit ParticleMesh meshaux to MeshBlock.
-    Hydro *phydro = pmy_block->phydro;
-    Real t = 0, dt = 0;
-
-    switch (stage) {
-    case 1:
-      t = pmy_mesh->time;
-      dt = 0.5 * pmy_mesh->dt;
-      break;
-
-    case 2:
-      t = pmy_mesh->time + 0.5 * pmy_mesh->dt;
-      dt = pmy_mesh->dt;
-      break;
-    }
-
+    Hydro *phydro(pmy_block->phydro);
     DepositToMesh(t, dt, phydro->w, phydro->u);
   }
-
   return flag;
 }
 

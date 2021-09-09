@@ -2016,15 +2016,30 @@ enum TaskStatus TimeIntegratorTaskList::ParticlesReceive(MeshBlock *pmb, int sta
 }
 
 enum TaskStatus TimeIntegratorTaskList::ParticleMeshSend(MeshBlock *pmb, int stage) {
-  pmb->ppar->SendParticleMesh();
-  return TaskStatus::success;
+  if (stage <= nstages) {
+    if (stage_wghts[stage-1].main_stage) {
+      pmb->ppar->SendParticleMesh();
+      return TaskStatus::success;
+    }
+    return TaskStatus::next;
+  }
+  return TaskStatus::fail;
 }
 
 enum TaskStatus TimeIntegratorTaskList::ParticleMeshReceive(MeshBlock *pmb, int stage) {
-  if (pmb->ppar->ReceiveParticleMesh(stage))
-    return TaskStatus::success;
-  else
-    return TaskStatus::fail;
+  if (stage <= nstages) {
+    IntegratorWeight &weight(stage_wghts[stage-1]);
+    if (weight.main_stage) {
+      Real t(pmb->pmy_mesh->time + weight.sbeta * pmb->pmy_mesh->dt);
+      Real dt(weight.beta * pmb->pmy_mesh->dt);
+      if (pmb->ppar->ReceiveParticleMesh(t, dt))
+        return TaskStatus::success;
+      else
+        return TaskStatus::fail;
+    }
+    return TaskStatus::next;
+  }
+  return TaskStatus::fail;
 }
 
 //--------------------------------------------------------------------------------------

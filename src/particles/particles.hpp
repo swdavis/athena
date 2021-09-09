@@ -90,7 +90,7 @@ friend class DustParticles;
   void SetPositionIndices();
   void StartReceiving();
   bool ReceiveFromNeighbors();
-  bool ReceiveParticleMesh(int step);
+  bool ReceiveParticleMesh(Real t, Real dt);
   virtual Real NewBlockTimeStep();
 
   std::size_t GetSizeInBytes();
