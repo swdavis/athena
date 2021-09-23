@@ -75,10 +75,12 @@ void PhotonMover::Move(Photon *pphot, int ips, int ipe) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real)
+//! \fn bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, 
+//!                                       Real tauacc, int ip)
 //! \brief Accelerate photon diffusion with modified random walk method
 
-bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real tauacc) {
+bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real tauacc,
+                                  int ip) {
 
   MonteCarloBlock *pmcb = pmy_mcb;
   bool accel_success = true;
@@ -88,22 +90,22 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
   //while (mrw <= 0.)
   //  mrw = MRWDist(pran);
   //Real delta = -log(mrw);
-  Real delta = InterpPathTime(pphot->sct_coef*dist,pran->uniform());
+  Real delta = InterpPathTime(pphot->scp[ip]*dist,pran->uniform());
   //printf("delta: %g\n",delta);
   Real chi;
   if (!compton)
-    chi = 3. * (pphot->abs_coef+pphot->sct_coef) / SQR(PI);
+    chi = 3. * (pphot->acp[ip]+pphot->scp[ip]) / SQR(PI);
   else {
     //chi = 3. * pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) / SQR(PI);
-    chi = 3. * pphot->sct_coef / SQR(PI);
+    chi = 3. * pphot->scp[ip] / SQR(PI);
   }
   Real ct,r0;
   Real beta[3], beta2, gamma, gonembdk;
   if (boosts) {
     // tranform relevant quanitites to comoving frame
-    beta[0] = pmcb->vel(0,pphot->i3,pphot->i2,pphot->i1) / 2.99792458e10;
-    beta[1] = pmcb->vel(1,pphot->i3,pphot->i2,pphot->i1) / 2.99792458e10;
-    beta[2] = pmcb->vel(2,pphot->i3,pphot->i2,pphot->i1) / 2.99792458e10;
+    beta[0] = pmcb->vel(0,pphot->i3p[ip],pphot->i2,pphot->i1) / 2.99792458e10;
+    beta[1] = pmcb->vel(1,pphot->i3p[ip],pphot->i2,pphot->i1) / 2.99792458e10;
+    beta[2] = pmcb->vel(2,pphot->i3p[ip],pphot->i2,pphot->i1) / 2.99792458e10;
     beta2 = SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
     gamma = 1./sqrt(1.-beta2);
     Real bdk = (pphot->k[0] * beta[0] + pphot->k[1] * beta[1] + pphot->k[2] * beta[2]);
@@ -525,12 +527,9 @@ bool PhotonMover::UpdateZone(Photon *pphot, int ip) {
       pphot->i1p[ip]++;
       if(pphot->i1p[ip] > pmcb->ie)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::outer_x1](pmcb,pcoord,pphot,ip);
-      if (pphot->statp[ip] == ESCAPED) {
-        pphot->face = BoundaryFace::outer_x1;
+      if (pphot->statp[ip] != EVOLVING) {
         break;
       }
-      if (pphot->statp[ip] == DESTROYED)
-        break;
     }
   } else if (pphot->x1p[ip] < pcoord->x1f(pphot->i1p[ip])) {
     update = true;
@@ -538,12 +537,9 @@ bool PhotonMover::UpdateZone(Photon *pphot, int ip) {
       pphot->i1p[ip]--;
       if(pphot->i1p[ip] < pmcb->is)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::inner_x1](pmcb,pcoord,pphot,ip);
-      if (pphot->statp[ip] == ESCAPED) {
-        pphot->face = BoundaryFace::inner_x1;
+      if (pphot->statp[ip] != EVOLVING) {
         break;
       }
-      if (pphot->statp[ip] == DESTROYED)
-        break;
     }
   }
   if (pphot->x2p[ip] >= pcoord->x2f(pphot->i2p[ip]+1)) {
@@ -552,12 +548,9 @@ bool PhotonMover::UpdateZone(Photon *pphot, int ip) {
       pphot->i2p[ip]++;
       if(pphot->i2p[ip] > pmcb->je)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::outer_x2](pmcb,pcoord,pphot,ip);
-      if (pphot->statp[ip] == ESCAPED) {
-        pphot->face = BoundaryFace::outer_x2;
+      if (pphot->statp[ip] != EVOLVING) {
         break;
       }
-      if (pphot->statp[ip] == DESTROYED)
-        break;
     }
   } else if (pphot->x2p[ip] < pcoord->x2f(pphot->i2p[ip])) {
     update = true;
@@ -565,12 +558,9 @@ bool PhotonMover::UpdateZone(Photon *pphot, int ip) {
       pphot->i2p[ip]--;
       if(pphot->i2p[ip] < pmcb->js)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::inner_x2](pmcb,pcoord,pphot,ip);
-      if (pphot->statp[ip] == ESCAPED) {
-        pphot->face = BoundaryFace::inner_x2;
+      if (pphot->statp[ip] != EVOLVING) {
         break;
       }
-      if (pphot->statp[ip] == DESTROYED)
-        break;
     }
   }
   if (pphot->x3p[ip] >= pcoord->x3f(pphot->i3p[ip]+1)) {
@@ -579,12 +569,9 @@ bool PhotonMover::UpdateZone(Photon *pphot, int ip) {
       pphot->i3p[ip]++;
       if(pphot->i3p[ip] > pmcb->ke)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::outer_x3](pmcb,pcoord,pphot,ip);
-      if (pphot->statp[ip] == ESCAPED) {
-        pphot->face = BoundaryFace::outer_x3;
+      if (pphot->statp[ip] != EVOLVING) {
         break;
       }
-      if (pphot->statp[ip] == DESTROYED)
-        break;
     }
   } else if (pphot->x3p[ip] < pcoord->x3f(pphot->i3p[ip])) {
     update = true;
@@ -592,12 +579,9 @@ bool PhotonMover::UpdateZone(Photon *pphot, int ip) {
       pphot->i3p[ip]--;
       if(pphot->i3p[ip] < pmcb->ks)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::inner_x3](pmcb,pcoord,pphot,ip);
-      if (pphot->statp[ip] == ESCAPED) {
-        pphot->face = BoundaryFace::inner_x3;
+      if (pphot->statp[ip] != EVOLVING) {
         break;
       }
-      if (pphot->statp[ip] == DESTROYED)
-        break;
     }
   }
   // Returns true if zone changes, false otherwise

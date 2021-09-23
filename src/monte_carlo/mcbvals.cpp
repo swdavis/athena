@@ -123,7 +123,7 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
     case MC_ABSORB_BNDRY:
       BoundaryFunction_[BoundaryFace::outer_x2] = Absorb;
       break;
-   case MC_DESTROY_BNDRY:
+    case MC_DESTROY_BNDRY:
       BoundaryFunction_[BoundaryFace::outer_x2] = Destroy;
       break;
     case MC_POLAR_BNDRY:
@@ -355,41 +355,6 @@ void ReflectMCOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip
   pphot->x3p[ip] = pco->x1f(pphot->i3p[ip]+1);
 
 }
-
-//----------------------------------------------------------------------------------------
-//! \fn void PeriodicWedgeInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot,
-//!                               int ip)
-//! \brief periodic wedge boundary conditions, inner x3 boundary
-
-/*void PeriodicWedgeInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
-
-  pphot->i3 = pmcb->ke;
-  pphot->x[2] = pco->x3f(pphot->i3+1);
-
-  // Flip kx,ky when domain is not full 2*pi
-  Real phib = pco->x3f(pmcb->ks);
-  Real cphib = cos(phib);
-  Real sphib = sin(phib);
-  Real kphib = pphot->ky * cphib - pphot->kx * sphib;
-  Real krb = pphot->kx * cphib + pphot->ky * sphib;
-  cphib = cos(pphot->x3);
-  sphib = sin(pphot->x3);
-  pphot->kc[0] = cphib * krb - sphib * kphib;
-  pphot->kc[1] = sphib * krb + cphib * kphib;
-  }*/
-
-//----------------------------------------------------------------------------------------
-//! \fn void PeriodicWedgeOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot,
-//!                               int ip)
-//  \brief periodic wedgeboundary conditions, outer x3 boundary
-
-/*void PeriodicWedgeOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
-
-  pphot->i3 = pmcb->ks;
-  pphot->x[2] = pco->x3f(pphot->i3);
-
-  }*/
-
 
 //----------------------------------------------------------------------------------------
 //! \fn void Escape(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)

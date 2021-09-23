@@ -10,7 +10,7 @@
 #include "photon.hpp"
 #include "photonmover.hpp"
 #include "../mesh/mesh.hpp"
-#include "debug.hpp"
+
 
 //#define DEBUG_SM
 //#define NBUFFER 50
@@ -278,12 +278,12 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
           if (pmcb->coherent_scattering) {
             Real tauacc = 10.;
             if ((pphot->acp[ip]+pphot->scp[ip]) * dist > tauacc)
-              accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
+              accel_success = MRWAcceleration(pphot,pran,dist,tauacc,ip);
           } else {
             Real tauacc = 10.;
             Real pio = pmcb->planck_inv_opacity(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]);
             if (pio * dist > tauacc)
-              accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
+              accel_success = MRWAcceleration(pphot,pran,dist,tauacc,ip);
           }
         }
 
@@ -305,14 +305,14 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
 
           // Update k vector
           cth = cos(pphot->x2p[ip]);
-          sth = sqrt(1. - SQR(cth));
+          sth = sin(pphot->x2p[ip]);
           cph = cos(pphot->x3p[ip]);
           sph = sin(pphot->x3p[ip]);
           kr  = kx * sth * cph + ky * sth * sph + kz * cth;
           kth = kx * cth * cph + ky * cth * sph - kz * sth;
           kph = -kx * sph + ky * cph;
         }
-        if (ptraj != NULL) ptraj->AddToTrajectory(pphot);
+        if (ptraj != NULL) ptraj->AddToTrajectory(pphot,ip);
         return;
       } else { // Photon moves to next zone and reduce tauremaining
         // Update moments
@@ -338,7 +338,7 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
         kr  = kx * sth * cph + ky * sth * sph + kz * cth;
         kth = kx * cth * cph + ky * cth * sph - kz * sth;
         kph = -kx * sph + ky * cph;
-        if (ptraj != NULL) ptraj->AddToTrajectory(pphot);
+        if (ptraj != NULL) ptraj->AddToTrajectory(pphot,ip);
       }
 
     }

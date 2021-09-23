@@ -352,36 +352,54 @@ void MonteCarloBlock::RayTracePhotons(int nphot) {
     Real const to_comv = 1.0;
     Real const to_eulr = -1.0;
     int nscat = 0, nesc = 0, nabs = 0, ndes = 0;
-    int nprop = (nphot > nphremain) ? nphremain : nphot;
+    int ntodo = (nphot > nphremain) ? nphremain : nphot;
 
-    for (int i=0; i<nprop; ++i) {
+    int nloop = 100;
+    int nprop = ntodo;
 
+    while (nprop > 0) {
+
+      // Emit photons to replace those that left meshblock or were terminated
+      nloop = (nloop > nprop) ? nprop : nloop;
+      int nold = pphot->nphot;
+      pphot->Resize(nloop);
       // user definied photon initialization
-      InitializePhoton(pphot,0,0);
-
+      InitializePhoton(pphot,nold,pphot->nphot-1);
+      if (ptraj != nullptr) {
+        for (int ip=nold; ip < pphot->nphot; ip++)
+          ptraj->InitializeTrajectory(pphot->trp[ip]);
+      }
       // Photon initialized in coordinate frame
       // move photon until  stopping condition
-      pmover->Move(pphot,0,0);
-      if (ptraj != nullptr) ptraj->CompleteTrajectory();
-      // User defined completion work
-      FinalizePhoton(pphot,0);
-      if (pphot->status == ESCAPED) {
-        // loop over spectra and update
-        Spectrum *pspect = pspec;
-        while (pspect != nullptr) {
-          pspect->UpdateSpectrum(pphot);
-          pspect = pspect->next;
-        }
-        if (pphlist != nullptr) {
-          pphlist->AddPhoton(pphot);
-        }
-        nesc++;
-      } else if (pphot->status == ABSORBED) {
-        nabs++;
-      } else if (pphot->status == DESTROYED) {
-        ndes++;
+      pmover->Move(pphot,0,pphot->nphot-1);
+      if (ptraj != nullptr) {
+        for (int ip=nold; ip < pphot->nphot; ip++)
+          ptraj->CompleteTrajectory(pphot->trp[ip]);
       }
-    }
+
+      for (int ip=0; ip<pphot->nphot; ip++) {
+        // User defined completion work
+        FinalizePhoton(pphot,ip);
+        if (pphot->statp[ip] == ESCAPED) {
+          // loop over spectra and update
+          Spectrum *pspect = pspec;
+          while (pspect != nullptr) {
+            pspect->UpdateSpectrum(pphot,ip);
+            pspect = pspect->next;
+          }
+          if (pphlist != nullptr) {
+            pphlist->AddPhoton(pphot,ip);
+          }
+          nesc++;
+        } else if (pphot->statp[ip] == ABSORBED) {
+          nabs++;
+        } else if (pphot->statp[ip] == DESTROYED) {
+          ndes++;
+        }
+        pphot->RemoveOneParticle(ip);
+        nprop--;
+      } // end loop over ip
+    } // while nprop > 0
 
     std::cout  << "rank, nesc, nabs, ndes, nscat: " << Globals::my_rank << ' ' << nesc
                << ' ' << nabs << ' ' << ndes << ' '
@@ -414,7 +432,10 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
     //printf("nold: %d %d %d %d\n",nprop,nold,nprop,nloop);
     // user definied photon initialization
     InitializePhoton(pphot,nold,pphot->nphot-1);
-
+    if (ptraj != nullptr) {
+      for (int ip=nold; ip < pphot->nphot; ip++)
+        ptraj->InitializeTrajectory(pphot->trp[ip]);
+    }
     // Lorentz transform E, k to Eulerian frame and update opacities
     // only for newly emitted photons
     if (boosts) {
@@ -498,20 +519,22 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
       if (pphot->statp[ip] != EVOLVING) {
 
         if (pphot->statp[ip] == ESCAPED) {
-          if (ptraj != nullptr) ptraj->CompleteTrajectory(); //SWDFIX
+          if (ptraj != nullptr) {
+            ptraj->CompleteTrajectory(pphot->trp[ip]);
+          }
           // User defined completion work
           FinalizePhoton(pphot,ip);
           // SWD: temporary, needed for output
-          pphot->VectorsToWorkingArrays(ip);
+          //pphot->VectorsToWorkingArrays(ip);
 
           // loop over spectra and update
           Spectrum *pspect = pspec;
           while (pspect != nullptr) {
-            pspect->UpdateSpectrum(pphot);
+            pspect->UpdateSpectrum(pphot,ip);
             pspect = pspect->next;
           }
           if (pphlist != nullptr) {
-            pphlist->AddPhoton(pphot);
+            pphlist->AddPhoton(pphot,ip);
           }
           nesc++;
         } else if (pphot->statp[ip] == ABSORBED) {
@@ -523,7 +546,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
         nprop--;
       }
     } // End loop over ip
-  }
+  } // while nprop > 0
 
   std::cout  << "rank, nesc, nabs, ndes, nscat: " << Globals::my_rank << ' ' << nesc
              << ' ' << nabs << ' ' << ndes << ' '
@@ -629,8 +652,9 @@ void MonteCarloBlock::TransferPhotonsOld(int nphot) {
       pmover->Move(pphot,ip,ip);
 
     }
-
-    if (ptraj != nullptr) ptraj->CompleteTrajectory();
+    if (ptraj != nullptr) {
+      ptraj->CompleteTrajectory(pphot->trp[ip]);
+    }
     nscat += iscat;
 
     } // End loop over ip
@@ -644,11 +668,11 @@ void MonteCarloBlock::TransferPhotonsOld(int nphot) {
       // loop over spectra and update
       Spectrum *pspect = pspec;
       while (pspect != nullptr) {
-        pspect->UpdateSpectrum(pphot);
+        pspect->UpdateSpectrum(pphot,ip);
         pspect = pspect->next;
       }
       if (pphlist != nullptr) {
-        pphlist->AddPhoton(pphot);
+        pphlist->AddPhoton(pphot,ip);
       }
       nesc++;
     } else if (pphot->statp[ip] == ABSORBED) {
@@ -669,9 +693,25 @@ void MonteCarloBlock::TransferPhotonsOld(int nphot) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::ComovingToCoordinate(Photon *pphot, int ips, int ipe)
+//! \brief Transform photon sample to coordinate/Eulerian frame
+
+void MonteCarloBlock::ComovingToCoordinate(Photon *pphot, int ips, int ipe) {
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::ComovingToCoordinate(Photon *pphot, int ips, int ipe)
+//! \brief Transform photon sample to comoving frame
+
+void MonteCarloBlock::CoordinateToComoving(Photon *pphot, int ips, int ipe) {
+
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign, int ips,
 //!                                            int ipe)
-//! \brief Lorentz transform photon packet
+//! \brief Lorentz transform photon sample
 //
 // Does not transform stokes vectors but this seems
 // to be correct -- the plane of polarization is invariant under lorentz
@@ -752,7 +792,8 @@ Real MonteCarloBlock::LorentzTransformFrequencyShift(Photon *pphot, int ip) {
 
 // SWD: This is an untested modification of Eric's original method, unfinished
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign)
+//! \fn void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign, int ips,
+//!                                           int ipe)
 //!  \brief Tetrad transform photon packet
 //
 // Does not transform stokes vectors..
@@ -761,70 +802,76 @@ Real MonteCarloBlock::LorentzTransformFrequencyShift(Photon *pphot, int ip) {
 // to_comv: sign = 1.0;
 // to_eulr: sign = -1.0;
 
-void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign) {
+void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign, int ips, int ipe) {
 
-  // Get velocity of cell
-  int i1 = pphot->i1, i2 = pphot->i2, i3 = pphot->i3;
-  Real beta[3];
-  for (int i=0; i<3; ++i) {
-    beta[i] = sign * vel(i,i3,i2,i1) / 2.9979e10;
-  }
-  Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
-  Real gamma = 1. / sqrt(1. - beta2);
-
-  // Define velocity four vector for cell
-  Real ucon[NCOORD];
-  ucon[IMC0] = gamma;
-  ucon[IMC1] = gamma * beta[0];
-  ucon[IMC2] = gamma * beta[1];
-  ucon[IMC3] = gamma * beta[2];
-
-  // get metric values for current position
-  Real gcov[NCOORD][NCOORD];
-  pcoord->Metric(pphot->x, gcov);
-
-  // create tetrad basis
-  Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
-  ConstructTetrad(ucon, gcov, econ, ecov);
-
-  if (sign > 0) { // tranforming to comoving frame
-
-    // SWD: mirrors Lorentz transformation but redundant -> should use CoordinateToTetrad
-    Real kdotu;
-    for (int i = 0; i < NCOORD; i++)
-      kdotu += pphot->k[i] * ucon[i]; // pphot->k in coordinate frame
-    Real energy_shift = - pphot->k[IMC0] / kdotu;
-
-    Real kcopy[NCOORD];
-    for (int i = 0; i < NCOORD; i++)
-      kcopy[i] = pphot->k[i];
-    CoordinateToTetrad(kcopy, pphot->k, ecov); // updates pphot->k
-
-    // transform energy and extinction coefficients
-    pphot->energy *= energy_shift;
-    pphot->abs_coef *= energy_shift;
-    pphot->sct_coef *= energy_shift;
-
-  } else { // transforming to coordinate frame
-
-    Real kcopy[NCOORD];
-    for (int i = 0; i < NCOORD; i++)
-      kcopy[i] = pphot->k[i];
-    TetradToCoordinate(kcopy, pphot->k, econ); // updates pphot->k
-
-    // Eric's implementation -- needs to be updated
-    Real kdotu = DotVec(pphot->k, ucon, gcov);
-    if (fabs(kdotu) < 1.0e-30) {
-      printf("warning: kdotu = %g\n", kdotu);
-      kdotu = 1.0e-30;
+  for (int ip=ips; ip<=ipe; ip++) {
+    // Get velocity of cell
+    int i1 = pphot->i1p[ip], i2 = pphot->i2p[ip], i3 = pphot->i3p[ip];
+    Real beta[3];
+    for (int i=0; i<3; ++i) {
+      beta[i] = sign * vel(i,i3,i2,i1) / 2.9979e10;
     }
-    Real energy_shift = - kdotu / pphot->k[IMC0]; // new calculation
+    Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
+    Real gamma = 1. / sqrt(1. - beta2);
 
-    // transform energy and opacities
-    pphot->energy *= energy_shift;
-    pphot->abs_coef *= energy_shift;
-    pphot->sct_coef *= energy_shift;
-  }
+    // Define velocity four vector for cell
+    Real ucon[NCOORD];
+    ucon[IMC0] = gamma;
+    ucon[IMC1] = gamma * beta[0];
+    ucon[IMC2] = gamma * beta[1];
+    ucon[IMC3] = gamma * beta[2];
+
+    // get metric values for current position
+    Real gcov[NCOORD][NCOORD];
+    Real x[NCOORD];
+    x[IMC0] = pphot->x0p[ip];
+    x[IMC1] = pphot->x1p[ip];
+    x[IMC2] = pphot->x2p[ip];
+    x[IMC3] = pphot->x3p[ip];
+    pcoord->Metric(x, gcov);
+
+    // create tetrad basis
+    Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
+    ConstructTetrad(ucon, gcov, econ, ecov);
+
+    if (sign > 0) { // tranforming to comoving frame
+
+      Real kcopy[NCOORD];
+      kcopy[IMC0] = pphot->k0p[ip];
+      kcopy[IMC1] = pphot->k1p[ip];
+      kcopy[IMC2] = pphot->k2p[ip];
+      kcopy[IMC3] = pphot->k3p[ip];
+      Real k[NCOORD];
+      CoordinateToTetrad(kcopy, k, ecov);
+      pphot->k0p[ip] = k[IMC0];
+      pphot->k1p[ip] = k[IMC1];
+      pphot->k2p[ip] = k[IMC2];
+      pphot->k3p[ip] = k[IMC3];
+
+      Real energy_shift = kcopy[IMC0] / k[IMC0];
+      // transform energy and extinction coefficients
+      pphot->ep[ip] *= energy_shift;
+      pphot->acp[ip] *= energy_shift;
+      pphot->scp[ip] *= energy_shift;
+
+    } else { // transforming to coordinate frame
+
+      Real kcopy[NCOORD];
+      kcopy[IMC0] = pphot->k0p[ip];
+      kcopy[IMC1] = pphot->k1p[ip];
+      kcopy[IMC2] = pphot->k2p[ip];
+      kcopy[IMC3] = pphot->k3p[ip];
+      Real k[NCOORD];
+      TetradToCoordinate(kcopy, k, econ); // updates pphot->k
+
+      Real energy_shift = kcopy[IMC0] / pphot->k[IMC0]; // new calculation
+
+      // transform energy and opacities
+      pphot->ep[ip] *= energy_shift;
+      pphot->acp[ip] *= energy_shift;
+      pphot->scp[ip] *= energy_shift;
+    }
+  } // loop over ip
 }
 
 //----------------------------------------------------------------------------------------
@@ -905,7 +952,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
     moments(MCIFR2,k,j,i) += weight2 * 2.99792458e10;
     moments(MCIFR3,k,j,i) += weight3 * 2.99792458e10;
     // Radiation Pressure
-    //Real weightp = weight1 * pphot->k[0];
+
     Real weightp = weight1 * 2.99792458e10;
     moments(MCIPR11,k,j,i) += weightp;
     weightp = weight2 * k2;

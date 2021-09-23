@@ -16,13 +16,13 @@
 #include "../athena_arrays.hpp"
 
 
-int Photon::nint = 6;
+int Photon::nint = 7;
 int Photon::nreal = 20;
 int Photon::naux = 0;
 int Photon::nwork = 0;
 int Photon::ipid = 0;
-int Photon::inscp = 1, Photon::istatp = 2;
-int Photon::ii1p = 3, Photon::ii2p = 4, Photon::ii3p = 5;
+int Photon::inscp = 1, Photon::istatp = 2, Photon::itrp = 3;
+int Photon::ii1p = 4, Photon::ii2p = 5, Photon::ii3p = 6;
 int Photon::ix0p = 0, Photon::ix1p = 1, Photon::ix2p = 2, Photon::ix3p = 3;
 int Photon::ik0p = 4, Photon::ik1p = 5, Photon::ik2p = 6, Photon::ik3p = 7;
 int Photon::idk0p = 8, Photon::idk1p = 9, Photon::idk2p = 10, Photon::idk3p = 11;
@@ -37,8 +37,8 @@ Photon::Photon(MonteCarloBlock *pmcb, int nuser, int len_limit)
   : intprop(new std::vector<int> [nint]), realprop(new std::vector<Real> [nreal]),
     aux(new std::vector<Real> [naux]), work(new std::vector<Real> [nwork]),
     user(new std::vector<Real> [nuser]),
-    nphot(npar),pid(intprop[ipid]),nscp(intprop[inscp]),
-    statp(intprop[istatp]), i1p(intprop[ii1p]), i2p(intprop[ii2p]), i3p(intprop[ii3p]),
+    nphot(npar),pid(intprop[ipid]),nscp(intprop[inscp]), statp(intprop[istatp]),
+    trp(intprop[itrp]), i1p(intprop[ii1p]), i2p(intprop[ii2p]), i3p(intprop[ii3p]),
     x0p(realprop[ix0p]), x1p(realprop[ix1p]), x2p(realprop[ix2p]), x3p(realprop[ix3p]),
     k0p(realprop[ik0p]), k1p(realprop[ik1p]), k2p(realprop[ik2p]), k3p(realprop[ik3p]),
     dk0p(realprop[idk0p]), dk1p(realprop[idk1p]), dk2p(realprop[idk2p]),
@@ -123,12 +123,14 @@ void Photon::PrintPhoton(int ip) {
             << std::endl
             << "k: " << k1p[ip] << " " << k2p[ip] << " " << k3p[ip] << " " << k0p[ip]
             << std::endl
+            << "dk: " << dk1p[ip] << " " << dk2p[ip] << " " << dk3p[ip] << " " << dk0p[ip]
+            << std::endl
             << "stokes: " << sip[ip] << " " << sqp[ip] << " " << sup[ip] << std::endl
             << "opacity: " << scp[ip] << " " << acp[ip] << std::endl;
   if (nuser_var > 0) {
     std::cout << "User vars:";
       for (int i=0; i<nuser_var; i++) {
-        std::cout << " " << user_var[i];
+        std::cout << " " << user[i][ip];
       }
       std::cout << std::endl;
   }

@@ -148,7 +148,7 @@ void __attribute__((weak)) MonteCarloBlock::InitializePhoton(Photon *pphot, int 
 }
 
 //========================================================================================
-//! \fn void MonteCarloBlock::FinalizePhoton(Photon *pphot, ip)
+//! \fn void MonteCarloBlock::FinalizePhoton(Photon *pphot, int ip)
 //! \brief Complete work at end of photon packets before integration
 //========================================================================================
 

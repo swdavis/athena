@@ -11,7 +11,6 @@
 #include "photon.hpp"
 #include "photonmover.hpp"
 #include "../mesh/mesh.hpp"
-#include "debug.hpp"
 
 // SWD: remove all of these
 #define NCOORD 4
@@ -102,7 +101,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
       // Perform any user work
       if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this,ip);
       // SWD: put here for now, may need additional flag
-      if (ptraj != NULL) ptraj->AddToTrajectory(pphot);
+      if (ptraj != NULL) ptraj->AddToTrajectory(pphot,ip);
 
     } // end of photon integration
 

@@ -402,88 +402,116 @@ bool Spectrum::AngleBinsSphericalPolar(Real k[4], int &phibin, int &cthbin) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn bool Spectrum::ScreenCoordinates(Photon *pphot)
+//! \fn bool Spectrum::ScreenCoordinates(Photon *pphot, int ip)
 //! \brief Returns true if photon is not within specified coordinate ranges
 
-bool Spectrum::ScreenCoordinates(Photon *pphot) {
+bool Spectrum::ScreenCoordinates(Photon *pphot, int ip) {
 
-  if (pphot->x[0] < x1min)
+  if (pphot->x1p[ip] < x1min)
     return true;
-  else if (pphot->x[0] > x1max)
+  else if (pphot->x1p[ip] > x1max)
     return true;
-  else if (pphot->x[1] < x2min)
+  else if (pphot->x2p[ip] < x2min)
     return true;
-  else if (pphot->x[1] > x2max)
+  else if (pphot->x2p[ip] > x2max)
     return true;
-  else if (pphot->x[2] < x3min)
+  else if (pphot->x3p[ip] < x3min)
     return true;
-  else if (pphot->x[2] > x3max)
+  else if (pphot->x3p[ip] > x3max)
     return true;
   else
     return false;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void Spectrum::UpdateSpectrum(Photon *pphot)
+//! \fn void Spectrum::UpdateSpectrum(Photon *pphot, int ip)
 //! \brief add photon contribution to spectrum
 
-void Spectrum::UpdateSpectrum(Photon *pphot) {
+void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
 
-  if ((face != pphot->face) && (pphot->face != BoundaryFace::undef))
-    return;
+  // if face is set, then determine if photon positions matches
+  if (face != BoundaryFace::undef) {
+    enum BoundaryFace photon_face = GetPhotonFace(pphot,ip);
+    if (face != photon_face)
+      return;
+  }
 
-  Real weight = pphot->weight;
+  Real weight = pphot->wp[ip];
   if ((isinf(weight)) || (isnan(weight))) {
     std::cout << "Warning: weight is Nan or Inf: " << weight << std::endl;
   } else {
 
     if (coordinates) {
       //Apply coordinate cuts
-      if (ScreenCoordinates(pphot))
+      if (ScreenCoordinates(pphot,ip))
         return;
     }
 
     int ebin;
-    // SWD: covariant mover requires: ebin = EnergyBin(pphot->k[0]);
-    ebin = EnergyBinUniform(pphot->energy,logarithmic);
+    // SWD: covariant mover may require adjustment here
+    ebin = EnergyBinUniform(pphot->ep[ip],logarithmic);
     if (ebin < 0) return;
 
     // Get angle bins
     int phibin, mubin;
     if (polar_axis) {
       Real kcart[4];
-      pphot->pmy_mcb->pmover->CurvalinearToCartesian(pphot,kcart);
+      if ((COORDINATE_SYSTEM == "cartesian") || (COORDINATE_SYSTEM == "minkowski"))  {
+        kcart[IMC1] = pphot->k1p[ip];
+        kcart[IMC2] = pphot->k2p[ip];
+        kcart[IMC3] = pphot->k3p[ip];
+      } else  if (COORDINATE_SYSTEM == "spherical_polar") {
+        Real cth = cos(pphot->x2p[ip]);
+        Real sth = sin(pphot->x2p[ip]);
+        Real cph = cos(pphot->x3p[ip]);
+        Real sph = sin(pphot->x3p[ip]);
+        Real kr, kth, kph;
+        if (pphot->pmy_mcb->general_mover_flag) {
+          kr = pphot->k1p[ip];
+          kth = pphot->k2p[ip]*pphot->x1p[ip];
+          kph = pphot->k3p[ip]*pphot->x1p[ip]*sth;
+        } else {
+          kr = pphot->k1p[ip];
+          kth = pphot->k2p[ip];
+          kph = pphot->k3p[ip];
+        }
+        // Compute cartesian
+        kcart[IMC1] = kr*sth*cph + kth*cth*cph - kph*sph;
+        kcart[IMC2] = kr*sth*sph + kth*cth*sph + kph*cph;
+        kcart[IMC3] = kr*cth - kth*sth;
+      }
+      // SWD: Add cylindrical
       if (!AngleBinsCartesian(kcart,phibin,mubin))
         return;
     } else {
       if (COORDINATE_SYSTEM == "spherical_polar") {
+        Real ksph[4];
         if (pphot->pmy_mcb->general_mover_flag) {
-          Real kn[4];
-          kn[IMC1] = pphot->k[IMC1];
-          kn[IMC2] = pphot->k[IMC2]*pphot->x[IMC1];
-          kn[IMC3] = pphot->k[IMC3]*pphot->x[IMC1]*sin(pphot->x[IMC2]);
-          Real norm = sqrt(SQR(kn[IMC1])+SQR(kn[IMC2])+SQR(kn[IMC3]));
+          ksph[IMC1] = pphot->k1p[ip];
+          ksph[IMC2] = pphot->k2p[ip]*pphot->x1p[ip];
+          ksph[IMC3] = pphot->k3p[ip]*pphot->x1p[ip]*sin(pphot->x2p[ip]);
+          Real norm = sqrt(SQR(ksph[IMC1])+SQR(ksph[IMC2])+SQR(ksph[IMC3]));
           for (int i=0; i<4; ++i)
-            kn[i] /= norm;
-          if(!AngleBinsSphericalPolar(kn,phibin,mubin))
-            return;
+            ksph[i] /= norm;
         } else {
-          if(!AngleBinsSphericalPolar(pphot->k,phibin,mubin))
-            return;
+          ksph[IMC1] = pphot->k1p[ip];
+          ksph[IMC2] = pphot->k2p[ip];
+          ksph[IMC3] = pphot->k3p[ip];
         }
+        if(!AngleBinsSphericalPolar(ksph,phibin,mubin))
+            return;
       }
-    }
-    //Real tauabs = -log(weight);
-    //Real opac = tauabs/pphot->path;
+    } // if (polar_axis) else
+
     intensity(phibin,mubin,ebin) += weight;
-    intensity_sq(phibin,mubin,ebin) += weight*weight;
-    //intensity(phibin,mubin,ebin) += pphot->stokes[0] * weight;
-    //intensity_sq(phibin,mubin,ebin) += SQR(pphot->stokes[0] * weight);
+    intensity_sq(phibin,mubin,ebin) += weight * weight;
+    //intensity(phibin,mubin,ebin) += pphot->sip[ip] * weight;
+    //intensity_sq(phibin,mubin,ebin) += SQR(pphot->sip[ip] * weight);
     if (polarized) {
-      stokesq(phibin,mubin,ebin) += pphot->stokes[1] * weight;
-      stokesq_sq(phibin,mubin,ebin) += SQR(pphot->stokes[1] * weight);
-      stokesu(phibin,mubin,ebin) += pphot->stokes[2] * weight;
-      stokesu_sq(phibin,mubin,ebin) += SQR(pphot->stokes[2] * weight);
+      stokesq(phibin,mubin,ebin) += pphot->sqp[ip] * weight;
+      stokesq_sq(phibin,mubin,ebin) += SQR(pphot->sqp[ip] * weight);
+      stokesu(phibin,mubin,ebin) += pphot->sup[ip] * weight;
+      stokesu_sq(phibin,mubin,ebin) += SQR(pphot->sup[ip] * weight);
     }
   }
 }
@@ -594,6 +622,29 @@ void Spectrum::AddSpectrum(Spectrum *pspec) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn enum BoundaryFace Spectrum::GetPhotonFace(Photon *pphot, int ip)
+//! \brief Determine which boundary photon crossed, if any
+
+enum BoundaryFace Spectrum::GetPhotonFace(Photon *pphot, int ip) {
+
+  MonteCarloBlock *pmcb = pphot->pmy_mcb;
+  if(pphot->i1p[ip] > pmcb->ie)
+    return BoundaryFace::outer_x1;
+  else if(pphot->i1p[ip] < pmcb->is)
+    return BoundaryFace::inner_x1;
+  else if(pphot->i2p[ip] > pmcb->je)
+    return BoundaryFace::outer_x2;
+  else if(pphot->i2p[ip] < pmcb->js)
+    return BoundaryFace::inner_x2;
+  else if(pphot->i3p[ip] > pmcb->ke)
+    return BoundaryFace::outer_x3;
+  else if(pphot->i3p[ip] < pmcb->ks)
+    return BoundaryFace::inner_x3;
+  else
+    return BoundaryFace::undef;
+}
+
+//----------------------------------------------------------------------------------------
 //! PhotonList constructor from input
 
 PhotonList::PhotonList(int list_mem_size, bool pol, int nuser) {
@@ -619,28 +670,32 @@ PhotonList::~PhotonList() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn PhotonList::AddPhoton(Photon *pphot)
+//! \fn PhotonList::AddPhoton(Photon *pphot, int ip)
 //! \brief add photon to list
 
-void PhotonList::AddPhoton(Photon *pphot) {
+void PhotonList::AddPhoton(Photon *pphot, int ip) {
 
   if (length == len_limit) {
     // double array size when list is full
     ResizeList(2*len_limit);
   }
   int n = 0;
-  photons(length,n++) = pphot->weight;
-  photons(length,n++) = pphot->energy;
-  for (int i=0; i<4; i++)
-    photons(length,n++) = pphot->x[i];
-  for (int i=0; i<4; i++)
-    photons(length,n++) = pphot->k[i];
+  photons(length,n++) = pphot->wp[ip];
+  photons(length,n++) = pphot->ep[ip];
+  photons(length,n++) = pphot->x1p[ip];
+  photons(length,n++) = pphot->x2p[ip];
+  photons(length,n++) = pphot->x3p[ip];
+  photons(length,n++) = pphot->x0p[ip];
+  photons(length,n++) = pphot->k1p[ip];
+  photons(length,n++) = pphot->k2p[ip];
+  photons(length,n++) = pphot->k3p[ip];
+  photons(length,n++) = pphot->k0p[ip];
   if (polarized) {
-    photons(length,n++) = pphot->stokes[1];
-    photons(length,n++) = pphot->stokes[2];
+    photons(length,n++) = pphot->sqp[ip];
+    photons(length,n++) = pphot->sup[ip];
   }
   for (int i=0; i<nuser_out; i++) {
-    photons(length,n++) = pphot->user_var[i];
+    photons(length,n++) = pphot->user[i][ip];
   }
   length++;
 
@@ -725,6 +780,7 @@ PhotonTrajectoryList::PhotonTrajectoryList(int init_len_limit, int init_step_lim
   nuser_out = nuser;
   trajectories.NewAthenaArray(len_limit,step_limit,nparams);
   nsteps = new int[len_limit];
+
 }
 
 //----------------------------------------------------------------------------------------
@@ -738,36 +794,49 @@ PhotonTrajectoryList::~PhotonTrajectoryList() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn PhotonTrajectoryList::CompleteTrajectory()
-//! \brief add location to trajectory
+//! \fn PhotonTrajectoryList::InitializeTrajectory(int itraj)
+//! \brief add new trajectory
 
-void PhotonTrajectoryList::CompleteTrajectory() {
+void PhotonTrajectoryList::InitializeTrajectory(int itraj) {
 
-  nsteps[length] = step;
-  if (step > maxstep) maxstep = step;
-  length++;
-  if (length == len_limit) {
+  if (itraj >= len_limit) {
     // double array size when list is full
     ResizeList(2*len_limit,step_limit);
   }
-  step = 0;
+  if (itraj >= length)
+    length = itraj+1;
+
+  nsteps[itraj] = 0;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn PhotonTrajectoryList::AddToTrajectory(Photon *pphot)
+//! \fn PhotonTrajectoryList::CompleteTrajectory(int itraj)
+//! \brief complete trajectory
+
+void PhotonTrajectoryList::CompleteTrajectory(int itraj) {
+
+  if (nsteps[itraj] > maxstep) maxstep = nsteps[itraj];
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn PhotonTrajectoryList::AddToTrajectory(Photon *pphot, int ip)
 //! \brief add photon location to trajectory
 
-void PhotonTrajectoryList::AddToTrajectory(Photon *pphot) {
+void PhotonTrajectoryList::AddToTrajectory(Photon *pphot, int ip) {
 
-  if (step == step_limit)
+  int itr = pphot->trp[ip];
+  int &step = nsteps[itr];
+  if (step >= step_limit)
     return;
 
   int n = 0;
-  for (int i=0; i<4; i++) {
-    trajectories(length,step,n++) = pphot->x[i];
-  }
+  trajectories(itr,step,n++) = pphot->x1p[ip];
+  trajectories(itr,step,n++) = pphot->x2p[ip];
+  trajectories(itr,step,n++) = pphot->x3p[ip];
+  trajectories(itr,step,n++) = pphot->x0p[ip];
   for (int i=0; i<nuser_out; i++) {
-    trajectories(length,step,n++) = pphot->user_var[i];
+    trajectories(itr,step,n++) = pphot->user[i][ip];
   }
   step++;
 }
@@ -1000,7 +1069,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         ptraj = new PhotonTrajectoryList(pmc->max_list_size+1,step_limit,nuser_out);
         // Initialize photon list
         ptraj->length = 0;
-        ptraj->maxstep = ptraj->step = 0;
+        ptraj->maxstep = 0;
         ptraj->output_number = 0;
         // Generate file name
         std::string outn = pib->block_name.substr(6); // 6 because counting starts at 0!
