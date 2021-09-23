@@ -11,14 +11,9 @@
 #include "photon.hpp"
 #include "photonmover.hpp"
 #include "../mesh/mesh.hpp"
-#include "debug.hpp"
-
-//#define DEBUG_GM
-//#define NBUFFER 1000
 
 // SWD: remove all of these
 #define NCOORD 4
-//#define VERBOSE
 
 // GR headers
 #define tolerance 1.e-5
@@ -51,140 +46,78 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
   MCRandom *pran = pmy_mcb->pran;
   PhotonTrajectoryList *ptraj = pmy_mcb->ptraj;
 
-  // get number of mean free paths photon will travel
-  Real tauremaining = GetOpticalDepth(pran);
+  for (int ip=ips; ip<=ipe; ip++) {
+    // get number of mean free paths photon will travel
+    Real tauremaining = GetOpticalDepth(pran);
 
-#ifdef DEBUG_GM
-  typedef struct {
-    Real dl, dlr, dlt, dlp;
-    Real cth, sth, cph, sph;
-    Real kr, kth, kph;
-    Real x,y,z;
-    int i,j,k;
-    bool ascend[3];
-  } debug_t;
-  debug_t db[NBUFFER];
-#endif
+    Real step = StepSize(pphot,ip);
+    int count = 0;
+    int iter = 0;
+    int zone_counter = 0;
+    Real chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
 
-  Real step = StepSize(pphot);
-  int count = 0;
-  int iter = 0;
-  int zone_counter = 0;
-  Real chi = GetExtinctionCoefficient(pphot->abs_coef,pphot->sct_coef);
-  //Real chi = pphot->sct_coef + pphot->abs_coef;
-  //chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max
+    while ( (pphot->statp[ip] == EVOLVING) && (tauremaining > TINY_NUMBER) &&
+            (iter < checkmove)) {
+      //printf("%d %g\n",iter,step);
+      //pphot->PrintPhoton(ip);
+      iter++;
+      count++;
 
-#ifdef VERBOSE
-  printf("tau: %g; chi: %g; chi*dlambda: %g\n", tauremaining, chi, chi*dlambda);
-#endif
+      if (tauremaining > chi * step) {
+        VerletStep(pphot,step,ip);
+        if (pmy_mcb->pmy_mc->polarized)
+          PropogatePolarization(pphot,step,ip);
+      } else {
+        step = tauremaining / chi;
+        VerletStep(pphot,step,ip);
+        if (pmy_mcb->pmy_mc->polarized)
+          PropogatePolarization(pphot,step,ip);
+      }
 
-  Real cth, sth, cph, sph;
-  Real x,y,z,x0,y0,z0;
-  cth = cos(pphot->x[1]);
-  sth = sqrt(1. - SQR(cth));
-  cph = cos(pphot->x[2]);
-  sph = sin(pphot->x[2]);
-  x0 = pphot->x[0]*sth*cph;
-  y0 = pphot->x[0]*sth*sph;
-  z0 = pphot->x[0]*cth;
+      tauremaining -= chi * step;
 
-  while ( (pphot->status == EVOLVING) && (tauremaining > TINY_NUMBER) &&
-          (iter < checkmove)) {
+      // SWD: Clean up these checks
+      // Check if photon changed zones
+      if (UpdateZone(pphot,ip)) {
+        UpdateOpacities(pphot,pmcb,ip);
+        zone_counter++;
+        chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
+      }
+      if (pphot->statp[ip] == DESTROYED) {
+        pphot->PrintPhoton(ip);
+      }
 
-    iter++;
-    count++;
-    //printf("%g ",pphot->x[IMC1]);
-    /*Real cth = cos(pphot->x[1]);
-    Real sth = sqrt(1. - SQR(cth));
-    Real cph = cos(pphot->x[2]);
-    Real sph = sin(pphot->x[2]);
-    //pphot->PrintPhoton();
-    // Compute cartesian
-    pphot->kcart[0] = pphot->k[0]*sth*cph + pphot->k[1]*cth*cph - pphot->k[2]*sph;
-    pphot->kcart[1] = pphot->k[0]*sth*sph + pphot->k[1]*cth*sph + pphot->k[2]*cph;
-    pphot->kcart[2] = pphot->k[0]*cth - pphot->k[1]*sth;*/
+      // Update moments
+      if (pmcb->moments_flag) {
+        pmcb->UpdateMoments(pphot,step,1.,ip);
+      }
 
-   if (tauremaining > chi * step) {
-     VerletStep(pphot,step);
-     if (pmy_mcb->pmy_mc->polarized)
-       PropogatePolarization(pphot,step);
-   } else {
-     step = tauremaining / chi;
-     VerletStep(pphot,step);
-     if (pmy_mcb->pmy_mc->polarized)
-       PropogatePolarization(pphot,step);
-   }
-   /*cth = cos(pphot->x[1]);
-   sth = sqrt(1. - SQR(cth));
-   cph = cos(pphot->x[2]);
-   sph = sin(pphot->x[2]);*/
-   // Compute cartesian
-   /*Real kx = pphot->k[0]*sth*cph + pphot->k[1]*cth*cph - pphot->k[2]*sph;
-   Real ky  = pphot->k[0]*sth*sph + pphot->k[1]*cth*sph + pphot->k[2]*cph;
-   Real kz = pphot->k[0]*cth - pphot->k[1]*sth;
-   x = pphot->x[0]*sth*cph;
-   y = pphot->x[0]*sth*sph;
-   z = pphot->x[0]*cth;*/
-   //printf("ks: %g %g %g %g %g %g\n",pphot->kcart[0],kx,pphot->kcart[1],ky,pphot->kcart[2],kz);
-   /*x0 += step*pphot->kcart[0];
-   y0 += step*pphot->kcart[1];
-   z0 += step*pphot->kcart[2];*/
-   //printf("xs: %g %g %g %g %g %g\n",x0,x,y0,y,z0,z,step);
-   tauremaining -= chi * step;
+      if (pphot->IsNanPhoton(ip)) {
+        pphot->PrintPhoton(ip);
+        pphot->statp[ip] = DESTROYED;
+      }
+      step = StepSize(pphot,ip);
 
-   // SWD: Clean up these checks
-   // Check if photon changed zones
-   if (UpdateZone(pphot,0)) {
-     UpdateOpacities(pphot,pmcb);
-     zone_counter++;
-     chi = GetExtinctionCoefficient(pphot->abs_coef,pphot->sct_coef);
-     //chi = pphot->sct_coef + pphot->abs_coef;
-     //chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max(chi, TINY_NUMBER)
-   }
-   if (pphot->status == DESTROYED) {
-     pphot->PrintPhoton();
-   }
+      // Perform any user work
+      if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this,ip);
+      // SWD: put here for now, may need additional flag
+      if (ptraj != NULL) ptraj->AddToTrajectory(pphot,ip);
 
-   // Update moments
-   if (pmcb->moments_flag) {
-     pmcb->UpdateMoments(pphot,step,1.,0);
-   }
+    } // end of photon integration
 
-   if ((isnan(pphot->k[IMC0])) or (pphot->IsNanPhoton())) {
-     pphot->PrintPhoton();
-     pphot->status = DESTROYED;
-   }
+    /*if (pphot->statp[ip] == ESCAPED) {
+      pphot->ep[ip] *= pphot->k0p[ip];
+      //pphot->PrintPhoton(ip);
+      }*/
 
-   step = StepSize(pphot);
-
-   // Perform any user work
-   if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this,0);
-   // SWD: put here for now, may need additional flag
-   if (ptraj != NULL) ptraj->AddToTrajectory(pphot);
-
-  } // end of photon integration
-
-  /*if (pphot->status == ESCAPED) {
-    pphot->energy *= pphot->k[IMC0];
-    //pphot->PrintPhoton();
-    }*/
-
-  if (iter >= checkmove) {
-    std::cout << "Warning: iter exceeded " << checkmove << " in photon mover."
-              << std::endl;
-    pphot->PrintPhoton();
-    std::cout << "tau remaining, chi: " << tauremaining << " " << chi << std::endl;
-    pphot->status = DESTROYED;
-  }
-
-
-#ifdef VERBOSE
-  printf("The photon crossed %d zones, traveling %g after %d iterations.\n",zone_counter,
-         dlambda*static_cast<Real>(iter), iter);
-  printf("k[IMC0]: %g  k[IMC1]: %g  k[IMC2]: %g  k[IMC3]: %g \n",
-         pphot->k[IMC0], pphot->k[IMC1], pphot->k[IMC2], pphot->k[IMC3]);
-  printf("end GeneralMover::Move\n");
-#endif
+    if (iter >= checkmove) {
+      std::cout << "Warning: iter exceeded " << checkmove << " in photon mover."
+                << std::endl;
+      pphot->PrintPhoton(ip);
+      std::cout << "tau remaining, chi: " << tauremaining << " " << chi << std::endl;
+      pphot->statp[ip] = DESTROYED;
+    }
+  } // end loop over ip
 
 }
 
@@ -215,68 +148,87 @@ void GeneralMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void GeneralMover::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb)
+//! \fn void GeneralMover::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip)
 //! \brief update opacities after a photon has changed zones
 
-void GeneralMover::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb) {
+void GeneralMover::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip) {
 
   pmy_mcb = pmcb;
 
-    if (pphot->status == EVOLVING) {
+    if (pphot->statp[ip] == EVOLVING) {
     // Opacities need to be calculated using comoving frame energy and then transformed
     // back to Eulerian frame when Lorentz Transformations are enabled.
     Real shift;
-    int i1 = pphot->i1;
-    int i2 = pphot->i2;
-    int i3 = pphot->i3;
+    int i1 = pphot->i1p[ip];
+    int i2 = pphot->i2p[ip];
+    int i3 = pphot->i3p[ip];
     if (pmcb->boosts) {
       // Shift photon energy to comoving frame
-      shift = pmy_mcb->LorentzTransformFrequencyShift(pphot,0); //SWDFIX
-      Real energy = pphot->energy * shift;
+      shift = pmy_mcb->LorentzTransformFrequencyShift(pphot,ip);
+      Real energy = pphot->ep[ip] * shift;
       // compute opacities in comoving frame
-      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,i1,i2,i3,energy);
-      pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,i1,i2,i3,energy);
+      pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,i1,i2,i3,energy);
+      pphot->scp[ip] = pmcb->ScatteringOpacity(pmcb,i1,i2,i3,energy);
       // Shift opaciteis to Eulerian frame
-      pphot->abs_coef *= shift;
-      pphot->sct_coef *= shift;
+      pphot->acp[ip] *= shift;
+      pphot->scp[ip] *= shift;
     } else {
       // No distinction between comovinng frame and eulerian frame
-      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,i1,i2,i3,pphot->energy);
-      pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,i1,i2,i3,pphot->energy);
+      pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,i1,i2,i3,pphot->ep[ip]);
+      pphot->scp[ip] = pmcb->ScatteringOpacity(pmcb,i1,i2,i3,pphot->ep[ip]);
     }
 
   }
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void GeneralMover::VerletStep(Photon *pphot, Real step)
+//! \fn void GeneralMover::VerletStep(Photon *pphot, Real step, int ip)
 //! \brief performs a single verlet integration step
 
-void GeneralMover::VerletStep(Photon *pphot, Real step) {
+void GeneralMover::VerletStep(Photon *pphot, Real step, int ip) {
 
-  //Real gamma[NCOORD][NCOORD][NCOORD];
   Real k_n1[NCOORD],k_n1_copy[NCOORD];
   Real dk_n1[NCOORD];
-  Real dk, error;
-  int n_iteration, i, k, j;
+  Real error;
+  Real x[NCOORD], k0[NCOORD], dk0[NCOORD];
 
-  for (i=0;i<NCOORD;i++) {
-    pphot->x[i] += (pphot->k[i])*step + 0.5*(pphot->dk[i])*SQR(step);
-    k_n1[i] = (pphot->k[i]) + (pphot->dk[i])*step;
-  }
+  // SWD: Need to think about how to do this better without invoking recurssion
+  // SWD: Need to rename variables and clean this up with new scheme
+
+  x[IMC0] = pphot->x0p[ip] += (pphot->k0p[ip])*step + 0.5*(pphot->dk0p[ip])*SQR(step);
+  x[IMC1] = pphot->x1p[ip] += (pphot->k1p[ip])*step + 0.5*(pphot->dk1p[ip])*SQR(step);
+  x[IMC2] = pphot->x2p[ip] += (pphot->k2p[ip])*step + 0.5*(pphot->dk2p[ip])*SQR(step);
+  x[IMC3] = pphot->x3p[ip] += (pphot->k3p[ip])*step + 0.5*(pphot->dk3p[ip])*SQR(step);
+
+  k_n1[IMC0] = (pphot->k0p[ip]) + 0.5*(pphot->dk0p[ip]) * step;
+  k_n1[IMC1] = (pphot->k1p[ip]) + 0.5*(pphot->dk1p[ip]) * step;
+  k_n1[IMC2] = (pphot->k2p[ip]) + 0.5*(pphot->dk2p[ip]) * step;
+  k_n1[IMC3] = (pphot->k3p[ip]) + 0.5*(pphot->dk3p[ip]) * step;
+
+  k0[IMC0] = pphot->k0p[ip];
+  k0[IMC1] = pphot->k1p[ip];
+  k0[IMC2] = pphot->k2p[ip];
+  k0[IMC3] = pphot->k3p[ip];
+
+  dk0[IMC0] = pphot->dk0p[ip];
+  dk0[IMC1] = pphot->dk1p[ip];
+  dk0[IMC2] = pphot->dk2p[ip];
+  dk0[IMC3] = pphot->dk3p[ip];
+
 
   // Update gamma for current location
-  pcoord->Connect(pphot->x, gamma);
-  n_iteration = 0;
+  pcoord->Connect(x, gamma);
+  int n_iteration = 0;
 
+  // SWD: not clear this while loops is accomplishing anything
   do {
     n_iteration += 1;
     error = 0.;
-    for (i=0;i<NCOORD;i++) {
+    for (int i=0;i<NCOORD;i++) {
       k_n1_copy[i] = k_n1[i];
     }
 
-    for (k=0;k<NCOORD;k++) {
+    for (int k=0;k<NCOORD;k++) {
       // off diagonal elements
       dk_n1[k] =
         -2. * (k_n1_copy[IMC0] *
@@ -294,32 +246,36 @@ void GeneralMover::VerletStep(Photon *pphot, Real step) {
          gamma[k][IMC2][IMC2] * k_n1_copy[IMC2] * k_n1_copy[IMC2] +
          gamma[k][IMC3][IMC3] * k_n1_copy[IMC3] * k_n1_copy[IMC3]);
 
-      k_n1[k] = pphot->k[k] + (1./2.)*((pphot->dk[k])+dk_n1[k])*step;
+      k_n1[k] = k0[k] + 0.5 * (dk0[k] + dk_n1[k]) * step;
 
       error += fabs(k_n1_copy[k] - k_n1[k]) / (k_n1[k]);
     }
   } while ((error > tolerance) && (n_iteration < max_iteration));
 
-  //printf("%g %g %g %g %g %g %g %g %g\n", step, pphot->k[IMC0], pphot->k[IMC1],
-  // pphot->k[IMC2], pphot->k[IMC3], k_n1[IMC0], k_n1[IMC1], k_n1[IMC2], k_n1[IMC3]);
-
   // SWD probably should not do this here
   // update photon energy due to evolving k_t (coordinate frame)
-  //pphot->energy *= k_n1[IMC0]/(pphot->k[IMC0]);
+  //pphot->ep[ip] *= k_n1[IMC0]/(pphot->k[IMC0]);
 
-  for (i=0;i<NCOORD;i++) {
-    pphot->k[i] = k_n1[i];
-    pphot->dk[i] = dk_n1[i];
-  }
+  pphot->k0p[ip] = k_n1[IMC0];
+  pphot->k1p[ip] = k_n1[IMC1];
+  pphot->k2p[ip] = k_n1[IMC2];
+  pphot->k3p[ip] = k_n1[IMC3];
+
+  pphot->dk0p[ip] = dk_n1[IMC0];
+  pphot->dk1p[ip] = dk_n1[IMC1];
+  pphot->dk2p[ip] = dk_n1[IMC2];
+  pphot->dk3p[ip] = dk_n1[IMC3];
 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void GeneralMover::PropogatePolarization(Photon *pphot, Real step)
+//! \fn void GeneralMover::PropogatePolarization(Photon *pphot, Real step, int ip)
 //! \brief propogates polarization tensor a single step
 
-void GeneralMover::PropogatePolarization(Photon *pphot, Real step) {
+void GeneralMover::PropogatePolarization(Photon *pphot, Real step, int ip) {
 
+
+  // SWDFIX
   // SWD: Gamma does not need recomputing
   //Real gamma[NCOORD][NCOORD][NCOORD];
   // Store gamma in Coord to prevent recalculation
@@ -340,41 +296,37 @@ void GeneralMover::PropogatePolarization(Photon *pphot, Real step) {
           pphot->polten[i][j] += -(gamma[i][k][l] * ptcopy[k][j] +
                                    gamma[j][k][l] * ptcopy[i][k]) *
                                   pphot->k[l] * step;
-        }}
-      if ((i == IMC2) && (j == IMC2)) {
-        Real tc02 = ptcopy[IMC0][IMC2].real();
-        Real tc12 = ptcopy[IMC1][IMC2].real();
-        Real tc22 = ptcopy[IMC2][IMC2].real();
-        Real tc32 = ptcopy[IMC3][IMC2].real();
+        }
       }
-    }}
+    }
+  }
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real GeneralMover::StepSize(Photon *pphot)
+//! \fn Real GeneralMover::StepSize(Photon *pphot, int ip)
 //! \brief computes stepsize based on size of current zone
 
 // SWD: Requires updates
 // return the stepsize based on the current zone and k-vector
 // this should be updated with every iteration since k continuously changes
-Real GeneralMover::StepSize(Photon *pphot) {
+Real GeneralMover::StepSize(Photon *pphot, int ip) {
 
   if (!pphot->pmy_mcb->varystep_flag) {
     return step_par; // keep step constant
   }
 
   Real small = 1.e-20;
-  Real kx1 = (fabs(pphot->k[IMC1]) > small) ? fabs(pphot->k[IMC1]) : small;
-  Real kx2 = (fabs(pphot->k[IMC2]) > small) ? fabs(pphot->k[IMC2]) : small;
-  Real kx3 = (fabs(pphot->k[IMC3]) > small) ? fabs(pphot->k[IMC3]) : small;
+  Real kx1 = (fabs(pphot->k1p[ip]) > small) ? fabs(pphot->k1p[ip]) : small;
+  Real kx2 = (fabs(pphot->k2p[ip]) > small) ? fabs(pphot->k2p[ip]) : small;
+  Real kx3 = (fabs(pphot->k3p[ip]) > small) ? fabs(pphot->k3p[ip]) : small;
 
   // SWD: May want to store as dx1, etc.
-  Real stepx1 = ((pcoord->x1f(pphot->i1 + 1) - pcoord->x1f(pphot->i1)) / kx1);
-  Real stepx2 = ((pcoord->x2f(pphot->i2 + 1) - pcoord->x2f(pphot->i2)) / kx2);
-  Real stepx3 = ((pcoord->x3f(pphot->i3 + 1) - pcoord->x3f(pphot->i3)) / kx3);
+  Real stepx1 = ((pcoord->x1f(pphot->i1p[ip]+1)-pcoord->x1f(pphot->i1p[ip]))/kx1);
+  Real stepx2 = ((pcoord->x2f(pphot->i2p[ip]+1)-pcoord->x2f(pphot->i2p[ip]))/kx2);
+  Real stepx3 = ((pcoord->x3f(pphot->i3p[ip]+1)-pcoord->x3f(pphot->i3p[ip]))/kx3);
 
   Real step = (stepx1 < stepx2) ? stepx1 : stepx2;
   step = (step < stepx3) ? step : stepx3;
 
-  return step*step_par;
+  return step * step_par;
 }

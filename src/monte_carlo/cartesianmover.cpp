@@ -10,7 +10,6 @@
 #include "photon.hpp"
 #include "photonmover.hpp"
 #include "../mesh/mesh.hpp"
-#include "debug.hpp"
 
 // function prototypes
 Real DistanceToNearestFace(MCCoord *pco, Photon *pphot, int ip);
@@ -107,12 +106,12 @@ void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
           if (pmcb->coherent_scattering) {
             Real tauacc = 10.;
             if ((pphot->acp[ip]+pphot->scp[ip]) * dist > tauacc)
-              accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
+              accel_success = MRWAcceleration(pphot,pran,dist,tauacc,ip);
           } else {
             Real tauacc = 10.;
             if (pmcb->planck_inv_opacity(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip])
                 * dist > tauacc)
-              accel_success = MRWAcceleration(pphot,pran,dist,tauacc);
+              accel_success = MRWAcceleration(pphot,pran,dist,tauacc,ip);
           }
         }
 

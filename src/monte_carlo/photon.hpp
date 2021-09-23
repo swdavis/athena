@@ -37,8 +37,7 @@ public:
   int i1,i2,i3; // zone indicies currently containing photon
   int status; // photon status (escaped, absorbed, evolving)
   int nuser_var; // number of user variables
-  enum BoundaryFace face;
-
+  int face;
   // SWD: x can always include time, k could always include energy?
 
   Real x[4];  // current photon position in spacetime
@@ -68,14 +67,13 @@ public:
   static int nwork;
 
   static int ipid;
-  static int istatp, inscp;
+  static int istatp, inscp, itrp;
   static int ii1p, ii2p, ii3p;
   static int ix0p, ix1p, ix2p, ix3p;
   static int ik0p, ik1p, ik2p, ik3p;
   static int idk0p, idk1p, idk2p, idk3p;
   static int iep, iwp, iscp, iacp;
   static int isip, isqp, isup, isvp;
-
 
   std::vector<int> *intprop;   //!>   integer properties
   std::vector<Real> *realprop; //!>   real properties
@@ -85,7 +83,7 @@ public:
   std::vector<Real> *user;     //!>   user variable arrays
 
   std::vector<int> &pid;                  //!>   particle ID
-  std::vector<int> &statp, &nscp;
+  std::vector<int> &statp, &nscp, &trp;
   std::vector<int> &i1p, &i2p, &i3p;
   std::vector<Real> &x0p, &x1p, &x2p, &x3p;
   std::vector<Real> &k0p, &k1p, &k2p, &k3p;

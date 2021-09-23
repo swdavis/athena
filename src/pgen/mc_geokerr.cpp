@@ -40,7 +40,8 @@ namespace {
   bool first;
 
   // user function definitions
-  void TurningPointCheck(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover);
+  void TurningPointCheck(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
+                         int ip);
 
 }
 
@@ -54,7 +55,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   Real rideal = 8.314e7;
   Real rho = 1.;
   Real temp = 1.;
-  Real gamma = peos->GetGamma(); 
+  Real gamma = peos->GetGamma();
 
   // Set nominal values for grid, unused
   for (int k=ks; k<=ke; k++) {
@@ -71,6 +72,11 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
 }
 
+//========================================================================================
+//! \fn void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin)
+//! \brief Initializes user data specific to MonteCarlo class
+//========================================================================================
+
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 
   // Request 6 user variables
@@ -79,6 +85,11 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
   // Enroll user work in move function
   EnrollUserWorkInMove(TurningPointCheck);
 }
+
+//========================================================================================
+//! \fn void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin)
+//! \brief Analogous to problem generator but used in support of InitializePhoton
+//========================================================================================
 
 void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
@@ -119,7 +130,7 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
   for(int i=js; i<=je; i++) {
     if ((th0 >= pcoord->x2f(i)) && (th0 < pcoord->x2f(i+1)))
       i2start = i;
-  } 
+  }
   i3start = -1;
   for(int i=ks; i<=ke; i++) {
     if ((phi0 >= pcoord->x3f(i)) && (phi0 < pcoord->x3f(i+1)))
@@ -132,7 +143,7 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
     throw std::runtime_error(msg.str().c_str());
   }
 
-#ifdef MPI_PARALLEL 
+#ifdef MPI_PARALLEL
   // Set iphot based on assumption that rays are distributed evenly
   // across active processes
   int rank = Globals::my_rank;
@@ -155,182 +166,201 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
 }
 
-void MonteCarloBlock::InitializePhoton(Photon *pphot) {
+//========================================================================================
+//! \fn void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe)
+//! \brief Initializes Photon packets before integration
+//========================================================================================
+
+void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
   MCCoord *pco = pphot->pmy_mcb->pcoord;
 
-  // Set status flag
-  pphot->status = EVOLVING;
-  pphot->weight = 1.;
-  
-  // initialize cell coordinates
-  pphot->i1 = i1start;
-  pphot->i2 = i2start;
-  pphot->i3 = i3start;
+  for (int ip=ips; ip<=ipe; ip++) {
 
-  // Initialize photon position
-  pphot->x[IMC0] = 0.;
-  pphot->x[IMC1] = r0;
-  pphot->x[IMC2] = th0;
-  pphot->x[IMC3] = phi0;
+    // Set status flag
+    pphot->statp[ip] = EVOLVING;
+    pphot->wp[ip] = 1.;
 
-  rprev = r0; // Used to check for turning point in r
+    // initialize cell coordinates
+    pphot->i1p[ip] = i1start;
+    pphot->i2p[ip] = i2start;
+    pphot->i3p[ip] = i3start;
 
+    // Initialize photon position
+    Real x[NCOORD];
+    x[IMC0] = pphot->x0p[ip] = 0.;
+    x[IMC1] = pphot->x1p[ip] = r0;
+    x[IMC2] = pphot->x2p[ip] = th0;
+    x[IMC3] = pphot->x3p[ip] = phi0;
 
-  if (pphot->weight < 0) {
-    printf("Warning: photon initial position not found on grid.\n");
-    pphot->status = DESTROYED;
-    pphot->PrintPhoton();
-  }
-  // Set the initial photon direction assuming "isotropic" emission
-  pphot->energy = 1.0;
+    //SWDFIX
+    rprev = r0; // Used to check for turning point in r
 
-  int ith = iphot / 4;
-  int iph = iphot % 4;
-  Real cth = muk + 0.2 * static_cast<Real>(ith);
-  Real phi = (phik + 0.4 * static_cast<Real>(iph)) * M_PI;
-  Real sth = sqrt(1.-cth*cth);
- 
-  iphot++;
+    // Set the initial photon direction assuming "isotropic" emission
+    pphot->ep[ip] = 1.0;
+    pphot->trp[ip] = iphot;
+    int ith = iphot / 4;
+    int iph = iphot % 4;
+    Real cth = muk + 0.2 * static_cast<Real>(ith);
+    Real phi = (phik + 0.4 * static_cast<Real>(iph)) * M_PI;
+    Real sth = sqrt(1.-cth*cth);
 
-  Real ktet[NCOORD];
-  ktet[IMC0] = pphot->energy;
-  ktet[IMC1] = pphot->energy*sth*sin(phi);
-  ktet[IMC2] = pphot->energy*cth;
-  ktet[IMC3] = pphot->energy*sth*cos(phi);
+    iphot++;
 
-  // Initialize Stokes vector as unpolarized
-  pphot->stokes[0] = 1.0;
-  pphot->stokes[1] = 0.0;
-  pphot->stokes[2] = 0.0;
-  pphot->stokes[3] = 0.0;
+    Real ktet[NCOORD];
+    ktet[IMC0] = pphot->ep[ip];
+    ktet[IMC1] = pphot->ep[ip]*sth*sin(phi);
+    ktet[IMC2] = pphot->ep[ip]*cth;
+    ktet[IMC3] = pphot->ep[ip]*sth*cos(phi);
 
-  // Initialize the absorption and scattering extinction coefficients
-  // to the values appropriate in the emitted zone
-  pphot->abs_coef = 0.;
-  pphot->sct_coef = 0.;
+    // Initialize Stokes vector as unpolarized
+    pphot->sip[ip] = 1.0;
+    pphot->sqp[ip] = 0.0;
+    pphot->sup[ip] = 0.0;
 
-  // Transform to coordinate frame
+    // Initialize the absorption and scattering extinction coefficients
+    // to the values appropriate in the emitted zone
+    pphot->acp[ip] = 0.;
+    pphot->scp[ip] = 0.;
 
-  Real ucon[NCOORD];
-  Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
-  Real gcov[NCOORD][NCOORD];
-  pco->Metric(pphot->x, gcov);
+    // Transform to coordinate frame
+    Real gcov[NCOORD][NCOORD];
+    pco->Metric(x, gcov);
 
-  Real r = pphot->x[IMC1];
-  Real a = pco->GetSpin();
-  Real omega = 1.0/(pow(r, 3./2.) + a); // circular velocity 
+    Real r = pphot->x1p[ip];
+    Real a = pco->GetSpin();
+    Real omega = 1.0/(pow(r, 3./2.) + a); // circular velocity
+    Real ucon[NCOORD];
+    ucon[IMC0] = sqrt(-1.0/(gcov0[IMC0][IMC0] + 2.*gcov0[IMC0][IMC3]*omega +
+                            SQR(omega)*gcov0[IMC3][IMC3]));
+    ucon[IMC1] = 0.;
+    ucon[IMC2] = 0.;
+    ucon[IMC3] = (ucon[IMC0])*omega;
 
-  ucon[IMC0] = sqrt(-1.0/(gcov0[IMC0][IMC0] + 2.*gcov0[IMC0][IMC3]*omega +
-                          SQR(omega)*gcov0[IMC3][IMC3]));
-  ucon[IMC1] = 0.;
-  ucon[IMC2] = 0.;
-  ucon[IMC3] = (ucon[IMC0])*omega;
-    
-  // create tetrad basis
-  ConstructTetrad(ucon, gcov, econ, ecov);
+    // create tetrad basis
+    Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
+    ConstructTetrad(ucon, gcov, econ, ecov);
 
-  // Transform k
-  TetradToCoordinate(ktet, pphot->k, econ);
+    // Transform k
+    Real k[NCOORD];
+    TetradToCoordinate(ktet, k, econ);
+    pphot->k0p[ip] = k[IMC0];
+    pphot->k1p[ip] = k[IMC1];
+    pphot->k2p[ip] = k[IMC2];
+    pphot->k3p[ip] = k[IMC3];
 
-  //  Initialize dK
-  Real gamma[NCOORD][NCOORD][NCOORD];
-  pco->Connect(pphot->x, gamma);
+    //  Initialize dK
+    Real gamma[NCOORD][NCOORD][NCOORD];
+    pco->Connect(x, gamma);
 
-  for (int i = 0; i < 4; i++) {
-
-    pphot->dk[i] = 
-      -2.*(pphot->k[0]*(gamma[i][IMC0][IMC1]*pphot->k[IMC1]+gamma[i][IMC0][IMC2]*pphot->k[IMC2]+
-                        gamma[i][IMC0][IMC3]*pphot->k[IMC3])+
-           pphot->k[IMC1]*(gamma[i][IMC1][IMC2]*pphot->k[IMC2]+gamma[i][IMC1][IMC3]*pphot->k[IMC3])+
-           pphot->k[IMC2]*gamma[i][IMC2][IMC3]*pphot->k[IMC3])-
-      (gamma[i][IMC0][IMC0]*pphot->k[IMC0]*pphot->k[IMC0]+gamma[i][IMC1][IMC1]*pphot->k[IMC1]*pphot->k[IMC1]+
-       gamma[i][IMC2][IMC2]*pphot->k[IMC2]*pphot->k[IMC2]+gamma[i][IMC3][IMC3]*pphot->k[IMC3]*pphot->k[IMC3]);
-  }
+    Real dk[NCOORD];
+    for (int i = 0; i < 4; i++) {
+      dk[i] =
+        -2.*(pphot->k[0]*(gamma[i][IMC0][IMC1]*k[IMC1]+gamma[i][IMC0][IMC2]*k[IMC2]+
+                        gamma[i][IMC0][IMC3]*k[IMC3])+
+           k[IMC1]*(gamma[i][IMC1][IMC2]*k[IMC2]+gamma[i][IMC1][IMC3]*k[IMC3])+
+           k[IMC2]*gamma[i][IMC2][IMC3]*k[IMC3])-
+        (gamma[i][IMC0][IMC0]*SQR(k[IMC0])+gamma[i][IMC1][IMC1]*SQR(k[IMC1])+
+         gamma[i][IMC2][IMC2]*SQR(k[IMC2])+gamma[i][IMC3][IMC3]*SQR(k[IMC3]));
+    }
+    pphot->dk0p[ip] = dk[IMC0];
+    pphot->dk1p[ip] = dk[IMC1];
+    pphot->dk2p[ip] = dk[IMC2];
+    pphot->dk3p[ip] = dk[IMC3];
 
   // Compute input variables for geokerr and store as user varibles for photon list
-
   // Geokerr uses BL coordinates so we first transfer from KS to BL and then compute
   // k_\alpha needed to define alpha, beta for geokerr
 
-  Real alpha,beta;
-  if (!pphot->pmy_mcb->boyerlindquist_flag) {
+    Real alpha,beta;
+    if (!pphot->pmy_mcb->boyerlindquist_flag) {
 
-    Real delta = SQR(pphot->x[IMC1]) - 2 * pphot->x[IMC1] + SQR(a);
-    Real kt0_bl = (pphot->k[IMC0] - 2.*pphot->x[IMC1]/delta*pphot->k[IMC1])*gcov0[IMC0][IMC0] 
-      + pphot->k[IMC1]*gcov0[IMC0][IMC1] + pphot->k[IMC2]*gcov0[IMC0][IMC2] 
-      + (pphot->k[IMC3] - a/delta*pphot->k[IMC1])*gcov0[IMC0][IMC3];
-    Real kth0_bl = (pphot->k[IMC0] - 2.*pphot->x[IMC1]/delta*pphot->k[IMC1])*gcov0[IMC2][IMC0]
-      + pphot->k[IMC1]*gcov0[IMC2][IMC1] + pphot->k[IMC2]*gcov0[IMC2][IMC2] 
-      + (pphot->k[IMC3] - a/delta*pphot->k[IMC1])*gcov0[IMC2][IMC3];
-    Real kphi0_bl = (pphot->k[IMC0] - 2.*pphot->x[IMC1]/delta*pphot->k[IMC1])*gcov0[IMC3][IMC0]
-      + pphot->k[IMC1]*gcov0[IMC3][IMC1] + pphot->k[IMC2]*gcov0[IMC3][IMC2] 
-      + (pphot->k[IMC3] - a/delta*pphot->k[IMC1])*gcov0[IMC3][IMC3];
-    alpha = -kphi0_bl / kt0_bl;
-    // Assumes with start at theta = pi/2, then beta^2 = q^2
-    beta = sqrt(SQR(kth0_bl)/SQR(kt0_bl));
-    if (kth0_bl > 0)
-      beta = -beta;
-  } else {
-    Real kt0 = pphot->k[IMC0]*gcov0[IMC0][IMC0] + pphot->k[IMC1]*gcov0[IMC0][IMC1] + 
-      pphot->k[IMC2]*gcov0[IMC0][IMC2] + pphot->k[IMC3]*gcov0[IMC0][IMC3];
-    Real kth0 = pphot->k[IMC0]*gcov0[IMC2][IMC0] + pphot->k[IMC1]*gcov0[IMC2][IMC1] + 
-      pphot->k[IMC2]*gcov0[IMC2][IMC2] + pphot->k[IMC3]*gcov0[IMC2][IMC3];
-    Real kphi0 = pphot->k[IMC0]*gcov0[IMC3][IMC0] + pphot->k[IMC1]*gcov0[IMC3][IMC1] + 
-      pphot->k[IMC2]*gcov0[IMC3][IMC2] + pphot->k[IMC3]*gcov0[IMC3][IMC3];
-    alpha = -kphi0 / kt0;
-    // SWD change?
-    // Assumes with start at theta = pi/2, then beta^2 = q^2
-    beta = sqrt(SQR(kth0)/SQR(kt0));
-  }
+      Real delta = SQR(x[IMC1]) - 2 * x[IMC1] + SQR(a);
+      Real kt0_bl = (k[IMC0] - 2.*x[IMC1]/delta*k[IMC1])*gcov0[IMC0][IMC0]
+        + k[IMC1]*gcov0[IMC0][IMC1] + k[IMC2]*gcov0[IMC0][IMC2]
+        + (k[IMC3] - a/delta*k[IMC1])*gcov0[IMC0][IMC3];
+      Real kth0_bl = (k[IMC0] - 2.*x[IMC1]/delta*k[IMC1])*gcov0[IMC2][IMC0]
+        + k[IMC1]*gcov0[IMC2][IMC1] + k[IMC2]*gcov0[IMC2][IMC2]
+        + (k[IMC3] - a/delta*k[IMC1])*gcov0[IMC2][IMC3];
+      Real kphi0_bl = (k[IMC0] - 2.*x[IMC1]/delta*k[IMC1])*gcov0[IMC3][IMC0]
+        + k[IMC1]*gcov0[IMC3][IMC1] + k[IMC2]*gcov0[IMC3][IMC2]
+        + (k[IMC3] - a/delta*k[IMC1])*gcov0[IMC3][IMC3];
+      alpha = -kphi0_bl / kt0_bl;
+      // Assumes with start at theta = pi/2, then beta^2 = q^2
+      beta = sqrt(SQR(kth0_bl)/SQR(kt0_bl));
+      if (kth0_bl > 0)
+        beta = -beta;
+    } else {
+      Real kt0 = k[IMC0]*gcov0[IMC0][IMC0] + k[IMC1]*gcov0[IMC0][IMC1] +
+        k[IMC2]*gcov0[IMC0][IMC2] + k[IMC3]*gcov0[IMC0][IMC3];
+      Real kth0 = k[IMC0]*gcov0[IMC2][IMC0] + k[IMC1]*gcov0[IMC2][IMC1] +
+        k[IMC2]*gcov0[IMC2][IMC2] + k[IMC3]*gcov0[IMC2][IMC3];
+      Real kphi0 = k[IMC0]*gcov0[IMC3][IMC0] + k[IMC1]*gcov0[IMC3][IMC1] +
+        k[IMC2]*gcov0[IMC3][IMC2] + k[IMC3]*gcov0[IMC3][IMC3];
+      alpha = -kphi0 / kt0;
+      // SWD change?
+      // Assumes with start at theta = pi/2, then beta^2 = q^2
+      beta = sqrt(SQR(kth0)/SQR(kt0));
+    }
 
-  // Geokerr initialization paramters
-  pphot->user_var[0] = alpha;
-  pphot->user_var[1] = beta;
-  pphot->user_var[2] = 1./pphot->x[IMC1]; // ui for 
-  first = true; // for setting sign of du/dlambda
-  pphot->user_var[4] = 0.; // tpr
-  pphot->user_var[5] = cos(th0);
+    // Geokerr initialization parameters
+    pphot->user[0][ip] = alpha;
+    pphot->user[1][ip] = beta;
+    pphot->user[2][ip] = 1./x[IMC1]; // ui for
+    if (pphot->k1p[ip] < 0.) {
+      pphot->user[3][ip] = 1.;
+    } else {
+      pphot->user[3][ip] = -1.;
+    }
+    first = true; // for setting sign of du/dlambda //SWDFIX
+    pphot->user[4][ip] = 0.; // tpr
+    pphot->user[5][ip] = cos(th0);
 
-
+    pphot->PrintPhoton(ip);
+  } // loop over ip
 }
 
+//========================================================================================
+//! \fn void MonteCarloBlock::FinalizePhoton(Photon *pphot, int ip)
+//! \brief Complete work at end of photon packets before integration
+//========================================================================================
 
+void MonteCarloBlock::FinalizePhoton(Photon *pphot, int ip) {
 
-void MonteCarloBlock::FinalizePhoton(Photon *pphot) {
-  
   Real a = pcoord->GetSpin();
   Real r_outer = 1.0 + sqrt(1.0 - SQR(a)) + 1.0e-3;
 
   // r is outside ISCO, transform into comoving frame tetrad, assuming
   // circular flow velocity
-  if (pphot->x[IMC1] < r_outer + 1.0e-5) {
-    pphot->status = ESCAPED;
+  if (pphot->x1p[ip] < r_outer + 1.0e-5) {
+    pphot->statp[ip] = ESCAPED;
     return;
   }
-  
+
 }
 
 namespace {
 
-void TurningPointCheck(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover) {
+void TurningPointCheck(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
+                       int ip) {
 
   // Check if r is increasing and set sign of du/dlamda accordingly
-  if (first) {
-    if (pphot->x[IMC1] > rprev)
-      pphot->user_var[3] = -1.;
+  // SWDFIX
+  /*if (first) {
+    if (pphot->x1p[ip] > rprev)
+      pphot->user[3][ip] = -1.;
     else
-      pphot->user_var[3] = 1.;
+      pphot->user[3][ip] = 1.;
     first = false;
-  }
-  
-  if (pphot->user_var[3] > 0.) 
-    if (pphot->x[IMC1] > rprev)
-      pphot->user_var[4] = 1.;
+    }*/
+
+  if (pphot->user[3][ip] > 0.)
+    if (pphot->x1p[ip] > rprev)
+      pphot->user[4][ip] = 1.;
   else
-    if (pphot->x[IMC1] < rprev)
-      pphot->user_var[4] = 1.;
-  rprev = pphot->x[IMC1];
+    if (pphot->x1p[ip] < rprev)
+      pphot->user[4][ip] = 1.;
+  rprev = pphot->x1p[ip];
 
 }
 

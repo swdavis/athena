@@ -77,7 +77,8 @@ public:
   virtual void CurvalinearToCartesian(Photon *pphot, Real kcart[4]);
   virtual void InitializeMRWDist(void);
   // Acceleration methods
-  virtual bool MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real tauacc);
+  virtual bool MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real tauacc,
+                               int ip);
   virtual Real MRWDist(MCRandom *pran);
   virtual void ReadComptonGreensFunction(void);
   virtual Real InterpComptonEnergy(Real x0, Real time, Real prob);

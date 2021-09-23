@@ -59,13 +59,14 @@ public:
 
   //functions
   void BuildEnergyGrid(Real emin, Real emax, int nen, bool xlog);
-  void UpdateSpectrum(Photon *pphot);
+  void UpdateSpectrum(Photon *pphot, int ip);
   int EnergyBin(Real energy);
   int EnergyBinUniform(Real energy, bool loge);
   bool AngleBinsCartesian(Real k[4], int &Phibin, int &mubin);
   bool AngleBinsSphericalPolar(Real k[4], int &Phibin, int &mubin);
   void SetSurface(std::string input_face);
-  bool ScreenCoordinates(Photon *pphot);
+  enum BoundaryFace GetPhotonFace(Photon *phot, int ip);
+  bool ScreenCoordinates(Photon *pphot, int ip);
   void ResetSpectrum();
   void AddSpectrum(Spectrum *pspec);
   void WriteSpectrum(std::string filename, int ntot);
@@ -91,7 +92,7 @@ public:
   AthenaArray<Real> photons;  // array of photon properies
 
   //functions
-  void AddPhoton(Photon *pphot);
+  void AddPhoton(Photon *pphot, int ip);
   void WriteList(std::string filename, int ntot);
 
 private:
@@ -112,7 +113,6 @@ public:
   std::string base_name;
 
   int length; // number of trajectories
-  int step;  // current step in trajectory
   int maxstep;
   int nparams; // number of properties for each photon trajectory
   int output_number;// current output number
@@ -122,8 +122,9 @@ public:
   AthenaArray<Real> trajectories;  // array of photon properies
 
   //functions
-  void CompleteTrajectory();
-  void AddToTrajectory(Photon *pphot);
+  void InitializeTrajectory(int itraj);
+  void CompleteTrajectory(int itraj);
+  void AddToTrajectory(Photon *pphot, int ip);
   void WriteList(std::string filename);
 
 private:

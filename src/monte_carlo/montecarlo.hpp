@@ -330,9 +330,11 @@ public:
   void RayTracePhotons(int nphtot); // Ray trace photon on this block
   void TransferPhotons(int nphtot); // Transfer photons on this block
   void TransferPhotonsOld(int nphtot); // Transfer photons on this block
+  void CoordinateToComoving(Photon *pphot, int ips, int ipe);
+  void ComovingToCoordinate(Photon *pphot, int ips, int ipe);
   void LorentzTransform(Photon *pphot, const Real sign, int ips, int ipe);
   Real LorentzTransformFrequencyShift(Photon *pphot, int ip);
-  void TetradTransform(Photon *pphot, const Real sign);
+  void TetradTransform(Photon *pphot, const Real sign, int ips, int ipe);
   void InitializePhoton(Photon *pphot, int ips, int ipe);
   void FinalizePhoton(Photon *pphot);
   void UpdateMoments(Photon *pphot, Real dl, Real etau, int ip);
