@@ -66,6 +66,18 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3,
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn Real DustAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3,
+//!                                    Real energy)
+//! \brief calculation extinction coefficient for dust absorption
+
+Real DustAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3,
+                               Real energy) {
+
+  return 0.;
+
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn Real ThomsonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy)
 //! \brief calculation extinction coefficient for Thomson scattering
 
@@ -144,6 +156,19 @@ Real ResonanceLineOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real en
   Real kappa = XsecVoigt(energy / h, tgas) / mass;
 
   return kappa * pmcb->rho(i3,i2,i1);
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Real DustScatteringOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3,
+//!                                    Real energy)
+//! \brief calculation extinction coefficient for dust scattering
+
+Real DustScatteringOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3,
+                               Real energy) {
+
+  Real kapdust = 1.e10;
+  return kapdust*pmcb->rho(i3,i2,i1);
 
 }
 

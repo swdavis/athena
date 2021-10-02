@@ -274,28 +274,34 @@ void GeneralMover::VerletStep(Photon *pphot, Real step, int ip) {
 
 void GeneralMover::PropogatePolarization(Photon *pphot, Real step, int ip) {
 
-
   // SWDFIX
   // SWD: Gamma does not need recomputing
   //Real gamma[NCOORD][NCOORD][NCOORD];
   // Store gamma in Coord to prevent recalculation
   //pcoord->Connect(pphot->x, gamma);
 
-  int i, j, k, l;
-  std::complex<Real> ptcopy[NCOORD][NCOORD];
 
-  for (int i = 0; i < 4; i++)
-    for (int j = 0; j < 4; j++)
-      ptcopy[i][j] = pphot->polten[i][j];
+  std::complex<Real> ptcopy[4][4];
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      ptcopy[i][j] = pphot->polten[i*4+j][ip];
+    }
+  }
+
+  Real kp[4];
+  kp[IMC0] = pphot->k0p[ip];
+  kp[IMC1] = pphot->k1p[ip];
+  kp[IMC2] = pphot->k2p[ip];
+  kp[IMC3] = pphot->k3p[ip];
 
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < 4; j++) {
       for (int k = 0; k < 4; k++) {
         for (int l = 0; l < 4; l++) {
           // eq. 16 of Moscibrodzka & Gammie in vacuum
-          pphot->polten[i][j] += -(gamma[i][k][l] * ptcopy[k][j] +
-                                   gamma[j][k][l] * ptcopy[i][k]) *
-                                  pphot->k[l] * step;
+          pphot->polten[i*4+j][ip] += -(gamma[i][k][l] * ptcopy[k][j] +
+                                        gamma[j][k][l] * ptcopy[i][k]) *
+                                       kp[l] * step;
         }
       }
     }

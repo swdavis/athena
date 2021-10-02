@@ -225,6 +225,8 @@ enum AbsorptionOpacityFlag GetAbsorptionOpacityFlag(std::string input_string) {
     return ABSNONE;
   } else if (input_string == "freefree") {
     return ABSFF;
+  } else if (input_string == "dust") {
+    return ABSDUST;
   } else {
     std::stringstream msg;
     msg << "### FATAL ERROR in GetAbsorptionOpacityFlag" << std::endl
@@ -271,6 +273,8 @@ enum ScatteringFlag GetScatteringFlag(std::string input_string) {
     return SCATCOMP;
   } else if (input_string == "resonance") {
     return SCATRES;
+  } else if (input_string == "dust") {
+    return SCATDUST;
   } else {
     std::stringstream msg;
     msg << "### FATAL ERROR in GetScatteringFlag" << std::endl

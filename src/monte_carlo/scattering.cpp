@@ -514,14 +514,11 @@ void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
   } // end loop over ip
 }
 
-
-//----------------------------------------------------------------------------
-//! \fn void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot,
-//!                               int ips, int ipe)
+//----------------------------------------------------------------------------------------
+//! \fn void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe)
 //! \brief Implements resonance line scattering
 
-void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips,
-                          int ipe) {
+void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
 
   MCRandom *pran = pmcb->pran;
 
@@ -584,6 +581,33 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips,
     //printf("nu: %g %g %g %g %g %g\n", pphot->ep[i]/h, nu, cgam, vpar, vperp, vth);
 
   } // end loop over ip
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ScatterDust(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe)
+//! \brief Implements resonance line scattering
+
+void ScatterDust(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
+
+  MCRandom *pran = pmcb->pran;
+
+  for (int ip=ips; ip<=ipe; ip++) {
+
+    // Copy from isotropic scattering
+    Real phi = 2.*PI * pran->uniform();
+    Real cphi = cos(phi);
+    Real sphi = sqrt(1. - SQR(cphi));
+
+    Real cth = 2. * pran->uniform() - 1.;
+    Real sth = sqrt(1. - SQR(cth));
+
+    // calculate new wave vector
+    pphot->k1p[ip] = sth * cphi;
+    pphot->k2p[ip] = sth * sphi;
+    pphot->k3p[ip] = cth;
+
+  }
+
 }
 
 //----------------------------------------------------------------------------------------

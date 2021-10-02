@@ -36,15 +36,14 @@ class MCOutoupt;
 class MCCoord;
 
 // SWD: Make into a general MACRO set by configure?
-#define NCOORD 4
 #define NMOM 16
 
 // Flags for controlling monte carlo emission, scattering, absorption, bcs
 enum EmissionFlag {EMISUSER = 0, EMISNONE = 1, EMISFF = 2};
-enum AbsorptionOpacityFlag {ABSUSER = 0, ABSNONE = 1, ABSFF = 2};
+enum AbsorptionOpacityFlag {ABSUSER = 0, ABSNONE = 1, ABSFF = 2, ABSDUST =3};
 enum AbsorptionMethodFlag {ABSWEIGHT = 0, ABSPROB = 1, ABSTAU = 2};
 enum ScatteringFlag {SCATUSER = 0, SCATNONE =1, SCATISO = 2, SCATTHOM = 3, SCATCOMP =4,
-                     SCATRES = 5};
+                     SCATRES = 5, SCATDUST = 6};
 enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY = 2,
                      MC_DESTROY_BNDRY = 3, MC_POLAR_BNDRY = 4, MC_REFLECT_BNDRY = 5,
                      MC_USER_BNDRY = 6, MC_BLOCK_BNDRY = 7};
@@ -68,9 +67,11 @@ void DefaultGetTemperature(MonteCarloBlock *pmcb);
 //--------------------- prototypes for opacity.cpp functions -----------------------------
 Real NoOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
 Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3,Real energy);
+Real DustAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
 Real ThomsonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
 Real ComptonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
 Real ResonanceLineOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
+Real DustScatteringOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
 void GenerateComptonTable(int io);
 Real ComptonCrossSection(Real energy, Real theta);
 Real Maxwell(Real theta, Real gamma);
@@ -88,6 +89,7 @@ void ScatterThomsonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, in
 void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe);
 void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe);
 void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe);
+void ScatterDust(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe);
 Real Bigy(Real x, Real xp);
 Real SigmaHat(Real x);
 Real ElectronDistPozdnyakov(Real tgas, MCRandom *pran);
@@ -106,31 +108,26 @@ void GetZonePositionCylindrical(Photon *pphot, MCRandom *pran, MCCoord *pco, int
 
 //------------------ prototypes for frame_transformations.cpp functions ------------------
 // SWD:  Add these to MCCoord class, utils, keep here?
-void ConstructTetrad(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD],
-                     Real econ[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD]);
-void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD],
-                     Real econ[NCOORD][NCOORD], Real ecov[NCOORD][NCOORD]);
-void ConstructTetrad(Real ucon[NCOORD], Real vcon[NCOORD], Real wcon[NCOORD],
-                     Real gcov[NCOORD][NCOORD], Real econ[NCOORD][NCOORD],
-                     Real ecov[NCOORD][NCOORD]);
-void InitializeLeviCivita(Real levi[NCOORD][NCOORD][NCOORD][NCOORD]);
-void ImposeRightHanded(Real econ[NCOORD][NCOORD], Real gcov[NCOORD][NCOORD]);
+void ConstructTetrad(Real ucon[4], Real gcov[4][4],
+                     Real econ[4][4], Real ecov[4][4]);
+void ConstructTetrad(Real ucon[4], Real vcon[4], Real gcov[4][4],
+                     Real econ[4][4], Real ecov[4][4]);
+void ConstructTetrad(Real ucon[4], Real vcon[4], Real wcon[4],
+                     Real gcov[4][4], Real econ[4][4],
+                     Real ecov[4][4]);
+void InitializeLeviCivita(Real levi[4][4][4][4]);
+void ImposeRightHanded(Real econ[4][4], Real gcov[4][4]);
 Real KroneckerDelta(int i, int j);
-void ProjectVecSub(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD]);
-Real DotVec(Real ucon[NCOORD], Real vcon[NCOORD], Real gcov[NCOORD][NCOORD]);
-void NormalizeVec(Real ucon[NCOORD], Real gcov[NCOORD][NCOORD]);
-void ConToCov(Real ucon[NCOORD], Real ucov[NCOORD], Real gcov[NCOORD][NCOORD]);
-void CovToCon(Real ucov[NCOORD], Real ucon[NCOORD], Real gcon[NCOORD][NCOORD]);
-void CoordinateToTetrad(Real ucoord[NCOORD],Real utet[NCOORD],Real ecov[NCOORD][NCOORD]);
-void TetradToCoordinate(Real utet[NCOORD],Real ucoord[NCOORD],Real econ[NCOORD][NCOORD]);
-void StokesToTensor(Real stokes[NCOORD], std::complex<Real> tensor[NCOORD][NCOORD]);
-void TensorToStokes(std::complex<Real> tensor[NCOORD][NCOORD], Real stokes[NCOORD]);
-void ComplexCoordinateToTetrad(std::complex<Real> tcoord[NCOORD][NCOORD],
-                               std::complex<Real> ttet[NCOORD][NCOORD],
-                               Real ecov[NCOORD][NCOORD]);
-void ComplexTetradToCoordinate(std::complex<Real> ttet[NCOORD][NCOORD],
-                               std::complex<Real> tcoord[NCOORD][NCOORD],
-                               Real econ[NCOORD][NCOORD]);
+void ProjectVecSub(Real ucon[4], Real vcon[4], Real gcov[4][4]);
+Real DotVec(Real ucon[4], Real vcon[4], Real gcov[4][4]);
+void NormalizeVec(Real ucon[4], Real gcov[4][4]);
+void ConToCov(Real ucon[4], Real ucov[4], Real gcov[4][4]);
+void CovToCon(Real ucov[4], Real ucon[4], Real gcon[4][4]);
+void CoordinateToTetrad(Real ucoord[4],Real utet[4],Real ecov[4][4]);
+void TetradToCoordinate(Real utet[4],Real ucoord[4],Real econ[4][4]);
+void StokesToTensor(Real stokes[4], std::complex<Real> tensor[4][4]);
+void TensorToStokes(std::complex<Real> tensor[4][4], Real stokes[4]);
+
 //---------------------- prototypes for setting flags ------------------------------------
 enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string);
 enum EmissionFlag GetEmissionFlag(std::string input_string);
@@ -336,7 +333,7 @@ public:
   Real LorentzTransformFrequencyShift(Photon *pphot, int ip);
   void TetradTransform(Photon *pphot, const Real sign, int ips, int ipe);
   void InitializePhoton(Photon *pphot, int ips, int ipe);
-  void FinalizePhoton(Photon *pphot);
+  void FinalizePhoton(Photon *pphot, int ip);
   void UpdateMoments(Photon *pphot, Real dl, Real etau, int ip);
   void NormalizeMoments(bool normalize);
   void ResetMoments();

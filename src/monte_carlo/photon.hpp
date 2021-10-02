@@ -24,7 +24,7 @@ enum {IMC1 = 0, IMC2 = 1, IMC3 = 2, IMC0 = 3};
 
 //---------------------------------------------------------------------------------------
 //! \class Photon
-//! \brief phton data and functions
+//! \brief photon data and functions
 
 class Photon {
 public:
@@ -48,7 +48,7 @@ public:
   Real energy;  // photon energy
   Real *user_var; // storage for user variables
   Real sct_coef, abs_coef;  //scattering and absoprtion coefficients
-  std::complex<Real> polten[4][4]; // the polarization tensor
+  //std::complex<Real> polten[4][4]; // the polarization tensor
 
   // functions
   void CopyPhoton(Photon *pphot);
@@ -65,6 +65,7 @@ public:
   static int nreal;
   static int naux;
   static int nwork;
+  static int ncplx;
 
   static int ipid;
   static int istatp, inscp, itrp;
@@ -81,6 +82,7 @@ public:
                                //!>     particles moving to another meshblock)
   std::vector<Real> *work;     //!>   working arrays (not communicated)
   std::vector<Real> *user;     //!>   user variable arrays
+  std::vector<std::complex<Real>> *polten;
 
   std::vector<int> &pid;                  //!>   particle ID
   std::vector<int> &statp, &nscp, &trp;
@@ -97,6 +99,7 @@ public:
   void VectorsToWorkingArrays(int n);
   void WorkingArraysToVectors(int n);
   bool IsNanPhoton(int ip);
-
+  void PolarizationToTetrad(std::complex<Real> ttet[4][4], Real ecov[4][4], const int ip);
+  void PolarizationToCoord(std::complex<Real> ttet[4][4], Real econ[4][4], const int ip);
 };
 #endif // PHOTON_HPP

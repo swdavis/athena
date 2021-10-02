@@ -61,7 +61,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
   Real heabund = 0.09; //hardcode for now (should be parameter)
   //Real heabund = 0.;
-  Real mp = 1.6726e-24; 
+  Real mp = 1.6726e-24;
   Real sigmat = 6.65248e-25;
   Real kappaes = sigmat * (1. + 2.*heabund) / (mp * (1.+4.*heabund) );
 
@@ -71,13 +71,13 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   for (int k=ks; k<=ke; k++) {
     for (int j=js; j<=je; j++) {
       for (int i=is; i<=ie; i++) {
-	phydro->u(IDN,k,j,i) = rho;
-	phydro->u(IM1,k,j,i) = 0.0;
-	phydro->u(IM2,k,j,i) = 0.0;
-	phydro->u(IM3,k,j,i) = rho*vel;
-	phydro->u(IEN,k,j,i) = rideal*rho*temp/(gamma-1.0);
-	}
+        phydro->u(IDN,k,j,i) = rho;
+        phydro->u(IM1,k,j,i) = 0.0;
+        phydro->u(IM2,k,j,i) = 0.0;
+        phydro->u(IM3,k,j,i) = rho*vel;
+        phydro->u(IEN,k,j,i) = rideal*rho*temp/(gamma-1.0);
       }
+    }
   }
 
   // add kinetic energy
@@ -105,7 +105,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 
 void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
-  // Set variables 
+  // Set variables
   srcdist =pin->GetOrAddBoolean("problem","srcdist",false);
   rad0 = pin->GetReal("problem","radius");
   time0 = pin->GetOrAddReal("problem","time",-1.);
@@ -136,7 +136,7 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
     }
   }
 
-  // Deterime cell of initial photon, which is asssumed to include 
+  // Deterime cell of initial photon, which is asssumed to include
   // the origin if more than one cell is specified for each direction
   i1start = -1;
   for(int i=is; i<=ie; i++) {
@@ -200,12 +200,11 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
       pphot->sip[ip] = 1.0;
       pphot->sqp[ip] = 0.0;
       pphot->sup[ip] = 0.0;
-    
+
       // Generate initial angle parameters
       Real phi = 2. * PI * pran->uniform();
       Real cphi = cos(phi);
       Real sphi = sin(phi);
-    
       Real cth = 2. * pran->uniform() - 1.;
       Real sth = sqrt(1. - SQR(cth));
 
@@ -230,12 +229,11 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
             x = pran->uniform();
           dev = pran->uniform();
         }
-      
+
         Real r0 = x*rad0;
         Real phi = 2. * PI * pran->uniform();
         Real cphi = cos(phi);
         Real sphi = sin(phi);
-      
         Real cth = 2. * pran->uniform() - 1.;
         Real sth = sqrt(1. - SQR(cth));
 
@@ -252,7 +250,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
       }
 
     } else if (pmy_mc->emission_meth == EMISFF) {
-      // Set weight according to the emission array, which is the relative number 
+      // Set weight according to the emission array, which is the relative number
       // of photons per unit time emitted in each cell
       pphot->wp[ip] = emission(i3,i2,i1);
 
@@ -268,7 +266,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
       Real r0 = pow(pran->uniform()*rad0*rad0*rad0,1./3.);
       Real phi = 2. * PI * pran->uniform();
       Real cphi = cos(phi);
-      Real sphi = sin(phi);      
+      Real sphi = sin(phi);
       Real cth = 2. * pran->uniform() - 1.;
       Real sth = sqrt(1. - SQR(cth));
       pphot->x1p[ip] = r0*sth*cphi;
@@ -278,12 +276,11 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     }
 
     // Set status flag
-    if (pphot->wp[ip] < 0.0) 
+    if (pphot->wp[ip] < 0.0)
       pphot->statp[ip] = DESTROYED;
     else
       pphot->statp[ip] = EVOLVING;
 
-  
     // Initialize the absorption and scattering extinction coefficients
     // to the values appropriate in the emitted zone
     pphot->acp[ip] = AbsorptionOpacity(this,i1,i2,i3,pphot->ep[ip]);
@@ -296,7 +293,7 @@ namespace {
 
 // Used to evalue photons time distribution as fixed spherical
 // escape surface
-void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover, 
+void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
                      int ip) {
 
   pphot->user[0][ip] += pmover->dl * pphot->wp[ip];
@@ -314,9 +311,8 @@ void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
     pphot->x3p[ip] -= pphot->k3p[ip]*dr;
 
     pphot->statp[ip] = ESCAPED;
-    //pphot->face = BoundaryFace::undef;
-  } 
- 
+  }
+
 }
 
 // Used to test photons radial distributions after a fixed travel time
@@ -345,7 +341,6 @@ void TimedEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
     pphot->x3p[ip] -= pphot->k3p[ip]*dt*2.99792458e10;
 
     pphot->statp[ip] = ESCAPED;
-    //pphot->face = BoundaryFace::undef;
   }
 }
 

@@ -256,7 +256,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     Real dk[NCOORD];
     for (int i = 0; i < 4; i++) {
       dk[i] =
-        -2.*(pphot->k[0]*(gamma[i][IMC0][IMC1]*k[IMC1]+gamma[i][IMC0][IMC2]*k[IMC2]+
+        -2.*(pphot->k[IMC1]*(gamma[i][IMC0][IMC1]*k[IMC1]+gamma[i][IMC0][IMC2]*k[IMC2]+
                         gamma[i][IMC0][IMC3]*k[IMC3])+
            k[IMC1]*(gamma[i][IMC1][IMC2]*k[IMC2]+gamma[i][IMC1][IMC3]*k[IMC3])+
            k[IMC2]*gamma[i][IMC2][IMC3]*k[IMC3])-

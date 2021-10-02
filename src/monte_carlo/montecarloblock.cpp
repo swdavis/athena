@@ -224,6 +224,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     AbsorptionOpacity = NoOpacity;
   } else if (absorption_opac == ABSFF) {
     AbsorptionOpacity = FreeFreeAbsorptionOpacity;
+  } else if (absorption_opac == ABSDUST) {
+    AbsorptionOpacity = DustAbsorptionOpacity;
   }
 
   // Set scattering opacity and method
@@ -277,8 +279,19 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
       Scatter = ScatterResonanceLine;
       coherent_scattering = false;
     }
+  } else if (scattering_meth == SCATDUST) {
+    ScatteringOpacity = DustScatteringOpacity;
+    if (pmy_mc->polarized) {
+      Scatter = ScatterDust;
+      coherent_scattering = true;
+    } else {
+      std::stringstream msg;
+      msg << "### ERROR in MonteCarloBlock constructor" << std::endl
+          << "Dust scattering not suppored for polarized = "
+          << pmy_mc->polarized << std::endl;
+      throw std::runtime_error(msg.str().c_str());
+    }
   }
-
 
   // Allocate (/initialize) variable arrays needed for evolution/output
   int ncells1 = nx1 + 2*(NGHOST);

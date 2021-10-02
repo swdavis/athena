@@ -20,6 +20,7 @@ int Photon::nint = 7;
 int Photon::nreal = 20;
 int Photon::naux = 0;
 int Photon::nwork = 0;
+int Photon::ncplx = 16;
 int Photon::ipid = 0;
 int Photon::inscp = 1, Photon::istatp = 2, Photon::itrp = 3;
 int Photon::ii1p = 4, Photon::ii2p = 5, Photon::ii3p = 6;
@@ -37,6 +38,7 @@ Photon::Photon(MonteCarloBlock *pmcb, int nuser, int len_limit)
   : intprop(new std::vector<int> [nint]), realprop(new std::vector<Real> [nreal]),
     aux(new std::vector<Real> [naux]), work(new std::vector<Real> [nwork]),
     user(new std::vector<Real> [nuser]),
+    polten(new std::vector<std::complex<Real>> [ncplx]),
     nphot(npar),pid(intprop[ipid]),nscp(intprop[inscp]), statp(intprop[istatp]),
     trp(intprop[itrp]), i1p(intprop[ii1p]), i2p(intprop[ii2p]), i3p(intprop[ii3p]),
     x0p(realprop[ix0p]), x1p(realprop[ix1p]), x2p(realprop[ix2p]), x3p(realprop[ix3p]),
@@ -309,6 +311,8 @@ void Photon::Resize(int new_npar) {
     work[i].resize(new_npar);
   for (int i = 0; i < nuser_var; ++i)
     user[i].resize(new_npar);
+  for (int i = 0; i < ncplx; ++i)
+    polten[i].resize(new_npar);
 
   // Flag new particles.
   for (int k = npar; k < new_npar; ++k)
@@ -336,6 +340,8 @@ void Photon::RemoveOneParticle(int k) {
         work[j][k] = work[j].back();
       for (int j = 0; j < nuser_var; ++j)
         user[j][k] = user[j].back();
+      for (int j = 0; j < ncplx; ++j)
+        polten[j][k] = polten[j].back();
     }
     // Remove the last particle.
     for (int j = 0; j < nint; ++j)
@@ -348,6 +354,9 @@ void Photon::RemoveOneParticle(int k) {
       work[j].pop_back();
     for (int j = 0; j < nuser_var; ++j)
       user[j].pop_back();
+    for (int j = 0; j < ncplx; ++j)
+      polten[j].pop_back();
+
   } else {
     // Throw error when index k is invalid.
     std::stringstream msg;
@@ -357,4 +366,48 @@ void Photon::RemoveOneParticle(int k) {
     throw std::runtime_error(msg.str().c_str());
     //ATHENA_ERROR(msg);
   }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Photon::PolarizationToTetrad(std::complex<Real> ttet[4][4], Real ecov[4][4],
+//!                                       const int ip)
+//!
+//! \brief transform complex tensor from coordinate frame to tetrad frame
+
+void Photon::PolarizationToTetrad(std::complex<Real> ttet[4][4], Real ecov[4][4],
+                                  const int ip) {
+
+  for (int i = 0; i < 4; i++)
+    for (int j = 0; j < 4; j++)
+      ttet[i][j] = std::complex<Real>(0.,0.);
+
+  for (int i = 0; i < 4; i++)
+    for (int j = 0; j < 4; j++)
+      for (int k = 0; k < 4; k++)
+        for (int l = 0; l < 4; l++) {
+          ttet[i][j] += polten[k*4+l][ip] * ecov[i][k] * ecov[j][l];
+        }
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void PolarizationToCoord(std::complex<Real> ttet[4][4], Real econ[4][4],
+//!                              const int ip)
+//!
+//! \brief transform complex tensor from tetrad frame to coordinate frame
+
+void Photon::PolarizationToCoord(std::complex<Real> ttet[4][4], Real econ[4][4],
+                                 const int ip) {
+
+  for(int i = 0; i < NCOORD; i++)
+    for(int j = 0; j < NCOORD; j++)
+      polten[i*4+j][ip] = std::complex<Real>(0.,0.);
+
+  for(int i = 0; i < NCOORD; i++)
+    for(int j = 0; j < NCOORD; j++)
+      for(int k = 0; k < NCOORD; k++)
+        for(int l = 0; l < NCOORD; l++) {
+          polten[i*4+j][ip] += ttet[k][l] * econ[k][i] * econ[l][j];
+        }
+
 }
