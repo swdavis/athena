@@ -4,12 +4,12 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file mctest.cpp
-//  \brief Problem generator for  monte carlo through uniform sphere
+//! \brief Problem generator for  monte carlo through uniform sphere
 //
 //========================================================================================
 
-// C/C++ headers
-#include <iostream> 
+// C++ headers
+#include <iostream>
 #include <stdexcept>
 
 // Athena++ headers
@@ -87,8 +87,15 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         phydro->u(IEN,k,j,i) += 0.5*SQR(phydro->u(IM1,k,j,i))/phydro->u(IDN,k,j,i);
         phydro->u(IEN,k,j,i) += 0.5*SQR(phydro->u(IM2,k,j,i))/phydro->u(IDN,k,j,i);
         phydro->u(IEN,k,j,i) += 0.5*SQR(phydro->u(IM3,k,j,i))/phydro->u(IDN,k,j,i);
-      }}}
+      }
+    }
+  }
 }
+
+//========================================================================================
+//! \fn void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin)
+//! \brief Initializes user data specific to MonteCarlo class
+//========================================================================================
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 
@@ -102,6 +109,11 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
     EnrollUserWorkInMove(SphericalEscape);
 
 }
+
+//========================================================================================
+//! \fn void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin)
+//! \brief Analogous to problem generator but used in support of InitializePhoton
+//========================================================================================
 
 void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
@@ -171,6 +183,11 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
 }
 
+//========================================================================================
+//! \fn void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe)
+//! \brief Initializes Photon packets before integration
+//========================================================================================
+
 void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
   for (int ip=ips; ip<=ipe; ip++) {
@@ -205,6 +222,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
       Real phi = 2. * PI * pran->uniform();
       Real cphi = cos(phi);
       Real sphi = sin(phi);
+
       Real cth = 2. * pran->uniform() - 1.;
       Real sth = sqrt(1. - SQR(cth));
 
@@ -234,6 +252,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
         Real phi = 2. * PI * pran->uniform();
         Real cphi = cos(phi);
         Real sphi = sin(phi);
+
         Real cth = 2. * pran->uniform() - 1.;
         Real sth = sqrt(1. - SQR(cth));
 
@@ -281,6 +300,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     else
       pphot->statp[ip] = EVOLVING;
 
+
     // Initialize the absorption and scattering extinction coefficients
     // to the values appropriate in the emitted zone
     pphot->acp[ip] = AbsorptionOpacity(this,i1,i2,i3,pphot->ep[ip]);
@@ -311,6 +331,7 @@ void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
     pphot->x3p[ip] -= pphot->k3p[ip]*dr;
 
     pphot->statp[ip] = ESCAPED;
+    //pphot->face = BoundaryFace::undef;
   }
 
 }
@@ -341,6 +362,7 @@ void TimedEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
     pphot->x3p[ip] -= pphot->k3p[ip]*dt*2.99792458e10;
 
     pphot->statp[ip] = ESCAPED;
+    //pphot->face = BoundaryFace::undef;
   }
 }
 

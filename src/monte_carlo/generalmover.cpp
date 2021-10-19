@@ -274,7 +274,6 @@ void GeneralMover::VerletStep(Photon *pphot, Real step, int ip) {
 
 void GeneralMover::PropogatePolarization(Photon *pphot, Real step, int ip) {
 
-  // SWDFIX
   // SWD: Gamma does not need recomputing
   //Real gamma[NCOORD][NCOORD][NCOORD];
   // Store gamma in Coord to prevent recalculation

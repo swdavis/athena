@@ -31,8 +31,8 @@ def prob_ct_tau(t,tau):
     In = 0.5*tau*(1+(1.5*tau-1)/((1.5*tau-1)**2+lamn*lamn))
     yn2 = (y)**(lamn*lamn/(np.pi*np.pi))*np.cos(lamn)*(1.5*tau**2/(1-1.5*tau)/In)*(lamn*lamn/(np.pi*np.pi))
 
-    # Compute the sum to the limit of double precision        
-    while (abs(yn2) > 1.e-17 ): 
+    # Compute the sum to the limit of double precision
+    while (abs(yn2) > 1.e-17 ):
         prob += yn2
         n = n+1;
         bracket = [lamn+(1.-0.1/n)*dlamn,lamn+(1.+0.1/n)*dlamn]
@@ -43,14 +43,14 @@ def prob_ct_tau(t,tau):
         yn2 = (y)**(lamn*lamn/(np.pi*np.pi))*np.cos(lamn)*(1.5*tau**2/(1-1.5*tau)/In)*(lamn*lamn/(np.pi*np.pi))
 
     return prob
- 
+
 
 # Main function
 def main(**kwargs):
 
-   # Use latex labels
-    plt.rc('text',usetex=True)
-    plt.rc('font', **{'family' :"serif"})
+    # Use latex labels
+    #plt.rc('text',usetex=True)
+    #plt.rc('font', **{'family' :"serif"})
 
     # Filenames for io
     infile = kwargs.pop('infile')
@@ -71,7 +71,7 @@ def main(**kwargs):
     ax.set_xlabel(r"$t \; \rm(s)$")
 
     # Plot times
-    if (kwargs['tnorm']): 
+    if (kwargs['tnorm']):
         c = 2.99792e10
         tlc = radius/c
         tmid /= tlc
@@ -88,7 +88,7 @@ def main(**kwargs):
     # Write distribution to file
     if outfile is None:
         outfile = infile.replace('.tdist','.pdf')
-        
+
     plt.savefig(outfile)
     plt.close()
 

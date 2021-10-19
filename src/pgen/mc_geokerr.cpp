@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file mc_geokerr.cpp
-//  \brief Problem generator for testing geodesic integration in kerr spacetime
+//! \brief Problem generator for testing geodesic integration in kerr spacetime
 //
 //========================================================================================
 

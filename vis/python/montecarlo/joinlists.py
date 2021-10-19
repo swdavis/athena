@@ -26,9 +26,13 @@ def main(**kwargs):
     end = kwargs['end']
 
     basename = kwargs['basename']
-    
+
     def list_match(list1,list2):
         match = True
+        if (list1 is None):
+            return False
+        if (list2 is None):
+            return False
         if (list1['npars'] != list2['npars']):
             match = False
         if (list1['polarized'] != list2['polarized']):
@@ -53,8 +57,12 @@ def main(**kwargs):
                     phlist['length'] += addlist['length']
                     ntot += addlist['ntot']
                 else:
-                    raise RuntimeError("List headers do not match.\n")
-            print("Reading: "+filename,ntot)      
+                    if (addlist is None):
+                        if (not kwargs["skip"]):
+                            raise RuntimeError(filename+" not found, aborting.\n")
+                    else:
+                        raise RuntimeError("List headers do not match for "+filename+".\n")
+            print("Reading: "+filename,ntot)
     phlist['ntot'] = ntot
     print("Final list contains {:d} photons out of {:d} initialized.\n"
           .format(phlist['length'],phlist['ntot']))
@@ -85,6 +93,9 @@ if __name__ == '__main__':
     parser.add_argument('end',
         type=int,
         help='ending output number')
+    parser.add_argument('--skip',
+        action='store_true',
+        help='include lists from first process')
     parser.add_argument('-s', '--startzero',
         action='store_true',
         help='include lists from first process')

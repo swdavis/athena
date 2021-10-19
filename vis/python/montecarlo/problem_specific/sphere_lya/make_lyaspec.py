@@ -23,7 +23,7 @@ def main(**kwargs):
     # Read photon list
     phlist = mclist.read_list(infile)
     phots = photons(phlist)
-    
+
     # Generate spectrum from phots
     nx = kwargs.pop('nx')
     xmax = kwargs.pop('xmax')
@@ -39,10 +39,10 @@ def main(**kwargs):
     dopw = nu0 * vth / c;
     xmin = xmin * dopw + nu0
     xmax = xmax * dopw + nu0
-    print kwargs
+
     spectrum = mcspec.make_spectrum(phots,nx,xmin,xmax,'nu',logx=False,**kwargs)
     spectrum['xfaces'] = (spectrum['xfaces'] - nu0) / dopw
- 
+      
     # Write spectrum to file
     if outfile is None:
         outfile = infile.replace('.list','.spec')
@@ -96,7 +96,6 @@ if __name__ == '__main__':
     parser.add_argument('--yerror',
         action='store_true',
         help='compute intensity errors')
-    
+
     args = parser.parse_args()
     main(**vars(args))
-

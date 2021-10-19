@@ -53,15 +53,19 @@ def read_list(filename):
     """
     Read unformated list output and return as a dictionary
     """
-    # Read raw data
-    with open(filename, 'rb') as data_file:
-        raw_data = data_file.read()
-    raw_data_ascii = raw_data.decode('ascii', 'replace')
+
+    try:
+        # Read raw data
+        with open(filename, 'rb') as data_file:
+            raw_data = data_file.read()
+        raw_data_ascii = raw_data.decode('ascii', 'replace')
+    except:
+        return None
 
     # Store in dictionary
     phlist = {}
     current_index = 0
-    
+
     # Function for skipping though the file
     def skip_string(expected_string):
         expected_string_len = len(expected_string)

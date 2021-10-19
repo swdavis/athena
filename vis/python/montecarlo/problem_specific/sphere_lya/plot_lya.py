@@ -41,7 +41,7 @@ def plot_spec_lya(spectrum,imu,ax=None,iphi='ave',
 
 
     intensity = spectrum['intensity'][0,:,:,:]
-    print intensity
+
     if ploterr:
         errors = spectrum['errors'][0,:,:,:]
 
@@ -107,7 +107,7 @@ def plot_spec_lya(spectrum,imu,ax=None,iphi='ave',
     if ymax is not None:
         right=float(ymax)
     ax.set_ylim([left,right])
-    
+
     # Return x and nu to facilitate evaluation of comparison functions
     # that may plotted by calling function.  Return ax to enable
     # further call to plot on the same axis
@@ -118,8 +118,8 @@ def plot_spec_lya(spectrum,imu,ax=None,iphi='ave',
 def main(**kwargs):
 
     # Use latex labels
-    plt.rc('text',usetex=True)
-    plt.rc('font', **{'family' :"serif"})
+    #plt.rc('text',usetex=True)
+    #plt.rc('font', **{'family' :"serif"})
 
     # filenames for io
     infile = kwargs.pop('infile')
