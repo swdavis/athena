@@ -125,6 +125,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 
   // Flags for handling photon movement
   general_mover_flag = pin->GetOrAddBoolean("montecarlo","general_mover",false);
+  sphpol_alt_flag = pin->GetOrAddBoolean("montecarlo", "sphpol_alt",false)
   boyerlindquist_flag = pin->GetOrAddBoolean("montecarlo","boyerlindquist",false);
   orthotet_flag = pin->GetOrAddBoolean("montecarlo", "orthotet", false);
   varystep_flag = pin->GetOrAddBoolean("montecarlo", "varystep", false);
@@ -156,6 +157,13 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
       else
         pcoord = new MCSphericalPolar(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
                                       acceleration);
+    } else if (sphpol_alt_flag) {
+      pmover = new SphericalPolarAltMover(this);
+      if (pmb != nullptr)
+        pcoord = new MCCoord(pmb->pcoord,this);
+      else
+        pcoord = new MCCoord(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
+                             acceleration);
     } else {
       pmover = new SphericalPolarMover(this);
       if (pmb != nullptr)
