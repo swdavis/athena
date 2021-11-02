@@ -949,7 +949,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
   }
   // Weight moments by time spent in domain
   Real weight = pphot->wp[ip] * energy * leff / 2.99792458e10;
-  if ((isinf(weight)) || (isnan(weight))) {
+  if ((std::isinf(weight)) || (std::isnan(weight))) {
     std::cout << "Warning: UpdateMoments weight is : " << weight << std::endl;
   } else {
     // Higher order moments are weighted by curvalinear coordinates k
@@ -1080,7 +1080,7 @@ void MonteCarloBlock::UpdateCooling(Photon *pphot, Real energy0, Real weight0, i
   Real cool = (pphot->wp[ip] - weight0) * (pphot->ep[ip] - energy0);
   //if (energy0 == 0.0)
   //  printf("weight, cool: %g %g\n",pphot->weight,cool);
-  if ((isinf(cool)) || (isnan(cool))) {
+  if ((std::isinf(cool)) || (std::isnan(cool))) {
     std::cout << "Warning: UpdateCooling cooling is : " << cool << std::endl;
     pphot->PrintPhoton(ip);
   } else {

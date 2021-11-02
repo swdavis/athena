@@ -99,15 +99,15 @@ void Photon::CopyPhoton(Photon *pphot) {
 
 bool Photon::IsNanPhoton() {
 
-  if (isnan(weight)) return true;
-  if (isnan(energy)) return true;
+  if (std::isnan(weight)) return true;
+  if (std::isnan(energy)) return true;
   for (int i=0; i<3; ++i) {
-    if (isnan(x[i])) return true;
-    if (isnan(k[i])) return true;
-    if (isnan(stokes[i])) return true;
+    if (std::isnan(x[i])) return true;
+    if (std::isnan(k[i])) return true;
+    if (std::isnan(stokes[i])) return true;
   }
-  if (isnan(sct_coef)) return true;
-  if (isnan(abs_coef)) return true;
+  if (std::isnan(sct_coef)) return true;
+  if (std::isnan(abs_coef)) return true;
 
   return false;
 }
@@ -272,21 +272,21 @@ void Photon::WorkingArraysToVectors(int n) {
 
 bool Photon::IsNanPhoton(int ip) {
 
-  if (isnan(wp[ip])) return true;
-  if (isnan(ep[ip])) return true;
-  if (isnan(x0p[ip])) return true;
-  if (isnan(x1p[ip])) return true;
-  if (isnan(x2p[ip])) return true;
-  if (isnan(x3p[ip])) return true;
-  if (isnan(k0p[ip])) return true;
-  if (isnan(k1p[ip])) return true;
-  if (isnan(k2p[ip])) return true;
-  if (isnan(k3p[ip])) return true;
-  if (isnan(sip[ip])) return true;
-  if (isnan(sqp[ip])) return true;
-  if (isnan(sup[ip])) return true;
-  if (isnan(scp[ip])) return true;
-  if (isnan(acp[ip])) return true;
+  if (std::isnan(wp[ip])) return true;
+  if (std::isnan(ep[ip])) return true;
+  if (std::isnan(x0p[ip])) return true;
+  if (std::isnan(x1p[ip])) return true;
+  if (std::isnan(x2p[ip])) return true;
+  if (std::isnan(x3p[ip])) return true;
+  if (std::isnan(k0p[ip])) return true;
+  if (std::isnan(k1p[ip])) return true;
+  if (std::isnan(k2p[ip])) return true;
+  if (std::isnan(k3p[ip])) return true;
+  if (std::isnan(sip[ip])) return true;
+  if (std::isnan(sqp[ip])) return true;
+  if (std::isnan(sup[ip])) return true;
+  if (std::isnan(scp[ip])) return true;
+  if (std::isnan(acp[ip])) return true;
 
   return false;
 }
