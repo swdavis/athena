@@ -116,6 +116,28 @@ public:
 };
 
 //----------------------------------------------------------------------------------------
+//! \class SphericalPolarAltMover
+//! \brief derived class for moving in spherical-polar coordinates
+
+class SphericalPolarAltMover : public PhotonMover {
+public:
+  SphericalPolarAltMover(MonteCarloBlock *pmcb);
+  ~SphericalPolarAltMover();
+
+  Real step_par;
+  Real gamma[NCOORD][NCOORD][NCOORD];
+
+  // functions
+  void Move(Photon *pphot, int ips, int ipe);
+  void CurvalinearToCartesian(Photon *pphot, Real kcart[4]);
+  void UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip);
+  void VerletStep(Photon *pphot, Real step, int ip);
+  void PropogatePolarization(Photon *nphot, Real step, int ip);
+  Real StepSize(Photon *pphot, int ip);
+
+};
+
+//----------------------------------------------------------------------------------------
 //! \class GeneralMover
 //! \brief derived class for moving in general coordinates
 
