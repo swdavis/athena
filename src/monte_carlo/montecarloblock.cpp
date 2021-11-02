@@ -125,7 +125,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 
   // Flags for handling photon movement
   general_mover_flag = pin->GetOrAddBoolean("montecarlo","general_mover",false);
-  sphpol_alt_flag = pin->GetOrAddBoolean("montecarlo", "sphpol_alt",false)
+  sphpol_alt_flag = pin->GetOrAddBoolean("montecarlo", "sphpol_alt",false);
   boyerlindquist_flag = pin->GetOrAddBoolean("montecarlo","boyerlindquist",false);
   orthotet_flag = pin->GetOrAddBoolean("montecarlo", "orthotet", false);
   varystep_flag = pin->GetOrAddBoolean("montecarlo", "varystep", false);
