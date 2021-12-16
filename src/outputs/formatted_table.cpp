@@ -143,7 +143,7 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool f
   }  // end loop over MeshBlocks
 
   // Output particle data if any.
-  if (PARTICLES) Particles::FormattedTableOutput(pm, output_params);
+  if (PARTICLES) Particles::OutputFormattedTable(pm, output_params);
 
   // increment counters
   output_params.file_number++;

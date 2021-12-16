@@ -60,8 +60,8 @@ friend class DustParticles;
   static void PostInitialize(Mesh *pm, ParameterInput *pin);
   static void FindDensityOnMesh(Mesh *pm, bool include_momentum);
   static void FindHistoryOutput(Mesh *pm, Real data_sum[], int pos);
-  static void FormattedTableOutput(Mesh *pm, OutputParameters op);
   static void GetHistoryOutputNames(std::string output_names[]);
+  static void OutputFormattedTable(Mesh *pm, OutputParameters op);
   static int GetTotalNumber(Mesh *pm);
 
   // Class constant

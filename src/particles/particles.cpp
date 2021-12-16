@@ -299,6 +299,50 @@ void Particles::GetHistoryOutputNames(std::string output_names[]) {
 }
 
 //--------------------------------------------------------------------------------------
+//! \fn Particles::OutputFormattedTable()
+//! \brief outputs the particle data in tabulated format.
+
+void Particles::OutputFormattedTable(Mesh *pm, OutputParameters op) {
+  std::stringstream fname, msg;
+  std::ofstream os;
+
+  // Loop over MeshBlocks
+  for (int b = 0; b < pm->nblocal; ++b) {
+    const MeshBlock *pmb(pm->my_blocks(b));
+    const Particles *ppar(pmb->ppar);
+
+    // Create the filename.
+    fname << op.file_basename
+          << ".block" << pmb->gid << '.' << op.file_id
+          << '.' << std::setw(5) << std::right << std::setfill('0') << op.file_number
+          << '.' << "par.tab";
+
+    // Open the file for write.
+    os.open(fname.str().data());
+    if (!os.is_open()) {
+      msg << "### FATAL ERROR in function [Particles::FormattedTableOutput]"
+          << std::endl << "Output file '" << fname.str() << "' could not be opened"
+          << std::endl;
+      ATHENA_ERROR(msg);
+    }
+
+    // Write the time.
+    os << std::scientific << std::showpoint << std::setprecision(18);
+    os << "# Athena++ particle data at time = " << pm->time << std::endl;
+
+    // Write the particle data in the meshblock.
+    for (int k = 0; k < ppar->npar; ++k)
+      os << ppar->pid[k] << "  "
+         << ppar->xp[k] << "  " << ppar->yp[k] << "  " << ppar->zp[k] << "  "
+         << ppar->vpx[k] << "  " << ppar->vpy[k] << "  " << ppar->vpz[k] << std::endl;
+
+    // Close the file and get the next meshblock.
+    os.close();
+    fname.str("");
+  }
+}
+
+//--------------------------------------------------------------------------------------
 //! \fn int Particles::GetTotalNumber(Mesh *pm)
 //! \brief returns total number of particles (from all processes).
 
@@ -1211,50 +1255,6 @@ void Particles::PackParticlesForRestart(char *&pdata) {
       std::memcpy(pdata, &(rp[k]), size);
       pdata += size;
     }
-  }
-}
-
-//--------------------------------------------------------------------------------------
-//! \fn Particles::FormattedTableOutput()
-//! \brief outputs the particle data in tabulated format.
-
-void Particles::FormattedTableOutput(Mesh *pm, OutputParameters op) {
-  std::stringstream fname, msg;
-  std::ofstream os;
-
-  // Loop over MeshBlocks
-  for (int b = 0; b < pm->nblocal; ++b) {
-    const MeshBlock *pmb(pm->my_blocks(b));
-    const Particles *ppar(pmb->ppar);
-
-    // Create the filename.
-    fname << op.file_basename
-          << ".block" << pmb->gid << '.' << op.file_id
-          << '.' << std::setw(5) << std::right << std::setfill('0') << op.file_number
-          << '.' << "par.tab";
-
-    // Open the file for write.
-    os.open(fname.str().data());
-    if (!os.is_open()) {
-      msg << "### FATAL ERROR in function [Particles::FormattedTableOutput]"
-          << std::endl << "Output file '" << fname.str() << "' could not be opened"
-          << std::endl;
-      ATHENA_ERROR(msg);
-    }
-
-    // Write the time.
-    os << std::scientific << std::showpoint << std::setprecision(18);
-    os << "# Athena++ particle data at time = " << pm->time << std::endl;
-
-    // Write the particle data in the meshblock.
-    for (int k = 0; k < ppar->npar; ++k)
-      os << ppar->pid[k] << "  "
-         << ppar->xp[k] << "  " << ppar->yp[k] << "  " << ppar->zp[k] << "  "
-         << ppar->vpx[k] << "  " << ppar->vpy[k] << "  " << ppar->vpz[k] << std::endl;
-
-    // Close the file and get the next meshblock.
-    os.close();
-    fname.str("");
   }
 }
 
