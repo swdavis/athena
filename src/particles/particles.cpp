@@ -30,6 +30,7 @@
 #include "particles.hpp"
 
 // Class variable initialization
+std::vector<std::string> Particles::ipname;
 bool Particles::initialized = false;
 int Particles::idmax = 0;
 int Particles::nint = 0;
@@ -121,7 +122,7 @@ void Particles::Initialize(Mesh *pm, ParameterInput *pin) {
   if (initialized) return;
 
   // Add particle ID.
-  ipid = AddIntProperty();
+  ipid = AddIntProperty("id");
 
   // Add particle position.
   ixp = AddRealProperty();
@@ -1116,10 +1117,11 @@ void Particles::FlushReceiveBuffer(ParticleBuffer& recv) {
 }
 
 //--------------------------------------------------------------------------------------
-//! \fn int Particles::AddIntProperty()
+//! \fn int Particles::AddIntProperty(const std::string& name)
 //! \brief adds one integer property to the particles and returns the index.
 
-int Particles::AddIntProperty() {
+int Particles::AddIntProperty(const std::string& name) {
+  ipname.push_back(name);
   return nint++;
 }
 
