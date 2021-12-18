@@ -30,7 +30,7 @@
 #include "particles.hpp"
 
 // Class variable initialization
-std::vector<std::string> Particles::ipname;
+std::vector<std::string> Particles::ipname, Particles::rpname;
 bool Particles::initialized = false;
 int Particles::idmax = 0;
 int Particles::nint = 0;
@@ -125,14 +125,14 @@ void Particles::Initialize(Mesh *pm, ParameterInput *pin) {
   ipid = AddIntProperty("id");
 
   // Add particle position.
-  ixp = AddRealProperty();
-  iyp = AddRealProperty();
-  izp = AddRealProperty();
+  ixp = AddRealProperty("xp");
+  iyp = AddRealProperty("yp");
+  izp = AddRealProperty("zp");
 
   // Add particle velocity.
-  ivpx = AddRealProperty();
-  ivpy = AddRealProperty();
-  ivpz = AddRealProperty();
+  ivpx = AddRealProperty("vpx");
+  ivpy = AddRealProperty("vpy");
+  ivpz = AddRealProperty("vpz");
 
   // Add particle position indices.
   ixi1 = AddWorkingArray();
@@ -1126,10 +1126,11 @@ int Particles::AddIntProperty(const std::string& name) {
 }
 
 //--------------------------------------------------------------------------------------
-//! \fn int Particles::AddRealProperty()
+//! \fn int Particles::AddRealProperty(const std::string& name)
 //! \brief adds one real property to the particles and returns the index.
 
-int Particles::AddRealProperty() {
+int Particles::AddRealProperty(const std::string& name) {
+  rpname.push_back(name);
   return nreal++;
 }
 

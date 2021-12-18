@@ -100,7 +100,7 @@ friend class DustParticles;
  protected:
   // Class methods
   static int AddIntProperty(const std::string& name);
-  static int AddRealProperty();
+  static int AddRealProperty(const std::string& name);
   static int AddAuxProperty();
   static int AddWorkingArray();
 
@@ -179,6 +179,7 @@ friend class DustParticles;
 
   // Class variable
   static std::vector<std::string> ipname;  //!> names of integer properties
+  static std::vector<std::string> rpname;  //!> names of real properties
   static int idmax;
 
   // Instance variables
