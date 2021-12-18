@@ -12,9 +12,9 @@
 #include <cstdint>
 #include <cstring>
 #include <fstream>
-#include <iomanip>
-#include <iostream>
-#include <limits>
+#include <iomanip>  // setw(), setprecision()
+#include <iostream> // <<
+#include <limits>   // numeric_limits<T>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -304,6 +304,10 @@ void Particles::GetHistoryOutputNames(std::string output_names[]) {
 //! \brief outputs the particle data in tabulated format.
 
 void Particles::OutputFormattedTable(Mesh *pm, OutputParameters op) {
+  const int iprec(std::numeric_limits<int>::digits10);
+  const int rprec(std::numeric_limits<Real>::max_digits10);
+  const int wi(iprec+2);
+  const int wr(rprec+8);
   std::stringstream fname, msg;
   std::ofstream os;
 
@@ -328,15 +332,15 @@ void Particles::OutputFormattedTable(Mesh *pm, OutputParameters op) {
     }
 
     // Write the time.
-    os << std::scientific << std::showpoint << std::setprecision(18);
+    os << std::scientific << std::showpoint << std::setprecision(rprec);
     os << "# Athena++ particle data at time = " << pm->time << std::endl;
 
     // Write the particle data in the meshblock.
     for (int k = 0; k < ppar->npar; ++k) {
       for (int j = 0; j < nint; ++j)
-        os << "  " << ppar->intprop[j][k];
+        os << std::setw(wi) << ppar->intprop[j][k];
       for (int j = 0; j < nreal; ++j)
-        os << "  " << ppar->rp[j][k];
+        os << std::setw(wr) << ppar->rp[j][k];
       os << '\n';
     }
 
