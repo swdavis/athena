@@ -16,6 +16,7 @@
 
 // Athena++ headers
 #include "../athena.hpp"
+#include "../particles/particles_output.hpp"
 #include "io_wrapper.hpp"
 
 #ifdef HDF5OUTPUT
@@ -197,5 +198,8 @@ class Outputs {
  private:
   OutputType *pfirst_type_; // ptr to head OutputType node in singly linked list
   // (not storing a reference to the tail node)
+#ifdef PARTICLES
+  ParticlesOutput *pout_;
+#endif
 };
 #endif // OUTPUTS_OUTPUTS_HPP_

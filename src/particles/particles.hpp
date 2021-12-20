@@ -27,6 +27,7 @@
 #endif
 
 // Forward definitions
+struct OutputParameters;
 class ParticleGravity;
 
 //--------------------------------------------------------------------------------------
