@@ -11,6 +11,7 @@
 // C/C++ Standard Libraries
 
 // Athena headers
+#include "../outputs/output_parameters.hpp"
 #include "particles.hpp"
 
 //--------------------------------------------------------------------------------------
@@ -20,11 +21,12 @@
 class ParticlesOutput {
  public:
   // Constructors
-  ParticlesOutput() {};
-  ~ParticlesOutput() {};
+  explicit ParticlesOutput(const OutputParameters& op_in) : op(op_in) {}
+  ~ParticlesOutput() {}
 
- private:
-
+ protected:
+  // Instance Variables
+  OutputParameters op;
 };
 
 #endif  // PARTICLES_PARTICLES_OUTPUT_HPP_
