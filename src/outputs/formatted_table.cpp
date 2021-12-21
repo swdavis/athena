@@ -23,7 +23,7 @@
 #include "../athena.hpp"
 #include "../coordinates/coordinates.hpp"
 #include "../mesh/mesh.hpp"
-#include "../particles/particles.hpp"
+#include "../particles/particles_output.hpp"
 #include "outputs.hpp"
 
 
@@ -143,7 +143,7 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool f
   }  // end loop over MeshBlocks
 
   // Output particle data if any.
-  if (PARTICLES) Particles::OutputFormattedTable(pm, output_params);
+  if (PARTICLES) POutFormattedTable(output_params).WriteOutputFile(pm);
 
   // increment counters
   output_params.file_number++;

@@ -11,8 +11,6 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <fstream>
-#include <iomanip>  // setw(), setprecision()
 #include <iostream> // <<
 #include <limits>   // numeric_limits<T>
 #include <sstream>
@@ -297,66 +295,6 @@ void Particles::GetHistoryOutputNames(std::string output_names[]) {
   output_names[4] = "vp1^2";
   output_names[5] = "vp2^2";
   output_names[6] = "vp3^2";
-}
-
-//--------------------------------------------------------------------------------------
-//! \fn Particles::OutputFormattedTable()
-//! \brief outputs the particle data in tabulated format.
-
-void Particles::OutputFormattedTable(Mesh *pm, OutputParameters op) {
-  const int iprec(std::numeric_limits<int>::digits10);
-  const int rprec(std::numeric_limits<Real>::max_digits10);
-  const int wi(iprec+2);
-  const int wr(rprec+8);
-  std::stringstream fname, msg;
-  std::ofstream os;
-
-  // Loop over MeshBlocks
-  for (int b = 0; b < pm->nblocal; ++b) {
-    const MeshBlock *pmb(pm->my_blocks(b));
-    const Particles *ppar(pmb->ppar);
-
-    // Create the filename.
-    fname << op.file_basename
-          << ".block" << pmb->gid << '.' << op.file_id
-          << '.' << std::setw(5) << std::right << std::setfill('0') << op.file_number
-          << '.' << "par.tab";
-
-    // Open the file for write.
-    os.open(fname.str().data());
-    if (!os.is_open()) {
-      msg << "### FATAL ERROR in function [Particles::FormattedTableOutput]"
-          << std::endl << "Output file '" << fname.str() << "' could not be opened"
-          << std::endl;
-      ATHENA_ERROR(msg);
-    }
-
-    // Write the time.
-    os << std::scientific << std::showpoint << std::setprecision(rprec);
-    os << "# Athena++ particle data at time = " << pm->time << std::endl;
-
-    // Write the column head.
-    os << '#';
-    for (int j = 0; j < nint; ++j)
-       os << std::setw(wi) << ipname[j];
-    for (int j = 0; j < nreal; ++j)
-       os << std::setw(wr) << rpname[j];
-    os << '\n';
-
-    // Write the particle data in the meshblock.
-    for (int k = 0; k < ppar->npar; ++k) {
-      os << ' ';
-      for (int j = 0; j < nint; ++j)
-        os << std::setw(wi) << ppar->intprop[j][k];
-      for (int j = 0; j < nreal; ++j)
-        os << std::setw(wr) << ppar->rp[j][k];
-      os << '\n';
-    }
-
-    // Close the file and get the next meshblock.
-    os.close();
-    fname.str("");
-  }
 }
 
 //--------------------------------------------------------------------------------------

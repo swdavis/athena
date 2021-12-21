@@ -16,7 +16,6 @@
 #include "../athena.hpp"
 #include "../athena_arrays.hpp"
 #include "../mesh/mesh.hpp"
-#include "../outputs/outputs.hpp"
 #include "../parameter_input.hpp"
 #include "particle_buffer.hpp"
 #include "particle-mesh.hpp"
@@ -27,7 +26,7 @@
 #endif
 
 // Forward definitions
-struct OutputParameters;
+class OutputType;
 class ParticleGravity;
 
 //--------------------------------------------------------------------------------------
@@ -51,6 +50,7 @@ friend class MeshBlock;  // Make writing initial conditions possible.
 friend class OutputType;
 friend class ParticleGravity;
 friend class ParticleMesh;
+friend class POutFormattedTable;
 friend class DustParticles;
 
  public:
@@ -62,7 +62,6 @@ friend class DustParticles;
   static void FindDensityOnMesh(Mesh *pm, bool include_momentum);
   static void FindHistoryOutput(Mesh *pm, Real data_sum[], int pos);
   static void GetHistoryOutputNames(std::string output_names[]);
-  static void OutputFormattedTable(Mesh *pm, OutputParameters op);
   static int GetTotalNumber(Mesh *pm);
 
   // Class constant
