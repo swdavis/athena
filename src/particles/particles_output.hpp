@@ -11,12 +11,12 @@
 // C/C++ Standard Libraries
 
 // Athena headers
-#include "../outputs/output_parameters.hpp"
-#include "particles.hpp"
+#include "../mesh/mesh.hpp"                 // Mesh
+#include "../outputs/output_parameters.hpp" // OutputParameters
 
 //--------------------------------------------------------------------------------------
 //! \class ParticlesOutput
-//! \brief defines the class for output of particles data.
+//! \brief defines abstract class for output of particles data.
 
 class ParticlesOutput {
  public:
@@ -24,9 +24,25 @@ class ParticlesOutput {
   explicit ParticlesOutput(const OutputParameters& op_in) : op(op_in) {}
   ~ParticlesOutput() {}
 
+  // Virtual function to write output file.
+  virtual void WriteOutputFile(const Mesh *pm) = 0;
+
  protected:
   // Instance Variables
   OutputParameters op;
+};
+
+//--------------------------------------------------------------------------------------
+//! \class POutFormattedTable
+//! \brief defines derived class for writing an ASCII file.
+
+class POutFormattedTable : public ParticlesOutput {
+ public:
+  // Constructors
+  explicit POutFormattedTable(const OutputParameters& op_in) : ParticlesOutput(op_in) {}
+
+  // Function to write a formatted table to an ASCII file.
+  void WriteOutputFile(const Mesh *pm);
 };
 
 #endif  // PARTICLES_PARTICLES_OUTPUT_HPP_
