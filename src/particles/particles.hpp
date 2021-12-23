@@ -83,6 +83,7 @@ friend class DustParticles;
   const std::vector<int>* GetIntProps() const { return intprop; }
   const std::vector<Real>* GetRealProps() const { return rp; }
   Real GetMaximumWeight() const;
+  int GetNPar() const { return npar; }
 
   // Instance methods
   void ClearBoundary();
