@@ -97,6 +97,7 @@
 #include "../orbital_advection/orbital_advection.hpp"
 #include "../parameter_input.hpp"
 #include "../particles/dust_particles.hpp"
+#include "../particles/particles_output.hpp"
 #include "../scalars/scalars.hpp"
 #include "outputs.hpp"
 
@@ -117,6 +118,7 @@ OutputType::OutputType(OutputParameters oparams) :
 
 Outputs::Outputs(Mesh *pm, ParameterInput *pin) {
   pfirst_type_ = nullptr;
+  pout_ = nullptr;
   std::stringstream msg;
   InputBlock *pib = pin->pfirst_block;
   OutputType *pnew_type;
@@ -139,137 +141,152 @@ Outputs::Outputs(Mesh *pm, ParameterInput *pin) {
       op.dt = pin->GetReal(op.block_name,"dt");
 
       if (op.dt > 0.0) {  // only add output if dt>0
-        // set file number, basename, id, and format
+        // set file number, basename, and format
         op.file_number = pin->GetOrAddInteger(op.block_name,"file_number",0);
         op.file_basename = pin->GetString("job","problem_id");
-        char define_id[10];
-        std::snprintf(define_id, sizeof(define_id),
-                      "out%d", op.block_number);  // default id="outN"
-        op.file_id = pin->GetOrAddString(op.block_name,"id",define_id);
         op.file_type = pin->GetString(op.block_name,"file_type");
 
-        // read slicing options.  Check that slice is within mesh
-        if (pin->DoesParameterExist(op.block_name,"x1_slice")) {
-          Real x1 = pin->GetReal(op.block_name,"x1_slice");
-          if (x1 >= pm->mesh_size.x1min && x1 < pm->mesh_size.x1max) {
-            op.x1_slice = x1;
-            op.output_slicex1 = true;
+        if (PARTICLES && op.block_name == "outputp") {
+          // Construct new particle output according to file_type.
+          if (op.file_type == "tab") {
+            pout_ = new POutFormattedTable(op);
           } else {
             msg << "### FATAL ERROR in Outputs constructor" << std::endl
-                << "Slice at x1=" << x1 << " in output block '" << op.block_name
-                << "' is out of range of Mesh" << std::endl;
+                << "Unrecognized file format = '" << op.file_type
+                << "' in output block '" << op.block_name << "' for particles"
+                << std::endl;
             ATHENA_ERROR(msg);
           }
-        }
+        } else {
+          // set id.
+          char define_id[10];
+          std::snprintf(define_id, sizeof(define_id),
+                        "out%d", op.block_number);  // default id="outN"
+          op.file_id = pin->GetOrAddString(op.block_name,"id",define_id);
 
-        if (pin->DoesParameterExist(op.block_name,"x2_slice")) {
-          Real x2 = pin->GetReal(op.block_name,"x2_slice");
-          if (x2 >= pm->mesh_size.x2min && x2 < pm->mesh_size.x2max) {
-            op.x2_slice = x2;
-            op.output_slicex2 = true;
-          } else {
+          // read slicing options.  Check that slice is within mesh
+          if (pin->DoesParameterExist(op.block_name,"x1_slice")) {
+            Real x1 = pin->GetReal(op.block_name,"x1_slice");
+            if (x1 >= pm->mesh_size.x1min && x1 < pm->mesh_size.x1max) {
+              op.x1_slice = x1;
+              op.output_slicex1 = true;
+            } else {
+              msg << "### FATAL ERROR in Outputs constructor" << std::endl
+                  << "Slice at x1=" << x1 << " in output block '" << op.block_name
+                  << "' is out of range of Mesh" << std::endl;
+              ATHENA_ERROR(msg);
+            }
+          }
+
+          if (pin->DoesParameterExist(op.block_name,"x2_slice")) {
+            Real x2 = pin->GetReal(op.block_name,"x2_slice");
+            if (x2 >= pm->mesh_size.x2min && x2 < pm->mesh_size.x2max) {
+              op.x2_slice = x2;
+              op.output_slicex2 = true;
+            } else {
+              msg << "### FATAL ERROR in Outputs constructor" << std::endl
+                  << "Slice at x2=" << x2 << " in output block '" << op.block_name
+                  << "' is out of range of Mesh" << std::endl;
+              ATHENA_ERROR(msg);
+            }
+          }
+
+          if (pin->DoesParameterExist(op.block_name,"x3_slice")) {
+            Real x3 = pin->GetReal(op.block_name,"x3_slice");
+            if (x3 >= pm->mesh_size.x3min && x3 < pm->mesh_size.x3max) {
+              op.x3_slice = x3;
+              op.output_slicex3 = true;
+            } else {
+              msg << "### FATAL ERROR in Outputs constructor" << std::endl
+                  << "Slice at x3=" << x3 << " in output block '" << op.block_name
+                  << "' is out of range of Mesh" << std::endl;
+              ATHENA_ERROR(msg);
+            }
+          }
+
+          // read sum options.  Check for conflicts with slicing.
+          op.output_sumx1 = pin->GetOrAddBoolean(op.block_name,"x1_sum",false);
+          if ((op.output_slicex1) && (op.output_sumx1)) {
             msg << "### FATAL ERROR in Outputs constructor" << std::endl
-                << "Slice at x2=" << x2 << " in output block '" << op.block_name
-                << "' is out of range of Mesh" << std::endl;
+                << "Cannot request both slice and sum along x1-direction"
+                << " in output block '" << op.block_name << "'" << std::endl;
             ATHENA_ERROR(msg);
           }
-        }
-
-        if (pin->DoesParameterExist(op.block_name,"x3_slice")) {
-          Real x3 = pin->GetReal(op.block_name,"x3_slice");
-          if (x3 >= pm->mesh_size.x3min && x3 < pm->mesh_size.x3max) {
-            op.x3_slice = x3;
-            op.output_slicex3 = true;
-          } else {
+          op.output_sumx2 = pin->GetOrAddBoolean(op.block_name,"x2_sum",false);
+          if ((op.output_slicex2) && (op.output_sumx2)) {
             msg << "### FATAL ERROR in Outputs constructor" << std::endl
-                << "Slice at x3=" << x3 << " in output block '" << op.block_name
-                << "' is out of range of Mesh" << std::endl;
+                << "Cannot request both slice and sum along x2-direction"
+                << " in output block '" << op.block_name << "'" << std::endl;
             ATHENA_ERROR(msg);
           }
-        }
+          op.output_sumx3 = pin->GetOrAddBoolean(op.block_name,"x3_sum",false);
+          if ((op.output_slicex3) && (op.output_sumx3)) {
+            msg << "### FATAL ERROR in Outputs constructor" << std::endl
+                << "Cannot request both slice and sum along x3-direction"
+                << " in output block '" << op.block_name << "'" << std::endl;
+            ATHENA_ERROR(msg);
+          }
 
-        // read sum options.  Check for conflicts with slicing.
-        op.output_sumx1 = pin->GetOrAddBoolean(op.block_name,"x1_sum",false);
-        if ((op.output_slicex1) && (op.output_sumx1)) {
-          msg << "### FATAL ERROR in Outputs constructor" << std::endl
-              << "Cannot request both slice and sum along x1-direction"
-              << " in output block '" << op.block_name << "'" << std::endl;
-          ATHENA_ERROR(msg);
-        }
-        op.output_sumx2 = pin->GetOrAddBoolean(op.block_name,"x2_sum",false);
-        if ((op.output_slicex2) && (op.output_sumx2)) {
-          msg << "### FATAL ERROR in Outputs constructor" << std::endl
-              << "Cannot request both slice and sum along x2-direction"
-              << " in output block '" << op.block_name << "'" << std::endl;
-          ATHENA_ERROR(msg);
-        }
-        op.output_sumx3 = pin->GetOrAddBoolean(op.block_name,"x3_sum",false);
-        if ((op.output_slicex3) && (op.output_sumx3)) {
-          msg << "### FATAL ERROR in Outputs constructor" << std::endl
-              << "Cannot request both slice and sum along x3-direction"
-              << " in output block '" << op.block_name << "'" << std::endl;
-          ATHENA_ERROR(msg);
-        }
-
-        // read ghost cell option
-        op.include_ghost_zones = pin->GetOrAddBoolean(op.block_name, "ghost_zones",
+          // read ghost cell option
+          op.include_ghost_zones = pin->GetOrAddBoolean(op.block_name, "ghost_zones",
                                                       false);
 
-        // read orbital system output option
-        op.orbital_system_output = pin->GetOrAddBoolean(op.block_name, "orbital_system",
+          // read orbital system output option
+          op.orbital_system_output = pin->GetOrAddBoolean(op.block_name, "orbital_system",
                                                         false);
 
-        // read cartesian mapping option
-        if (std::strcmp(COORDINATE_SYSTEM, "cylindrical") == 0 ||
-            std::strcmp(COORDINATE_SYSTEM, "spherical_polar") == 0)
-          op.cartesian_vector = pin->GetOrAddBoolean(op.block_name, "cartesian_vector",
-                                                   false);
-        else
-          op.cartesian_vector = false;
+          // read cartesian mapping option
+          if (std::strcmp(COORDINATE_SYSTEM, "cylindrical") == 0 ||
+              std::strcmp(COORDINATE_SYSTEM, "spherical_polar") == 0)
+            op.cartesian_vector = pin->GetOrAddBoolean(op.block_name, "cartesian_vector",
+                                                     false);
+          else
+            op.cartesian_vector = false;
 
-        // set output variable and optional data format string used in formatted writes
-        if (op.file_type.compare("hst") != 0 && op.file_type.compare("rst") != 0) {
-          op.variable = pin->GetString(op.block_name, "variable");
-        }
-        op.data_format = pin->GetOrAddString(op.block_name, "data_format", "%12.5e");
-        op.data_format.insert(0, " "); // prepend with blank to separate columns
+          // set output variable and optional data format string used in formatted writes
+          if (op.file_type.compare("hst") != 0 && op.file_type.compare("rst") != 0) {
+            op.variable = pin->GetString(op.block_name, "variable");
+          }
+          op.data_format = pin->GetOrAddString(op.block_name, "data_format", "%12.5e");
+          op.data_format.insert(0, " "); // prepend with blank to separate columns
 
-        // Construct new OutputType according to file format
-        // NEW_OUTPUT_TYPES: Add block to construct new types here
-        if (op.file_type.compare("hst") == 0) {
-          pnew_type = new HistoryOutput(op);
-          num_hst_outputs++;
-        } else if (op.file_type.compare("tab") == 0) {
-          pnew_type = new FormattedTableOutput(op);
-        } else if (op.file_type.compare("vtk") == 0) {
-          pnew_type = new VTKOutput(op);
-        } else if (op.file_type.compare("rst") == 0) {
-          pnew_type = new RestartOutput(op);
-          num_rst_outputs++;
-        } else if (op.file_type.compare("ath5") == 0
-                   || op.file_type.compare("hdf5") == 0) {
+          // Construct new OutputType according to file format
+          // NEW_OUTPUT_TYPES: Add block to construct new types here
+          if (op.file_type.compare("hst") == 0) {
+            pnew_type = new HistoryOutput(op);
+            num_hst_outputs++;
+          } else if (op.file_type.compare("tab") == 0) {
+            pnew_type = new FormattedTableOutput(op);
+          } else if (op.file_type.compare("vtk") == 0) {
+            pnew_type = new VTKOutput(op);
+          } else if (op.file_type.compare("rst") == 0) {
+            pnew_type = new RestartOutput(op);
+            num_rst_outputs++;
+          } else if (op.file_type.compare("ath5") == 0
+                     || op.file_type.compare("hdf5") == 0) {
 #ifdef HDF5OUTPUT
-          pnew_type = new ATHDF5Output(op);
+            pnew_type = new ATHDF5Output(op);
 #else
-          msg << "### FATAL ERROR in Outputs constructor" << std::endl
-              << "Executable not configured for HDF5 outputs, but HDF5 file format "
-              << "is requested in output block '" << op.block_name << "'" << std::endl;
-          ATHENA_ERROR(msg);
+            msg << "### FATAL ERROR in Outputs constructor" << std::endl
+                << "Executable not configured for HDF5 outputs, but HDF5 file format "
+                << "is requested in output block '" << op.block_name << "'" << std::endl;
+            ATHENA_ERROR(msg);
 #endif
-        } else {
-          msg << "### FATAL ERROR in Outputs constructor" << std::endl
-              << "Unrecognized file format = '" << op.file_type
-              << "' in output block '" << op.block_name << "'" << std::endl;
-          ATHENA_ERROR(msg);
-        }
+          } else {
+            msg << "### FATAL ERROR in Outputs constructor" << std::endl
+                << "Unrecognized file format = '" << op.file_type
+                << "' in output block '" << op.block_name << "'" << std::endl;
+            ATHENA_ERROR(msg);
+          }
 
-        // Append type as tail node in singly linked list
-        if (pfirst_type_ == nullptr) {
-          pfirst_type_ = pnew_type;
-        } else {
-          plast->pnext_type = pnew_type;
+          // Append type as tail node in singly linked list
+          if (pfirst_type_ == nullptr) {
+            pfirst_type_ = pnew_type;
+          } else {
+            plast->pnext_type = pnew_type;
+          }
+          plast = pnew_type;
         }
-        plast = pnew_type;
       }
     }
     pib = pib->pnext;  // move to next input block name
@@ -325,6 +342,7 @@ Outputs::~Outputs() {
     ptype = ptype->pnext_type;
     delete ptype_old;
   }
+  delete pout_;
 }
 
 //----------------------------------------------------------------------------------------
@@ -831,6 +849,10 @@ void Outputs::MakeOutputs(Mesh *pm, ParameterInput *pin, bool wtflag) {
       ptype->WriteOutputFile(pm, pin, wtflag);
     }
     ptype = ptype->pnext_type; // move to next OutputType node in signly linked list
+  }
+  if (pout_ != nullptr && pout_->CheckTimer(pm)) {
+    pout_->WriteOutputFile(pm);
+    pout_->SetNextOutput(pin);
   }
 }
 

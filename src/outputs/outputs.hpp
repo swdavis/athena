@@ -171,8 +171,6 @@ class Outputs {
  private:
   OutputType *pfirst_type_; // ptr to head OutputType node in singly linked list
   // (not storing a reference to the tail node)
-#ifdef PARTICLES
-  ParticlesOutput *pout_;
-#endif
+  ParticlesOutput *pout_; // ptr to a ParticlesOutput
 };
 #endif // OUTPUTS_OUTPUTS_HPP_

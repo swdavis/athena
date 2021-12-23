@@ -51,10 +51,8 @@ void POutFormattedTable::WriteOutputFile(const Mesh *pm) {
     const Particles *ppar(pmb->ppar);
 
     // Create the filename.
-    fname << op.file_basename
-          << ".block" << pmb->gid << '.' << op.file_id
-          << '.' << std::setw(5) << std::right << std::setfill('0') << op.file_number
-          << '.' << "par.tab";
+    fname << op.file_basename << ".block" << pmb->gid << ".pout."
+          << std::setw(5) << std::right << std::setfill('0') << op.file_number << ".tab";
 
     // Open the file for write.
     os.open(fname.str().data());

@@ -25,7 +25,7 @@ class ParticlesOutput {
   // Constructors
   explicit ParticlesOutput(const OutputParameters& op_in) :
       op(op_in), nint(Particles::GetNInt()), nreal(Particles::GetNReal()) {}
-  ~ParticlesOutput() {}
+  virtual ~ParticlesOutput() {}
 
   // Accessors
   bool CheckTimer(const Mesh *pm) const;
