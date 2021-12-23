@@ -50,7 +50,6 @@ friend class MeshBlock;  // Make writing initial conditions possible.
 friend class OutputType;
 friend class ParticleGravity;
 friend class ParticleMesh;
-friend class POutFormattedTable;
 friend class DustParticles;
 
  public:

@@ -12,6 +12,8 @@
 #include <iostream>  // <<, endl, scientific, showpoint
 #include <limits>    // numeric_limits<T>
 #include <sstream>   // ostringstream
+#include <string>    // string
+#include <vector>    // vector<T>
 
 // Athena++ headers
 #include "../defs.hpp"       // ATHENA_ERROR()
@@ -24,6 +26,8 @@
 //! \brief outputs the particle data in tabulated format.
 
 void POutFormattedTable::WriteOutputFile(const Mesh *pm) {
+  const std::vector<std::string>& ipname(Particles::GetIntNames());
+  const std::vector<std::string>& rpname(Particles::GetRealNames());
   const int iprec(std::numeric_limits<int>::digits10);
   const int rprec(std::numeric_limits<Real>::max_digits10);
   const int wi(iprec+2);
@@ -58,18 +62,20 @@ void POutFormattedTable::WriteOutputFile(const Mesh *pm) {
     // Write the column head.
     os << '#';
     for (int j = 0; j < nint; ++j)
-       os << std::setw(wi) << Particles::ipname[j];
+       os << std::setw(wi) << ipname[j];
     for (int j = 0; j < nreal; ++j)
-       os << std::setw(wr) << Particles::rpname[j];
+       os << std::setw(wr) << rpname[j];
     os << '\n';
 
     // Write the particle data in the meshblock.
-    for (int k = 0; k < ppar->npar; ++k) {
+    const std::vector<int>* intprop(ppar->GetIntProps());
+    const std::vector<Real>* realprop(ppar->GetRealProps());
+    for (int k = 0; k < ppar->GetNPar(); ++k) {
       os << ' ';
       for (int j = 0; j < nint; ++j)
-        os << std::setw(wi) << ppar->intprop[j][k];
+        os << std::setw(wi) << intprop[j][k];
       for (int j = 0; j < nreal; ++j)
-        os << std::setw(wr) << ppar->rp[j][k];
+        os << std::setw(wr) << realprop[j][k];
       os << '\n';
     }
 
