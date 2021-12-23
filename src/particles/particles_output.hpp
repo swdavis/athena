@@ -27,6 +27,9 @@ class ParticlesOutput {
       op(op_in), nint(Particles::GetNInt()), nreal(Particles::GetNReal()) {}
   ~ParticlesOutput() {}
 
+  // Accessors
+  bool CheckTimer(const Mesh *pm) const;
+
   // Mutators
   void SetNextOutput(ParameterInput* pin);
 
@@ -38,6 +41,16 @@ class ParticlesOutput {
   OutputParameters op;  //!> output parameters
   int nint, nreal;      //!> numbers of int and Real properties for each particle
 };
+
+//--------------------------------------------------------------------------------------
+//! \fn bool ParticlesOutput::CheckTimer(const Mesh *pm) const
+//! \brief checks if it is time for next output.
+
+inline bool ParticlesOutput::CheckTimer(const Mesh *pm) const {
+  return (pm->time == pm->start_time) ||
+         (pm->time >= op.next_time) ||
+         (pm->time >= pm->tlim);
+}
 
 //--------------------------------------------------------------------------------------
 //! \class POutFormattedTable
