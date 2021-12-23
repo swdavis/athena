@@ -13,6 +13,7 @@
 // Athena headers
 #include "../mesh/mesh.hpp"                 // Mesh
 #include "../outputs/output_parameters.hpp" // OutputParameters
+#include "../parameter_input.hpp"           // ParameterInput
 #include "particles.hpp"                    // Particles
 
 //--------------------------------------------------------------------------------------
@@ -25,6 +26,9 @@ class ParticlesOutput {
   explicit ParticlesOutput(const OutputParameters& op_in) :
       op(op_in), nint(Particles::GetNInt()), nreal(Particles::GetNReal()) {}
   ~ParticlesOutput() {}
+
+  // Mutators
+  void SetNextOutput(ParameterInput* pin);
 
   // Virtual function to write output file.
   virtual void WriteOutputFile(const Mesh *pm) = 0;

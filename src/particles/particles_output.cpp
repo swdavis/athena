@@ -22,6 +22,16 @@
 #include "particles_output.hpp"
 
 //--------------------------------------------------------------------------------------
+//! \fn void ParticlesOutput::SetNextOutput(ParameterInput* pin)
+//! \brief advances the timer for next output.
+
+void ParticlesOutput::SetNextOutput(ParameterInput* pin) {
+  op.next_time += op.dt;
+  pin->SetReal(op.block_name, "next_time", op.next_time);
+  pin->SetInteger(op.block_name, "file_number", ++op.file_number);
+}
+
+//--------------------------------------------------------------------------------------
 //! \fn void POutFormattedTable::WriteOutputFile(Mesh *pm)
 //! \brief outputs the particle data in tabulated format.
 
