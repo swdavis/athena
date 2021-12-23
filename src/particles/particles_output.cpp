@@ -46,7 +46,7 @@ void POutFormattedTable::WriteOutputFile(const Mesh *pm) {
     // Open the file for write.
     os.open(fname.str().data());
     if (!os.is_open()) {
-      msg << "### FATAL ERROR in function [Particles::FormattedTableOutput]"
+      msg << "### FATAL ERROR in function [POutFormattedTable::WriteOutputFile]"
           << std::endl << "Output file '" << fname.str() << "' could not be opened"
           << std::endl;
       ATHENA_ERROR(msg);
