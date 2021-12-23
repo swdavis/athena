@@ -13,6 +13,7 @@
 // Athena headers
 #include "../mesh/mesh.hpp"                 // Mesh
 #include "../outputs/output_parameters.hpp" // OutputParameters
+#include "particles.hpp"                    // Particles
 
 //--------------------------------------------------------------------------------------
 //! \class ParticlesOutput
@@ -21,7 +22,8 @@
 class ParticlesOutput {
  public:
   // Constructors
-  explicit ParticlesOutput(const OutputParameters& op_in) : op(op_in) {}
+  explicit ParticlesOutput(const OutputParameters& op_in) :
+      op(op_in), nint(Particles::GetNInt()), nreal(Particles::GetNReal()) {}
   ~ParticlesOutput() {}
 
   // Virtual function to write output file.
@@ -29,7 +31,8 @@ class ParticlesOutput {
 
  protected:
   // Instance Variables
-  OutputParameters op;
+  OutputParameters op;  //!> output parameters
+  int nint, nreal;      //!> numbers of int and Real properties for each particle
 };
 
 //--------------------------------------------------------------------------------------

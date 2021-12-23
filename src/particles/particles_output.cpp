@@ -24,7 +24,6 @@
 //! \brief outputs the particle data in tabulated format.
 
 void POutFormattedTable::WriteOutputFile(const Mesh *pm) {
-  const int nint(Particles::nint), nreal(Particles::nreal);
   const int iprec(std::numeric_limits<int>::digits10);
   const int rprec(std::numeric_limits<Real>::max_digits10);
   const int wi(iprec+2);
