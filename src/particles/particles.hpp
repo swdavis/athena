@@ -62,6 +62,8 @@ friend class DustParticles;
   static void FindDensityOnMesh(Mesh *pm, bool include_momentum);
   static void FindHistoryOutput(Mesh *pm, Real data_sum[], int pos);
   static void GetHistoryOutputNames(std::string output_names[]);
+  static int GetNInt() { return nint; }
+  static int GetNReal() { return nreal; }
   static int GetTotalNumber(Mesh *pm);
 
   // Class constant
