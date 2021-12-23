@@ -37,14 +37,14 @@ def analyze():
     """Analyze the output and determine if the test passes. """
     from glob import glob
 
-    # Define the base name.
-    base = "bin/UniStream"
-
     # Read the input file.
     athinput = athena_read.athinput("../../inputs/particles//athinput.uniform_streaming")
     input_mesh = athinput["mesh"]
     input_particles = athinput["particles"]
     input_problem = athinput["problem"]
+
+    # Define the base name.
+    base = "bin/" + athinput["job"]["problem_id"]
 
     # Get the initial conditions.
     xlen = float(input_mesh["x1max"]) - float(input_mesh["x1min"])
@@ -70,7 +70,7 @@ def analyze():
         {"names": ["id", "xp", "yp", "zp", "vpx", "vpy", "vpz"],
          "formats": [int, float, float, float, float, float, float]})
 
-    f = open(base + ".00000.tab")
+    f = open(base + ".out1.00000.tab")
     f.readline()
     names = f.readline().split()[1:]
     f.close()
@@ -83,7 +83,7 @@ def analyze():
     dtg = np.dtype(dict(names=names, formats=formats))
 
     # Get the initial particle positions.
-    dp = np.rec.array(np.loadtxt(base + ".00000.par.tab", dtype=dtp))
+    dp = np.rec.array(np.loadtxt(base + ".pout.00000.tab", dtype=dtp))
     xp0, yp0, zp0 = np.copy(dp.xp), np.copy(dp.yp), np.copy(dp.zp)
     npar = len(xp0)
 
@@ -104,7 +104,7 @@ def analyze():
     xpold, ypold, zpold = np.copy(xp0), np.copy(yp0), np.copy(zp0)
 
     # Collect particle data.
-    for fname in sorted(glob(base + ".*.par.tab")):
+    for fname in sorted(glob(base + ".pout.*.tab")):
         with open(fname) as f:
             t.append(float(f.readline().split()[-1]))
         dp = np.rec.array(np.loadtxt(fname, dtype=dtp))
@@ -157,7 +157,7 @@ def analyze():
     vpzavg, vpzmin, vpzmax = np.array(vpzavg), np.array(vpzmin), np.array(vpzmax)
 
     # Collect gas data.
-    for fname in sorted(glob(base + ".[0-9][0-9][0-9][0-9][0-9].tab")):
+    for fname in sorted(glob(base + ".out1.[0-9][0-9][0-9][0-9][0-9].tab")):
         dg = np.rec.array(np.loadtxt(fname, dtype=dtg))
 
         # Process gas velocities.
