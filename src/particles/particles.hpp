@@ -78,6 +78,8 @@ friend class DustParticles;
   // Accessor
   virtual AthenaArray<Real> GetMassDensity() const;
   virtual AthenaArray<Real> GetVelocityField() const;
+  const std::vector<int>* GetIntProps() const { return intprop; }
+  const std::vector<Real>* GetRealProps() const { return rp; }
   Real GetMaximumWeight() const;
 
   // Instance methods
