@@ -23,7 +23,7 @@
 #include "../athena.hpp"
 #include "../coordinates/coordinates.hpp"
 #include "../mesh/mesh.hpp"
-#include "../particles/particles_output.hpp"
+#include "../particles/particles-output.hpp"
 #include "outputs.hpp"
 
 

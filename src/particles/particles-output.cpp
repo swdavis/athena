@@ -3,7 +3,7 @@
 // Copyright(C) 2021 James M. Stone <jmstone@princeton.edu> and other code contributors
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //======================================================================================
-//! \file particles_output.cpp
+//! \file particles-output.cpp
 //! \brief implements functions for class ParticlesOutput and its derived classes.
 
 // C/C++ Standard Libraries
@@ -19,7 +19,7 @@
 #include "../defs.hpp"       // ATHENA_ERROR()
 #include "../mesh/mesh.hpp"  // MeshBlock
 #include "particles.hpp"     // Particles
-#include "particles_output.hpp"
+#include "particles-output.hpp"
 
 //--------------------------------------------------------------------------------------
 //! \fn void ParticlesOutput::SetNextOutput(ParameterInput* pin)

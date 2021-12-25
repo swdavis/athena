@@ -97,7 +97,7 @@
 #include "../orbital_advection/orbital_advection.hpp"
 #include "../parameter_input.hpp"
 #include "../particles/dust_particles.hpp"
-#include "../particles/particles_output.hpp"
+#include "../particles/particles-output.hpp"
 #include "../scalars/scalars.hpp"
 #include "outputs.hpp"
 

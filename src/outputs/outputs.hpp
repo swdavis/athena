@@ -16,7 +16,7 @@
 
 // Athena++ headers
 #include "../athena.hpp"
-#include "../particles/particles_output.hpp"
+#include "../particles/particles-output.hpp"
 #include "io_wrapper.hpp"
 #include "output_parameters.hpp"
 
