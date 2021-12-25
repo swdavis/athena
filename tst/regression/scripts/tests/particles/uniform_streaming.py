@@ -35,6 +35,7 @@ def run(**kwargs):
 
 def analyze():
     """Analyze the output and determine if the test passes. """
+    import athena_read
     from glob import glob
 
     # Read the input file.
@@ -66,10 +67,6 @@ def analyze():
             backreaction = True
 
     # Construct numpy datatypes.
-    dtp = np.dtype(
-        {"names": ["id", "xp", "yp", "zp", "vpx", "vpy", "vpz"],
-         "formats": [int, float, float, float, float, float, float]})
-
     f = open(base + ".out1.00000.tab")
     f.readline()
     names = f.readline().split()[1:]
@@ -83,7 +80,7 @@ def analyze():
     dtg = np.dtype(dict(names=names, formats=formats))
 
     # Get the initial particle positions.
-    dp = np.rec.array(np.loadtxt(base + ".pout.00000.tab", dtype=dtp))
+    t, dp = athena_read.particles(base + ".pout.00000.tab")
     xp0, yp0, zp0 = np.copy(dp.xp), np.copy(dp.yp), np.copy(dp.zp)
     npar = len(xp0)
 
@@ -105,9 +102,8 @@ def analyze():
 
     # Collect particle data.
     for fname in sorted(glob(base + ".pout.*.tab")):
-        with open(fname) as f:
-            t.append(float(f.readline().split()[-9]))
-        dp = np.rec.array(np.loadtxt(fname, dtype=dtp))
+        time, dp = athena_read.particles(fname)
+        t.append(time)
 
         # Process particle positions.
         sx[np.where(xpold - dp.xp > 0.5 * xlen)] += 1

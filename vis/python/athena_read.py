@@ -1051,6 +1051,60 @@ def athinput(filename):
 
 # ========================================================================================
 
+def particles(filename):
+    """Reads particle data.
+
+    Positional Argument
+        filename
+            Name of the data file.
+
+    Returned Values
+        time
+            Time of the snapshot.
+        pdata
+            A numpy record array of particles data.
+    """
+    import numpy as np
+
+    # Check the file type.
+    if ".pout." in filename:
+        if filename.endswith(".tab"): # Formatted ASCII table
+
+            # Function to get a key-value pair.
+            def get_key(words, key):
+                if key in words:
+                    index = words.index(key)
+                    if words[index+1] == "=":
+                        return words[index+2]
+                raise AthenaError("Unable to get key '" + key + "'. ")
+
+            # Parse the header.
+            with open(filename) as f:
+                words = f.readline().split()
+                time = float(get_key(words, "time"))
+                nint = int(get_key(words, "nint"))
+                nreal = int(get_key(words, "nreal"))
+                varnames = f.readline().split()[1:]
+
+            # Compose the data type.
+            if len(varnames) != nint + nreal:
+                raise AthenaError("Inconsistent number of particle properties. ")
+            dtype = np.dtype(dict(names=varnames, formats=nint*[int]+nreal*[float]))
+
+            # Read the particle data.
+            pdata = np.rec.array(np.loadtxt(filename, dtype=dtype))
+
+        else:
+            raise AthenaError("Unknown data type for file '" + filename + "'. ")
+
+    else:
+        raise AthenaError("Was the file '" + filename + "' produced by <outputp>? ")
+
+    # Read and return the data.
+    return time, pdata
+
+# ========================================================================================
+
 class AthenaError(RuntimeError):
     """General exception class for Athena++ read functions."""
     pass
