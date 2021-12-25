@@ -63,9 +63,10 @@ void POutFormattedTable::WriteOutputFile(const Mesh *pm) {
       ATHENA_ERROR(msg);
     }
 
-    // Write the time.
+    // Write the time and numbers of properties.
     os << std::scientific << std::showpoint << std::setprecision(rprec);
-    os << "# Athena++ particle data at time = " << pm->time << std::endl;
+    os << "# Athena++ particle data at time = " << pm->time
+       << " with nint = " << nint << " and nreal = " << nreal << std::endl;
 
     // Write the column head.
     os << '#';

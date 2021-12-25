@@ -106,7 +106,7 @@ def analyze():
     # Collect particle data.
     for fname in sorted(glob(base + ".pout.*.tab")):
         with open(fname) as f:
-            t.append(float(f.readline().split()[-1]))
+            t.append(float(f.readline().split()[-9]))
         dp = np.rec.array(np.loadtxt(fname, dtype=dtp))
 
         # Process particle positions.
