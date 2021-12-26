@@ -12,7 +12,6 @@
 #include <iostream>  // <<, endl, scientific, showpoint
 #include <limits>    // numeric_limits<T>
 #include <sstream>   // ostringstream
-#include <string>    // string
 #include <vector>    // vector<T>
 
 // Athena++ headers
@@ -36,8 +35,6 @@ void ParticlesOutput::SetNextOutput(ParameterInput* pin) {
 //! \brief outputs the particle data in tabulated format.
 
 void POutFormattedTable::WriteOutputFile(const Mesh *pm) {
-  const std::vector<std::string>& ipname(Particles::GetIntNames());
-  const std::vector<std::string>& rpname(Particles::GetRealNames());
   const int iprec(std::numeric_limits<int>::digits10);
   const int rprec(std::numeric_limits<Real>::max_digits10);
   const int wi(iprec+2);

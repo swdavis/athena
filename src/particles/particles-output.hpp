@@ -9,6 +9,8 @@
 //======================================================================================
 
 // C/C++ Standard Libraries
+#include <string>  // string
+#include <vector>  // vector<T>
 
 // Athena headers
 #include "../mesh/mesh.hpp"                 // Mesh
@@ -24,7 +26,8 @@ class ParticlesOutput {
  public:
   // Constructors
   explicit ParticlesOutput(const OutputParameters& op_in) :
-      op(op_in), nint(Particles::GetNInt()), nreal(Particles::GetNReal()) {}
+      op(op_in), nint(Particles::GetNInt()), nreal(Particles::GetNReal()),
+      ipname(Particles::GetIntNames()), rpname(Particles::GetRealNames()) {}
   virtual ~ParticlesOutput() {}
 
   // Accessors
@@ -38,8 +41,10 @@ class ParticlesOutput {
 
  protected:
   // Instance Variables
-  OutputParameters op;  //!> output parameters
-  int nint, nreal;      //!> numbers of int and Real properties for each particle
+  OutputParameters op;   //!> output parameters
+  const int nint, nreal; //!> numbers of int and Real properties for each particle
+  const std::vector<std::string>
+      &ipname, &rpname;  //!> names of the properties
 };
 
 //--------------------------------------------------------------------------------------
