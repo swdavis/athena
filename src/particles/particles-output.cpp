@@ -31,6 +31,14 @@ void ParticlesOutput::SetNextOutput(ParameterInput* pin) {
 }
 
 //--------------------------------------------------------------------------------------
+//! \fn void POutBinaries::WriteOutputFile(Mesh *pm)
+//! \brief outputs the particle data in raw binaries.
+
+void POutBinaries::WriteOutputFile(const Mesh *pm) {
+  std::cout << "In POutBinaries::WriteOutputFile()......" << std::endl;
+}
+
+//--------------------------------------------------------------------------------------
 //! \fn void POutFormattedTable::WriteOutputFile(Mesh *pm)
 //! \brief outputs the particle data in tabulated format.
 

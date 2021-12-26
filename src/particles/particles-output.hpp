@@ -58,6 +58,19 @@ inline bool ParticlesOutput::CheckTimer(const Mesh *pm) const {
 }
 
 //--------------------------------------------------------------------------------------
+//! \class POutBinaries
+//! \brief defines derived class for writing a binary file.
+
+class POutBinaries : public ParticlesOutput {
+ public:
+  // Constructors
+  explicit POutBinaries(const OutputParameters& op) : ParticlesOutput(op) {}
+
+  // Function to write raw data to a binary file.
+  void WriteOutputFile(const Mesh *pm);
+};
+
+//--------------------------------------------------------------------------------------
 //! \class POutFormattedTable
 //! \brief defines derived class for writing an ASCII file.
 

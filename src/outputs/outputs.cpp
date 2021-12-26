@@ -150,6 +150,8 @@ Outputs::Outputs(Mesh *pm, ParameterInput *pin) {
           // Construct new particle output according to file_type.
           if (op.file_type == "tab") {
             pout_ = new POutFormattedTable(op);
+          } else if (op.file_type == "bin") {
+            pout_ = new POutBinaries(op);
           } else {
             msg << "### FATAL ERROR in Outputs constructor" << std::endl
                 << "Unrecognized file format = '" << op.file_type
