@@ -12,6 +12,7 @@
 #include <iostream>  // <<, endl, scientific, showpoint
 #include <limits>    // numeric_limits<T>
 #include <sstream>   // ostringstream
+#include <string>    // string
 #include <vector>    // vector<T>
 
 // Athena++ headers
@@ -19,6 +20,17 @@
 #include "../mesh/mesh.hpp"  // MeshBlock
 #include "particles.hpp"     // Particles
 #include "particles-output.hpp"
+
+//--------------------------------------------------------------------------------------
+//! \fn std::string ParticlesOutput::ComposeFileName(int block_id) const
+//! \brief composes the output file name without the extension, given block_id.
+
+std::string ParticlesOutput::ComposeFileName(int block_id) const {
+  std::ostringstream fname;
+  fname << op.file_basename << ".block" << block_id << ".pout."
+        << std::setw(5) << std::right << std::setfill('0') << op.file_number;
+  return fname.str();
+}
 
 //--------------------------------------------------------------------------------------
 //! \fn void ParticlesOutput::SetNextOutput(ParameterInput* pin)
@@ -47,7 +59,7 @@ void POutFormattedTable::WriteOutputFile(const Mesh *pm) {
   const int rprec(std::numeric_limits<Real>::max_digits10);
   const int wi(iprec+2);
   const int wr(rprec+8);
-  std::ostringstream fname, msg;
+  std::ostringstream msg;
   std::ofstream os;
 
   // Loop over MeshBlocks
@@ -56,14 +68,13 @@ void POutFormattedTable::WriteOutputFile(const Mesh *pm) {
     const Particles *ppar(pmb->ppar);
 
     // Create the filename.
-    fname << op.file_basename << ".block" << pmb->gid << ".pout."
-          << std::setw(5) << std::right << std::setfill('0') << op.file_number << ".tab";
+    std::string fname(ComposeFileName(pmb->gid) + ".tab");
 
     // Open the file for write.
-    os.open(fname.str().data());
+    os.open(fname);
     if (!os.is_open()) {
       msg << "### FATAL ERROR in function [POutFormattedTable::WriteOutputFile]"
-          << std::endl << "Output file '" << fname.str() << "' could not be opened"
+          << std::endl << "Output file '" << fname << "' could not be opened"
           << std::endl;
       ATHENA_ERROR(msg);
     }
@@ -93,9 +104,7 @@ void POutFormattedTable::WriteOutputFile(const Mesh *pm) {
       os << '\n';
     }
 
-    // Close the file and get the next meshblock.
+    // Close the file.
     os.close();
-    fname.str("");
   }
 }
-
