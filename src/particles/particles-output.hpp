@@ -59,7 +59,7 @@ inline bool ParticlesOutput::CheckTimer(const Mesh *pm) const {
 class POutFormattedTable : public ParticlesOutput {
  public:
   // Constructors
-  explicit POutFormattedTable(const OutputParameters& op_in) : ParticlesOutput(op_in) {}
+  explicit POutFormattedTable(const OutputParameters& op) : ParticlesOutput(op) {}
 
   // Function to write a formatted table to an ASCII file.
   void WriteOutputFile(const Mesh *pm);
