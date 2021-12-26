@@ -31,6 +31,7 @@ class ParticlesOutput {
   virtual ~ParticlesOutput() {}
 
   // Accessors
+  std::string ComposeFileName() const;
   std::string ComposeFileName(int block_id) const;
   bool CheckTimer(const Mesh *pm) const;
 

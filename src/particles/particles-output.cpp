@@ -22,6 +22,17 @@
 #include "particles-output.hpp"
 
 //--------------------------------------------------------------------------------------
+//! \fn std::string ParticlesOutput::ComposeFileName() const
+//! \brief composes the output file name without the extension.
+
+std::string ParticlesOutput::ComposeFileName() const {
+  std::ostringstream fname;
+  fname << op.file_basename << ".pout."
+        << std::setw(5) << std::right << std::setfill('0') << op.file_number;
+  return fname.str();
+}
+
+//--------------------------------------------------------------------------------------
 //! \fn std::string ParticlesOutput::ComposeFileName(int block_id) const
 //! \brief composes the output file name without the extension, given block_id.
 
