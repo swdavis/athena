@@ -26,8 +26,8 @@ class ParticlesOutput {
  public:
   // Constructors
   explicit ParticlesOutput(const OutputParameters& op_in) :
-      op(op_in), nint(Particles::GetNInt()), nreal(Particles::GetNReal()),
-      ipname(Particles::GetIntNames()), rpname(Particles::GetRealNames()) {}
+      nint(Particles::GetNInt()), nreal(Particles::GetNReal()),
+      ipname(Particles::GetIntNames()), rpname(Particles::GetRealNames()), op(op_in) {}
   virtual ~ParticlesOutput() {}
 
   // Accessors
@@ -43,10 +43,12 @@ class ParticlesOutput {
 
  protected:
   // Instance Variables
-  OutputParameters op;   //!> output parameters
   const int nint, nreal; //!> numbers of int and Real properties for each particle
-  const std::vector<std::string>
-      &ipname, &rpname;  //!> names of the properties
+  const std::vector<std::string> &ipname, &rpname; //!> names of the properties
+
+ private:
+  // Instance Variables
+  OutputParameters op; //!> output parameters
 };
 
 //--------------------------------------------------------------------------------------
