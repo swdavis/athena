@@ -9,6 +9,7 @@
 //======================================================================================
 
 // C/C++ Standard Libraries
+#include <cstdlib> // size_t
 #include <string>  // string
 #include <vector>  // vector<T>
 
@@ -68,10 +69,14 @@ inline bool ParticlesOutput::CheckTimer(const Mesh *pm) const {
 class POutBinaries : public ParticlesOutput {
  public:
   // Constructors
-  explicit POutBinaries(const OutputParameters& op) : ParticlesOutput(op) {}
+  explicit POutBinaries(const OutputParameters& op);
 
   // Function to write raw data to a binary file.
   void WriteOutputFile(const Mesh *pm);
+
+ private:
+  // Instance Variables
+  std::size_t header_size;
 };
 
 //--------------------------------------------------------------------------------------

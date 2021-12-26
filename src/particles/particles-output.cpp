@@ -7,6 +7,7 @@
 //! \brief implements functions for class ParticlesOutput and its derived classes.
 
 // C/C++ Standard Libraries
+#include <cstring>   // size_t
 #include <fstream>   // ofstream
 #include <iomanip>   // setprecision(), setw()
 #include <iostream>  // <<, endl, scientific, showpoint
@@ -51,6 +52,23 @@ void ParticlesOutput::SetNextOutput(ParameterInput* pin) {
   op.next_time += op.dt;
   pin->SetReal(op.block_name, "next_time", op.next_time);
   pin->SetInteger(op.block_name, "file_number", ++op.file_number);
+}
+
+//--------------------------------------------------------------------------------------
+//! \fn POutBinaries::POutBinaries(const OutputParameters& op)
+//! \brief is a constructor.
+
+POutBinaries::POutBinaries(const OutputParameters& op)
+: ParticlesOutput(op) {
+  const std::size_t SIZE_OF_INT(sizeof(int));
+  const std::size_t SIZE_OF_REAL(sizeof(Real));
+
+  // Compute the size of the header.
+  header_size = SIZE_OF_REAL + 4 * SIZE_OF_INT;
+  for (int j = 0; j < nint; ++j)
+    header_size += ipname[j].size() + 1;
+  for (int j = 0; j < nreal; ++j)
+    header_size += rpname[j].size() + 1;
 }
 
 //--------------------------------------------------------------------------------------
