@@ -60,15 +60,12 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
   // Assign the particle, if any.
   if (flag) {
-    ppar->npar = 1;
-    ppar->pid(0) = 0;
-    ppar->xp(0) = xp0;
-    ppar->yp(0) = yp0;
-    ppar->zp(0) = zp0;
-    ppar->vpx(0) = vpx0;
-    ppar->vpy(0) = vpy0;
-    ppar->vpz(0) = vpz0;
-  } else {
-    ppar->npar = 0;
+    ppar->Resize(1);
+    ppar->xp[0] = xp0;
+    ppar->yp[0] = yp0;
+    ppar->zp[0] = zp0;
+    ppar->vpx[0] = vpx0;
+    ppar->vpy[0] = vpy0;
+    ppar->vpz[0] = vpz0;
   }
 }
