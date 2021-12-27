@@ -18,9 +18,15 @@
 
 // Athena++ headers
 #include "../defs.hpp"       // ATHENA_ERROR()
+#include "../globals.hpp"    // my_rank, nranks
 #include "../mesh/mesh.hpp"  // MeshBlock
 #include "particles.hpp"     // Particles
 #include "particles-output.hpp"
+
+// MPI header
+#ifdef MPI_PARALLEL
+#include <mpi.h>
+#endif
 
 // Constants
 static const std::size_t SIZE_OF_INT(sizeof(int));
@@ -86,9 +92,17 @@ POutBinaries::POutBinaries(const OutputParameters& op)
 
 void POutBinaries::WriteOutputFile(const Mesh *pm) {
   // Count total number of particles in each process.
-  int nptot(0);
+  int my_npar(0), npar_tot(0);
   for (int b = 0; b < pm->nblocal; ++b)
-    nptot += pm->my_blocks(b)->ppar->GetNPar();
+    my_npar += pm->my_blocks(b)->ppar->GetNPar();
+#ifdef MPI_PARALLEL
+  int *npar_in_rank(new int[Globals::nranks]);
+  MPI_Allgather(&my_npar, 1, MPI_INT, npar_in_rank, 1, MPI_INT, MPI_COMM_WORLD);
+  for (int i = 0; i < Globals::nranks; ++i)
+    npar_tot += npar_in_rank[i];
+#else // MPI_PARALLEL
+  npar_tot = my_npar;
+#endif // MPI_PARALLEL
 
   // Create the output file.
   const std::string fname(ComposeFileName() + ".dat");
@@ -110,12 +124,12 @@ void POutBinaries::WriteOutputFile(const Mesh *pm) {
     pbuf = add_data(pbuf, ipname[j]);
   for (int j = 0; j < nreal; ++j)
     pbuf = add_data(pbuf, rpname[j]);
-  pbuf = add_data(pbuf, nptot);
+  pbuf = add_data(pbuf, npar_tot);
   os.write(buf, pbuf - buf);
   delete [] buf;
 
   // Write the particle data.
-  pbuf = buf = new char[nptot * psize];
+  pbuf = buf = new char[my_npar * psize];
   for (int b = 0; b < pm->nblocal; ++b) {
     const Particles *ppar(pm->my_blocks(b)->ppar);
     const std::vector<int>* intprop(ppar->GetIntProps());
@@ -132,6 +146,10 @@ void POutBinaries::WriteOutputFile(const Mesh *pm) {
 
   // Close the file.
   os.close();
+
+#ifdef MPI_PARALLEL
+  delete [] npar_in_rank;
+#endif // MPI_PARALLEL
 }
 
 //--------------------------------------------------------------------------------------
