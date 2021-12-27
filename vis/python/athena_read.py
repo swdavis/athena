@@ -1065,6 +1065,7 @@ def particles(filename):
             A numpy record array of particles data.
     """
     import numpy as np
+    from struct import unpack
 
     # Check the file type.
     if ".pout." in filename:
@@ -1092,7 +1093,54 @@ def particles(filename):
             dtype = np.dtype(dict(names=varnames, formats=nint*[int]+nreal*[float]))
 
             # Read the particle data.
-            pdata = np.rec.array(np.loadtxt(filename, dtype=dtype))
+            pdata = np.loadtxt(filename, dtype=dtype)
+
+        if filename.endswith(".dat"): # Binary raw data
+
+            with open(filename, "rb") as f:
+
+                # Function to read an integer.
+                def get_int():
+                    return unpack('i', f.read(4))[0]
+
+                # Check the size of a real.
+                rsize = get_int()
+                if rsize == 4:
+                    fmt = 'f'
+                elif rsize == 8:
+                    fmt = 'd'
+                else:
+                    raise AthenaError(f"Unknown size ({rsize}) of a Real. ")
+
+                # Function to read a real.
+                def get_real():
+                    return unpack(fmt, f.read(rsize))[0]
+
+                # Function to read a string.
+                def get_str():
+                    s = b""
+                    while True:
+                        c = f.read(1)
+                        if c == b'\x00': return s.decode("ascii")
+                        s += c
+
+                # Process the header.
+                time = get_real()
+                nint, nreal = get_int(), get_int()
+                ipnames = [ get_str() for i in range(nint) ]
+                rpnames = [ get_str() for i in range(nreal) ]
+                npar = get_int()
+
+                # Read the particle data.
+                names = ipnames + rpnames
+                formats = nint*[int] + nreal*[float]
+                dtype = np.dtype(dict(names=names, formats=formats))
+                pdata = []
+                for k in range(npar):
+                    values = [ get_int() for i in range(nint) ]
+                    values += [ get_real() for i in range(nreal) ]
+                    pdata.append(tuple(values))
+                pdata = np.array(pdata, dtype=dtype)
 
         else:
             raise AthenaError("Unknown data type for file '" + filename + "'. ")
@@ -1101,7 +1149,7 @@ def particles(filename):
         raise AthenaError("Was the file '" + filename + "' produced by <outputp>? ")
 
     # Read and return the data.
-    return time, pdata
+    return time, np.rec.array(pdata)
 
 # ========================================================================================
 
