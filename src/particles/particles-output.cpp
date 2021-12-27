@@ -26,6 +26,11 @@
 static const std::size_t SIZE_OF_INT(sizeof(int));
 static const std::size_t SIZE_OF_REAL(sizeof(Real));
 
+// Local functions
+static char* add_data(char* pbuf, int n);
+static char* add_data(char* pbuf, Real n);
+static char* add_data(char* pbuf, const std::string& s);
+
 //--------------------------------------------------------------------------------------
 //! \fn std::string ParticlesOutput::ComposeFileName() const
 //! \brief composes the output file name without the extension.
@@ -97,27 +102,15 @@ void POutBinaries::WriteOutputFile(const Mesh *pm) {
 
   // Write the header.
   char *buf(new char[header_size]), *pbuf(buf);
-  const int real_size(SIZE_OF_REAL);
-  std::memcpy(pbuf, &real_size, SIZE_OF_INT);
-  pbuf += SIZE_OF_INT;
-  std::memcpy(pbuf, &pm->time, SIZE_OF_REAL);
-  pbuf += SIZE_OF_REAL;
-  std::memcpy(pbuf, &nint, SIZE_OF_INT);
-  pbuf += SIZE_OF_INT;
-  std::memcpy(pbuf, &nreal, SIZE_OF_INT);
-  pbuf += SIZE_OF_INT;
-  for (int j = 0; j < nint; ++j) {
-    const std::size_t size(ipname[j].size() + 1);
-    std::memcpy(pbuf, ipname[j].c_str(), size);
-    pbuf += size;
-  }
-  for (int j = 0; j < nreal; ++j) {
-    const std::size_t size(rpname[j].size() + 1);
-    std::memcpy(pbuf, rpname[j].c_str(), size);
-    pbuf += size;
-  }
-  std::memcpy(pbuf, &nptot, SIZE_OF_INT);
-  pbuf += SIZE_OF_INT;
+  pbuf = add_data(pbuf, static_cast<int>(SIZE_OF_REAL));
+  pbuf = add_data(pbuf, pm->time);
+  pbuf = add_data(pbuf, nint);
+  pbuf = add_data(pbuf, nreal);
+  for (int j = 0; j < nint; ++j)
+    pbuf = add_data(pbuf, ipname[j]);
+  for (int j = 0; j < nreal; ++j)
+    pbuf = add_data(pbuf, rpname[j]);
+  pbuf = add_data(pbuf, nptot);
   os.write(buf, pbuf - buf);
   delete [] buf;
 
@@ -128,14 +121,10 @@ void POutBinaries::WriteOutputFile(const Mesh *pm) {
     const std::vector<int>* intprop(ppar->GetIntProps());
     const std::vector<Real>* realprop(ppar->GetRealProps());
     for (int k = 0; k < ppar->GetNPar(); ++k) {
-      for (int j = 0; j < nint; ++j) {
-        std::memcpy(pbuf, &intprop[j][k], SIZE_OF_INT);
-        pbuf += SIZE_OF_INT;
-      }
-      for (int j = 0; j < nreal; ++j) {
-        std::memcpy(pbuf, &realprop[j][k], SIZE_OF_REAL);
-        pbuf += SIZE_OF_REAL;
-      }
+      for (int j = 0; j < nint; ++j)
+        pbuf = add_data(pbuf, intprop[j][k]);
+      for (int j = 0; j < nreal; ++j)
+        pbuf = add_data(pbuf, realprop[j][k]);
     }
   }
   os.write(buf, pbuf - buf);
@@ -202,4 +191,32 @@ void POutFormattedTable::WriteOutputFile(const Mesh *pm) {
     // Close the file.
     os.close();
   }
+}
+
+//--------------------------------------------------------------------------------------
+//! \fn char* add_data(char* pbuf, int n)
+//! \brief writes an integer to the buffer and advance the pointer.
+
+inline char* add_data(char* pbuf, int n) {
+  std::memcpy(pbuf, &n, SIZE_OF_INT);
+  return pbuf + SIZE_OF_INT;
+}
+
+//--------------------------------------------------------------------------------------
+//! \fn char* add_data(char* pbuf, Real x)
+//! \brief writes a real to the buffer and advance the pointer.
+
+inline char* add_data(char* pbuf, Real x) {
+  std::memcpy(pbuf, &x, SIZE_OF_REAL);
+  return pbuf + SIZE_OF_REAL;
+}
+
+//--------------------------------------------------------------------------------------
+//! \fn char* add_data(char* pbuf, const std::string& s)
+//! \brief writes a string to the buffer and advance the pointer.
+
+inline char* add_data(char* pbuf, const std::string& s) {
+  const std::size_t size(s.size() + 1);
+  std::memcpy(pbuf, s.c_str(), size);
+  return pbuf + size;
 }
