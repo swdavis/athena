@@ -7,10 +7,10 @@
 //! \brief implements functions for class ParticlesOutput and its derived classes.
 
 // C/C++ Standard Libraries
-#include <cstring>   // size_t
+#include <cstring>   // size_t, memcpy()
 #include <fstream>   // ofstream
 #include <iomanip>   // setprecision(), setw()
-#include <iostream>  // <<, endl, scientific, showpoint
+#include <iostream>  // <<, endl, ios, scientific, showpoint
 #include <limits>    // numeric_limits<T>
 #include <sstream>   // ostringstream
 #include <string>    // string
@@ -21,6 +21,10 @@
 #include "../mesh/mesh.hpp"  // MeshBlock
 #include "particles.hpp"     // Particles
 #include "particles-output.hpp"
+
+// Constants
+static const std::size_t SIZE_OF_INT(sizeof(int));
+static const std::size_t SIZE_OF_REAL(sizeof(Real));
 
 //--------------------------------------------------------------------------------------
 //! \fn std::string ParticlesOutput::ComposeFileName() const
@@ -60,9 +64,6 @@ void ParticlesOutput::SetNextOutput(ParameterInput* pin) {
 
 POutBinaries::POutBinaries(const OutputParameters& op)
 : ParticlesOutput(op) {
-  const std::size_t SIZE_OF_INT(sizeof(int));
-  const std::size_t SIZE_OF_REAL(sizeof(Real));
-
   // Compute the size of the header.
   header_size = SIZE_OF_REAL + 4 * SIZE_OF_INT;
   for (int j = 0; j < nint; ++j)
@@ -76,7 +77,49 @@ POutBinaries::POutBinaries(const OutputParameters& op)
 //! \brief outputs the particle data in raw binaries.
 
 void POutBinaries::WriteOutputFile(const Mesh *pm) {
-  std::cout << "In POutBinaries::WriteOutputFile()......" << std::endl;
+  // Count total number of particles in each process.
+  int nptot(0);
+  for (int b = 0; b < pm->nblocal; ++b)
+    nptot += pm->my_blocks(b)->ppar->GetNPar();
+
+  // Create the output file.
+  const std::string fname(ComposeFileName());
+  std::ofstream os(fname, std::ios::out|std::ios::binary);
+  if (!os.is_open()) {
+    std::ostringstream msg;
+    msg << "### FATAL ERROR in function [POutBinaries::WriteOutputFile]\n"
+        << "Output file '" << fname << "' could not be opened.\n";
+    ATHENA_ERROR(msg);
+  }
+
+  // Write the header.
+  char *buf(new char[header_size]), *pbuf(buf);
+  const int real_size(SIZE_OF_REAL);
+  std::memcpy(pbuf, &real_size, SIZE_OF_INT);
+  pbuf += SIZE_OF_INT;
+  std::memcpy(pbuf, &pm->time, SIZE_OF_REAL);
+  pbuf += SIZE_OF_REAL;
+  std::memcpy(pbuf, &nint, SIZE_OF_INT);
+  pbuf += SIZE_OF_INT;
+  std::memcpy(pbuf, &nreal, SIZE_OF_INT);
+  pbuf += SIZE_OF_INT;
+  for (int j = 0; j < nint; ++j) {
+    const std::size_t size(ipname[j].size() + 1);
+    std::memcpy(pbuf, ipname[j].c_str(), size);
+    pbuf += size;
+  }
+  for (int j = 0; j < nreal; ++j) {
+    const std::size_t size(rpname[j].size() + 1);
+    std::memcpy(pbuf, rpname[j].c_str(), size);
+    pbuf += size;
+  }
+  std::memcpy(pbuf, &nptot, SIZE_OF_INT);
+  pbuf += SIZE_OF_INT;
+  os.write(buf, pbuf - buf);
+  delete [] buf;
+
+  // Close the file.
+  os.close();
 }
 
 //--------------------------------------------------------------------------------------
