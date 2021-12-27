@@ -76,7 +76,8 @@ class POutBinaries : public ParticlesOutput {
 
  private:
   // Instance Variables
-  std::size_t header_size;
+  std::size_t header_size, //!> data size for the header
+              psize;       //!> data size for each particle
 };
 
 //--------------------------------------------------------------------------------------

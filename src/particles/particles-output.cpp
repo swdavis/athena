@@ -64,12 +64,15 @@ void ParticlesOutput::SetNextOutput(ParameterInput* pin) {
 
 POutBinaries::POutBinaries(const OutputParameters& op)
 : ParticlesOutput(op) {
-  // Compute the size of the header.
+  // Compute the data size for the header.
   header_size = SIZE_OF_REAL + 4 * SIZE_OF_INT;
   for (int j = 0; j < nint; ++j)
     header_size += ipname[j].size() + 1;
   for (int j = 0; j < nreal; ++j)
     header_size += rpname[j].size() + 1;
+
+  // Compute the data size for each particle.
+  psize = nint * SIZE_OF_INT + nreal * SIZE_OF_REAL;
 }
 
 //--------------------------------------------------------------------------------------
