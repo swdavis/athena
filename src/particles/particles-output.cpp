@@ -105,9 +105,17 @@ void POutBinaries::WriteOutputFile(const Mesh *pm) {
 #endif // MPI_PARALLEL
 
   // Create the output file.
+  bool flag;
   const std::string fname(ComposeFileName() + ".dat");
+#ifdef MPI_PARALLEL
+  MPI_File fhandle;
+  flag = MPI_File_open(MPI_COMM_WORLD, fname.c_str(), MPI_MODE_CREATE|MPI_MODE_WRONLY,
+      MPI_INFO_NULL, &fhandle) != MPI_SUCCESS;
+#else // MPI_PARALLEL
   std::ofstream os(fname, std::ios::out|std::ios::binary);
-  if (!os.is_open()) {
+  flag = !os.is_open();
+#endif // MPI_PARALLEL
+  if (flag) {
     std::ostringstream msg;
     msg << "### FATAL ERROR in function [POutBinaries::WriteOutputFile]\n"
         << "Output file '" << fname << "' could not be opened.\n";
@@ -125,7 +133,9 @@ void POutBinaries::WriteOutputFile(const Mesh *pm) {
   for (int j = 0; j < nreal; ++j)
     pbuf = add_data(pbuf, rpname[j]);
   pbuf = add_data(pbuf, npar_tot);
+#ifndef MPI_PARALLEL
   os.write(buf, pbuf - buf);
+#endif // MPI_PARALLEL
   delete [] buf;
 
   // Write the particle data.
@@ -141,11 +151,17 @@ void POutBinaries::WriteOutputFile(const Mesh *pm) {
         pbuf = add_data(pbuf, realprop[j][k]);
     }
   }
+#ifndef MPI_PARALLEL
   os.write(buf, pbuf - buf);
+#endif // MPI_PARALLEL
   delete [] buf;
 
   // Close the file.
+#ifdef MPI_PARALLEL
+  MPI_File_close(&fhandle);
+#else // MPI_PARALLEL
   os.close();
+#endif // MPI_PARALLEL
 
 #ifdef MPI_PARALLEL
   delete [] npar_in_rank;
