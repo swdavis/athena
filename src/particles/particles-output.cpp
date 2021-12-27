@@ -121,6 +121,26 @@ void POutBinaries::WriteOutputFile(const Mesh *pm) {
   os.write(buf, pbuf - buf);
   delete [] buf;
 
+  // Write the particle data.
+  pbuf = buf = new char[nptot * psize];
+  for (int b = 0; b < pm->nblocal; ++b) {
+    const Particles *ppar(pm->my_blocks(b)->ppar);
+    const std::vector<int>* intprop(ppar->GetIntProps());
+    const std::vector<Real>* realprop(ppar->GetRealProps());
+    for (int k = 0; k < ppar->GetNPar(); ++k) {
+      for (int j = 0; j < nint; ++j) {
+        std::memcpy(pbuf, &intprop[j][k], SIZE_OF_INT);
+        pbuf += SIZE_OF_INT;
+      }
+      for (int j = 0; j < nreal; ++j) {
+        std::memcpy(pbuf, &realprop[j][k], SIZE_OF_REAL);
+        pbuf += SIZE_OF_REAL;
+      }
+    }
+  }
+  os.write(buf, pbuf - buf);
+  delete [] buf;
+
   // Close the file.
   os.close();
 }
