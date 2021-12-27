@@ -86,7 +86,7 @@ void POutBinaries::WriteOutputFile(const Mesh *pm) {
     nptot += pm->my_blocks(b)->ppar->GetNPar();
 
   // Create the output file.
-  const std::string fname(ComposeFileName());
+  const std::string fname(ComposeFileName() + ".dat");
   std::ofstream os(fname, std::ios::out|std::ios::binary);
   if (!os.is_open()) {
     std::ostringstream msg;
