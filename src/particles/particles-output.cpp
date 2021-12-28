@@ -162,7 +162,19 @@ void POutBinaries::WriteOutputFile(const Mesh *pm) {
         pbuf = add_data(pbuf, realprop[j][k]);
     }
   }
-#ifndef MPI_PARALLEL
+#ifdef MPI_PARALLEL
+  int npar_prev(0);
+  for (int i = 0; i < Globals::my_rank; ++i)
+    npar_prev += npar_in_rank[i];
+  MPI_Offset offset(header_size + npar_prev * psize);
+  if (MPI_File_write_at_all(fhandle, offset, buf, pbuf - buf, MPI_CHAR,
+                     MPI_STATUS_IGNORE) != MPI_SUCCESS) {
+    std::ostringstream msg;
+    msg << "### FATAL ERROR in function [POutBinaries::WriteOutputFile]\n"
+        << "Unable to write the particle data.\n";
+    ATHENA_ERROR(msg);
+  }
+#else // MPI_PARALLEL
   os.write(buf, pbuf - buf);
 #endif // MPI_PARALLEL
   delete [] buf;
