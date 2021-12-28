@@ -123,20 +123,31 @@ void POutBinaries::WriteOutputFile(const Mesh *pm) {
   }
 
   // Write the header.
-  char *buf(new char[header_size]), *pbuf(buf);
-  pbuf = add_data(pbuf, static_cast<int>(SIZE_OF_REAL));
-  pbuf = add_data(pbuf, pm->time);
-  pbuf = add_data(pbuf, nint);
-  pbuf = add_data(pbuf, nreal);
-  for (int j = 0; j < nint; ++j)
-    pbuf = add_data(pbuf, ipname[j]);
-  for (int j = 0; j < nreal; ++j)
-    pbuf = add_data(pbuf, rpname[j]);
-  pbuf = add_data(pbuf, npar_tot);
-#ifndef MPI_PARALLEL
-  os.write(buf, pbuf - buf);
+  char *buf, *pbuf;
+  if (Globals::my_rank == 0) {
+    pbuf = buf = new char[header_size];
+    pbuf = add_data(pbuf, static_cast<int>(SIZE_OF_REAL));
+    pbuf = add_data(pbuf, pm->time);
+    pbuf = add_data(pbuf, nint);
+    pbuf = add_data(pbuf, nreal);
+    for (int j = 0; j < nint; ++j)
+      pbuf = add_data(pbuf, ipname[j]);
+    for (int j = 0; j < nreal; ++j)
+      pbuf = add_data(pbuf, rpname[j]);
+    pbuf = add_data(pbuf, npar_tot);
+#ifdef MPI_PARALLEL
+    if (MPI_File_write(fhandle, buf, pbuf - buf, MPI_CHAR,
+                       MPI_STATUS_IGNORE) != MPI_SUCCESS) {
+      std::ostringstream msg;
+      msg << "### FATAL ERROR in function [POutBinaries::WriteOutputFile]\n"
+          << "Unable to write the header.\n";
+      ATHENA_ERROR(msg);
+    }
+#else // MPI_PARALLEL
+    os.write(buf, pbuf - buf);
 #endif // MPI_PARALLEL
-  delete [] buf;
+    delete [] buf;
+  }
 
   // Write the particle data.
   pbuf = buf = new char[my_npar * psize];
