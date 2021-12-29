@@ -110,6 +110,9 @@ friend class DustParticles;
   static int AddAuxProperty();
   static int AddWorkingArray();
 
+  // Instance methods
+  virtual void SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsrc);
+
   // Class variables
   static bool initialized;  //!> whether or not the class is initialized
   static int nint;          //!> numbers of integer particle properties
@@ -160,7 +163,6 @@ friend class DustParticles;
   static void ProcessNewParticles(Mesh *pmesh);
 
   // Instance methods
-  virtual void SourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsrc);
   virtual void UserSourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsrc) {}
   virtual void ReactToMeshAux(Real t, Real dt, const AthenaArray<Real>& meshsrc) {}
   virtual void DepositToMesh(Real t, Real dt, const AthenaArray<Real>& meshsrc,
