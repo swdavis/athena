@@ -7,13 +7,12 @@ configure = --prob=uniform_streaming -p
 problem_id  = UniStream # problem ID: basename of output filenames
 
 <outputp>
-file_type   = tab       # Tabular data dump
+file_type   = bin       # binary data dump
 dt          = 0.1       # time increment between outputs
 
 <output1>
-file_type   = tab       # Tabular data dump
+file_type   = hdf5      # HDF5 data dump
 variable    = prim      # variables to be output
-data_format = %24.17e   # Optional data format string
 dt          = 0.1       # time increment between outputs
 
 <time>

@@ -1,6 +1,7 @@
 # Test for uniform streaming between gas and particles.
 
 # Modules
+from collections import namedtuple
 import math
 import numpy as np                             # standard Python module for numerics
 import sys                                     # standard Python module to change path
@@ -12,7 +13,7 @@ import athena_read                             # utilities for reading Athena++ 
 def prepare(**kwargs):
     """Configure and make the executable. """
 
-    athena.configure('p', 'mpi', prob='uniform_streaming', **kwargs)
+    athena.configure("p", "mpi", "hdf5", "h5double", prob="uniform_streaming", **kwargs)
     athena.make()
 
 
@@ -27,10 +28,6 @@ def run(**kwargs):
     # Run the executable.
     athena.mpirun(kwargs['mpirun_cmd'], kwargs['mpirun_opts'], 2,
                   'particles/athinput.uniform_streaming', arguments)
-
-    # Combine the output tables.
-    my_dir = os.path.dirname(os.path.realpath(__file__))
-    subprocess.check_call([my_dir + "/combine.sh"], cwd="bin/")
 
 
 def analyze():
@@ -66,21 +63,8 @@ def analyze():
         if input_particles["backreaction"] == "true":
             backreaction = True
 
-    # Construct numpy datatypes.
-    f = open(base + ".out1.00000.tab")
-    f.readline()
-    names = f.readline().split()[1:]
-    f.close()
-    formats = []
-    for entry in names:
-        if entry == "i" or entry == "j" or entry == "k":
-            formats.append(int)
-        else:
-            formats.append(float)
-    dtg = np.dtype(dict(names=names, formats=formats))
-
     # Get the initial particle positions.
-    t, dp = athena_read.particles(base + ".pout.00000.tab")
+    t, dp = athena_read.particles(base + ".pout.00000.dat")
     xp0, yp0, zp0 = np.copy(dp.xp), np.copy(dp.yp), np.copy(dp.zp)
     npar = len(xp0)
 
@@ -101,7 +85,7 @@ def analyze():
     xpold, ypold, zpold = np.copy(xp0), np.copy(yp0), np.copy(zp0)
 
     # Collect particle data.
-    for fname in sorted(glob(base + ".pout.*.tab")):
+    for fname in sorted(glob(base + ".pout.*.dat")):
         time, dp = athena_read.particles(fname)
         t.append(time)
 
@@ -153,8 +137,9 @@ def analyze():
     vpzavg, vpzmin, vpzmax = np.array(vpzavg), np.array(vpzmin), np.array(vpzmax)
 
     # Collect gas data.
-    for fname in sorted(glob(base + ".out1.[0-9][0-9][0-9][0-9][0-9].tab")):
-        dg = np.rec.array(np.loadtxt(fname, dtype=dtg))
+    for fname in sorted(glob(base + ".out1.[0-9][0-9][0-9][0-9][0-9].athdf")):
+        dg = athena_read.athdf(fname)
+        dg = namedtuple("HDF5", dg.keys())(**dg)
 
         # Process gas velocities.
         uxavg.append(dg.vel1.mean())
