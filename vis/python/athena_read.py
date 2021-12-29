@@ -1051,12 +1051,18 @@ def athinput(filename):
 
 # ========================================================================================
 
-def particles(filename):
+def particles(filename, indexing=True):
     """Reads particle data.
 
     Positional Argument
         filename
             Name of the data file.
+
+    Keyword Argument
+        indexing
+            If True, the particles are sorted and indexed by their id's
+            (minus one).  The id's must be contiguous from one to the
+            total number of particles.
 
     Returned Values
         time
@@ -1147,6 +1153,19 @@ def particles(filename):
 
     else:
         raise AthenaError("Was the file '" + filename + "' produced by <outputp>? ")
+
+    if indexing:
+        # Sort the particles by their id's.
+        ids = pdata["id"]
+        npar = len(ids)
+        if len(np.unique(ids)) != npar or ids.max() != npar:
+            raise AthenaError("Particle id's are not contiguous; " +
+                              "use indexing=False instead. ")
+        names = list(pdata.dtype.names)
+        axis = names.index("id")
+        pdata.sort(axis=axis)
+        del names[axis]
+        pdata = pdata[names]
 
     # Read and return the data.
     return time, np.rec.array(pdata)
