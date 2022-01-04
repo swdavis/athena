@@ -58,7 +58,8 @@ class ParticlesOutput {
 
 inline bool ParticlesOutput::CheckTimer(const Mesh *pm) const {
   return (pm->time == pm->start_time) ||
-         (pm->time >= op.next_time) ||
+         (op.dt > 0.0 && pm->time >= op.next_time) ||
+         (op.dcycle > 0 && pm->ncycle % op.dcycle == 0) ||
          (pm->time >= pm->tlim);
 }
 
