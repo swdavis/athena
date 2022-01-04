@@ -33,17 +33,22 @@ HydroDiffusion::HydroDiffusion(Hydro *phyd, ParameterInput *pin) :
     hydro_diffusion_defined(false),
     nu_iso{pin->GetOrAddReal("problem", "nu_iso", 0.0)},
     nu_aniso{pin->GetOrAddReal("problem", "nu_aniso", 0.0)},
+    nu2mesh{pin->GetOrAddReal("hydro", "nu2mesh", 0.0)},
     kappa_iso{}, kappa_aniso{},
     pmy_hydro_(phyd), pmb_(pmy_hydro_->pmy_block), pco_(pmb_->pcoord) {
   int nc1 = pmb_->ncells1, nc2 = pmb_->ncells2, nc3 = pmb_->ncells3;
 
-  // Check if viscous process are active
-  if (nu_iso > 0.0 || nu_aniso  > 0.0) {
+  // Allocate memory for fluxes.
+  if (nu_iso > 0.0 || nu_aniso > 0.0 || nu2mesh > 0.0) {
     hydro_diffusion_defined = true;
-    // Allocate memory for fluxes
     visflx[X1DIR].NewAthenaArray(NHYDRO, nc3, nc2, nc1+1);
     visflx[X2DIR].NewAthenaArray(NHYDRO, nc3, nc2+1, nc1);
     visflx[X3DIR].NewAthenaArray(NHYDRO, nc3+1, nc2, nc1);
+  }
+
+  // Check if viscous process are active
+  if (nu_iso > 0.0 || nu_aniso  > 0.0) {
+    // Allocate working arrays for divergence.
     x1area_.NewAthenaArray(nc1+1);
     x2area_.NewAthenaArray(nc1);
     x3area_.NewAthenaArray(nc1);

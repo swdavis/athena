@@ -43,6 +43,7 @@ class HydroDiffusion {
   // data
   bool hydro_diffusion_defined;
   Real nu_iso, nu_aniso; // viscosity coeff
+  Real nu2mesh; // mesh hyper-diffusion
   AthenaArray<Real> visflx[3]; // viscous stress tensor
   AthenaArray<Real> nu; // viscosity array
 
