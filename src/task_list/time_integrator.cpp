@@ -1743,6 +1743,7 @@ TaskStatus TimeIntegratorTaskList::DiffuseHydro(MeshBlock *pmb, int stage) {
       } else {
         ph->hdif.CalcDiffusionFlux(ph->w, ph->w, pf->bcc);
       }
+      ph->hdif.CalcMeshDiffusionFlux(ph->u);
     }
     return TaskStatus::next;
   }

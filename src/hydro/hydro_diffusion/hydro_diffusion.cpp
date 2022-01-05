@@ -124,6 +124,14 @@ void HydroDiffusion::CalcDiffusionFlux(const AthenaArray<Real> &prim,
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void HydroDiffusion::CalcMeshDiffusionFlux
+//! \brief adds mesh-hyperdiffusion fluxes to all conservative variables.
+
+void HydroDiffusion::CalcMeshDiffusionFlux(const AthenaArray<Real> &cons) {
+  if (nu2mesh > 0.0) MeshDiffusionFlux2(cons, visflx);
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void HydroDiffusion::AddDiffusionEnergyFlux
 //! \brief Adds only diffusion energy flux to hydro flux
 //
