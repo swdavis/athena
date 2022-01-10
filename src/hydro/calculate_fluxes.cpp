@@ -389,7 +389,7 @@ void Hydro::AddDiffusionFluxes() {
   Field *pf = pmy_block->pfield;
   // add diffusion fluxes
   if (hdif.hydro_diffusion_defined) {
-    if (hdif.nu_iso > 0.0 || hdif.nu_aniso > 0.0)
+    if (hdif.nu_iso > 0.0 || hdif.nu_aniso > 0.0 || hdif.nu2mesh > 0.0)
       hdif.AddDiffusionFlux(hdif.visflx,flux);
     if (NON_BAROTROPIC_EOS) {
       if (hdif.kappa_iso > 0.0 || hdif.kappa_aniso > 0.0)

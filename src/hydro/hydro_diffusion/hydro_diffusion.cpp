@@ -112,7 +112,7 @@ void HydroDiffusion::CalcDiffusionFlux(const AthenaArray<Real> &prim,
                                        const AthenaArray<Real> &bcc) {
   SetDiffusivity(prim, bcc);
 
-  if (nu_iso > 0.0 || nu_aniso > 0.0) ClearFlux(visflx);
+  if (nu_iso > 0.0 || nu_aniso > 0.0 || nu2mesh > 0.0) ClearFlux(visflx);
   if (nu_iso > 0.0) ViscousFluxIso(prim, iprim, visflx);
   if (nu_aniso > 0.0) ViscousFluxAniso(prim, iprim, visflx);
 
