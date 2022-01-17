@@ -18,6 +18,7 @@
 #include "../athena_arrays.hpp"
 #include "../bvals/cc/hydro/bvals_hydro.hpp"
 #include "hydro_diffusion/hydro_diffusion.hpp"
+#include "hydro_diffusion/mesh_diffusion.hpp"
 #include "srcterms/hydro_srcterms.hpp"
 
 class MeshBlock;
@@ -116,6 +117,8 @@ class Hydro {
   AthenaArray<Real> laplacian_l_fc_, laplacian_r_fc_;
 
   TimeStepFunc UserTimeStep_;
+
+  MeshDiffusion md_;
 
   void AddDiffusionFluxes();
   Real GetWeightForCT(Real dflx, Real rhol, Real rhor, Real dx, Real dt);

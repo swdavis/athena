@@ -33,13 +33,12 @@ HydroDiffusion::HydroDiffusion(Hydro *phyd, ParameterInput *pin) :
     hydro_diffusion_defined(false),
     nu_iso{pin->GetOrAddReal("problem", "nu_iso", 0.0)},
     nu_aniso{pin->GetOrAddReal("problem", "nu_aniso", 0.0)},
-    nu2mesh{pin->GetOrAddReal("hydro", "nu2mesh", 0.0)},
     kappa_iso{}, kappa_aniso{},
     pmy_hydro_(phyd), pmb_(pmy_hydro_->pmy_block), pco_(pmb_->pcoord) {
   int nc1 = pmb_->ncells1, nc2 = pmb_->ncells2, nc3 = pmb_->ncells3;
 
   // Allocate memory for fluxes.
-  if (nu_iso > 0.0 || nu_aniso > 0.0 || nu2mesh > 0.0) {
+  if (nu_iso > 0.0 || nu_aniso > 0.0) {
     hydro_diffusion_defined = true;
     visflx[X1DIR].NewAthenaArray(NHYDRO, nc3, nc2, nc1+1);
     visflx[X2DIR].NewAthenaArray(NHYDRO, nc3, nc2+1, nc1);
@@ -112,7 +111,7 @@ void HydroDiffusion::CalcDiffusionFlux(const AthenaArray<Real> &prim,
                                        const AthenaArray<Real> &bcc) {
   SetDiffusivity(prim, bcc);
 
-  if (nu_iso > 0.0 || nu_aniso > 0.0 || nu2mesh > 0.0) ClearFlux(visflx);
+  if (nu_iso > 0.0 || nu_aniso > 0.0) ClearFlux(visflx);
   if (nu_iso > 0.0) ViscousFluxIso(prim, iprim, visflx);
   if (nu_aniso > 0.0) ViscousFluxAniso(prim, iprim, visflx);
 
@@ -121,14 +120,6 @@ void HydroDiffusion::CalcDiffusionFlux(const AthenaArray<Real> &prim,
   if (kappa_aniso > 0.0) ThermalFluxAniso(prim, cndflx);
 
   return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void HydroDiffusion::CalcMeshDiffusionFlux
-//! \brief adds mesh-hyperdiffusion fluxes to all conservative variables.
-
-void HydroDiffusion::CalcMeshDiffusionFlux(const AthenaArray<Real> &cons) {
-  if (nu2mesh > 0.0) MeshDiffusionFlux2(cons, visflx);
 }
 
 //----------------------------------------------------------------------------------------

@@ -942,14 +942,14 @@ TimeIntegratorTaskList::TimeIntegratorTaskList(ParameterInput *pin, Mesh *pm) {
       AddTask(RECV_HYDORB,NONE);
       AddTask(CALC_HYDORB,(SEND_HYDORB|RECV_HYDORB));
       AddTask(SEND_HYD,CALC_HYDORB);
-      AddTask(RECV_HYD,DIFFUSE_HYD);
+      AddTask(RECV_HYD,CALC_HYDFLX);
       AddTask(SETB_HYD,(RECV_HYD|CALC_HYDORB));
     } else {
       if (PARTICLES)
         AddTask(SEND_HYD,SRCTERM_HYD|RECV_PM);
       else
         AddTask(SEND_HYD,SRCTERM_HYD);
-      AddTask(RECV_HYD,DIFFUSE_HYD);
+      AddTask(RECV_HYD,CALC_HYDFLX);
       AddTask(SETB_HYD,(RECV_HYD|SRCTERM_HYD));
     }
 
@@ -994,7 +994,7 @@ TimeIntegratorTaskList::TimeIntegratorTaskList(ParameterInput *pin, Mesh *pm) {
       AddTask(SEND_PAR, INT_PAR);
       AddTask(RECV_PAR, NONE);
       AddTask(SEND_PM, INT_PAR);
-      AddTask(RECV_PM, INT_HYD|DIFFUSE_HYD);
+      AddTask(RECV_PM, INT_HYD);
     }
 
     if (MAGNETIC_FIELDS_ENABLED) { // MHD
@@ -1743,7 +1743,6 @@ TaskStatus TimeIntegratorTaskList::DiffuseHydro(MeshBlock *pmb, int stage) {
       } else {
         ph->hdif.CalcDiffusionFlux(ph->w, ph->w, pf->bcc);
       }
-      ph->hdif.CalcMeshDiffusionFlux(ph->u);
     }
     return TaskStatus::next;
   }

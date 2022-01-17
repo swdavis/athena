@@ -11,18 +11,34 @@
 // Athena++ headers
 #include "../../athena.hpp"        // X[123]DIR
 #include "../../athena_arrays.hpp" // AthenaArray
-#include "../../mesh/mesh.hpp"     // MeshBlock
-#include "hydro_diffusion.hpp"     // HydroDiffusion
+#include "mesh_diffusion.hpp"      // MeshDiffusion
 
 //----------------------------------------------------------------------------------------
-//! \fn void HydroDiffusion::MeshDiffusionFlux2
-//! \brief calculates and adds mesh diffusion flux of fourth order.
+//! \fn MeshDiffusion::MeshDiffusion(ParameterInput *pin)
+//! \brief constructs an instance of MeshDiffusion
 
-void HydroDiffusion::MeshDiffusionFlux2(
-    const AthenaArray<Real> &cons, AthenaArray<Real> *flux) {
+MeshDiffusion::MeshDiffusion(MeshBlock* pmb, ParameterInput* pin) :
+    pmb(pmb), nu2mesh{pin->GetOrAddReal("hydro", "nu2mesh", 0.0)} {
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshDiffusion::AddFluxes
+//! \brief is a wrapper to call individual functions for adding mesh-diffusion fluxes.
+
+void MeshDiffusion::AddFluxes(
+    const AthenaArray<Real>& cons, AthenaArray<Real>* flux) const {
+  if (nu2mesh > 0.0) AddFluxHyper2(cons, flux);
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshDiffusion::AddFluxHyper2
+//! \brief calculates and adds mesh hyper-diffusion flux of fourth order.
+
+void MeshDiffusion::AddFluxHyper2(
+    const AthenaArray<Real>& cons, AthenaArray<Real>* flux) const {
   const int nvar(cons.GetDim4());
-  const int is(pmb_->is), js(pmb_->js), ks(pmb_->ks);
-  const int ie(pmb_->ie), je(pmb_->je), ke(pmb_->ke);
+  const int is(pmb->is), js(pmb->js), ks(pmb->ks);
+  const int ie(pmb->ie), je(pmb->je), ke(pmb->ke);
   AthenaArray<Real> &x1flux(flux[X1DIR]);
   AthenaArray<Real> &x2flux(flux[X2DIR]);
   AthenaArray<Real> &x3flux(flux[X3DIR]);

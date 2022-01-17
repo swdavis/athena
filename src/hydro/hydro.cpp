@@ -53,7 +53,8 @@ Hydro::Hydro(MeshBlock *pmb, ParameterInput *pin) :
                   AthenaArray<Real>::DataStatus::empty)),
     hbvar(pmb, &u, &coarse_cons_, flux, HydroBoundaryQuantity::cons),
     hsrc(this, pin),
-    hdif(this, pin) {
+    hdif(this, pin),
+    md_(pmb, pin) {
   int nc1 = pmb->ncells1, nc2 = pmb->ncells2, nc3 = pmb->ncells3;
   Mesh *pm = pmy_block->pmy_mesh;
 
