@@ -38,6 +38,11 @@ namespace {
   Real rh, rdisk;
   bool forward_integration;
   Real spsi,cpsi,szet,czet;
+  Real polch[21] = {0.11713,0.08979,0.07448,0.06311,0.05410,0.04667,0.04041,0.03502,
+                    0.03033,0.02619,0.02252,0.01923,0.01627,0.01358,0.011123,0.008880,
+                    0.006818,0.004919,0.003155,0.001522,0};
+  Real much[21] = {0.,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,
+                   0.75,0.8,0.85,0.9,0.95,1.};
 
   // User function definitions
   void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,int ip);
@@ -593,16 +598,6 @@ void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
     Real econ[4][4], ecov[4][4];
     ConstructTetrad(ucon, k, vcon, gcov, econ, ecov);
 
-    // Initialize and transform Stokes vector
-    Real stokes[4];
-    stokes[0] = 1.0;
-    stokes[1] = 1.0;
-    stokes[2] = 0.0;
-    stokes[3] = 0.0;
-    std::complex<Real> tcopy[4][4];
-    StokesToTensor(stokes,tcopy);
-    pphot->PolarizationToCoord(tcopy,econ,ip);
-
     // Get photon energy in rest frame
     Real kcopy[4];
     CoordinateToTetrad(k, kcopy, ecov);
@@ -611,6 +606,20 @@ void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
     pphot->user[3][ip] = x[IMC1];
     // set plane crossing to zero
     pphot->user[4][ip] = 0.;
+
+    // Initialize and transform Stokes vector
+    Real stokes[4];
+    int ipol = static_cast<int>(kcopy[IMC2]*20.);
+    Real aint = kcopy[IMC3] - much[ipol];
+    Real frac = polch[ipol]*(1.-aint) + polch[ipol+1]*aint;
+    stokes[0] = 1.0;
+    stokes[1] = frac;
+    stokes[2] = 0.0;
+    stokes[3] = 0.0;
+    std::complex<Real> tcopy[4][4];
+    StokesToTensor(stokes,tcopy);
+    pphot->PolarizationToCoord(tcopy,econ,ip);
+
 
   } // if (reverse)
 }

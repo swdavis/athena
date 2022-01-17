@@ -56,7 +56,7 @@ enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
 typedef Real (*EmisFunc_t)(MonteCarloBlock *pmcb);
 typedef void (*TempFunc_t)(MonteCarloBlock *pmcb);
 typedef void (*MCBValFunc_t)(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
-typedef Real (*OpacFunc_t)(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
+typedef Real (*OpacFunc_t)(MonteCarloBlock *pmcb,  Photon *pphot, int ip);
 typedef void (*ScatFunc_t)(MonteCarloBlock *pmcb, Photon *phot, int ips, int ipe);
 typedef void (*UserMoveFunc_t)(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover,
                                int ip);
@@ -65,13 +65,13 @@ typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, MCCoord *pco, int ip)
 //---------------------- prototypes for provided functions -------------------------------
 void DefaultGetTemperature(MonteCarloBlock *pmcb);
 //--------------------- prototypes for opacity.cpp functions -----------------------------
-Real NoOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
-Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3,Real energy);
-Real DustAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
-Real ThomsonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
-Real ComptonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
-Real ResonanceLineOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
-Real DustScatteringOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy);
+Real NoOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
+Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
+Real DustAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
+Real ThomsonOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
+Real ComptonOpacity(MonteCarloBlock *pmcb,  Photon *pphot, int ip);
+Real ResonanceLineOpacity(MonteCarloBlock *pmcb,  Photon *pphot, int ip);
+Real DustScatteringOpacity(MonteCarloBlock *pmcb,  Photon *pphot, int ip);
 void GenerateComptonTable(int io);
 Real ComptonCrossSection(Real energy, Real theta);
 Real Maxwell(Real theta, Real gamma);

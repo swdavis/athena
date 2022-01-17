@@ -442,6 +442,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
     nloop = (nloop > nprop) ? nprop : nloop;
     int nold = pphot->nphot;
     pphot->Resize(nloop);
+
     //printf("nold: %d %d %d %d\n",nprop,nold,nprop,nloop);
     // user definied photon initialization
     InitializePhoton(pphot,nold,pphot->nphot-1);
@@ -511,11 +512,8 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
         // Update the absorption and scattering extinction coefficients
         // with the new energy.
         if (!coherent_scattering) {
-          int &i1 = pphot->i1p[ip];
-          int &i2 = pphot->i2p[ip];
-          int &i3 = pphot->i3p[ip];
-          pphot->acp[ip] = AbsorptionOpacity(this,i1,i2,i3,pphot->ep[ip]);
-          pphot->scp[ip] = ScatteringOpacity(this,i1,i2,i3,pphot->ep[ip]);
+          pphot->acp[ip] = AbsorptionOpacity(this,pphot,ip);
+          pphot->scp[ip] = ScatteringOpacity(this,pphot,ip);
         }
         // Lorentz transform to Eulerian frame and shift opacities
         if (boosts) {
@@ -528,7 +526,8 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
 
     } // End loop over ip
 
-    for (int ip=0; ip<pphot->nphot; ip++) {
+    //for (int ip=0; ip<pphot->nphot; ip++) {
+    for (int ip=pphot->nphot-1; ip >= 0; ip--) {
       if (pphot->statp[ip] != EVOLVING) {
 
         if (pphot->statp[ip] == ESCAPED) {
@@ -646,11 +645,8 @@ void MonteCarloBlock::TransferPhotonsOld(int nphot) {
         // Update the absorption and scattering extinction coefficients
         // with the new energy.
         if (!coherent_scattering) {
-          int &i1 = pphot->i1p[ip];
-          int &i2 = pphot->i2p[ip];
-          int &i3 = pphot->i3p[ip];
-          pphot->acp[ip] = AbsorptionOpacity(this,i1,i2,i3,pphot->ep[ip]);
-          pphot->scp[ip] = ScatteringOpacity(this,i1,i2,i3,pphot->ep[ip]);
+          pphot->acp[ip] = AbsorptionOpacity(this,pphot,ip);
+          pphot->scp[ip] = ScatteringOpacity(this,pphot,ip);
         }
         // Lorentz transform to Eulerian frame and shift opacities
         if (boosts) {
@@ -941,7 +937,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
   }
   // Weight moments by time spent in domain
   Real weight = pphot->wp[ip] * energy * leff / 2.99792458e10;
-  if ((isinf(weight)) || (isnan(weight))) {
+  if ((std::isinf(weight)) || (std::isnan(weight))) {
     std::cout << "Warning: UpdateMoments weight is : " << weight << std::endl;
   } else {
     // Higher order moments are weighted by curvalinear coordinates k
@@ -995,7 +991,7 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
 
   // Normalize all moments by number of photons emitted
   Real normall = static_cast<Real>(nphdone);
-
+  
   if (normalize) {
    // Normalize energy density weighted averages first
     for (int k=ks; k<=ke; ++k) {
