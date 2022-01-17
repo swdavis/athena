@@ -24,8 +24,9 @@ class MeshDiffusion {
   // Constructors
   MeshDiffusion(MeshBlock* pmb, ParameterInput* pin);
 
-  // Diffusion operations
+  // Operations
   void AddFluxes(const AthenaArray<Real>& cons, AthenaArray<Real>* flux) const;
+  Real FindTimeStep() const;
 
  private:
   // Instance Variables

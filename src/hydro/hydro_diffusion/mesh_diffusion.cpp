@@ -79,6 +79,16 @@ void MeshDiffusion::AddFluxes(
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn Real MeshDiffusion::FindTimeStep()
+//! \brief finds the time-step limited by mesh diffusion; 0 if none.
+
+Real MeshDiffusion::FindTimeStep() const {
+  Real dt_inv(0.0);
+  if (nu2mesh > 0.0) dt_inv = std::max(dt_inv, 8.0 * nu2mesh * dx_inv);
+  return dt_inv > 0.0 ? 1.0 / dt_inv : 0.0;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void MeshDiffusion::AddFluxHyper2
 //! \brief calculates and adds mesh hyper-diffusion flux of fourth order.
 
