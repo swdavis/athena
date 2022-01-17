@@ -7,11 +7,13 @@
 //! \brief functions to calculate mesh diffusion fluxes
 
 // C/C++ headers
+#include <algorithm> // max()
 
 // Athena++ headers
-#include "../../athena.hpp"        // X[123]DIR
-#include "../../athena_arrays.hpp" // AthenaArray
-#include "mesh_diffusion.hpp"      // MeshDiffusion
+#include "../../athena.hpp"                  // X[123]DIR
+#include "../../athena_arrays.hpp"           // AthenaArray
+#include "../../coordinates/coordinates.hpp" // Coordinates
+#include "mesh_diffusion.hpp"                // MeshDiffusion
 
 //----------------------------------------------------------------------------------------
 //! \fn MeshDiffusion::MeshDiffusion(ParameterInput *pin)
@@ -19,6 +21,52 @@
 
 MeshDiffusion::MeshDiffusion(MeshBlock* pmb, ParameterInput* pin) :
     pmb(pmb), nu2mesh{pin->GetOrAddReal("hydro", "nu2mesh", 0.0)} {
+  const Real is(pmb->is), ie(pmb->ie);
+  const Real js(pmb->js), je(pmb->je);
+  const Real ks(pmb->ks), ke(pmb->ke);
+
+  // Allocate temporary working arrays.
+  AthenaArray<Real> face, face1, vol;
+  face.NewAthenaArray(pmb->ncells1);
+  if (js < je || ks < ke) face1.NewAthenaArray(pmb->ncells1);
+  vol.NewAthenaArray(pmb->ncells1);
+
+  // Find minimum grid spacing for computing time steps.
+  Real dx1_inv_max(0.0), dx2_inv_max(0.0), dx3_inv_max(0.0);
+  for (int k = ks; k <= ke; ++k) {
+    for (int j = js; j <= je; ++j) {
+      pmb->pcoord->CellVolume(k, j, is, ie, vol);
+
+      // X1 direction
+      if (is < ie) {
+        pmb->pcoord->Face1Area(k, j, is, ie+1, face);
+        for (int i = is; i <= ie; ++i)
+          dx1_inv_max = std::max(dx1_inv_max, std::max(face(i), face(i+1)) / vol(i));
+      }
+
+      // X2 direction
+      if (js < je) {
+        pmb->pcoord->Face2Area(k, j, is, ie, face);
+        pmb->pcoord->Face2Area(k, j+1, is, ie, face1);
+        for (int i = is; i <= ie; ++i)
+          dx2_inv_max = std::max(dx2_inv_max, std::max(face(i), face1(i)) / vol(i));
+      }
+
+      // X3 direction
+      if (ks < ke) {
+        pmb->pcoord->Face3Area(k, j, is, ie, face);
+        pmb->pcoord->Face3Area(k+1, j, is, ie, face1);
+        for (int i = is; i <= ie; ++i)
+          dx3_inv_max = std::max(dx3_inv_max, std::max(face(i), face1(i)) / vol(i));
+      }
+    }
+  }
+  dx_inv = dx1_inv_max + dx2_inv_max + dx3_inv_max;
+
+  // Deallocate working arrays.
+  face.DeleteAthenaArray();
+  face1.DeleteAthenaArray();
+  vol.DeleteAthenaArray();
 }
 
 //----------------------------------------------------------------------------------------

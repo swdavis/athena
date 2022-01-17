@@ -31,6 +31,7 @@ class MeshDiffusion {
   // Instance Variables
   MeshBlock* pmb; // pointer to my mesh-block
   Real nu2mesh;   // 4th-order diffusion coefficient
+  Real dx_inv;    // sum of maximum of dx[123]^-1
 
   // Diffusion operations
   void AddFluxHyper2(const AthenaArray<Real> &cons, AthenaArray<Real> *flux) const;
