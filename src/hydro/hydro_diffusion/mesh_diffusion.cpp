@@ -84,7 +84,7 @@ void MeshDiffusion::AddFluxes(
 
 Real MeshDiffusion::FindTimeStep() const {
   Real dt_inv(0.0);
-  if (nu2mesh > 0.0) dt_inv = std::max(dt_inv, 8.0 * nu2mesh * dx_inv);
+  if (nu2mesh > 0.0) dt_inv = std::max(dt_inv, 16.0 * nu2mesh * dx_inv);
   return dt_inv > 0.0 ? 1.0 / dt_inv : 0.0;
 }
 
