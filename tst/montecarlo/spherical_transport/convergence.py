@@ -68,6 +68,11 @@ def write_athinput(iseed,nphot,step,file='athinput.sphtran',generalmover=True):
         outfile.write("general_mover = true\n")
         outfile.write("varystep = true\n")
         outfile.write("checkmove = 100000000\n")
+    elif (sphpol_mover):
+        outfile.write("stepsize = {:e}\n".format(step))
+        outfile.write("sphpol_alt = true\n")
+        outfile.write("varystep = true\n")
+        outfile.write("checkmove = 100000000\n")
     outfile.write("\n<problem>\n")
 
 
@@ -101,10 +106,10 @@ def main(**kwargs):
     error = np.zeros((nstep+1,2))
 
     # First do a run with standard cell-by-cell spherical mover integration
-    write_athinput(iseed,nphot,0.,generalmover=False)
+    write_athinput(iseed,nphot,0.,sphpol_mover=True, generalmover=False)
     com="mpirun -np {:d} ".format(mcranks+1)+athena_path+"/athena -i athinput.sphtran"
     system(com)
-    com="python ~/athena-swdavis/vis/python/montecarlo/joinlists.py sphtran.out1 {:d} 0 0 -rm".format(mcranks+1)
+    com="python ~/Documents/athena/vis/python/montecarlo/joinlists.py sphtran.out1 {:d} 0 0 -rm".format(mcranks+1)
     system(com)
     # read list as dict from infile
     phots = photons(mclist.read_list("sphtran.out1.list"))
@@ -117,7 +122,7 @@ def main(**kwargs):
         write_athinput(iseed+99*i,nphot,step)
         com="mpirun -np {:d} ".format(mcranks+1)+athena_path+"/athena -i athinput.sphtran"
         system(com)
-        com="python ~/athena-swdavis/vis/python/montecarlo/joinlists.py sphtran.out1 {:d} 0 0 -rm".format(mcranks+1)
+        com="python ~/Documents/athena/vis/python/montecarlo/joinlists.py sphtran.out1 {:d} 0 0 -rm".format(mcranks+1)
         system(com)
 
         # read list as dict from infile
@@ -165,7 +170,7 @@ if __name__ == '__main__':
         default = 5,
         help='mpi ranks to use')
     parser.add_argument('--path',
-        default = "/home/swd8g/athena-swdavis",
+        default = "/home/bcm2vn/Documents/athena",
         help='path to Athena++ distribution')
     parser.add_argument('--outfile',
         default="conv.out",
