@@ -162,7 +162,7 @@ if __name__ == '__main__':
         help='ration by which to decrease step size')
     parser.add_argument('--mcranks',
         type = int,
-        default = 10,
+        default = 5,
         help='mpi ranks to use')
     parser.add_argument('--path',
         default = "/home/swd8g/athena-swdavis",

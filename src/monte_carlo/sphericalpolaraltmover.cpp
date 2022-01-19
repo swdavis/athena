@@ -35,41 +35,35 @@ SphericalPolarAltMover::~SphericalPolarAltMover() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe)
-//! \brief Moves photon using cell-by-cell approach through spherical polar grid
+//! \brief Moves photon using cell-by-cell approach through cartesian grid, then converts to spherical polar
 
 void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
   MonteCarloBlock *pmcb = pmy_mcb;
   MCRandom *pran = pmy_mcb->pran;
   PhotonTrajectoryList *ptraj = pmy_mcb->ptraj;
 
-  for (int ip=ips; ip<=ipe; ip++) {
+  for (int ip=ips; ip<=ipe; ip++) 
+    {
     // get number of mean free paths photon will travel
     Real tauremaining = GetOpticalDepth(pran);
 
-    Real step = StepSize(pphot,ip);
     int count = 0;
     int iter = 0;
     int zone_counter = 0;
     Real chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
+    Real dl = tauremaining / chi;
+    Real dmin = pmcb->pcoord->dmin[i3, i2, i1];
+
+    // CM: Set step size to be min of dl and min distance to cell faces
+    Real step = (dl < dmin) ? dl : dmin;
 
     while ( (pphot->statp[ip] == EVOLVING) && (tauremaining > TINY_NUMBER) &&
             (iter < checkmove)) {
-      //printf("%d %g\n",iter,step);
-      //pphot->PrintPhoton(ip);
+
       iter++;
       count++;
 
-      if (tauremaining > chi * step) {
-        VerletStep(pphot,step,ip);
-        if (pmy_mcb->pmy_mc->polarized)
-          PropogatePolarization(pphot,step,ip);
-      } else {
-        step = tauremaining / chi;
-        VerletStep(pphot,step,ip);
-        if (pmy_mcb->pmy_mc->polarized)
-          PropogatePolarization(pphot,step,ip);
-      }
-
+      SimpleStep(pphot,step,ip);
       tauremaining -= chi * step;
 
       // SWD: Clean up these checks
@@ -92,7 +86,6 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
         pphot->PrintPhoton(ip);
         pphot->statp[ip] = DESTROYED;
       }
-      step = StepSize(pphot,ip);
 
       // Perform any user work
       if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this,ip);
@@ -113,7 +106,7 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
       std::cout << "tau remaining, chi: " << tauremaining << " " << chi << std::endl;
       pphot->statp[ip] = DESTROYED;
     }
-  } // end loop over ip
+  }
 
 }
 
@@ -132,6 +125,10 @@ void SphericalPolarAltMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]
   kcart[IMC1] = pphot->k[IMC1]*sth*cph + pphot->k[IMC2]*cth*cph - pphot->k[IMC3]*sph;
   kcart[IMC2] = pphot->k[IMC1]*sth*sph + pphot->k[IMC2]*cth*sph + pphot->k[IMC3]*cph;
   kcart[IMC3] = pphot->k[IMC1]*cth - pphot->k[IMC2]*sth;
+  Real norm = sqrt(SQR(kcart[IMC1])+SQR(kcart[IMC2])+SQR(kcart[IMC3]));
+  kcart[IMC1] /= norm;
+  kcart[IMC2] /= norm;
+  kcart[IMC3] /= norm;
 }
 
 //----------------------------------------------------------------------------------------
@@ -169,156 +166,29 @@ void SphericalPolarAltMover::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmc
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void SphericalPolarAltMover::VerletStep(Photon *pphot, Real step, int ip)
-//! \brief performs a single verlet integration step
+//! \fn void SphericalPolarAltMover::SimpleStep(Photon *pphot, Real step, int ip)
+//! \brief computes a step th
 
-void SphericalPolarAltMover::VerletStep(Photon *pphot, Real step, int ip) {
+void SphericalPolarAltMover::SimpleStep(Photon *pphot, Real step, int ip) {
 
-  Real k_n1[NCOORD],k_n1_copy[NCOORD];
-  Real dk_n1[NCOORD];
-  Real error;
-  Real x[NCOORD], k0[NCOORD], dk0[NCOORD];
+  Real x[NCOORD];
 
-  // SWD: Need to think about how to do this better without invoking recurssion
-  // SWD: Need to rename variables and clean this up with new scheme
+  // CM: not sure exactly what x[IMC#] is?
+  // CM: add k direction vec * step to the current position
+  x[IMC0] = pphot->x0p[ip] += (pphot->k0p[ip])*step;
+  x[IMC1] = pphot->x1p[ip] += (pphot->k1p[ip])*step;
+  x[IMC2] = pphot->x2p[ip] += (pphot->k2p[ip])*step;
+  x[IMC3] = pphot->x3p[ip] += (pphot->k3p[ip])*step;
 
-  x[IMC0] = pphot->x0p[ip] += (pphot->k0p[ip])*step + 0.5*(pphot->dk0p[ip])*SQR(step);
-  x[IMC1] = pphot->x1p[ip] += (pphot->k1p[ip])*step + 0.5*(pphot->dk1p[ip])*SQR(step);
-  x[IMC2] = pphot->x2p[ip] += (pphot->k2p[ip])*step + 0.5*(pphot->dk2p[ip])*SQR(step);
-  x[IMC3] = pphot->x3p[ip] += (pphot->k3p[ip])*step + 0.5*(pphot->dk3p[ip])*SQR(step);
-
+  // CM: Probably don't need second term for cartesian?
   k_n1[IMC0] = (pphot->k0p[ip]) + 0.5*(pphot->dk0p[ip]) * step;
   k_n1[IMC1] = (pphot->k1p[ip]) + 0.5*(pphot->dk1p[ip]) * step;
   k_n1[IMC2] = (pphot->k2p[ip]) + 0.5*(pphot->dk2p[ip]) * step;
   k_n1[IMC3] = (pphot->k3p[ip]) + 0.5*(pphot->dk3p[ip]) * step;
 
-  k0[IMC0] = pphot->k0p[ip];
-  k0[IMC1] = pphot->k1p[ip];
-  k0[IMC2] = pphot->k2p[ip];
-  k0[IMC3] = pphot->k3p[ip];
-
-  dk0[IMC0] = pphot->dk0p[ip];
-  dk0[IMC1] = pphot->dk1p[ip];
-  dk0[IMC2] = pphot->dk2p[ip];
-  dk0[IMC3] = pphot->dk3p[ip];
-
-
-  // Update gamma for current location
-  pcoord->Connect(x, gamma);
-  int n_iteration = 0;
-
-  // SWD: not clear this while loops is accomplishing anything
-  do {
-    n_iteration += 1;
-    error = 0.;
-    for (int i=0;i<NCOORD;i++) {
-      k_n1_copy[i] = k_n1[i];
-    }
-
-    for (int k=0;k<NCOORD;k++) {
-      // off diagonal elements
-      dk_n1[k] =
-        -2. * (k_n1_copy[IMC0] *
-               (gamma[k][IMC0][IMC1] * k_n1_copy[IMC1] +
-                gamma[k][IMC0][IMC2] * k_n1_copy[IMC2] +
-                gamma[k][IMC0][IMC3] * k_n1_copy[IMC3])
-               +
-               k_n1_copy[IMC1] * (gamma[k][IMC1][IMC2] * k_n1_copy[IMC2] +
-                                  gamma[k][IMC1][IMC3] * k_n1_copy[IMC3]) +
-               k_n1_copy[IMC2] * gamma[k][IMC2][IMC3] * k_n1_copy[IMC3]);
-      // diagonal elements
-      dk_n1[k] -=
-        (gamma[k][IMC0][IMC0] * k_n1_copy[IMC0] * k_n1_copy[IMC0] +
-         gamma[k][IMC1][IMC1] * k_n1_copy[IMC1] * k_n1_copy[IMC1] +
-         gamma[k][IMC2][IMC2] * k_n1_copy[IMC2] * k_n1_copy[IMC2] +
-         gamma[k][IMC3][IMC3] * k_n1_copy[IMC3] * k_n1_copy[IMC3]);
-
-      k_n1[k] = k0[k] + 0.5 * (dk0[k] + dk_n1[k]) * step;
-
-      error += fabs(k_n1_copy[k] - k_n1[k]) / (k_n1[k]);
-    }
-  } while ((error > tolerance) && (n_iteration < max_iteration));
-
-  // SWD probably should not do this here
-  // update photon energy due to evolving k_t (coordinate frame)
-  //pphot->ep[ip] *= k_n1[IMC0]/(pphot->k[IMC0]);
-
+  // Set photon direction vectors based on current position
   pphot->k0p[ip] = k_n1[IMC0];
   pphot->k1p[ip] = k_n1[IMC1];
   pphot->k2p[ip] = k_n1[IMC2];
   pphot->k3p[ip] = k_n1[IMC3];
-
-  pphot->dk0p[ip] = dk_n1[IMC0];
-  pphot->dk1p[ip] = dk_n1[IMC1];
-  pphot->dk2p[ip] = dk_n1[IMC2];
-  pphot->dk3p[ip] = dk_n1[IMC3];
-
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void SphericalPolarAltMover::PropogatePolarization(Photon *pphot, Real step, int ip)
-//! \brief propogates polarization tensor a single step
-
-void SphericalPolarAltMover::PropogatePolarization(Photon *pphot, Real step, int ip) {
-
-  // SWD: Gamma does not need recomputing
-  //Real gamma[NCOORD][NCOORD][NCOORD];
-  // Store gamma in Coord to prevent recalculation
-  //pcoord->Connect(pphot->x, gamma);
-
-
-  std::complex<Real> ptcopy[4][4];
-  for (int i = 0; i < 4; i++) {
-    for (int j = 0; j < 4; j++) {
-      ptcopy[i][j] = pphot->polten[i*4+j][ip];
-    }
-  }
-
-  Real kp[4];
-  kp[IMC0] = pphot->k0p[ip];
-  kp[IMC1] = pphot->k1p[ip];
-  kp[IMC2] = pphot->k2p[ip];
-  kp[IMC3] = pphot->k3p[ip];
-
-  for (int i = 0; i < 4; i++) {
-    for (int j = 0; j < 4; j++) {
-      for (int k = 0; k < 4; k++) {
-        for (int l = 0; l < 4; l++) {
-          // eq. 16 of Moscibrodzka & Gammie in vacuum
-          pphot->polten[i*4+j][ip] += -(gamma[i][k][l] * ptcopy[k][j] +
-                                        gamma[j][k][l] * ptcopy[i][k]) *
-                                       kp[l] * step;
-        }
-      }
-    }
-  }
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn Real SphericalPolarAltMover::StepSize(Photon *pphot, int ip)
-//! \brief computes stepsize based on size of current zone
-
-// SWD: Requires updates
-// return the stepsize based on the current zone and k-vector
-// this should be updated with every iteration since k continuously changes
-Real SphericalPolarAltMover::StepSize(Photon *pphot, int ip) {
-
-  if (!pphot->pmy_mcb->varystep_flag) {
-    return step_par; // keep step constant
-  }
-
-  Real small = 1.e-20;
-  Real kx1 = (fabs(pphot->k1p[ip]) > small) ? fabs(pphot->k1p[ip]) : small;
-  Real kx2 = (fabs(pphot->k2p[ip]) > small) ? fabs(pphot->k2p[ip]) : small;
-  Real kx3 = (fabs(pphot->k3p[ip]) > small) ? fabs(pphot->k3p[ip]) : small;
-
-  // SWD: May want to store as dx1, etc.
-  Real stepx1 = ((pcoord->x1f(pphot->i1p[ip]+1)-pcoord->x1f(pphot->i1p[ip]))/kx1);
-  Real stepx2 = ((pcoord->x2f(pphot->i2p[ip]+1)-pcoord->x2f(pphot->i2p[ip]))/kx2);
-  Real stepx3 = ((pcoord->x3f(pphot->i3p[ip]+1)-pcoord->x3f(pphot->i3p[ip]))/kx3);
-
-  Real step = (stepx1 < stepx2) ? stepx1 : stepx2;
-  step = (step < stepx3) ? step : stepx3;
-
-  return step * step_par;
 }
