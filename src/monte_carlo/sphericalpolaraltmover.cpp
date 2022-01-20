@@ -125,10 +125,6 @@ void SphericalPolarAltMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]
   kcart[IMC1] = pphot->k[IMC1]*sth*cph + pphot->k[IMC2]*cth*cph - pphot->k[IMC3]*sph;
   kcart[IMC2] = pphot->k[IMC1]*sth*sph + pphot->k[IMC2]*cth*sph + pphot->k[IMC3]*cph;
   kcart[IMC3] = pphot->k[IMC1]*cth - pphot->k[IMC2]*sth;
-  Real norm = sqrt(SQR(kcart[IMC1])+SQR(kcart[IMC2])+SQR(kcart[IMC3]));
-  kcart[IMC1] /= norm;
-  kcart[IMC2] /= norm;
-  kcart[IMC3] /= norm;
 }
 
 //----------------------------------------------------------------------------------------
@@ -172,8 +168,35 @@ void SphericalPolarAltMover::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmc
 void SphericalPolarAltMover::SimpleStep(Photon *pphot, Real step, int ip) {
 
   Real x[NCOORD];
+  Real kcart[4];
 
-  // CM: not sure exactly what x[IMC#] is?
+  // CM: Convert direction vector to cartesian
+    CurvalinearToCartesian(pphot);
+    Real& kx = pphot->kcart[0];
+    Real& ky = pphot->kcart[1];
+    Real& kz = pphot->kcart[2];
+
+    Real& kr  = pphot->k1p[ip];
+    Real& kth = pphot->k2p[ip];
+    Real& kph = pphot->k3p[ip];
+
+    Real cth = cos(pphot->x2p[ip]);
+    Real sth = sin(pphot->x2p[ip]);
+    Real cph = cos(pphot->x3p[ip]);
+    Real sph = sin(pphot->x3p[ip]);
+
+    // Make sure kcart is set
+    Real kx = kr*sth*cph + kth*cth*cph - kph*sph;
+    Real ky = kr*sth*sph + kth*cth*sph + kph*cph;
+    Real kz = kr*cth - kth*sth;
+
+      // Compute cartesian positions
+      Real r0 = pphot->x1p[ip];
+      Real x0 = r0 * sth * cph;
+      Real y0 = r0 * sth * sph;
+      Real z0 = r0 * cth;
+
+  // CM: not sure exactly what x[IMC#] accomplishes here?
   // CM: add k direction vec * step to the current position
   x[IMC0] = pphot->x0p[ip] += (pphot->k0p[ip])*step;
   x[IMC1] = pphot->x1p[ip] += (pphot->k1p[ip])*step;
