@@ -105,12 +105,22 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
 
       // Check if photon changed zones
       if (UpdateZone(pphot,ip)) {
-        zone_counter = abs(i3 - pphot->i3p[ip]) + abs(i2 - pphot->i2p[ip]) + abs(i1 - pphot->i1p[ip]);
 
-        // Refine until number of zones traversed is exactly 1
-        while (zone_counter > 1) {
-          // We've taken a step across two zone boundaries
-          step /= 2.0;
+        allowed_move = (abs(i3 - pphot->i3p[ip]) <= 1) && (abs(i2 - pphot->i2p[ip]) <= 1) && (abs(i2 - pphot->i2p[ip]) <= 1);
+        if (allowed_move) {
+          // Change of one or zero in each index
+
+          // Update opacities and extinction coefficient
+          UpdateOpacities(pphot,pmcb,ip);
+          chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
+
+          // Update step size based on chi and face distances in the new zone
+          dl = tauremaining / chi;
+          dmin = pmcb->pcoord->dmin(pphot->i3p[ip], pphot->i2p[ip], pphot->i1p[ip]);
+          step = (dl < dmin) ? dl : dmin;
+        }
+        else {
+          // Step back this move, halve the distance, and try again
           x0 -= step * kx;
           y0 -= step * ky;
           z0 -= step * kz;
@@ -118,21 +128,9 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
           pphot->x1p[ip] = sqrt(SQR(x0) + SQR(y0) + SQR(z0));
           pphot->x2p[ip] = acos(y0/sqrt(SQR(x0) + SQR(y0) + SQR(z0)));
           pphot->x3p[ip] = atan2(y0, x0);
-          UpdateZone(pphot,ip); // Updates pphot index based on position
-          zone_counter = abs(i3 - pphot->i3p[ip]) + abs(i2 - pphot->i2p[ip]) + abs(i1 - pphot->i1p[ip]);
+          UpdateZone(pphot,ip); // Updates pphot index
+          step /= 2.0;
         }
-
-        // What about case where stepping back by 1/2 no longer crosses the first zone boundary?
-
-        // Exactly one zone index changed
-        // Update opacities and extinction coefficient
-        UpdateOpacities(pphot,pmcb,ip);
-        chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
-
-        // Update step size based on chi and face distances in the new zone
-        dl = tauremaining / chi;
-        dmin = pmcb->pcoord->dmin(pphot->i3p[ip], pphot->i2p[ip], pphot->i1p[ip]);
-        step = (dl < dmin) ? dl : dmin;
       }
       
 
