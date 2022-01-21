@@ -100,16 +100,27 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
 
       // Update spherical polar position in pphot
       pphot->x1p[ip] = sqrt(SQR(x0) + SQR(y0) + SQR(z0));
-      pphot->x2p[ip] = acos(y0/sqrt(SQR(x0) + SQR(y0) + SQR(z0)));
+      // SWD: original
+      //pphot->x2p[ip] = acos(y0/sqrt(SQR(x0) + SQR(y0) + SQR(z0)));
+      // SWD: new, no need to recompute r.  The compiler might be smart enough to not
+      // recompute, but don't want to rely on it.
+      pphot->x2p[ip] = acos(y0/pphot->x1p[ip]);
       pphot->x3p[ip] = atan2(y0, x0);
+      // SWD atan2 will return values less than
+      // 0 but code assumes phi: 0 - 2pi
+      if (pphot->x3p[ip] < 0.)
+        pphot->x3p[ip] += 2.*PI;
 
       // Check if photon changed zones
       if (UpdateZone(pphot,ip)) {
+        // SWD: allowed_move not define. Only used once so better to remove
+        //allowed_move = (abs(i3 - pphot->i3p[ip]) <= 1) && (abs(i2 - pphot->i2p[ip]) <= 1) && (abs(i2 - pphot->i2p[ip]) <= 1);
+        //if (allowed_move) {
 
-        allowed_move = (abs(i3 - pphot->i3p[ip]) <= 1) && (abs(i2 - pphot->i2p[ip]) <= 1) && (abs(i2 - pphot->i2p[ip]) <= 1);
-        if (allowed_move) {
+        if ((abs(i3 - pphot->i3p[ip]) <= 1) && (abs(i2 - pphot->i2p[ip]) <= 1)
+            && (abs(i2 - pphot->i2p[ip]) <= 1)) {
+
           // Change of one or zero in each index
-
           // Update opacities and extinction coefficient
           UpdateOpacities(pphot,pmcb,ip);
           chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
@@ -118,8 +129,7 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
           dl = tauremaining / chi;
           dmin = pmcb->pcoord->dmin(pphot->i3p[ip], pphot->i2p[ip], pphot->i1p[ip]);
           step = (dl < dmin) ? dl : dmin;
-        }
-        else {
+        } else {
           // Step back this move, halve the distance, and try again
           x0 -= step * kx;
           y0 -= step * ky;
@@ -132,7 +142,6 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
           step /= 2.0;
         }
       }
-      
 
       if (pphot->statp[ip] == DESTROYED) {
         pphot->PrintPhoton(ip);

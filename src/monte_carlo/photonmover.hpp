@@ -129,9 +129,9 @@ public:
 
   // functions
   void Move(Photon *pphot, int ips, int ipe);
-  void CurvalinearToCartesian(Photon *pphot, Real kcart[4]);
+  //void CurvalinearToCartesian(Photon *pphot, Real kcart[4]);
   void UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip);
-  void SimpleStep(Photon *pphot, Real step, int ip); // CM: Replace this with a simple cartesian step
+  //void SimpleStep(Photon *pphot, Real step, int ip); // CM: Replace this with a simple cartesian step
 };
 
 //----------------------------------------------------------------------------------------
