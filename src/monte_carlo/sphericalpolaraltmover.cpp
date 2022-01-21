@@ -50,11 +50,38 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
     int count = 0;
     int iter = 0;
     int zone_counter = 0;
+    int i3 = pphot->i3p[ip]; // Not a deep copy --- will not update with pphot
+    int i2 = pphot->i2p[ip];
+    int i1 = pphot->i1p[ip];
+
+    // calculate sines and cosines of theta and phi angles
+    Real cth = cos(pphot->x2p[ip]);
+    Real sth = sin(pphot->x2p[ip]);
+    Real cph = cos(pphot->x3p[ip]);
+    Real sph = sin(pphot->x3p[ip]);
+
+    // shorthand for spherical polar coordinates
+    Real& kr  = pphot->k1p[ip];
+    Real& kth = pphot->k2p[ip];
+    Real& kph = pphot->k3p[ip];
+
+    // create kx, ky, kz direction vector
+    Real kx = kr*sth*cph + kth*cth*cph - kph*sph;
+    Real ky = kr*sth*sph + kth*cth*sph + kph*cph;
+    Real kz = kr*cth - kth*sth;
+
+    // create x, y, z position vector
+    Real r0 = pphot->x1p[ip];
+    Real x0 = r0 * sth * cph;
+    Real y0 = r0 * sth * sph;
+    Real z0 = r0 * cth;
+
+    // determine step size based on extinction coeff and distance to near face
     Real chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
     Real dl = tauremaining / chi;
-    Real dmin = pmcb->pcoord->dmin[i3, i2, i1];
+    Real dmin = pmcb->pcoord->dmin(i3, i2, i1);
 
-    // CM: Set step size to be min of dl and min distance to cell faces
+    // set step size to be min of dl and min distance to cell faces
     Real step = (dl < dmin) ? dl : dmin;
 
     while ( (pphot->statp[ip] == EVOLVING) && (tauremaining > TINY_NUMBER) &&
@@ -63,16 +90,52 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
       iter++;
       count++;
 
-      SimpleStep(pphot,step,ip);
+      // Move the photon in Cartesian coordinates
+      x0 += step * kx;
+      y0 += step * ky;
+      z0 += step * kz;
+
+      // Deduct distance travelled from remaining optical depth
       tauremaining -= chi * step;
 
-      // SWD: Clean up these checks
+      // Update spherical polar position in pphot
+      pphot->x1p[ip] = sqrt(SQR(x0) + SQR(y0) + SQR(z0));
+      pphot->x2p[ip] = acos(y0/sqrt(SQR(x0) + SQR(y0) + SQR(z0)));
+      pphot->x3p[ip] = atan2(y0, x0);
+
       // Check if photon changed zones
       if (UpdateZone(pphot,ip)) {
+        zone_counter = abs(i3 - pphot->i3p[ip]) + abs(i2 - pphot->i2p[ip]) + abs(i1 - pphot->i1p[ip]);
+
+        // Refine until number of zones traversed is exactly 1
+        while (zone_counter > 1) {
+          // We've taken a step across two zone boundaries
+          step /= 2.0;
+          x0 -= step * kx;
+          y0 -= step * ky;
+          z0 -= step * kz;
+          tauremaining += chi * step;
+          pphot->x1p[ip] = sqrt(SQR(x0) + SQR(y0) + SQR(z0));
+          pphot->x2p[ip] = acos(y0/sqrt(SQR(x0) + SQR(y0) + SQR(z0)));
+          pphot->x3p[ip] = atan2(y0, x0);
+          UpdateZone(pphot,ip); // Updates pphot index based on position
+          zone_counter = abs(i3 - pphot->i3p[ip]) + abs(i2 - pphot->i2p[ip]) + abs(i1 - pphot->i1p[ip]);
+        }
+
+        // What about case where stepping back by 1/2 no longer crosses the first zone boundary?
+
+        // Exactly one zone index changed
+        // Update opacities and extinction coefficient
         UpdateOpacities(pphot,pmcb,ip);
-        zone_counter++;
         chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
+
+        // Update step size based on chi and face distances in the new zone
+        dl = tauremaining / chi;
+        dmin = pmcb->pcoord->dmin(pphot->i3p[ip], pphot->i2p[ip], pphot->i1p[ip]);
+        step = (dl < dmin) ? dl : dmin;
       }
+      
+
       if (pphot->statp[ip] == DESTROYED) {
         pphot->PrintPhoton(ip);
       }
@@ -110,23 +173,6 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
 
 }
 
-// SWD: Deprecated and slated for removal
-//----------------------------------------------------------------------------------------
-//! \fn void SphericalPolarMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4])
-//! \brief convert k vector from curvalinear to cartesian
-
-void SphericalPolarAltMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
-
-  Real cth = cos(pphot->x[IMC2]);
-  Real sth = sqrt(1. - SQR(cth));
-  Real cph = cos(pphot->x[IMC3]);
-  Real sph = sin(pphot->x[IMC3]);
-  // Compute cartesian
-  kcart[IMC1] = pphot->k[IMC1]*sth*cph + pphot->k[IMC2]*cth*cph - pphot->k[IMC3]*sph;
-  kcart[IMC2] = pphot->k[IMC1]*sth*sph + pphot->k[IMC2]*cth*sph + pphot->k[IMC3]*cph;
-  kcart[IMC3] = pphot->k[IMC1]*cth - pphot->k[IMC2]*sth;
-}
-
 //----------------------------------------------------------------------------------------
 //! \fn void SphericalPolarAltMover::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip)
 //! \brief update opacities after a photon has changed zones
@@ -159,59 +205,4 @@ void SphericalPolarAltMover::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmc
     }
 
   }
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void SphericalPolarAltMover::SimpleStep(Photon *pphot, Real step, int ip)
-//! \brief computes a step th
-
-void SphericalPolarAltMover::SimpleStep(Photon *pphot, Real step, int ip) {
-
-  Real x[NCOORD];
-  Real kcart[4];
-
-  // CM: Convert direction vector to cartesian
-    CurvalinearToCartesian(pphot);
-    Real& kx = pphot->kcart[0];
-    Real& ky = pphot->kcart[1];
-    Real& kz = pphot->kcart[2];
-
-    Real& kr  = pphot->k1p[ip];
-    Real& kth = pphot->k2p[ip];
-    Real& kph = pphot->k3p[ip];
-
-    Real cth = cos(pphot->x2p[ip]);
-    Real sth = sin(pphot->x2p[ip]);
-    Real cph = cos(pphot->x3p[ip]);
-    Real sph = sin(pphot->x3p[ip]);
-
-    // Make sure kcart is set
-    Real kx = kr*sth*cph + kth*cth*cph - kph*sph;
-    Real ky = kr*sth*sph + kth*cth*sph + kph*cph;
-    Real kz = kr*cth - kth*sth;
-
-      // Compute cartesian positions
-      Real r0 = pphot->x1p[ip];
-      Real x0 = r0 * sth * cph;
-      Real y0 = r0 * sth * sph;
-      Real z0 = r0 * cth;
-
-  // CM: not sure exactly what x[IMC#] accomplishes here?
-  // CM: add k direction vec * step to the current position
-  x[IMC0] = pphot->x0p[ip] += (pphot->k0p[ip])*step;
-  x[IMC1] = pphot->x1p[ip] += (pphot->k1p[ip])*step;
-  x[IMC2] = pphot->x2p[ip] += (pphot->k2p[ip])*step;
-  x[IMC3] = pphot->x3p[ip] += (pphot->k3p[ip])*step;
-
-  // CM: Probably don't need second term for cartesian?
-  k_n1[IMC0] = (pphot->k0p[ip]) + 0.5*(pphot->dk0p[ip]) * step;
-  k_n1[IMC1] = (pphot->k1p[ip]) + 0.5*(pphot->dk1p[ip]) * step;
-  k_n1[IMC2] = (pphot->k2p[ip]) + 0.5*(pphot->dk2p[ip]) * step;
-  k_n1[IMC3] = (pphot->k3p[ip]) + 0.5*(pphot->dk3p[ip]) * step;
-
-  // Set photon direction vectors based on current position
-  pphot->k0p[ip] = k_n1[IMC0];
-  pphot->k1p[ip] = k_n1[IMC1];
-  pphot->k2p[ip] = k_n1[IMC2];
-  pphot->k3p[ip] = k_n1[IMC3];
 }
