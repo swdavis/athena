@@ -60,7 +60,7 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
     Real cph = cos(pphot->x3p[ip]);
     Real sph = sin(pphot->x3p[ip]);
 
-    // shorthand for spherical polar coordinates
+    // shorthand for spherical polar direction vector components
     Real& kr  = pphot->k1p[ip];
     Real& kth = pphot->k2p[ip];
     Real& kph = pphot->k3p[ip];
@@ -70,8 +70,12 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
     Real ky = kr*sth*sph + kth*cth*sph + kph*cph;
     Real kz = kr*cth - kth*sth;
 
-    // create x, y, z position vector
+    // Store original values of r, theta, phi before step
     Real r0 = pphot->x1p[ip];
+    Real th0 = pphot->x2p[ip];
+    Real ph0 = pphot->x3p[ip];
+
+    // create x, y, z position vector
     Real x0 = r0 * sth * cph;
     Real y0 = r0 * sth * sph;
     Real z0 = r0 * cth;
@@ -90,20 +94,14 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
       iter++;
       count++;
 
+      // Take a trial step
       // Move the photon in Cartesian coordinates
       x0 += step * kx;
       y0 += step * ky;
       z0 += step * kz;
 
-      // Deduct distance travelled from remaining optical depth
-      tauremaining -= chi * step;
-
       // Update spherical polar position in pphot
       pphot->x1p[ip] = sqrt(SQR(x0) + SQR(y0) + SQR(z0));
-      // SWD: original
-      //pphot->x2p[ip] = acos(y0/sqrt(SQR(x0) + SQR(y0) + SQR(z0)));
-      // SWD: new, no need to recompute r.  The compiler might be smart enough to not
-      // recompute, but don't want to rely on it.
       pphot->x2p[ip] = acos(y0/pphot->x1p[ip]);
       pphot->x3p[ip] = atan2(y0, x0);
       // SWD atan2 will return values less than
@@ -113,12 +111,12 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
 
       // Check if photon changed zones
       if (UpdateZone(pphot,ip)) {
-        // SWD: allowed_move not define. Only used once so better to remove
-        //allowed_move = (abs(i3 - pphot->i3p[ip]) <= 1) && (abs(i2 - pphot->i2p[ip]) <= 1) && (abs(i2 - pphot->i2p[ip]) <= 1);
-        //if (allowed_move) {
 
         if ((abs(i3 - pphot->i3p[ip]) <= 1) && (abs(i2 - pphot->i2p[ip]) <= 1)
             && (abs(i2 - pphot->i2p[ip]) <= 1)) {
+
+          // Deduct distance travelled from remaining optical depth
+          tauremaining -= chi * step;
 
           // Change of one or zero in each index
           // Update opacities and extinction coefficient
@@ -127,17 +125,18 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
 
           // Update step size based on chi and face distances in the new zone
           dl = tauremaining / chi;
-          dmin = pmcb->pcoord->dmin(pphot->i3p[ip], pphot->i2p[ip], pphot->i1p[ip]);
+          dmin = pmcb->pcoord->dmin(pphot->i3p[ip], pphot->i2p[ip], 
+                                    pphot->i1p[ip]);
           step = (dl < dmin) ? dl : dmin;
+
         } else {
           // Step back this move, halve the distance, and try again
           x0 -= step * kx;
           y0 -= step * ky;
           z0 -= step * kz;
-          tauremaining += chi * step;
-          pphot->x1p[ip] = sqrt(SQR(x0) + SQR(y0) + SQR(z0));
-          pphot->x2p[ip] = acos(y0/sqrt(SQR(x0) + SQR(y0) + SQR(z0)));
-          pphot->x3p[ip] = atan2(y0, x0);
+          pphot->x1p[ip] = r0;
+          pphot->x2p[ip] = th0;
+          pphot->x3p[ip] = ph0;
           UpdateZone(pphot,ip); // Updates pphot index
           step /= 2.0;
         }
@@ -164,6 +163,14 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
 
     } // end of photon integration
 
+    // Update k vector
+    cth = cos(pphot->x2p[ip]);
+    sth = sin(pphot->x2p[ip]);
+    cph = cos(pphot->x3p[ip]);
+    sph = sin(pphot->x3p[ip]);
+    kr  = kx * sth * cph + ky * sth * sph + kz * cth;
+    kth = kx * cth * cph + ky * cth * sph - kz * sth;
+    kph = -kx * sph + ky * cph;
     /*if (pphot->statp[ip] == ESCAPED) {
       pphot->ep[ip] *= pphot->k0p[ip];
       //pphot->PrintPhoton(ip);
