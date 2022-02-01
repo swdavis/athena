@@ -44,7 +44,7 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
 
   for (int ip=ips; ip<=ipe; ip++) 
     {
-    // get number of mean free paths photon will travel
+    // sample number of mean free paths photon will travel
     Real tauremaining = GetOpticalDepth(pran);
 
     int count = 0;
@@ -82,12 +82,15 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
 
     // determine step size based on extinction coeff and distance to near face
     Real chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
-    Real dl = tauremaining / chi;
-    Real dmin = pmcb->pcoord->dmin(i3, i2, i1);
+    Real chi0 = chi; // extinction coefficient in starting zone
+    Real dl = tauremaining / chi; // distance left to travel if chi constant
+    Real dmin = pmcb->pcoord->dmin(i3, i2, i1); // distance to nearest face
 
     // set step size to be min of dl and min distance to cell faces
     Real step = (dl < dmin) ? dl : dmin;
 
+    // WHILE PHOTON IS TAKING STEPS
+    // Continue taking steps until tauremaining is zero
     while ( (pphot->statp[ip] == EVOLVING) && (tauremaining > TINY_NUMBER) &&
             (iter < checkmove)) {
 
@@ -100,36 +103,79 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
       y0 += step * ky;
       z0 += step * kz;
 
-      // Update spherical polar position in pphot
+      // Update spherical polar position in pphot - expensive, do only once
       pphot->x1p[ip] = sqrt(SQR(x0) + SQR(y0) + SQR(z0));
       pphot->x2p[ip] = acos(y0/pphot->x1p[ip]);
       pphot->x3p[ip] = atan2(y0, x0);
-      // SWD atan2 will return values less than
-      // 0 but code assumes phi: 0 - 2pi
       if (pphot->x3p[ip] < 0.)
         pphot->x3p[ip] += 2.*PI;
 
+      // IF PHOTON CHANGES ZONES
       // Check if photon changed zones
       if (UpdateZone(pphot,ip)) {
 
+        // IF PHOTON CHANGES BY ONE ZONE
+        // Check that photon moved by only one zone in each direction
+        // Moving through a corner or an edge is allowed by this logic
         if ((abs(i3 - pphot->i3p[ip]) <= 1) && (abs(i2 - pphot->i2p[ip]) <= 1)
             && (abs(i2 - pphot->i2p[ip]) <= 1)) {
 
-          // Deduct distance travelled from remaining optical depth
-          tauremaining -= chi * step;
+          // Use average opacity in starting and ending zone to calculate 
+          // amount deducted from tauremaining
 
-          // Change of one or zero in each index
-          // Update opacities and extinction coefficient
+          // Update opacity and extinction coefficient in new zone
           UpdateOpacities(pphot,pmcb,ip);
           chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
 
-          // Update step size based on chi and face distances in the new zone
+          // Find average opacity between original and new zones
+          Real chi_avg = 0.5*(chi0 + chi);
+
+          // Deduct distance travelled from remaining optical depth
+          tauremaining -= chi_avg * step;
+  
+          // IF PHOTON MOVES PAST TARGET OPTICAL DEPTH
+          if (tauremaining < 0.) {
+            // Due to use of chi average, photon has moved too far
+            // Take corrective step back using chi in new zone
+            step = tauremaining / chi;
+            tauremaining -= chi * step;
+
+            // Take corrective step (step is negative)
+            x0 += step * kx;
+            y0 += step * ky;
+            z0 += step * kz;
+
+            // Update spherical polar position since photon loop is terminating
+            pphot->x1p[ip] = sqrt(SQR(x0) + SQR(y0) + SQR(z0));
+            pphot->x2p[ip] = acos(y0/pphot->x1p[ip]);
+            pphot->x3p[ip] = atan2(y0, x0);
+            if (pphot->x3p[ip] < 0.)
+              pphot->x3p[ip] += 2.*PI;
+          }
+
+          // Update all zone variables now that the photon is in a new zone
+          // Update zone indices
+          i3 = pphot->i3p[ip];
+          i2 = pphot->i2p[ip];
+          i1 = pphot->i1p[ip];
+
+          // Update values of r, theta, phi before next step
+          // (in case next step has to be undone)
+          r0 = pphot->x1p[ip];
+          th0 = pphot->x2p[ip];
+          ph0 = pphot->x3p[ip];
+
+          // Update stepsize for new zone
           dl = tauremaining / chi;
-          dmin = pmcb->pcoord->dmin(pphot->i3p[ip], pphot->i2p[ip], 
-                                    pphot->i1p[ip]);
+          dmin = pmcb->pcoord->dmin(i3, i2, i1);
           step = (dl < dmin) ? dl : dmin;
 
+          // Update chi now that this is our starting zone for the next step
+          chi0 = chi;
+
         } else {
+          // PHOTON HAS MOVED THROUGH TOO MANY ZONES
+          // Photon has moved by more than one index in a direction
           // Step back this move, halve the distance, and try again
           x0 -= step * kx;
           y0 -= step * ky;
@@ -140,6 +186,10 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
           UpdateZone(pphot,ip); // Updates pphot index
           step /= 2.0;
         }
+
+      } else {
+        // PHOTON HAS NOT CROSSED A ZONE BOUNDARY ON THIS STEP
+        tauremaining -= chi * step;
       }
 
       if (pphot->statp[ip] == DESTROYED) {
