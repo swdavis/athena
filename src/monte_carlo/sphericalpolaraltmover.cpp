@@ -164,7 +164,7 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
           r0 = pphot->x1p[ip];
           th0 = pphot->x2p[ip];
           ph0 = pphot->x3p[ip];
-
+          printf("here");
           // Update stepsize for new zone
           dl = tauremaining / chi;
           dmin = pmcb->pcoord->dmin(i3, i2, i1);

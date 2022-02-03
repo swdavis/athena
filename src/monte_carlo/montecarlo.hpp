@@ -199,6 +199,7 @@ public:
   bool emission_array_flag;  // Compute and save zone emissivities
   bool polarized;// track photon polarization
   bool acceleration;  // use MRW acceleration
+  bool computedmin;
   bool time_acc;  // use MRW acceleration with time limit
   bool raytrace_flag; // Will trace photons rather than scatter
 
@@ -293,6 +294,7 @@ public:
   bool boosts;  // Compute lorentz transformations
   bool coherent_scattering; // photon does notchange energy after scattering
   bool acceleration;  // use MRW acceleration
+  bool computedmin;
   bool time_acc;  // use MRW acceleration with time limit
 
   // Set flags

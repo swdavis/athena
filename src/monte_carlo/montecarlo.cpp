@@ -560,7 +560,7 @@ void MonteCarlo::SendMonteCarloData(int dest) {
   Real *send_buf;
   int size = 3; //tgas,rho,vol
   if (boosts) size+=3;
-  if (acceleration) size+=1; //dmin array
+  if (computedmin) size+=1; //dmin array
   size *= (pmcb->nx1*pmcb->nx2*pmcb->nx3); // all blocks have same size
   size += pmcb->nx1+1; size += pmcb->nx2+1; size+= pmcb->nx3+1;
   send_buf = new Real[size];
@@ -577,7 +577,7 @@ void MonteCarlo::SendMonteCarloData(int dest) {
                               pmcb->ks,pmcb->ke,p);
     BufferUtility::PackData(pmcb->pcoord->vol,send_buf,pmcb->is,pmcb->ie,pmcb->js,
                             pmcb->je,pmcb->ks,pmcb->ke,p);
-    if (acceleration)
+    if (computedmin)
       BufferUtility::PackData(pmcb->pcoord->dmin,send_buf,pmcb->is,pmcb->ie,pmcb->js,
                               pmcb->je,pmcb->ks,pmcb->ke,p);
     for (int i=pmcb->is; i<=pmcb->ie+1; ++i)
@@ -605,7 +605,7 @@ void MonteCarlo::ReceiveMonteCarloData(int source) {
   Real *recv_buf;
   int size = 3; //tgas,rho,vol
   if (boosts) size+=3;
-  if (acceleration) size+=1; //dmin array
+  if (computedmin) size+=1; //dmin array
   size *= (pmcb->nx1*pmcb->nx2*pmcb->nx3); // all blocks have same size
   size += pmcb->nx1+1; size += pmcb->nx2+1; size+= pmcb->nx3+1;
   recv_buf = new Real[size];
@@ -624,7 +624,7 @@ void MonteCarlo::ReceiveMonteCarloData(int source) {
                                   pmcb->je, pmcb->ks, pmcb->ke, p);
     BufferUtility::UnpackData(recv_buf, pmcb->pcoord->vol, pmcb->is, pmcb->ie, pmcb->js,
                                 pmcb->je, pmcb->ks, pmcb->ke, p);
-    if (acceleration)
+    if (computedmin)
       BufferUtility::UnpackData(recv_buf, pmcb->pcoord->dmin, pmcb->is, pmcb->ie,
                                 pmcb->js, pmcb->je, pmcb->ks, pmcb->ke, p);
     for (int i=pmcb->is; i<=pmcb->ie+1; ++i)

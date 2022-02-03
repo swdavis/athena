@@ -24,7 +24,7 @@ public:
   MCCoord(int ncells1, int ncells2, int ncells3, bool acc);
   ~MCCoord();
 
-  bool acceleration;
+  bool computedmin;
 
   AthenaArray<Real> x1f, x2f, x3f; // face  positions
   AthenaArray<Real> vol;

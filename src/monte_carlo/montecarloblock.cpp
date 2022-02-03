@@ -131,6 +131,10 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   varystep_flag = pin->GetOrAddBoolean("montecarlo", "varystep", false);
 
   // Set up photon movement and initialization methods
+  computedmin = false;
+  if ((acceleration)||(sphpol_alt_flag))
+    computedmin = true;
+  pmy_mc->computedmin = computedmin;
   if (COORDINATE_SYSTEM == "cartesian") {
     GetZonePosition = GetZonePositionCartesian;
     if (general_mover_flag) {
@@ -139,14 +143,14 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
         pcoord = new MCCartesian(pmb->pcoord,this);
       else
         pcoord = new MCCartesian(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                                 acceleration);
+                                 computedmin);
     } else {
       pmover = new CartesianMover(this);
       if (pmb != nullptr)
         pcoord = new MCCoord(pmb->pcoord,this);
       else
         pcoord = new MCCoord(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                             acceleration);
+                             computedmin);
     }
   } else if (COORDINATE_SYSTEM == "spherical_polar") {
     GetZonePosition = GetZonePositionSphericalPolar;
@@ -156,21 +160,21 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
         pcoord = new MCSphericalPolar(pmb->pcoord,this);
       else
         pcoord = new MCSphericalPolar(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                                      acceleration);
+                                      computedmin);
     } else if (sphpol_alt_flag) {
       pmover = new SphericalPolarAltMover(this);
       if (pmb != nullptr)
         pcoord = new MCCoord(pmb->pcoord,this);
       else
         pcoord = new MCCoord(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                             acceleration);
+                             computedmin);
     } else {
       pmover = new SphericalPolarMover(this);
       if (pmb != nullptr)
         pcoord = new MCCoord(pmb->pcoord,this);
       else
         pcoord = new MCCoord(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                             acceleration);
+                             computedmin);
     }
   } else if (COORDINATE_SYSTEM == "cylindrical") {
     GetZonePosition = GetZonePositionCylindrical;
@@ -179,7 +183,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
       pcoord = new MCCylindrical(pmb->pcoord,this);
     else
       pcoord = new MCCylindrical(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                                 acceleration);
+                                 computedmin);
   } else if (COORDINATE_SYSTEM == "kerr-schild") {
     GetZonePosition = GetZonePositionSphericalPolar;//approximate
     pmover = new GeneralMover(this);
@@ -188,7 +192,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
        pcoord = new MCBoyerLindquist(pmb->pcoord,this);
      else {
        pcoord = new MCBoyerLindquist(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                                     acceleration);
+                                     computedmin);
        pcoord->SetSpin(pin->GetReal("coord", "a"));
        pcoord->SetMass(pin->GetReal("coord", "m"));
      }
@@ -197,7 +201,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
         pcoord = new MCKerrSchild(pmb->pcoord,this);
       else {
         pcoord = new MCKerrSchild(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                                  acceleration);
+                                  computedmin);
         pcoord->SetSpin(pin->GetReal("coord", "a"));
         pcoord->SetMass(pin->GetReal("coord", "m"));
       }
@@ -209,7 +213,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
       pcoord = new MCMinkowski(pmb->pcoord,this);
     else
       pcoord = new MCMinkowski(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                               acceleration);
+                               computedmin);
   } else {
       std::stringstream msg;
       msg << "### ERROR in MonteCarloBlock constructor" << std::endl
