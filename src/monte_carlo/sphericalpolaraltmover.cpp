@@ -96,30 +96,36 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
 
       iter++;
       count++;
-
+      printf("\nSTEP #%d \n", iter);
+      printf("================================\n");
+      printf("i3, i2, i1=%d, %d, %d\n", i3, i2, i1);
+      printf("r0, th0, ph0=%e, %e, %e\n", r0, th0, ph0);
+      printf("x0, y0, z0=(%e, %e, %e)\n", x0, y0, z0);
       // Take a trial step
       // Move the photon in Cartesian coordinates
       x0 += step * kx;
       y0 += step * ky;
       z0 += step * kz;
-
+      printf("Cartesian step size: (%e, %e, %e)\n", step * kx, step * ky,step * kz);
       // Update spherical polar position in pphot - expensive, do only once
       pphot->x1p[ip] = sqrt(SQR(x0) + SQR(y0) + SQR(z0));
-      pphot->x2p[ip] = acos(y0/pphot->x1p[ip]);
+      pphot->x2p[ip] = acos(z0/pphot->x1p[ip]);
       pphot->x3p[ip] = atan2(y0, x0);
       if (pphot->x3p[ip] < 0.)
         pphot->x3p[ip] += 2.*PI;
-
+      printf("r, th, ph=%e, %e, %e\n", pphot->x1p[ip], pphot->x2p[ip],pphot->x3p[ip]);
       // IF PHOTON CHANGES ZONES
       // Check if photon changed zones
       if (UpdateZone(pphot,ip)) {
-
+        printf("Logic: UpdateZone is true\n");
+        printf("pphot->i#p[ip]=%d, %d, %d\n", pphot->i3p[ip], pphot->i2p[ip], pphot->i1p[ip]);
+        printf("di=%d, %d, %d\n", abs(i1 - pphot->i1p[ip]), abs(i2 - pphot->i2p[ip]), abs(i3 - pphot->i3p[ip]));
         // IF PHOTON CHANGES BY ONE ZONE
         // Check that photon moved by only one zone in each direction
         // Moving through a corner or an edge is allowed by this logic
         if ((abs(i3 - pphot->i3p[ip]) <= 1) && (abs(i2 - pphot->i2p[ip]) <= 1)
             && (abs(i2 - pphot->i2p[ip]) <= 1)) {
-
+          printf("Logic: Photon changed by one zone\n");
           // Use average opacity in starting and ending zone to calculate 
           // amount deducted from tauremaining
 
@@ -147,7 +153,7 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
 
             // Update spherical polar position since photon loop is terminating
             pphot->x1p[ip] = sqrt(SQR(x0) + SQR(y0) + SQR(z0));
-            pphot->x2p[ip] = acos(y0/pphot->x1p[ip]);
+            pphot->x2p[ip] = acos(z0/pphot->x1p[ip]);
             pphot->x3p[ip] = atan2(y0, x0);
             if (pphot->x3p[ip] < 0.)
               pphot->x3p[ip] += 2.*PI;
@@ -164,7 +170,7 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
           r0 = pphot->x1p[ip];
           th0 = pphot->x2p[ip];
           ph0 = pphot->x3p[ip];
-          printf("here");
+
           // Update stepsize for new zone
           dl = tauremaining / chi;
           dmin = pmcb->pcoord->dmin(i3, i2, i1);
@@ -174,6 +180,7 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
           chi0 = chi;
 
         } else {
+          printf("Logic: Photon changed by more than one zone\n");
           // PHOTON HAS MOVED THROUGH TOO MANY ZONES
           // Photon has moved by more than one index in a direction
           // Step back this move, halve the distance, and try again
@@ -183,12 +190,16 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
           pphot->x1p[ip] = r0;
           pphot->x2p[ip] = th0;
           pphot->x3p[ip] = ph0;
-          UpdateZone(pphot,ip); // Updates pphot index
+          pphot->i1p[ip] = i1;
+          pphot->i2p[ip] = i2;
+          pphot->i3p[ip] = i3;
           step /= 2.0;
         }
 
       } else {
+        printf("Logic: did not cross a zone boundary\n");
         // PHOTON HAS NOT CROSSED A ZONE BOUNDARY ON THIS STEP
+        printf("chi=%e, step=%e, prod=%e\n", chi, step, chi*step);
         tauremaining -= chi * step;
       }
 
@@ -210,6 +221,14 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
       if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this,ip);
       // SWD: put here for now, may need additional flag
       if (ptraj != NULL) ptraj->AddToTrajectory(pphot,ip);
+
+
+      printf("tauremaining=%f\n", tauremaining);
+      printf("dmin, dl=(%f, %e)\n", dmin, dl);
+      printf("step=%f\n", step);
+      printf("pphot->i#p[ip]=%d, %d, %d\n", pphot->i3p[ip], pphot->i2p[ip], pphot->i1p[ip]);
+      printf("================================\n");
+
 
     } // end of photon integration
 
