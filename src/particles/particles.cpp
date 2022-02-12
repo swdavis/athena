@@ -1177,14 +1177,14 @@ void Particles::UnpackParticlesForRestart(char *mbdata, std::size_t &os) {
     // Read integer properties.
     std::size_t size = npar * sizeof(int);
     for (int k = 0; k < nint; ++k) {
-      std::memcpy(&(intprop[k]), &(mbdata[os]), size);
+      std::memcpy(intprop[k].data(), &(mbdata[os]), size);
       os += size;
     }
 
     // Read real properties.
     size = npar * sizeof(Real);
     for (int k = 0; k < nreal; ++k) {
-      std::memcpy(&(rp[k]), &(mbdata[os]), size);
+      std::memcpy(rp[k].data(), &(mbdata[os]), size);
       os += size;
     }
   }
@@ -1203,13 +1203,13 @@ void Particles::PackParticlesForRestart(char *&pdata) {
     // Write integer properties.
     std::size_t size = npar * sizeof(int);
     for (int k = 0; k < nint; ++k) {
-      std::memcpy(pdata, &(intprop[k]), size);
+      std::memcpy(pdata, intprop[k].data(), size);
       pdata += size;
     }
     // Write real properties.
     size = npar * sizeof(Real);
     for (int k = 0; k < nreal; ++k) {
-      std::memcpy(pdata, &(rp[k]), size);
+      std::memcpy(pdata, rp[k].data(), size);
       pdata += size;
     }
   }
