@@ -69,14 +69,17 @@ MCCoord::MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb) {
     //dw3.NewAthenaArray(ncells3);
     // Initialize dmin array
     for (int k=pmcb->ks; k<=pmcb->ke; ++k) {
-      dw3 = pcoord->dx3f(k);
       for (int j=pmcb->js; j<=pmcb->je; ++j) {
-        dw2 = pcoord->dx2f(j);
-        //pcoord->CenterWidth1(k,j,pmcb->is,pmcb->ie,dw1);
-        //pcoord->CenterWidth2(k,j,pmcb->is,pmcb->ie,dw2);
-        //pcoord->CenterWidth3(k,j,pmcb->is,pmcb->ie,dw3);
         for (int i=pmcb->is; i<=pmcb->ie; ++i) {
-          dw1 = pcoord->dx1f(i);
+          if (pmcb->sphpol_alt_flag) {
+            dw3 = pcoord->dx3f(k) * pcoord->x1v(i) * sin(pcoord->x2v(j));
+            dw2 = pcoord->dx2f(j) * pcoord->x1v(i);
+            dw1 = pcoord->dx1f(i);
+          } else {
+            dw3 = pcoord->dx3f(k);
+            dw2 = pcoord->dx2f(j);
+            dw1 = pcoord->dx1f(i);
+          }
           Real dmin0 = std::min(dw1,dw2);
           dmin(k,j,i) = std::min(dmin0,dw3);
         }

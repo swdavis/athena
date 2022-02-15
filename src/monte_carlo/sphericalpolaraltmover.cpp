@@ -98,6 +98,7 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
       count++;
       printf("\nSTEP #%d \n", iter);
       printf("================================\n");
+      printf("chi=%e", chi);
       printf("i3, i2, i1=%d, %d, %d\n", i3, i2, i1);
       printf("r0, th0, ph0=%e, %e, %e\n", r0, th0, ph0);
       printf("x0, y0, z0=(%e, %e, %e)\n", x0, y0, z0);
@@ -255,6 +256,169 @@ void SphericalPolarAltMover::Move(Photon *pphot, int ips, int ipe) {
   }
 
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn bool SphericalPolarAltMover::UpdateSingleZone(photon *pphot, int ip, bool * multizone)
+//! \brief check/updates photon zone after displacement
+// If multizone is true, photon zone indices are not updated
+
+//bool PhotonMover::UpdateSingleZone(Photon *pphot, int ip, bool *multizone) {
+
+//  MonteCarloBlock *pmcb = pmy_mcb;
+//  bool change = false;
+//  int zonecountx1 = 0, zonecountx2 = 0, zonecountx3 = 0;
+/* TO BE REVISED - CM
+  if (pphot->x1p[ip] >= pcoord->x1f(pphot->i1p[ip]+1)) {
+    change = true;
+    while (pphot->x1p[ip] >= pcoord->x1f(pphot->i1p[ip]+1)) {
+      pphot->i1p[ip]++;
+      zonecountx1++;
+      if (zonecountx1 >= 2) {
+        multizone=true;
+        pphot->i1p[ip] -= zonecountx1;
+        break;  
+      }
+      if(pphot->i1p[ip] > pmcb->ie)
+        pmcb->pbval->BoundaryFunction_[BoundaryFace::outer_x1](pmcb,pcoord,pphot,ip);
+      if (pphot->statp[ip] != EVOLVING) {
+        break;
+      }
+    }
+  } else if (pphot->x1p[ip] < pcoord->x1f(pphot->i1p[ip])) {
+    change = true;
+    while (pphot->x1p[ip] < pcoord->x1f(pphot->i1p[ip])) {
+      pphot->i1p[ip]--;
+      zonecountx1++;
+      if (zonecountx1 >= 2) {
+        multizone=true;
+        pphot->i1p[ip] += zonecountx1;
+        break;    
+      }
+      if(pphot->i1p[ip] < pmcb->is)
+        pmcb->pbval->BoundaryFunction_[BoundaryFace::inner_x1](pmcb,pcoord,pphot,ip);
+      if (pphot->statp[ip] != EVOLVING) {
+        break;
+      }
+    }
+  }
+
+  if (pphot->x2p[ip] >= pcoord->x2f(pphot->i2p[ip]+1)) {
+    change = true;
+    while (pphot->x2p[ip] >= pcoord->x2f(pphot->i2p[ip]+1)) {
+      pphot->i2p[ip]++;
+      zonecountx2++;
+      if (zonecountx2 >= 2) {
+        multizone=true;
+        pphot->i2p[ip] -= zonecountx2;
+        break;
+      }
+      if(pphot->i2p[ip] > pmcb->je)
+        pmcb->pbval->BoundaryFunction_[BoundaryFace::outer_x2](pmcb,pcoord,pphot,ip);
+      if (pphot->statp[ip] != EVOLVING) {
+        break;
+      }
+    }
+  } else if (pphot->x2p[ip] < pcoord->x2f(pphot->i2p[ip])) {
+    change = true;
+    while (pphot->x2p[ip] < pcoord->x2f(pphot->i2p[ip])) {
+      pphot->i2p[ip]--;
+      zonecountx2++;
+      if (zonecountx2 >= 2) {
+        multizone=true;
+        pphot->i2p[ip] += zonecountx2;
+        break; 
+      }
+      if(pphot->i2p[ip] < pmcb->js)
+        pmcb->pbval->BoundaryFunction_[BoundaryFace::inner_x2](pmcb,pcoord,pphot,ip);
+      if (pphot->statp[ip] != EVOLVING) {
+        break;
+      }
+    }
+  }
+
+  if (pphot->x3p[ip] >= pcoord->x3f(pphot->i3p[ip]+1)) {
+    change = true;
+    while (pphot->x3p[ip] >= pcoord->x3f(pphot->i3p[ip]+1)) {
+      pphot->i3p[ip]++;
+      zonecountx3++;
+      if (zonecountx3 >= 2) {
+        multizone=true;
+        pphot->i3p[ip] -= zonecountx3;
+        break;
+      }
+      if(pphot->i3p[ip] > pmcb->ke)
+        pmcb->pbval->BoundaryFunction_[BoundaryFace::outer_x3](pmcb,pcoord,pphot,ip);
+      if (pphot->statp[ip] != EVOLVING) {
+        break;
+      }
+    }
+  } else if (pphot->x3p[ip] < pcoord->x3f(pphot->i3p[ip])) {
+    change = true;
+    while (pphot->x3p[ip] < pcoord->x3f(pphot->i3p[ip])) {
+      pphot->i3p[ip]--;
+      zonecountx3++;
+      if (zonecountx3 >= 2) {
+        multizone=true;
+        pphot->i3p[ip] += zonecountx3;
+        break;
+      }
+      if(pphot->i3p[ip] < pmcb->ks)
+        pmcb->pbval->BoundaryFunction_[BoundaryFace::inner_x3](pmcb,pcoord,pphot,ip);
+      if (pphot->statp[ip] != EVOLVING) {
+        break;
+      }
+    }
+  }
+
+
+
+  if (pphot->x3p[ip] >= pcoord->x3f(pphot->i3p[ip]+1)) {
+    // Phi greater than next phi cell face
+    if (pphot->x3p[ip] >= pcoord->x3f(pphot->i3p[ip]+2)) {
+      // Phi greater than next two phi cell faces
+      if ( (pphot->i3p[ip] == 0) && (pphot->x3p[ip] >= pcoord->x3f(pmcb->nx3-2)) && (pphot->x3p[ip] < pcoord->x3f(pmcb->nx3-1)) ) {
+        // Photon started in k=0 zone and moved to position within bounds 
+        // of k=63 zone
+        pphot->i3p[ip] = pmcb->nx3-1;
+        change = true;
+        // Call inner_x3 boundary condition necessary?
+      } else {
+        // Photon moved through two phi boundaries
+        multizone = true;
+      }
+    } else {
+      // Phi position has changed only by one zone in the positive phi direction
+      pphot->x3p[ip]++;
+      change = true;
+      if (pphot->i3p[ip] > pmcb->ke) 
+        pmcb->pbval->BoundaryFunction_[BoundaryFace::outer_x3](pmcb,pcoord,pphot,ip);
+    }
+  } else if (pphot->x3p[ip] < pcoord->x3f(pphot->i3p[ip])) {
+    // Phi less than inner phi cell face
+    if (pphot->x3p[ip] < pcoord->x3f(pphot->i3p[ip]-1)) {
+      // Phi less than previous phi cell face
+      if ( (pphot->i3p[ip] == pmcb->nx3-1) && (pphot->x3p[ip] >= pcoord->x3f(0)) && (pphot->x3p[ip] < pcoord->x3f(1)) ) {
+        // Photon started in k=63 zone and moved to position within bounds 
+        // of k=0 zone
+        pphot->i3p[ip] = 0;
+        change = true;
+        // Call inner_x3 boundary condition necessary?
+      } else {
+        // Photon moved through two phi boundaries
+        multizone = true;
+      }
+    } else {
+      // Phi position has changed only by one zone in the negative phi direction
+      pphot->x3p[ip]--;
+      change = true;
+      if (pphot->i3p[ip] < pmcb->ks) 
+        pmcb->pbval->BoundaryFunction_[BoundaryFace::inner_x3](pmcb,pcoord,pphot,ip);
+    }
+  }
+*/
+  // Returns true if zone changes, false otherwise
+//  return change;
+//}
 
 //----------------------------------------------------------------------------------------
 //! \fn void SphericalPolarAltMover::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip)

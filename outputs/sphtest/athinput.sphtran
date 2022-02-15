@@ -41,8 +41,7 @@ emission   = freefree
 absorption = none
 polarized = false
 stepsize = 1.000000e-02
-general_mover = false
-sphpol_alt = true
+general_mover = true
 varystep = true
 checkmove = 100000000
 

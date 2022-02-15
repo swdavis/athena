@@ -74,6 +74,7 @@ public:
   virtual void MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
                MonteCarloBlock *pmcb, int face, bool ascend[3], int ip);
   virtual bool UpdateZone(Photon *pphot, int ip);
+//  virtual bool UpdateSingleZone(Photon *pphot, int ip, bool *multizone);
   virtual void CurvalinearToCartesian(Photon *pphot, Real kcart[4]);
   virtual void InitializeMRWDist(void);
   // Acceleration methods
@@ -128,10 +129,9 @@ public:
   Real gamma[NCOORD][NCOORD][NCOORD];
 
   // functions
+  bool UpdateSingleZone(Photon *pphot, int ip, bool *multizone);
   void Move(Photon *pphot, int ips, int ipe);
-  //void CurvalinearToCartesian(Photon *pphot, Real kcart[4]);
   void UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip);
-  //void SimpleStep(Photon *pphot, Real step, int ip); // CM: Replace this with a simple cartesian step
 };
 
 //----------------------------------------------------------------------------------------
