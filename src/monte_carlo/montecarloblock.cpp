@@ -910,15 +910,12 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
   Real k2 = pphot->k2p[ip];
   Real k3 = pphot->k3p[ip];
 
+  // Normalize k vector if using general mover in spherical polar coords
   if ((COORDINATE_SYSTEM == "spherical_polar") && (general_mover_flag)) {
     k2 *= pphot->x1p[ip];
     k3 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
-
-    printf("norm check: %e", sqrt(SQR(k1) + SQR(k2) + SQR(k3)));
   }
-  // if coord==spherical polar & generalmover flag, k3=r*sin theta (check)
-  // check to make sure it gives you a normalized value
-  // Then check moments produced by generalmover against moments produced by sphpol mover
+
   Real energy, abs_coef, step;
   if (moments_comoving) {
     // boost relevant quanitities to comoving frame
