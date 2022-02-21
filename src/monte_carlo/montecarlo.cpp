@@ -391,7 +391,7 @@ enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string) {
     return MC_DESTROY_BNDRY;
   } else if (input_string == "polar") {
     return MC_POLAR_BNDRY;
-  } else if (input_string == "reflect") {
+  } else if (input_string == "reflecting") {
     return MC_REFLECT_BNDRY;
   } else if (input_string == "user") {
     return MC_USER_BNDRY;
