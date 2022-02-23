@@ -622,7 +622,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     ParticleMesh *ppm = pmb->ppar->ppm;
 
     // particle number density
-    if (output_params.variable.compare("np") == 0) {
+    if (ContainVariable(output_params.variable, "np")) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "np";
@@ -632,8 +632,8 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     }
 
     // particle velocity field
-    if (output_params.variable.compare("vp") == 0 ||
-        output_params.variable.compare("prim") == 0) {
+    if (ContainVariable(output_params.variable, "vp") ||
+        ContainVariable(output_params.variable, "prim")) {
       pod = new OutputData;
       pod->type = "VECTORS";
       pod->name = "vp";
@@ -643,8 +643,8 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     }
 
     // particle mass density
-    if (output_params.variable.compare("rhop") == 0 ||
-        output_params.variable.compare("prim") == 0) {
+    if (ContainVariable(output_params.variable, "rhop") ||
+        ContainVariable(output_params.variable, "prim")) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "rhop";
