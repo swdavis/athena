@@ -237,8 +237,5 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
     logemin = log(everg*pin->GetReal("problem", "emin"));
     logemax = log(everg*pin->GetReal("problem", "emax"));
   }
-  //Real everg = 1.6021772e-12;
-  //logemin = log(everg*pin->GetReal("problem", "emin"));
-  //logemax = log(everg*pin->GetReal("problem", "emax"));
 
 }

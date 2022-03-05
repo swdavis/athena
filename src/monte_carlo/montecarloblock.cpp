@@ -889,10 +889,17 @@ void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign, int ips, i
 
 void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
   // SWD: needs to be modifed for non general mover kvectors
-
+  
   Real k1 = pphot->k1p[ip];
   Real k2 = pphot->k2p[ip];
   Real k3 = pphot->k3p[ip];
+
+  // Normalize k vector if using general mover in spherical polar coords
+  if ((COORDINATE_SYSTEM == "spherical_polar") && (general_mover_flag)) {
+    k2 *= pphot->x1p[ip];
+    k3 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
+  }
+
   Real energy, abs_coef, step;
   if (moments_comoving) {
     // boost relevant quanitities to comoving frame

@@ -88,6 +88,7 @@ void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real l
   Real sth = sqrt(1. - SQR(cth));
 
   // Initialize wave vector with isotropic distribution
+  pphot->k0p[ip] = 1.;
   pphot->k1p[ip] = sth*cphi;
   pphot->k2p[ip] = sth*sphi;
   pphot->k3p[ip] = cth;
@@ -119,7 +120,6 @@ void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pcoord, in
 
 void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pcoord,
                                    int ip) {
-
   Real rl = pcoord->x1f(pphot->i1p[ip]), rh = pcoord->x1f(pphot->i1p[ip]+1);
   pphot->x1p[ip]  = pow(pran->uniform()*(rh*rh*rh-rl*rl*rl)+rl*rl*rl,1./3.);
   Real cthh = cos(pcoord->x2f(pphot->i2p[ip]));

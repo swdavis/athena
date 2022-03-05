@@ -532,12 +532,12 @@ def plot_polar_angle(spectrum,ix,ax=None,iphi='ave',xunit='mu',yunit='lnu',
 
     # Selection for frequency
     if ix == 'sum':
-        print("here")
         nx = spectrum['nx']
-        xmid = 0.5*(spectrum['xfaces'][1:]+spectrum['xfaces'][:-1])
-        intensity = np.dot(xmid,intensity)/nx
-        if ploterr:
-            errors = np.sqrt(np.dot((xmid)**2,(errors)**2))/nx
+        dx = (spectrum['xfaces'][1:]-spectrum['xfaces'][:-1]).reshape(nx)
+        #intensity = np.dot(dx,intensity,axis=1)
+        intensity = np.average(intensity,axis=1)
+        #if ploterr:
+        #    errors = np.sqrt(np.dot((xmid)**2,(errors)**2))/nx
     else:
         ix = int(ix)
         intensity = intensity[:,ix]

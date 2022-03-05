@@ -34,6 +34,7 @@ namespace {
 
   // Global variables
   int irmax;
+  Real opac;
 
 } // namespace
 
@@ -88,6 +89,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
 
 void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
+  opac = pin->GetReal("problem","opac");
   irmax = 0;
   for(int i=is; i<=ie; i++) {
     if (pcoord->x1f(i+1) <= 1.0) {
@@ -97,11 +99,13 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
   }
 
   Real ncells = static_cast<Real>(pmy_mc->ncells);
+  Real ratio = static_cast<Real>(ie-is+1)/static_cast<Real>(irmax-is+1);
+  printf("ratio: %g\n",ratio);
   for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je; ++j) {
       for (int i=is; i<=ie; ++i) {
         if (i <= irmax)
-          emission(k,j,i) = pcoord->vol(k,j,i)*ncells;
+          emission(k,j,i) = opac*pcoord->vol(k,j,i)*ncells/ratio;
         else
           emission(k,j,i) = 0.;
       }
@@ -119,6 +123,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
 
   // Get meshblock dimensions
+
   Real nx1 = static_cast<Real>(irmax-is+1);
   Real nx2 = static_cast<Real>(je-js+1);
   Real nx3 = static_cast<Real>(ke-ks+1);
@@ -166,8 +171,10 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     pphot->sqp[ip] = 0.0;
 
     // Initialize the absorption and scattering extinction coefficients
-    pphot->acp[ip] = 10.0; // all photons start with this opacity
+    pphot->acp[ip] = opac; // all photons start with this opacity
     pphot->scp[ip] = 0.0;
+
+    //pphot->PrintPhoton(ip);
 
   } // loop over ip
 }
@@ -192,7 +199,7 @@ Real StepFunctionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 
   // Opacity is position dependent
   if (pmcb->pcoord->x1f(pphot->i1p[ip]+1) <= 1.)
-    return 10.;
+    return opac;
   else
     return 0.;
 }

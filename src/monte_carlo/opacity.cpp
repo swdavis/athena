@@ -183,7 +183,7 @@ Real DustScatteringOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   int &i2 = pphot->i2p[ip];
   int &i3 = pphot->i3p[ip];
   Real &energy = pphot->ep[ip];
-  Real kapdust = 1.e10;
+  Real kapdust = 1.e14;
   return kapdust*pmcb->rho(i3,i2,i1);
 
 }

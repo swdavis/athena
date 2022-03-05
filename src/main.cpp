@@ -570,29 +570,30 @@ int main(int argc, char *argv[]) {
 
   //--- Step 10. -------------------------------------------------------------------------
   // Print diagnostic messages related to the end of the simulation
-  if ((Globals::my_rank == 0) && (!MONTE_CARLO_STATIC)) {
-    pmesh->OutputCycleDiagnostics();
-    if (SignalHandler::GetSignalFlag(SIGTERM) != 0) {
-      std::cout << std::endl << "Terminating on Terminate signal" << std::endl;
-    } else if (SignalHandler::GetSignalFlag(SIGINT) != 0) {
-      std::cout << std::endl << "Terminating on Interrupt signal" << std::endl;
-    } else if (SignalHandler::GetSignalFlag(SIGALRM) != 0) {
-      std::cout << std::endl << "Terminating on wall-time limit" << std::endl;
-    } else if (pmesh->ncycle == pmesh->nlim) {
-      std::cout << std::endl << "Terminating on cycle limit" << std::endl;
-    } else {
-      std::cout << std::endl << "Terminating on time limit" << std::endl;
+  if (Globals::my_rank == 0) {
+    if (!MONTE_CARLO_STATIC) {
+      pmesh->OutputCycleDiagnostics();
+      if (SignalHandler::GetSignalFlag(SIGTERM) != 0) {
+        std::cout << std::endl << "Terminating on Terminate signal" << std::endl;
+      } else if (SignalHandler::GetSignalFlag(SIGINT) != 0) {
+        std::cout << std::endl << "Terminating on Interrupt signal" << std::endl;
+      } else if (SignalHandler::GetSignalFlag(SIGALRM) != 0) {
+        std::cout << std::endl << "Terminating on wall-time limit" << std::endl;
+      } else if (pmesh->ncycle == pmesh->nlim) {
+        std::cout << std::endl << "Terminating on cycle limit" << std::endl;
+      } else {
+        std::cout << std::endl << "Terminating on time limit" << std::endl;
+      }
+
+      std::cout << "time=" << pmesh->time << " cycle=" << pmesh->ncycle << std::endl;
+      std::cout << "tlim=" << pmesh->tlim << " nlim=" << pmesh->nlim << std::endl;
+
+      if (pmesh->adaptive) {
+        std::cout << std::endl << "Number of MeshBlocks = " << pmesh->nbtotal
+                  << "; " << pmesh->nbnew << "  created, " << pmesh->nbdel
+                  << " destroyed during this simulation." << std::endl;
+      }
     }
-
-    std::cout << "time=" << pmesh->time << " cycle=" << pmesh->ncycle << std::endl;
-    std::cout << "tlim=" << pmesh->tlim << " nlim=" << pmesh->nlim << std::endl;
-
-    if (pmesh->adaptive) {
-      std::cout << std::endl << "Number of MeshBlocks = " << pmesh->nbtotal
-                << "; " << pmesh->nbnew << "  created, " << pmesh->nbdel
-                << " destroyed during this simulation." << std::endl;
-    }
-
     // Calculate and print the zone-cycles/cpu-second and wall-second
 #ifdef OPENMP_PARALLEL
     double omp_time = omp_get_wtime() - omp_start_time;
