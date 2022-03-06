@@ -787,12 +787,12 @@ def athdf(filename, raw=False, data=None, quantities=None, dtype=None, level=Non
                 s = 2 ** (block_level - level)
 
                 # Calculate destination indices, without selection
-                il_d = block_location[0] * block_size[0] / s if nx1 > 1 else 0
-                jl_d = block_location[1] * block_size[1] / s if nx2 > 1 else 0
-                kl_d = block_location[2] * block_size[2] / s if nx3 > 1 else 0
-                iu_d = il_d + block_size[0] / s if nx1 > 1 else 1
-                ju_d = jl_d + block_size[1] / s if nx2 > 1 else 1
-                ku_d = kl_d + block_size[2] / s if nx3 > 1 else 1
+                il_d = block_location[0] * block_size[0] // s if nx1 > 1 else 0
+                jl_d = block_location[1] * block_size[1] // s if nx2 > 1 else 0
+                kl_d = block_location[2] * block_size[2] // s if nx3 > 1 else 0
+                iu_d = il_d + block_size[0] // s if nx1 > 1 else 1
+                ju_d = jl_d + block_size[1] // s if nx2 > 1 else 1
+                ku_d = kl_d + block_size[2] // s if nx3 > 1 else 1
 
                 # Calculate (restricted) source indices, with selection
                 il_s = max(il_d, i_min) - il_d
@@ -826,9 +826,9 @@ def athdf(filename, raw=False, data=None, quantities=None, dtype=None, level=Non
                 # Apply subsampling
                 if subsample:
                     # Calculate fine-level offsets (nearest cell at or below center)
-                    o1 = s/2 - 1 if nx1 > 1 else 0
-                    o2 = s/2 - 1 if nx2 > 1 else 0
-                    o3 = s/2 - 1 if nx3 > 1 else 0
+                    o1 = s//2 - 1 if nx1 > 1 else 0
+                    o2 = s//2 - 1 if nx2 > 1 else 0
+                    o3 = s//2 - 1 if nx3 > 1 else 0
 
                     # Assign values
                     for q, dataset, index in zip(quantities, quantity_datasets,

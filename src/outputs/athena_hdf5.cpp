@@ -59,9 +59,7 @@ using H5Real = float;
 //!        one file per output using parallel IO.
 
 void ATHDF5Output::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
-  // SWD: currently only first process writes for static monte carlo 
-  //if ((MONTE_CARLO_STATIC) && (Globals::my_rank != 0))
-  //  return;
+
   // HDF5 structures
   hid_t file;                                  // file to be written to
   hsize_t dims_start[5], dims_count[5];        // array sizes
