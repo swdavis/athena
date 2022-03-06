@@ -152,7 +152,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
 void MonteCarloBlock::FinalizePhoton(Photon *pphot, int ip) {
 
-  if (pphot->status == ESCAPED) {
+  if (pphot->statp[ip] == ESCAPED) {
     Real rf = pphot->user[1][ip];
     Real thf = pphot->user[2][ip];
     Real phf = pphot->user[3][ip];
