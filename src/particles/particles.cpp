@@ -480,8 +480,8 @@ void Particles::LinkNeighbors(MeshBlockTree &tree,
       pn->pmb = pmy_mesh->FindMeshBlock(snb.gid);
     } else {
 #ifdef MPI_PARALLEL
-      send_[nb.bufid].tag = (snb.gid<<8) | (nb.targetid<<2),
-      recv_[nb.bufid].tag = (pmy_block->gid<<8) | (nb.bufid<<2);
+      send_[nb.bufid].tag = (snb.lid<<8) | (nb.targetid<<2),
+      recv_[nb.bufid].tag = (pmy_block->lid<<8) | (nb.bufid<<2);
 #endif
     }
   }
