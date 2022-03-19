@@ -48,6 +48,7 @@ ParticleBuffer::ParticleBuffer() {
   nparmax = npar = 0;
 #ifdef MPI_PARALLEL
   reqi = reqr = MPI_REQUEST_NULL;
+  mpi_active = false;
   flagn = flagi = flagr = 0;
   tag = -1;
 #endif
@@ -78,6 +79,7 @@ ParticleBuffer::ParticleBuffer(int nparmax0) {
   npar = 0;
 #ifdef MPI_PARALLEL
   reqi = reqr = MPI_REQUEST_NULL;
+  mpi_active = false;
   flagn = flagi = flagr = 0;
   tag = -1;
 #endif
