@@ -375,6 +375,7 @@ void Particles::ClearBoundary() {
 #ifdef MPI_PARALLEL
     if (nb.snb.rank != Globals::my_rank) {
       ParticleBuffer& recv = recv_[nb.bufid];
+      recv.mpi_active = false;
       recv.flagn = recv.flagi = recv.flagr = 0;
       send_[nb.bufid].npar = 0;
     }
@@ -714,12 +715,13 @@ bool Particles::ReceiveFromNeighbors() {
     int nb_rank = nb.snb.rank;
     if (nb_rank != Globals::my_rank && bstatus == BoundaryStatus::waiting) {
       ParticleBuffer& recv = recv_[nb.bufid];
-      if (!recv.flagn) {
+      if (!recv.mpi_active) {
         // Get the number of incoming particles.
-        if (recv.reqi == MPI_REQUEST_NULL)
-          MPI_Irecv(&recv.npar, 1, MPI_INT, nb_rank, recv.tag, my_comm, &recv.reqi);
-        else
-          MPI_Test(&recv.reqi, &recv.flagn, MPI_STATUS_IGNORE);
+        MPI_Irecv(&recv.npar, 1, MPI_INT, nb_rank, recv.tag, my_comm, &recv.reqi);
+        recv.mpi_active = true;
+      }
+      if (!recv.flagn) {
+        MPI_Test(&recv.reqi, &recv.flagn, MPI_STATUS_IGNORE);
         if (recv.flagn) {
           if (recv.npar > 0) {
             // Check the buffer size.
@@ -729,6 +731,11 @@ bool Particles::ReceiveFromNeighbors() {
               recv.Reallocate(2 * nprecv - recv.nparmax);
               recv.npar = nprecv;
             }
+            // Receive data from the neighbor.
+            MPI_Irecv(recv.ibuf, recv.npar * ParticleBuffer::nint, MPI_INT,
+                      nb_rank, recv.tag + 1, my_comm, &recv.reqi);
+            MPI_Irecv(recv.rbuf, recv.npar * ParticleBuffer::nreal, MPI_ATHENA_REAL,
+                      nb_rank, recv.tag + 2, my_comm, &recv.reqr);
           } else {
             // No incoming particles.
             bstatus = BoundaryStatus::completed;
@@ -736,21 +743,10 @@ bool Particles::ReceiveFromNeighbors() {
         }
       }
       if (recv.flagn && recv.npar > 0) {
-        // Receive data from the neighbor.
-        if (!recv.flagi) {
-          if (recv.reqi == MPI_REQUEST_NULL)
-            MPI_Irecv(recv.ibuf, recv.npar * ParticleBuffer::nint, MPI_INT,
-                      nb_rank, recv.tag + 1, my_comm, &recv.reqi);
-          else
-            MPI_Test(&recv.reqi, &recv.flagi, MPI_STATUS_IGNORE);
-        }
-        if (!recv.flagr) {
-          if (recv.reqr == MPI_REQUEST_NULL)
-            MPI_Irecv(recv.rbuf, recv.npar * ParticleBuffer::nreal, MPI_ATHENA_REAL,
-                      nb_rank, recv.tag + 2, my_comm, &recv.reqr);
-          else
-            MPI_Test(&recv.reqr, &recv.flagr, MPI_STATUS_IGNORE);
-        }
+        if (!recv.flagi)
+          MPI_Test(&recv.reqi, &recv.flagi, MPI_STATUS_IGNORE);
+        if (!recv.flagr)
+          MPI_Test(&recv.reqr, &recv.flagr, MPI_STATUS_IGNORE);
         if (recv.flagi && recv.flagr)
           bstatus = BoundaryStatus::arrived;
       }
