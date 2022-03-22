@@ -183,8 +183,7 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
       pphot->energy = xf * kb * temp;
       //tauabs = ct*pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1);
       //pphot->energy = PlanckDist(pmcb->tgas(pphot->i3,pphot->i2,pphot->i1),pran);
-      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot->i1,pphot->i2,pphot->i3,
-                                                pphot->energy);
+      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
       Real opacf = pphot->abs_coef;
       //Real opacf = std::max(pphot->abs_coef,pmcb->planck_opacity(pphot->i3,pphot->i2,
       //pphot->i1));
@@ -262,10 +261,8 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
     }
     if (newzone || compton) {
       // update opacity if zone or energy has changed
-      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot->i1,pphot->i2,pphot->i3,
-                                                pphot->energy);
-      pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,pphot->i1,pphot->i2,pphot->i3,
-                                                pphot->energy);
+      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
+      pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,pphot,ip);
     }
 
     // update direction assuming isotropic random direction in comoving frame
@@ -496,17 +493,19 @@ void PhotonMover::MovePhotonToNextZone(Photon *pphot, MCCoord *pco, MonteCarloBl
     if (pmy_mcb->boosts) {
       // Shift photon energy to comoving frame
       Real shift = pmy_mcb->LorentzTransformFrequencyShift(pphot,ip);
-      Real energy = pphot->ep[ip] * shift;
+      pphot->ep[ip] *= shift;
       // compute opacities in comoving frame
-      pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,i1,i2,i3,energy);
-      pphot->scp[ip] = pmcb->ScatteringOpacity(pmcb,i1,i2,i3,energy);
+      pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
+      pphot->scp[ip] = pmcb->ScatteringOpacity(pmcb,pphot,ip);
+      // Shift energy back to Eulerian frame
+      pphot->ep[ip] /= shift;
       // Shift opacities to Eulerian frame
       pphot->acp[ip] *= shift;
       pphot->scp[ip] *= shift;
     } else {
       // No distinction between comovinng frame and eulerian frame
-      pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,i1,i2,i3,pphot->ep[ip]);
-      pphot->scp[ip] = pmcb->ScatteringOpacity(pmcb,i1,i2,i3,pphot->ep[ip]);
+      pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
+      pphot->scp[ip] = pmcb->ScatteringOpacity(pmcb,pphot,ip);
     }
   }
 }

@@ -29,13 +29,12 @@
 
 
 namespace {
-
-  void FinalPositionSphericalPolar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot,
-                                   int ip);
+  // user defined functions
+  Real StepFunctionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
 
   // Global variables
-  static Real error_sum = 0.;
-  static int nerror = 0;
+  int irmax;
+  Real opac;
 
 } // namespace
 
@@ -47,22 +46,30 @@ namespace {
 void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
   Real rideal = 8.314e7;
-  Real rho = 1.;
-  Real temp = 1.;
+  Real rho0 = 1.;
+  Real tgas = 1.;
   Real gamma = peos->GetGamma();
 
   // Set nominal values for grid, unused
   for (int k=ks; k<=ke; k++) {
     for (int j=js; j<=je; j++) {
       for (int i=is; i<=ie; i++) {
-        phydro->u(IDN,k,j,i) = rho;
+        Real x1 = pcoord->x1f(i+1);
+        if (x1 <= 1.0){
+          phydro->u(IDN,k,j,i) = rho0;
+          phydro->u(IEN,k,j,i) = tgas * phydro->u(IDN,k,j,i)/(gamma-1.0);
+        }
+        else {
+          phydro->u(IDN,k,j,i) = 1e-7;
+          phydro->u(IEN,k,j,i) = 0.0;
+        }
         phydro->u(IM1,k,j,i) = 0.0;
         phydro->u(IM2,k,j,i) = 0.0;
         phydro->u(IM3,k,j,i) = 0.0;
-        phydro->u(IEN,k,j,i) = rideal*rho*temp/(gamma-1.0);
       }
     }
   }
+
 }
 
 //========================================================================================
@@ -71,8 +78,41 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 //========================================================================================
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
-  nuser_var = 4;
+
+  EnrollUserOpacityFunction(StepFunctionOpacity,true);
 }
+
+//========================================================================================
+//! \fn void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin)
+//! \brief Analogous to problem generator but used in support of InitializePhoton
+//========================================================================================
+
+void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
+
+  opac = pin->GetReal("problem","opac");
+  irmax = 0;
+  for(int i=is; i<=ie; i++) {
+    if (pcoord->x1f(i+1) <= 1.0) {
+      if (i > irmax)
+        irmax = i;
+    }
+  }
+
+  Real ncells = static_cast<Real>(pmy_mc->ncells);
+  Real ratio = static_cast<Real>(ie-is+1)/static_cast<Real>(irmax-is+1);
+  printf("ratio: %g\n",ratio);
+  for (int k=ks; k<=ke; ++k) {
+    for (int j=js; j<=je; ++j) {
+      for (int i=is; i<=ie; ++i) {
+        if (i <= irmax)
+          emission(k,j,i) = opac*pcoord->vol(k,j,i)*ncells/ratio;
+        else
+          emission(k,j,i) = 0.;
+      }
+    }
+  }
+}
+
 
 //========================================================================================
 //! \fn void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe)
@@ -81,8 +121,10 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
+
   // Get meshblock dimensions
-  Real nx1 = static_cast<Real>(ie-is+1);
+
+  Real nx1 = static_cast<Real>(irmax-is+1);
   Real nx2 = static_cast<Real>(je-js+1);
   Real nx3 = static_cast<Real>(ke-ks+1);
 
@@ -94,7 +136,9 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     pphot->i2p[ip] = i2 = static_cast<int>(pran->uniform()*nx2)+js;
     pphot->i3p[ip] = i3 = static_cast<int>(pran->uniform()*nx3)+ks;
 
-    pphot->wp[ip] = 1.0;
+    // emit all photons with same weight and energy
+    pphot->wp[ip] = emission(i3,i2,i1);
+    pphot->ep[ip] = 1.0;
 
     // Obtain initial position within zone
     GetZonePosition(pphot,pran,pcoord,ip);
@@ -126,21 +170,11 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     pphot->sup[ip] = 0.0;
     pphot->sqp[ip] = 0.0;
 
-    // Initialize energy
-    pphot->ep[ip] = 1.;
-
-    // Set status flag
-    if (pphot->wp[ip] < 0.0)
-      pphot->statp[ip] = DESTROYED;
-    else
-      pphot->statp[ip] = EVOLVING;
-
     // Initialize the absorption and scattering extinction coefficients
-    pphot->acp[ip] = 0.0;
+    pphot->acp[ip] = opac; // all photons start with this opacity
     pphot->scp[ip] = 0.0;
 
-    // Compute predicted final photon positions for comparison
-    FinalPositionSphericalPolar(this,pcoord,pphot,ip);
+    //pphot->PrintPhoton(ip);
 
   } // loop over ip
 }
@@ -152,91 +186,22 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
 void MonteCarloBlock::FinalizePhoton(Photon *pphot, int ip) {
 
-  if (pphot->statp[ip] == ESCAPED) {
-    Real rf = pphot->user[1][ip];
-    Real thf = pphot->user[2][ip];
-    Real phf = pphot->user[3][ip];
-    Real xp = rf * sin(thf) * cos(phf);
-    Real yp = rf * sin(thf) * sin(phf);
-    Real zp = rf * cos(thf);
-    Real xf = pphot->x1p[ip] * sin(pphot->x2p[ip]) * cos(pphot->x3p[ip]);
-    Real yf = pphot->x1p[ip] * sin(pphot->x2p[ip]) * sin(pphot->x3p[ip]);
-    Real zf = pphot->x1p[ip] * cos(pphot->x2p[ip]);
-
-    // Save as user variable for photon list
-    Real error = sqrt(SQR(xf-xp)+SQR(yf-yp)+SQR(zf-zp))/rf;
-    //printf("final: %d %g %g %g %g %g %g\n",ip,xf,xp,yf,yp,zf,zp);
-    //pphot->PrintPhoton(ip);
-    nerror++;
-    error_sum += error;
-    pphot->user[0][ip] = error;
-    if (nerror == cadence)
-      printf("Mean relative error: %g\n",error_sum/static_cast<Real>(nerror));
-  }
-
 }
 
 
 namespace {
-void FinalPositionSphericalPolar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot,
-                                 int ip) {
 
-  Real r = pphot->x1p[ip];
-  Real cth = cos(pphot->x2p[ip]);
-  Real sth = sin(pphot->x2p[ip]);
-  Real cph = cos(pphot->x3p[ip]);
-  Real sph = sin(pphot->x3p[ip]);
+//----------------------------------------------------------------------------------------
+//! \fn Real StepFunctionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip)
+//! \brief return 0 or 10 for extinction coeffictent
 
-  Real kr, kth, kph;
-  if (pmcb->general_mover_flag) {
-    kr = pphot->k1p[ip];
-    kth = r * pphot->k2p[ip];
-    kph = r * sth * pphot->k3p[ip];
-  } else {
-    kr = pphot->k1p[ip];
-    kth = pphot->k2p[ip];
-    kph = pphot->k3p[ip];
-  }
-  // Convert to cartesian
-  Real kx = kr * sth * cph + kth * cth*cph - kph * sph;
-  Real ky = kr * sth * sph + kth * cth*sph + kph * cph;
-  Real kz = kr * cth - kth * sth;
+Real StepFunctionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 
-  // Outer boundary is r = rf -- find dlr to this boundary
-  Real rf = pco->x1f(pmcb->ie+1);
-  Real ndr0 = pphot->x1p[ip] * (sth * (kx * cph + ky * sph) + kz * cth);
-  Real det = 1.0 + (SQR(rf) - SQR(pphot->x1p[ip])) / SQR(ndr0);
-  Real dlr1 = ndr0 * (sqrt(det) - 1.0);
-  Real dlr2 = -ndr0 * (sqrt(det) + 1.0);
-
-  Real dl;
-  if (dlr1 > 0.0) {
-    if (dlr2 > 0.0) {
-      std::cout << "Warning: both roots positive in FinalPositionSphericalPolar: "
-                << dlr1 << " " << dlr2 << std::endl;
-    } else {
-      dl = dlr1;
-    }
-  } else if (dlr2 > 0.0) {
-    dl = dlr2;
-  }
-
-  // Compute other boundary positions
-  //theta
-  Real zf = r * cth + kz * dl;
-  Real thf = acos(zf / rf);
-
-  //phi
-  Real xf = r * sth * cph + kx * dl;
-  Real yf = r * sth * sph + ky * dl;
-  Real phf = atan2(yf,xf);
-  if (phf < 0.0)
-    phf += 2.*PI;
-
-  pphot->user[1][ip] = rf;
-  pphot->user[2][ip] = thf;
-  pphot->user[3][ip] = phf;
-
+  // Opacity is position dependent
+  if (pmcb->pcoord->x1f(pphot->i1p[ip]+1) <= 1.)
+    return opac;
+  else
+    return 0.;
 }
 
-} // namespace
+} //namespace

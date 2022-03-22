@@ -109,6 +109,9 @@ void Mesh::CalculateLoadBalance(double *clist, int *rlist, int *slist, int *nlis
   nlist[j] = nb-slist[j];
 
   if (MONTE_CARLO_STATIC) {
+    nlist[0] = 1;
+    for(int i=1; i<Globals::nranks; i++)
+      nlist[i] = 0;
     return;
   }
 

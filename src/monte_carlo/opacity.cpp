@@ -28,21 +28,25 @@ Real xsect[NE + 1][NT + 1];
 Real dle, dlt, lmine, lmint;
 
 //----------------------------------------------------------------------------------------
-//! \fn Real NoOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy)
-//! \brief return zero for extinction coeffictent
+//! \fn Real NoOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip)
+//  \brief return zero for extinction coeffictent
 
-Real NoOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy) {
+Real NoOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 
   return 0.;
 }
 
-//----------------------------------------------------------------------------------------
-//! \fn Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3,
-//!                                    Real energy)
-//! \brief calculation extinction coefficient for free-free absorption
 
-Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3,
-                               Real energy) {
+//----------------------------------------------------------------------------------------
+//! \fn Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip)
+//  \brief calculation extinction coefficient for free-free absorption
+
+Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
+
+  Real &energy = pphot->ep[ip];
+  int &i1 = pphot->i1p[ip];
+  int &i2 = pphot->i2p[ip];
+  int &i3 = pphot->i3p[ip];
 
   Real ffnrm = 3.692146e8;
   Real heabund = 0.09; //hardcode for now (should be parameter)
@@ -66,22 +70,24 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real DustAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3,
-//!                                    Real energy)
+//! \fn Real DustAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip)
 //! \brief calculation extinction coefficient for dust absorption
 
-Real DustAbsorptionOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3,
-                               Real energy) {
+Real DustAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 
   return 0.;
 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real ThomsonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy)
-//! \brief calculation extinction coefficient for Thomson scattering
+//! \fn Real ThomsonOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip)
+//  \brief calculation extinction coefficient for Thomson scattering
 
-Real ThomsonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy) {
+Real ThomsonOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
+
+  int &i1 = pphot->i1p[ip];
+  int &i2 = pphot->i2p[ip];
+  int &i3 = pphot->i3p[ip];
 
   Real heabund = 0.09; //hardcode for now (should be parameter)
   Real mp = 1.67262192369e-24;
@@ -92,10 +98,15 @@ Real ThomsonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy) 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real ComptonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy)
-//! \brief Returns compton cross section via lookup table
+//! \fn Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip)
+//  \brief Returns compton cross section via lookup table
 
-Real ComptonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy) {
+Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
+
+  int &i1 = pphot->i1p[ip];
+  int &i2 = pphot->i2p[ip];
+  int &i3 = pphot->i3p[ip];
+  Real &energy = pphot->ep[ip];
 
   Real heabund = 0.09; //hardcode for now (should be parameter)
   Real mp = 1.67262192369e-24;
@@ -141,13 +152,16 @@ Real ComptonOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy) 
   return sigma0 * kappa0 * dens;
 
 }
-
 //----------------------------------------------------------------------------------------
-//! \fn Real ResonanceLineOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3,
-//!                               Real energy)
-//! \brief opacity due resonance line for thermal distribution of atoms
+//! \fn Real ResonanceLineOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip)
+//  \brief opacity due resonance line for thermal distribution of atoms
+//
+Real ResonanceLineOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 
-Real ResonanceLineOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real energy) {
+  int &i1 = pphot->i1p[ip];
+  int &i2 = pphot->i2p[ip];
+  int &i3 = pphot->i3p[ip];
+  Real &energy = pphot->ep[ip];
 
   Real h = 6.62607015e-27;
   Real tgas = pmcb->tgas(i3, i2, i1);
@@ -160,14 +174,16 @@ Real ResonanceLineOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3, Real en
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real DustScatteringOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3,
-//!                                    Real energy)
+//! \fn Real DustScatteringOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip)
 //! \brief calculation extinction coefficient for dust scattering
 
-Real DustScatteringOpacity(MonteCarloBlock *pmcb, int i1, int i2, int i3,
-                               Real energy) {
+Real DustScatteringOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 
-  Real kapdust = 1.e10;
+  int &i1 = pphot->i1p[ip];
+  int &i2 = pphot->i2p[ip];
+  int &i3 = pphot->i3p[ip];
+  Real &energy = pphot->ep[ip];
+  Real kapdust = 1.e14;
   return kapdust*pmcb->rho(i3,i2,i1);
 
 }
@@ -316,6 +332,7 @@ Real KleinNishina(Real x)
 
 void InitializeAccelerationOpacity(MonteCarloBlock *pmcb) {
 
+  int ip = 0;
   int nx = 500;
   Real x[500], dx[500];
 
@@ -337,6 +354,7 @@ void InitializeAccelerationOpacity(MonteCarloBlock *pmcb) {
   int jl = pmcb->js; int ju = pmcb->je;
   int kl = pmcb->ks; int ku = pmcb->ke;
 
+  Photon *pphot; // SWD temp fix -- will not work below
   Real kb = 1.380649e-16;
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
@@ -348,8 +366,8 @@ void InitializeAccelerationOpacity(MonteCarloBlock *pmcb) {
         Real planck_inv = 0.0;
         for(int l=0; l<nx; ++l) {
           Real energy = x[l] * kb * temp;
-          Real abs_coef = pmcb->AbsorptionOpacity(pmcb,i,j,k,energy);
-          Real sct_coef = pmcb->ScatteringOpacity(pmcb,i,j,k,energy);
+          Real abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
+          Real sct_coef = pmcb->ScatteringOpacity(pmcb,pphot,ip);
           Real Bx = pow(x[l],3)/(exp(x[l])-1.0) *dx[l];
           Bint += Bx;
           planck += Bx * abs_coef;

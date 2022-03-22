@@ -318,6 +318,11 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
 }
 
+//========================================================================================
+//! \fn void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin)
+//! \brief Analogous to problem generator but used in support of InitializePhoton
+//========================================================================================
+
 void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
   int nx1 = pin->GetInteger("mesh","nx1");
@@ -338,57 +343,52 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
 }
 
+//========================================================================================
+//! \fn void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe)
+//! \brief Initializes Photon packets before integration
+//========================================================================================
 
-void MonteCarloBlock::InitializePhoton(Photon *pphot) {
-
-  // Set status flag
-  pphot->status = EVOLVING;
+void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
   // Choose a random cell for emission
   Real nx1 = static_cast<Real>(ie-is+1);
   Real nx2 = static_cast<Real>(je-js+1);
   Real nx3 = static_cast<Real>(ke-ks+1);
+
+  for (int ip=ips; ip<=ipe; ip++) {
+
+    // Set status flag
+    pphot->statp[ip] = EVOLVING;
   
-  pphot->i1 = static_cast<int>(pran->uniform()*static_cast<Real>(nrmax-nrmin))+nrmin+is;
-  pphot->i2 = static_cast<int>(pran->uniform()*nx2)+js;
-  pphot->i3 = static_cast<int>(pran->uniform()*nx3)+ks;
+    int i1 = pphot->i1p[ip] = static_cast<int>(pran->uniform()*static_cast<Real>(nrmax-nrmin))
+                     + nrmin+is;
+    int i2 = pphot->i2p[ip] = static_cast<int>(pran->uniform()*nx2)+js;
+    int i3 = pphot->i3p[ip] = static_cast<int>(pran->uniform()*nx3)+ks;
 
-  // Set weight according to the emission array, which is the relative number of photons
-  // per unit time emitted in each cell
-  Real eweight = emission(pphot->i3,pphot->i2,pphot->i1);
-  Real ratio = nx1/static_cast<Real>(nrmax-nrmin);
-  pphot->weight = eweight * ratio;
+    // Obtain initial position within zone
+    GetZonePosition(pphot,pran,pcoord,ip);
 
-  //std::cout << "test: " << pphot->weight << ' ' << pphot->i1 << ' ' 
-  //          << pphot->i2 << ' ' << pphot->i3 << std::endl;
+    // Set weight according to the emission array, which is the relative number of photons
+    // per unit time emitted in each cell
+    pphot->wp[ip] = emission(i3,i2,i1);
+    Real ratio = nx1/static_cast<Real>(nrmax-nrmin);
+    pphot->wp[ip] *= ratio;
 
-  // Obtain initial position within zone
-  GetZonePosition(pphot,pran,pcoord);
-  //std::cout << pphot->x[0] << ' ' << pphot->x[1] << ' ' << pphot->x[2]
-  //          << std::endl;
+    // Obtain intitial energy, polarization, direction and weight
+    // Utilize free-free emission function in emission.cpp
+    if(tnorm) {
+      Real logtg = log(tgas(i3,i2,i1));
+      PhotonEmitFreeFree(this,pphot,logemin+logtg,logemax+logtg,ip);
+    } else{
+      PhotonEmitFreeFree(this,pphot,logemin,logemax,ip);
+    }
 
-  // Obtain intitial energy, polarization, direction and weight
-  // Utilize free-free emission function in emission.cpp
-  if(tnorm) {
-    Real logtg = log(tgas(pphot->i3,pphot->i2,pphot->i1));
-    PhotonEmitFreeFree(this,pphot,logemin+logtg,logemax+logtg);
-  } else{
-    PhotonEmitFreeFree(this,pphot,logemin,logemax);
-  }
+    // Initialize the absorption and scattering extinction coefficients
+    // to the values appropriate in the emitted zone
+    pphot->acp[ip] = AbsorptionOpacity(this,pphot,ip);
+    pphot->scp[ip] = ScatteringOpacity(this,pphot,ip);
 
-  // initialize kcart
-  //pmover->CurvalinearToCartesian(pphot);
-
-  //pphot->PrintPhoton();
-  //pphot->status = DESTROYED;
-
-  if (pphot->weight < 0.0) pphot->status = DESTROYED;
-
-  // Initialize the absorption and scattering extinction coefficients
-  // to the values appropriate in the emitted zone
-  pphot->abs_coef = AbsorptionOpacity(this,pphot);
-  pphot->sct_coef = ScatteringOpacity(this,pphot);
-
+  } // loop over ip
 
 }
 

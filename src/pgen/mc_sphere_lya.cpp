@@ -248,8 +248,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
     // Initialize the absorption and scattering extinction coefficients
     // to the values appropriate in the emitted zone
-    pphot->acp[ip] = AbsorptionOpacity(this,i1,i2,i3,pphot->ep[ip]);
-    pphot->scp[ip] = ScatteringOpacity(this,i1,i2,i3,pphot->ep[ip]);
+    pphot->acp[ip] = AbsorptionOpacity(this,pphot,ip);
+    pphot->scp[ip] = ScatteringOpacity(this,pphot,ip);
 
   } // loop over ip
 }

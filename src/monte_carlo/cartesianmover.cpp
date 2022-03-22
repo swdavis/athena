@@ -118,7 +118,7 @@ void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
         // Perform standard displacement if acceleration not atempted or unsuccsessful
         if (!accel_success) {
           if (pphot->statp[ip] != EVOLVING)
-            return;
+            break;
           // compute distance remaining in zone
           dl = tauremaining/chi;
           // Account for absorption (if needed) and update moments

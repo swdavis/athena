@@ -81,7 +81,6 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
     // Move photon until requisite # of mean free paths or escape
     while( (tauremaining > 0.) && (pphot->statp[ip] == EVOLVING) && (iter < checkmove)) {
       iter++;
-
       // Compute cartesian positions
       Real r0 = pphot->x1p[ip];
       Real x0 = r0 * sth * cph;
@@ -123,7 +122,7 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
           std::cout << "Warning: kr == 0 and ri < r0, absorbing photon" << std::endl;
           pphot->PrintPhoton(ip);
           pphot->statp[ip] = DESTROYED;
-          return;
+          break; // break out of while loop
         }
       }
 
@@ -289,7 +288,7 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
 
         if (!accel_success) {
           if (pphot->statp[ip] != EVOLVING)
-            return;
+            break; // break out of while loop
           // compute distance remaining in zone
           dl = tauremaining/chi;
           // Update moments
@@ -313,7 +312,8 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
           kph = -kx * sph + ky * cph;
         }
         if (ptraj != NULL) ptraj->AddToTrajectory(pphot,ip);
-        return;
+        tauremaining = 0.; // will cause break out while loop
+
       } else { // Photon moves to next zone and reduce tauremaining
         // Update moments
         if (pmcb->moments_flag)

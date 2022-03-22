@@ -209,8 +209,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
     // Initialize the absorption and scattering extinction coefficients
     // to the values appropriate in the emitted zone
-    pphot->acp[ip] = AbsorptionOpacity(this,i1,i2,i3,pphot->ep[ip]);
-    pphot->scp[ip] = ScatteringOpacity(this,i1,i2,i3,pphot->ep[ip]);
+    pphot->acp[ip] = AbsorptionOpacity(this,pphot,ip);
+    pphot->scp[ip] = ScatteringOpacity(this,pphot,ip);
   }
   //pphot->nphot++;
 
@@ -237,8 +237,5 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
     logemin = log(everg*pin->GetReal("problem", "emin"));
     logemax = log(everg*pin->GetReal("problem", "emax"));
   }
-  //Real everg = 1.6021772e-12;
-  //logemin = log(everg*pin->GetReal("problem", "emin"));
-  //logemax = log(everg*pin->GetReal("problem", "emax"));
 
 }

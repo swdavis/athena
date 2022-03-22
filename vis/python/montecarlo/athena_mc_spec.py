@@ -44,7 +44,7 @@ def write_spectrum(filename,spectrum):
     outfile.write(bin)
     myfmt='>'+'d'*(nphi+1)
     bin=struct.pack(myfmt,*(spectrum['phifaces']))
-    outfile.write(bin)        
+    outfile.write(bin)
     # Write data
     nelements = (spectrum['nintens']*nx*nmu*nphi)
     myfmt='>'+'d'*nelements
@@ -67,7 +67,7 @@ def read_spectrum(filename):
 
     spectrum = {}
     current_index = 0
-    
+
     # Function for skipping though the file
     def skip_string(expected_string):
         expected_string_len = len(expected_string)
@@ -162,7 +162,7 @@ def convert_xaxis(newunit,spectrum):
     h = 6.62607015e-27
     everg = 1.6021772e-12
     c = 2.99792e10
-    
+
     baseunit = spectrum['units']
     xfaces = spectrum['xfaces']
     if (baseunit == 'kev'):
@@ -189,7 +189,7 @@ def get_frequency(xunit,xfaces):
     h = 6.62607015e-27
     everg = 1.6021772e-12
     c = 2.99792e10
-    
+
     if (xunit == 'kev'):
         nu = 0.5*(xfaces[1:]+xfaces[:-1])*1000.*everg/h
     if (xunit == 'ev'):
@@ -296,7 +296,7 @@ def plot_spectrum(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='nulnu',
         ax.errorbar(x,y,yerr=yerr,fmt='.',**kwargs)
     else:
         ax.plot(x,y,'.',**kwargs)
-        
+
     # Set axis scales
     ax.set_xscale(xscale)
     ax.set_yscale(yscale)
@@ -314,7 +314,7 @@ def plot_spectrum(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='nulnu',
     if ymax is not None:
         right=float(ymax)
     ax.set_ylim([left,right])
-    
+
     # Return x and nu to facilitate evaluation of comparison functions
     # that may plotted by calling function.  Return ax to enable
     # further call to plot on the same axis
@@ -339,7 +339,7 @@ def compute_fraction_error(intensity,errors=None):
 
 def compute_angle_error(intensity,errors=None):
     """
-    Compute polarization angle and error (degrees)
+    Compute polarization angle and error if requested (degrees)
     """
     q = intensity[1,:]
     u = intensity[2,:]
@@ -354,7 +354,7 @@ def compute_angle_error(intensity,errors=None):
 
 def compute_q_error(intensity,errors=None):
     """
-    Compute q=Q/I (%)
+    Compute q=Q/I and error if requested
     """
     i = intensity[0,:]
     q = intensity[1,:]
@@ -371,10 +371,10 @@ def plot_polarization(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='frac',
                       ploterr=True,xscale='log',yscale='linear',xmin=None,xmax=None,
                       ymin=None,ymax=None,nu=None,**kwargs):
     """
-    Plot polarization fraction or angle. Assumes saving, etc. are performed by the 
+    Plot polarization fraction or angle. Assumes saving, etc. are performed by the
     calling function
     """
-    
+
     if (ax is None):
         # Create figure, axis and assume a single plot window
         fig = plt.figure()
@@ -390,7 +390,7 @@ def plot_polarization(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='frac',
     x = 0.5*(xfaces[1:]+xfaces[:-1])
     if (nu is None):
         nu = get_frequency(spectrum['units'],xfaces)
-    
+
     # Initialize x labels
     xlabel = ""
     if (xunit == 'kev'):
@@ -408,8 +408,8 @@ def plot_polarization(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='frac',
         if spectrum['yerror'] != "true":
             print("Warning: error requested but not computed in spectrum.\n")
             ploterr = False
-    
-    nintens = spectrum['nintens']    
+
+    nintens = spectrum['nintens']
     intensity = spectrum['intensity']
     if ploterr:
         errors = spectrum['errors']
@@ -435,7 +435,7 @@ def plot_polarization(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='frac',
     intensity = intensity[:,imu,:]
     if ploterr:
         errors = errors[:,imu,:]
-        
+
     # Set y, yerr, and ylabel according to input units
     if (yunit == 'frac'):
         ylabel = r"$\rm Pol.\; Fraction$"
@@ -453,7 +453,110 @@ def plot_polarization(spectrum,imu,ax=None,iphi='ave',xunit='kev',yunit='frac',
     else:
         ax.plot(x,y,'.',**kwargs)
 
-    
+
+    # Set axis scales
+    ax.set_xscale(xscale)
+    ax.set_yscale(yscale)
+
+    # (re)Set plot ranges
+    left,right = ax.get_xlim()
+    if xmin is not None:
+        left=float(xmin)
+    if xmax is not None:
+        right=float(xmax)
+    ax.set_xlim([left,right])
+    left,right = ax.get_ylim()
+    if ymin is not None:
+        left=float(ymin)
+    if ymax is not None:
+        right=float(ymax)
+    ax.set_ylim([left,right])
+
+    # Return x and nu to facilitate evaluation of comparison functions
+    # that may plotted by calling function.  Return ax to enable
+    # further call to plot on the same axis
+    return x, nu, ax
+
+def plot_polar_angle(spectrum,ix,ax=None,iphi='ave',xunit='mu',yunit='lnu',
+                     ploterr=True,xscale='log',yscale='log',istokes=0,xmin=None,
+                     xmax=None,ymin=None,ymax=None,xlabel=None,nu=None,**kwargs):
+    """
+    Plot polar angle. Assumes saving, etc. are performed by the calling function
+    """
+
+    if (ax is None):
+        # Create figure, axis and assume a single plot window
+        fig = plt.figure()
+        ax = fig.add_subplot(1,1,1)
+
+    # Set up x axis as bin midpoints
+    xfaces = spectrum['mufaces']
+    x = 0.5*(xfaces[1:]+xfaces[:-1])
+
+    # Initialize x labels
+    if (xlabel is None):
+        if (xunit == 'mu'):
+            xlabel = r"$\cos \theta$"
+    ax.set_xlabel(xlabel)
+
+
+    # Check if error requested and stored
+    if ploterr:
+        if spectrum['yerror'] != "true":
+            print("Warning: error requested but not computed in spectrum.\n")
+            ploterr = False
+
+    nintens = spectrum['nintens']
+    # Compute intensity spectrum
+    if ((istokes > 0) and (spectrum['polarized'] != 'true')):
+        print("Warning: polarization output requested for unpolarized spectrum. \
+               Plotting unpolarized intensity.")
+        istokes = 0
+    intensity = spectrum['intensity'][istokes,:,:,:]
+    if ploterr:
+        errors = spectrum['errors'][istokes,:,:,:]
+
+    # Selection for azimuthal angle
+    if ((iphi == 'ave') or (iphi == 'sum')):
+        norm = 1./float(spectrum['nphi'])
+        if iphi == 'sum':
+            norm *= 2.*np.pi
+        intensity = np.sum(intensity,axis=0)*norm
+        if ploterr:
+            errors = np.sqrt(np.sum((errors)**2,axis=0))*norm
+    else:
+        iphi = int(iphi)
+        intensity = intensity[iphi,:,:]
+        if ploterr:
+            errors = errors[iphi,:,:]
+
+    # Selection for frequency
+    if ix == 'sum':
+        nx = spectrum['nx']
+        dx = (spectrum['xfaces'][1:]-spectrum['xfaces'][:-1]).reshape(nx)
+        #intensity = np.dot(dx,intensity,axis=1)
+        intensity = np.average(intensity,axis=1)
+        #if ploterr:
+        #    errors = np.sqrt(np.dot((xmid)**2,(errors)**2))/nx
+    else:
+        ix = int(ix)
+        intensity = intensity[:,ix]
+        if ploterr:
+            errors = errors[:,ix]
+
+    # Set y, yerr, and ylabel according to input units
+    if (yunit == 'lnu'):
+        ylabel = r"$L_\nu {\rm (erg/s/Hz)}$"
+        y = intensity
+        if ploterr:
+            yerr = errors
+    ax.set_ylabel(ylabel)
+
+    if (ploterr):
+        ax.errorbar(x,y,yerr=yerr,fmt='.',**kwargs)
+    else:
+        ax.plot(x,y,'.',**kwargs)
+
     # Set axis scales
     ax.set_xscale(xscale)
     ax.set_yscale(yscale)
@@ -553,7 +656,7 @@ def get_bins(xphots,xfaces,nx,uniform=True,log=True):
 def get_bins_binary_search(xphots,xfaces,nx):
     """
     Returns x bin numbers corresponding to xphots for non-uniformly
-    binned data via binary search. 
+    binned data via binary search.
     """
     # Exclude values outside of search range
     indsp = (xphots > xfaces[nx]).nonzero()
@@ -564,7 +667,7 @@ def get_bins_binary_search(xphots,xfaces,nx):
     return xbins
 
 def get_angle_bins_cartesian(photons,nmu,mufaces,nphi,phifaces):
-    
+
     if ((nmu == 1) and (mufaces[0] <= 0.) and (mufaces[1] >= 1.0)):
         skipmu = True
     else:
@@ -660,7 +763,7 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     xfaces = build_bins(xmin,xmax,nx,logx)
     spectrum['nx'] = nx
     spectrum['xfaces'] = xfaces
-    
+
     # Get x bins
     xbins = get_bins(xphots,xfaces,nx,log=logx)
 
@@ -674,7 +777,7 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     spectrum['phifaces'] = phifaces
 
     mubins, phibins = get_angle_bins_cartesian(phots,nmu,mufaces,nphi,phifaces)
- 
+
     # Create intensity grid and loop over photons to add contribution
     nintens = 1
     if phots.polarized:
@@ -750,5 +853,3 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
         spectrum['yerror'] = "false"
 
     return spectrum
-
-
