@@ -440,15 +440,15 @@ void SphericalPolarAltMover::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmc
       shift = pmy_mcb->LorentzTransformFrequencyShift(pphot,ip);
       Real energy = pphot->ep[ip] * shift;
       // compute opacities in comoving frame
-      pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,i1,i2,i3,energy);
-      pphot->scp[ip] = pmcb->ScatteringOpacity(pmcb,i1,i2,i3,energy);
+      pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
+      pphot->scp[ip] = pmcb->ScatteringOpacity(pmcb,pphot,ip);
       // Shift opaciteis to Eulerian frame
       pphot->acp[ip] *= shift;
       pphot->scp[ip] *= shift;
     } else {
       // No distinction between comovinng frame and eulerian frame
-      pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,i1,i2,i3,pphot->ep[ip]);
-      pphot->scp[ip] = pmcb->ScatteringOpacity(pmcb,i1,i2,i3,pphot->ep[ip]);
+      pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
+      pphot->scp[ip] = pmcb->ScatteringOpacity(pmcb,pphot,ip);
     }
 
   }
