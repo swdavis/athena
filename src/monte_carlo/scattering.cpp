@@ -555,21 +555,26 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe
 
     // BCM: Normalize k vector if using general mover in spherical polar coords
     bool sphnorm = false;
-    if ((COORDINATE_SYSTEM == "spherical_polar") && (pmcb->general_mover_flag)) {
-      sphnorm = true;
-      k2 *= pphot->x1p[ip];
-      k3 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
-
+    if (COORDINATE_SYSTEM == "spherical_polar") {
       //Compute incoming angles - sphpol
       sth_in = sin(k2);
       phi_in = k3;
       kz = cos(k2);
+      if (pmcb->general_mover_flag) {
+        sphnorm = true;
+        k2 *= pphot->x1p[ip];
+        k3 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
+      }
     } else {
       //Compute incoming angles - cartesian
       sth_in = sqrt(1. - SQR(k3));
       phi_in = atan2(k2 , k1);
       kz = k3;
     }
+//    printf("coordinates: %s\n", COORDINATE_SYSTEM);
+//    printf("general mover: %d\n", pmcb->general_mover_flag);
+//    printf("knorm: %f\n", sqrt(SQR(k1) + SQR(k2) + SQR(k3)));
+//    printf("k: %f %f %f\n", k1, k2, k3);
 
     // Sample outgoing angles
     Real cth,sth,phi,cgam;
@@ -586,13 +591,17 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe
 
     } while (pran->uniform()*2. > (1.+SQR(cgam)));
 
-    if (sphnorm) {
-      k2 = acos(cth) / k1;
-      k3 = phi / (k1 * sth);
+    if (COORDINATE_SYSTEM == "spherical_polar") {
+      k2 = acos(cth);
+      k3 = phi;
     } else {
       k1 = sth * cos(phi);
       k2 = sth * sin(phi);
       k3 = cth;
+    }
+    if (sphnorm) {
+      k2 /= pphot->x1p[ip];
+      k3 /= (pphot->x1p[ip] * sin(pphot->x2p[ip]));
     }
 
     // Evaluate outgoing photon energy
