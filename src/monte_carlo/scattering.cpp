@@ -533,6 +533,14 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe
       sphnorm = true;
       ky *= pphot->x1p[ip];
       kz *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
+
+      // BCM: Temporary fix for NaN photons
+      Real norm = sqrt(SQR(kx) + SQR(ky) + SQR(kz));
+      if (norm > 1.) { 
+        kx /= norm;
+        ky /= norm;
+        kz /= norm;
+      }
     }
 
     int &i1 = pphot->i1p[ip];
