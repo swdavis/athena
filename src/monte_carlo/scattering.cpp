@@ -523,11 +523,6 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe
   MCRandom *pran = pmcb->pran;
 
   for (int ip=ips; ip<=ipe; ip++) {
-    // SWD: Assumes k is unit vector -- needs to be generalized
-    Real &kx = pphot->k1p[ip];
-    Real &ky = pphot->k2p[ip];
-    Real &kz = pphot->k3p[ip];
-
     int &i1 = pphot->i1p[ip];
     int &i2 = pphot->i2p[ip];
     int &i3 = pphot->i3p[ip];
@@ -552,9 +547,29 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe
     Real vperp = vth * sqrt(-log(pran->uniform())) * cos(2.*PI*pran->uniform());
     Real vpar = vth * SampleVelocityParallel(a, x, pran);
 
-    //Compute incoming angles
-    Real sth_in = sqrt(1. - SQR(kz));
-    Real phi_in = atan2(ky , kx);
+    // SWD: Assumes k is unit vector -- needs to be generalized
+    Real &k1 = pphot->k1p[ip];
+    Real &k2 = pphot->k2p[ip];
+    Real &k3 = pphot->k3p[ip];
+    Real kz, phi_in, sth_in;
+
+    // BCM: Normalize k vector if using general mover in spherical polar coords
+    bool sphnorm = false;
+    if ((COORDINATE_SYSTEM == "spherical_polar") && (pmcb->general_mover_flag)) {
+      sphnorm = true;
+      k2 *= pphot->x1p[ip];
+      k3 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
+
+      //Compute incoming angles - sphpol
+      sth_in = sin(k2);
+      phi_in = k3;
+      kz = cos(k2);
+    } else {
+      //Compute incoming angles - cartesian
+      sth_in = sqrt(1. - SQR(k3));
+      phi_in = atan2(k2 , k1);
+      kz = k3;
+    }
 
     // Sample outgoing angles
     Real cth,sth,phi,cgam;
@@ -571,9 +586,14 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe
 
     } while (pran->uniform()*2. > (1.+SQR(cgam)));
 
-    kx = sth * cos(phi);
-    ky = sth * sin(phi);
-    kz = cth;
+    if (sphnorm) {
+      k2 = acos(cth) / k1;
+      k3 = phi / (k1 * sth);
+    } else {
+      k1 = sth * cos(phi);
+      k2 = sth * sin(phi);
+      k3 = cth;
+    }
 
     // Evaluate outgoing photon energy
     Real sgam = sqrt(1. - SQR(cgam));
