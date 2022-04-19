@@ -64,6 +64,8 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   acceleration = pin->GetOrAddBoolean("montecarlo","acceleration",false);
   time_acc = pin->GetOrAddBoolean("montecarlo","time_acc",false);
   raytrace_flag = pin->GetOrAddBoolean("montecarlo", "raytrace", false);
+  scattering_meth = GetScatteringFlag(pin->GetOrAddString("montecarlo","scattering",
+                                                          "none"));
 
   nuser_var = 0; // Initialize photon user variables to zero
 
@@ -636,7 +638,7 @@ void MonteCarlo::ReceiveMonteCarloData(int source) {
     // initialize emission array
     if (InitEmission != NULL)
       pmcb->minweight *= InitEmission(pmcb);
-    if (acceleration && !(pmcb->coherent_scattering))
+    if (acceleration && !(pmcb->coherent_scattering) && !(scattering_meth == SCATRES))
       InitializeAccelerationOpacity(pmcb);
     pmcb=pmcb->next;
   }
@@ -861,7 +863,7 @@ void MonteCarlo::InitializeMonteCarloBlocks(ParameterInput *pinput) {
     //(pmcb->*(pmcb->GetTemperature2))();
     if (boosts) GetVelocity(pmcb);
     if (InitEmission != NULL) InitEmission(pmcb);
-    if (acceleration && !(pmcb->coherent_scattering))
+    if (acceleration && !(pmcb->coherent_scattering) && !(scattering_meth == SCATRES))
       InitializeAccelerationOpacity(pmcb);
     pmcb = pmcb->next;
     while (pmcb != NULL) {
@@ -869,7 +871,7 @@ void MonteCarlo::InitializeMonteCarloBlocks(ParameterInput *pinput) {
       GetTemperature(pmcb);
       if (boosts) GetVelocity(pmcb);
       if (InitEmission != NULL) InitEmission(pmcb);
-      if (acceleration && !(pmcb->coherent_scattering))
+      if (acceleration && !(pmcb->coherent_scattering) && !(scattering_meth == SCATRES))
         InitializeAccelerationOpacity(pmcb);
       pmcb = pmcb->next;
     }

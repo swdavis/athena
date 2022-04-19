@@ -130,6 +130,71 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   orthotet_flag = pin->GetOrAddBoolean("montecarlo", "orthotet", false);
   varystep_flag = pin->GetOrAddBoolean("montecarlo", "varystep", false);
 
+  // Scattering
+  scattering_meth = GetScatteringFlag(pin->GetOrAddString("montecarlo","scattering",
+                                                          "none"));
+  if (scattering_meth == SCATUSER) {
+    ScatteringOpacity = pmy_mc->UserScatteringOpacity;
+    Scatter = pmy_mc->UserScattering;
+  } else if (scattering_meth == SCATNONE) {
+    ScatteringOpacity = NoOpacity;
+    Scatter = NoScatter;  // should not be called
+    coherent_scattering = true;
+  } else if (scattering_meth == SCATISO) {
+    if (pmy_mc->polarized) {
+      std::stringstream msg;
+      msg << "### ERROR in MonteCarloBlock constructor" << std::endl
+          << "Istropic scattering not suppored for polarized = "
+          << pmy_mc->polarized << std::endl;
+      throw std::runtime_error(msg.str().c_str());
+    } else {
+      ScatteringOpacity = ThomsonOpacity;
+      Scatter = ScatterIsotropic;
+      coherent_scattering = true;
+    }
+  } else if (scattering_meth == SCATTHOM) {
+    ScatteringOpacity = ThomsonOpacity;
+    if (pmy_mc->polarized) {
+      Scatter = ScatterThomsonPolarized;
+    } else
+      Scatter = ScatterThomsonUnpolarized;
+    coherent_scattering = true;
+  } else if (scattering_meth == SCATCOMP) {
+    int comptonio = pin->GetOrAddInteger("montecarlo","comptonio",1);
+    GenerateComptonTable(comptonio);
+    ScatteringOpacity = ComptonOpacity;
+    if (pmy_mc->polarized) {
+      Scatter = ScatterComptonPolarized;
+    } else {
+      Scatter = ScatterComptonUnpolarized;
+    }
+    coherent_scattering = false;
+  } else if (scattering_meth == SCATRES) {
+    ScatteringOpacity = ResonanceLineOpacity;
+    if (pmy_mc->polarized) {
+      std::stringstream msg;
+      msg << "### ERROR in MonteCarloBlock constructor" << std::endl
+          << "Lyman alpha scattering not suppored for polarized = "
+          << pmy_mc->polarized << std::endl;
+      throw std::runtime_error(msg.str().c_str());
+    } else {
+      Scatter = ScatterResonanceLine;
+      coherent_scattering = false;
+    }
+  } else if (scattering_meth == SCATDUST) {
+    ScatteringOpacity = DustScatteringOpacity;
+    if (pmy_mc->polarized) {
+      Scatter = ScatterDust;
+      coherent_scattering = true;
+    } else {
+      std::stringstream msg;
+      msg << "### ERROR in MonteCarloBlock constructor" << std::endl
+          << "Dust scattering not suppored for polarized = "
+          << pmy_mc->polarized << std::endl;
+      throw std::runtime_error(msg.str().c_str());
+    }
+  }
+
   // Set up photon movement and initialization methods
   computedmin = false;
   if ((acceleration)||(sphpol_alt_flag))
@@ -240,71 +305,6 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     AbsorptionOpacity = DustAbsorptionOpacity;
   }
 
-  // Set scattering opacity and method
-  scattering_meth = GetScatteringFlag(pin->GetOrAddString("montecarlo","scattering",
-                                                          "none"));
-  if (scattering_meth == SCATUSER) {
-    ScatteringOpacity = pmy_mc->UserScatteringOpacity;
-    Scatter = pmy_mc->UserScattering;
-  } else if (scattering_meth == SCATNONE) {
-    ScatteringOpacity = NoOpacity;
-    Scatter = NoScatter;  // should not be called
-    coherent_scattering = true;
-  } else if (scattering_meth == SCATISO) {
-    if (pmy_mc->polarized) {
-      std::stringstream msg;
-      msg << "### ERROR in MonteCarloBlock constructor" << std::endl
-          << "Istropic scattering not suppored for polarized = "
-          << pmy_mc->polarized << std::endl;
-      throw std::runtime_error(msg.str().c_str());
-    } else {
-      ScatteringOpacity = ThomsonOpacity;
-      Scatter = ScatterIsotropic;
-      coherent_scattering = true;
-    }
-  } else if (scattering_meth == SCATTHOM) {
-    ScatteringOpacity = ThomsonOpacity;
-    if (pmy_mc->polarized) {
-      Scatter = ScatterThomsonPolarized;
-    } else
-      Scatter = ScatterThomsonUnpolarized;
-    coherent_scattering = true;
-  } else if (scattering_meth == SCATCOMP) {
-    int comptonio = pin->GetOrAddInteger("montecarlo","comptonio",1);
-    GenerateComptonTable(comptonio);
-    ScatteringOpacity = ComptonOpacity;
-    if (pmy_mc->polarized) {
-      Scatter = ScatterComptonPolarized;
-    } else {
-      Scatter = ScatterComptonUnpolarized;
-    }
-    coherent_scattering = false;
-  } else if (scattering_meth == SCATRES) {
-    ScatteringOpacity = ResonanceLineOpacity;
-    if (pmy_mc->polarized) {
-      std::stringstream msg;
-      msg << "### ERROR in MonteCarloBlock constructor" << std::endl
-          << "Lyman alpha scattering not suppored for polarized = "
-          << pmy_mc->polarized << std::endl;
-      throw std::runtime_error(msg.str().c_str());
-    } else {
-      Scatter = ScatterResonanceLine;
-      coherent_scattering = false;
-    }
-  } else if (scattering_meth == SCATDUST) {
-    ScatteringOpacity = DustScatteringOpacity;
-    if (pmy_mc->polarized) {
-      Scatter = ScatterDust;
-      coherent_scattering = true;
-    } else {
-      std::stringstream msg;
-      msg << "### ERROR in MonteCarloBlock constructor" << std::endl
-          << "Dust scattering not suppored for polarized = "
-          << pmy_mc->polarized << std::endl;
-      throw std::runtime_error(msg.str().c_str());
-    }
-  }
-
   // Allocate (/initialize) variable arrays needed for evolution/output
   int ncells1 = nx1 + 2*(NGHOST);
   int ncells2 = 1, ncells3 = 1;
@@ -316,7 +316,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   // moments is 1 (Er) + 3 (Fr) + 9 (Pr) + 1 (Eave) + 1 (net cool)
   if (moments_flag) moments.NewAthenaArray(NMOM,ncells3,ncells2,ncells1);
   if (emission_array_flag) emission.NewAthenaArray(ncells3,ncells2,ncells1);
-  if (acceleration && !(coherent_scattering)) {
+  if (acceleration && !(coherent_scattering) && !(scattering_meth == SCATRES)) {
     planck_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
     planck_inv_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
   }
@@ -343,7 +343,7 @@ MonteCarloBlock::~MonteCarloBlock() {
   if (boosts) vel.DeleteAthenaArray();
   if (moments_flag) moments.DeleteAthenaArray();
   if (emission_array_flag) emission.DeleteAthenaArray();
-  if (acceleration && !(coherent_scattering)) {
+  if (acceleration && !(coherent_scattering) && !(scattering_meth == SCATRES)) {
     planck_opacity.DeleteAthenaArray();
     planck_inv_opacity.DeleteAthenaArray();
   }

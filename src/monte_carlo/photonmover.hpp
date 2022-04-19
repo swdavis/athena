@@ -62,6 +62,7 @@ public:
 
   bool acceleration;
   bool boosts;
+  bool resonance;
   bool compton;
   bool time_acc;
 

@@ -194,6 +194,7 @@ public:
 
   enum EmissionFlag emission_meth;
   enum MCBoundaryFlag mc_bcs[6];
+  enum ScatteringFlag scattering_meth;
 
   bool boosts;  // Compute lorentz transformations
   bool emission_array_flag;  // Compute and save zone emissivities
@@ -202,6 +203,7 @@ public:
   bool computedmin;
   bool time_acc;  // use MRW acceleration with time limit
   bool raytrace_flag; // Will trace photons rather than scatter
+
 
   // function pointers
   UserMoveFunc_t UserWorkInMove;

@@ -62,45 +62,50 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
       //pphot->PrintPhoton(ip);
       iter++;
       count++;
-/*
-      // Get distance from photon to closest cell face
-      Real dmin;
-      Real dw3, dw2, dw1;
-      Real dx3p = std::min(fabs(pphot->x3p[ip] - pcoord->x3f(pphot->i3p[ip])), 
-                           fabs(pphot->x3p[ip] - pcoord->x3f(pphot->i3p[ip] + 1)));
-      Real dx2p = std::min(fabs(pphot->x2p[ip] - pcoord->x2f(pphot->i2p[ip])), 
-                           fabs(pphot->x2p[ip] - pcoord->x2f(pphot->i2p[ip] + 1)));
-      Real dx1p = std::min(fabs(pphot->x1p[ip] - pcoord->x1f(pphot->i1p[ip])), 
-                           fabs(pphot->x1p[ip] - pcoord->x1f(pphot->i1p[ip] + 1)));
-      dw3 = dx3p * pphot->x1p[ip] * sin(pphot->x2p[ip]);
-      dw2 = dx2p * pphot->x1p[ip];
-      dw1 = dx1p;
-      Real dmin0 = std::min(dw1, dw2);
-      dmin = std::min(dmin0, dw3);
 
-      // Calculate accel threshold
-      Real tauacc = 10.;
-      if (chi * dmin > tauacc) {
-//        printf("ACCELERATION: Accel triggered! \n");
-        printf("ACCELERATION: taumin: %f    (%f %f %f)\n", chi*dmin, dw1*chi, dw2*chi, dw3*chi);
-      } else {
-        printf("------------: taumin: %f     (%f %f %f)\n", chi*dmin, dw1*chi, dw2*chi, dw3*chi);
-      }     
+      bool accel_success = false;
+      if ((acceleration) && (resonance)) {
+        // Get distance from photon to closest cell face
+        Real dl;
+        Real dw3, dw2, dw1;
+        Real dx3p = std::min(fabs(pphot->x3p[ip] - pcoord->x3f(pphot->i3p[ip])), 
+                             fabs(pphot->x3p[ip] - pcoord->x3f(pphot->i3p[ip] + 1)));
+        Real dx2p = std::min(fabs(pphot->x2p[ip] - pcoord->x2f(pphot->i2p[ip])), 
+                             fabs(pphot->x2p[ip] - pcoord->x2f(pphot->i2p[ip] + 1)));
+        Real dx1p = std::min(fabs(pphot->x1p[ip] - pcoord->x1f(pphot->i1p[ip])), 
+                             fabs(pphot->x1p[ip] - pcoord->x1f(pphot->i1p[ip] + 1)));
+        dw3 = dx3p * pphot->x1p[ip] * sin(pphot->x2p[ip]);
+        dw2 = dx2p * pphot->x1p[ip];
+        dw1 = dx1p;
+        Real dmin0 = std::min(dw1, dw2);
+        dl = std::min(dmin0, dw3); // Distance to nearest face
 
-      // Perform standard displacement if acceleration not attempted or unsuccessful
-*/
-      if (tauremaining > chi * step) {
-        VerletStep(pphot,step,ip);
-        if (pmy_mcb->pmy_mc->polarized)
-          PropogatePolarization(pphot,step,ip);
-      } else {
-        step = tauremaining / chi;
-        VerletStep(pphot,step,ip);
-        if (pmy_mcb->pmy_mc->polarized)
-          PropogatePolarization(pphot,step,ip);
+        // Try to perform MRW acceleration if optical depth is large enough
+        Real tauacc = 10.;
+        if (dl > tauacc / chi) {
+          //printf("ACCELERATION: Accel triggered! \n");
+          accel_success = MRWAcceleration(pphot,pran,dl,tauacc,ip);
+          //printf("ACCELERATION: Accel success: %d \n", accel_success);
+        }
       }
-
-      tauremaining -= chi * step;
+      if (!accel_success) {// Acceleration off or didn't work - take standard step
+        if (tauremaining > chi * step) { // Photon hasn't yet reached tauremaining
+          VerletStep(pphot,step,ip);
+          if (pmy_mcb->pmy_mc->polarized)
+            PropogatePolarization(pphot,step,ip); 
+        } else { // Photon has reached end of tauremaining - step to make it 0
+          step = tauremaining / chi;
+          VerletStep(pphot,step,ip);
+          if (pmy_mcb->pmy_mc->polarized)
+            PropogatePolarization(pphot,step,ip);
+        }
+        tauremaining -= chi * step;
+      } else {
+        // Photon has been given a new position on sphere of radius dl
+        // Set exit parameters and continue the loop over photons
+        step = dl; // TODO: Sample a path length? Moments will be incorrect as-is.
+        tauremaining = 0.;
+      }
 
       // SWD: Clean up these checks
       // Check if photon changed zones
@@ -128,6 +133,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
       if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this,ip);
       // SWD: put here for now, may need additional flag
       if (ptraj != NULL) ptraj->AddToTrajectory(pphot,ip);
+
 
     } // end of photon integration
 
