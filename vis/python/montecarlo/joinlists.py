@@ -11,7 +11,7 @@ import numpy as np
 from os import system
 
 # Athena++ modules
-import athena_mc_list as mclist
+import athena_mc as athenamc
 
 # Main function
 def main(**kwargs):
@@ -47,11 +47,11 @@ def main(**kwargs):
             filename = basename+".proc{:d}".format(i)+".{:05d}".format(j)+".list"
             filelist += filename + " "
             if (firstlist):
-                phlist = mclist.read_list(filename)
+                phlist = athenamc.read_list(filename)
                 firstlist = False
                 ntot += phlist['ntot']
             else:
-                addlist = mclist.read_list(filename)
+                addlist = athenamc.read_list(filename)
                 if (list_match(phlist,addlist)):
                     phlist['list'] = np.append(phlist['list'],addlist['list'])
                     phlist['length'] += addlist['length']
@@ -66,7 +66,7 @@ def main(**kwargs):
     phlist['ntot'] = ntot
     print("Final list contains {:d} photons out of {:d} initialized.\n"
           .format(phlist['length'],phlist['ntot']))
-    mclist.write_list(basename+".list",phlist)
+    athenamc.write_list(basename+".list",phlist)
 
 
     if kwargs['removeold']:

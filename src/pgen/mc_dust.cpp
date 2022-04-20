@@ -149,7 +149,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     int i3 = pphot->i3p[ip];
     // Set weight and energy
     pphot->wp[ip] = 1.0;
-    pphot->ep[ip] = 1.0;
+    pphot->ep[ip] = 1.602176634e-12;
 
     // Initialize Stokes vector
     pphot->sip[ip] = 1.0;

@@ -448,7 +448,7 @@ void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
     }
 
     int ebin;
-    // SWD: covariant mover may require adjustment here
+    // SWD: general mover may require adjustment here
     ebin = EnergyBinUniform(pphot->ep[ip],logarithmic);
     if (ebin < 0) return;
 
@@ -966,6 +966,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         range.cthmax = pin->GetOrAddReal(pib->block_name,"cthmax",1.);
         bool polarized = pin->GetOrAddBoolean(pib->block_name,"polarized",pmc->polarized);
         bool xlog = pin->GetOrAddBoolean(pib->block_name,"xlog",true);
+
         // Create spectrum
         pspec = new Spectrum(range,polarized,xlog);
         pspec->id = id++;

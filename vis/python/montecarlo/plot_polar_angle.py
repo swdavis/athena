@@ -1,7 +1,8 @@
 #! /usr/bin/env python
 
 """
-Plot athena++ spectra as function of frequency, angle, photon energy, etc.
+Plot single athena++ spectrum.  Allows specification of multiple inclinations
+to be plotted simultaneously.
 """
 
 # python standard modules
@@ -13,21 +14,17 @@ import matplotlib.pyplot as plt
 import athena_mc as athenamc
 
 
-def imu_handler(imu):
-    """
-    Parse imu to deterimine which angles to plot
-    """
-
-    if imu == None:
+def ix_handler(ix):
+    if ix == None:
         return [0]
-    if imu == 'sum':
-        return [imu]
-    if (len(imu) > 1):
+    if ix == 'sum':
+        return [ix]
+    if (len(ix) > 1):
         # loop over all imu in the array
-        slist = imu.strip(('[]')).split(",")
+        slist = ix.strip(('[]')).split(",")
         ilist = [int(i) for i in slist]
     else:
-        ilist = [imu]
+        ilist = [ix]
     return ilist
 
 def file_handler(infile):
@@ -41,60 +38,24 @@ def file_handler(infile):
         flist = [infile]
     return flist
 
-def plot_one(spectrum,ax,xunit,yunit,imu,iphi,plterr,**kwargs):
+def plot_one(spectrum,ax,xunit,yunit,ix,iphi,plterr,**kwargs):
     """
     Plot curves corresponding to single spectrum
     """
-
     #Convert xaxis, if needed
     if (xunit != spectrum['units']):
         athenamc.convert_xaxis(xunit,spectrum)
 
     # plot spectrum as function mu
-    ilist = imu_handler(imu)
-    for imu in ilist:
-        x,y,yerr,xlabel,ylabel = athenamc.plot_frequency(spectrum,imu,iphi=iphi,
-                                 plterr=plterr,xunit=xunit,yunit=yunit)
+    ilist = ix_handler(ix)
+    for ix in ilist:
+        x,y,yerr,xlabel,ylabel = athenamc.plot_theta(spectrum,ix,plterr=plterr,
+                                 xunit=xunit,yunit=yunit)
         athenamc.make_plot(x,y,yerr=yerr,xlabel=xlabel,ylabel=ylabel,ax=ax,**kwargs)
 
-def plot_blackbody(spectrum,ax,xunit,yunit,bbtemp,bbnorm):
-    """
-    Plot blackbody for comparison
-    """
-
-    # Convert xaxis, if needed
-    if (xunit != spectrum['units']):
-        athenamc.convert_xaxis(xunit,spectrum)
-
-    # Compute frequency and x
-    xfaces = spectrum['xfaces']
-    x = 0.5*(xfaces[1:]+xfaces[:-1])
-    nu = athenamc.get_frequency(spectrum['units'],xfaces)
-
-    # Plot blackbody spectrum
-    c = 2.99792458e10
-    kb = 1.380649e-16
-    h = 6.62607015e-27
-    ybb = bbnorm*2*h/c**2*nu**3/(np.exp(h*nu/(kb*bbtemp)) - 1.0)
-    if yunit == 'nulnu':
-        plt.plot(x,ybb*nu,linestyle='-')
-    elif yunit == 'lnu':
-        plt.plot(x,ybb,linestyle='-')
-    elif yunit == 'counts':
-        plt.plot(x,ybb/(h*nu),linestyle='-')
 
 # Main function
 def main(**kwargs):
-
-    # Get blackbody parameters
-    bbtemp = kwargs.pop('bbtemp')
-    bbnorm = kwargs.pop('bbnorm')
-    if bbtemp is not None:
-        bbtemp = float(bbtemp)
-        if bbnorm is None:
-            bbnorm = 1.
-        else:
-            bbnorm = float(bbnorm)
 
     # Use latex labels
     #plt.rc('text',usetex=True)
@@ -107,11 +68,11 @@ def main(**kwargs):
     if outfile is None:
         outfile = files[0].replace('.spec','.pdf')
 
-    # Set plot parameters
+    #  Set plot parameters
     plterr = kwargs.pop("ploterr")
     xunit = kwargs.pop("xunit")
     yunit = kwargs.pop("yunit")
-    imu = kwargs.pop("imu")
+    ix = kwargs.pop("ix")
     iphi = kwargs.pop("iphi")
 
     # Set axis to be reused
@@ -122,14 +83,10 @@ def main(**kwargs):
     for file in files:
         # read spectrum as dict from infile
         spectrum = athenamc.read_spectrum(file)
-        print("lumin: ("+file+")",athenamc.get_luminosity(spectrum))
+        print("luminosity: ("+file+")",athenamc.get_luminosity(spectrum))
 
         # plot curves corresponding to this spectrum
-        plot_one(spectrum,ax,xunit,yunit,imu,iphi,plterr,**kwargs)
-
-        if bbtemp is not None:
-            plot_blackbody(spectrum,ax,xunit,yunit,bbtemp,bbnorm)
-
+        plot_one(spectrum,ax,xunit,yunit,ix,iphi,plterr,**kwargs)
 
     # save plot to outfile
     plt.savefig(outfile)
@@ -139,15 +96,15 @@ def main(**kwargs):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('infile',
-        help='input photon spectrum filename(s)')
-    parser.add_argument('--imu',
+        help='input photon list filename')
+    parser.add_argument('--ix',
         default = None,
-        help='index of angle bin to plot')
+        help='index of frequency bin to plot')
     parser.add_argument('--iphi',
         default = 'ave',
         help='controls phi bin for plot')
     parser.add_argument('--xscale',
-        default = 'log',
+        default = 'linear',
         help='x-axis scale')
     parser.add_argument('--xmin',
         default = None,
@@ -158,7 +115,7 @@ if __name__ == '__main__':
         type = float,
         help='x-axis maximum')
     parser.add_argument('--yscale',
-        default = 'log',
+        default = 'linear',
         help='y-axis scale')
     parser.add_argument('--ymin',
         default = None,
@@ -169,23 +126,17 @@ if __name__ == '__main__':
         type = float,
         help='y-axis maximum')
     parser.add_argument('--xunit',
-        default='kev',
-        help='variable to be used for x axis: ev, kev, nu, lambda')
+        default='mu',
+        help='variable to be used for x axis: mu')
     parser.add_argument('--yunit',
-        default='nulnu',
-        help='variable to be used for y axis: nulnu, lnu, counts')
+        default='lnu',
+                        help='variable to be used for y axis: lnu')
     parser.add_argument('--ploterr',
         action='store_true',
         help='plot intensity with error bar')
     parser.add_argument('--outfile',
         default=None,
         help='output filename for spectrum')
-    parser.add_argument('--bbtemp',
-        default = None,
-        help='blackbody temperature')
-    parser.add_argument('--bbnorm',
-        default = None,
-        help='blackbody normalization')
 
     args = parser.parse_args()
     main(**vars(args))
