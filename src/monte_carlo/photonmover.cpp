@@ -116,11 +116,13 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
       pphot->x[2] = atan2(y0,x0);
       if (pphot->x[2] < 0.)
         pphot->x[2] += 2.*PI;
+      //printf("Acc moved from %f to %f r\n", r/1.e11, pphot->x[0]/1.e11);
 
       // ********* DIRECTION *********
       // Sample outgoing angles to local normal - zero ingoing flux, so must be outward
-      Real sq32 = sqrt(3.)/2.;
-      Real samp_cth = (1.+sqrt(1. + 4.*sq32*(1.+sq32)*(1.-pran->uniform())))/(2.*sq32);
+      Real sq3 = 2.*sqrt(3.);
+      Real xi = pran->uniform();
+      Real samp_cth = (2./sq3)*(sqrt(-sq3 * xi - 3.*xi + sq3 + 4.) - 1.);
       Real samp_sth = sqrt(1.0 - samp_cth*samp_cth);
       Real samp_phi = 2.*PI*pran->uniform();
 
