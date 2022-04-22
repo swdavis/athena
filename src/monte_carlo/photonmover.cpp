@@ -100,22 +100,22 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
     if (COORDINATE_SYSTEM == "spherical_polar") {
       // convert to cartesian
       // Global simulation angles based on photon position
-      Real cth = cos(pphot->x[1]);
+      Real cth = cos(pphot->x2p[ip]);
       Real sth = sqrt(1. - SQR(cth));
-      Real cph = cos(pphot->x[2]);
-      Real sph = sin(pphot->x[2]);
-      Real r = pphot->x[0];
+      Real cph = cos(pphot->x3p[ip]);
+      Real sph = sin(pphot->x3p[ip]);
+      Real r = pphot->x1p[ip];
       Real x0 = r * sth * cph;
       Real y0 = r * sth * sph;
       Real z0 = r * cth;
       x0 += lsth*cos(lphi) * r0;
       y0 += lsth*sin(lphi) * r0;
       z0 += mu * r0;
-      pphot->x[0] = sqrt(SQR(x0)+SQR(y0)+SQR(z0));
-      pphot->x[1] = acos(z0 / pphot->x[0]);
-      pphot->x[2] = atan2(y0,x0);
-      if (pphot->x[2] < 0.)
-        pphot->x[2] += 2.*PI;
+      pphot->x1p[ip] = sqrt(SQR(x0)+SQR(y0)+SQR(z0));
+      pphot->x2p[ip] = acos(z0 / pphot->x1p[ip]);
+      pphot->x3p[ip] = atan2(y0,x0);
+      if (pphot->x3p[ip] < 0.)
+        pphot->x3p[ip] += 2.*PI;
       //printf("Acc moved from %f to %f r\n", r/1.e11, pphot->x[0]/1.e11);
 
       // ********* DIRECTION *********
@@ -137,15 +137,15 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
       Real nz = mu * samp_cth - lsth * samp_sth * cos(samp_phi);
 
       // Updated global coordinates after the move onto surf of sphere
-      cth = cos(pphot->x[1]);
+      cth = cos(pphot->x2p[ip]);
       sth = sqrt(1. - SQR(cth));
-      cph = cos(pphot->x[2]);
-      sph = sin(pphot->x[2]);
+      cph = cos(pphot->x3p[ip]);
+      sph = sin(pphot->x3p[ip]);
 
       // Global sphpol direction vectors from local cartesian on the sphere
-      pphot->k[0] = nx * sth * cph + ny * sth * sph + nz * cth;
-      pphot->k[1] = nx * cth * cph + ny * cth * sph - nz * sth;
-      pphot->k[2] = -nx * sph + ny * cph;
+      pphot->k1p[ip] = nx * sth * cph + ny * sth * sph + nz * cth;
+      pphot->k2p[ip] = nx * cth * cph + ny * cth * sph - nz * sth;
+      pphot->k3p[ip] = -nx * sph + ny * cph;
 
       // ********* FREQUENCY REDISTRIBUTION *********
       // Sample outgoing frequency from Dijkstra et al 2006 solution

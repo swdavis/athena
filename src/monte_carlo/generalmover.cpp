@@ -86,7 +86,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
         dl = std::min(dmin0, dw3); // Distance to nearest face
 
         // Try to perform MRW acceleration if optical depth is large enough
-        Real tauacc = 100.;
+        Real tauacc = 10.;
         if (dl > tauacc / chi) {
           //printf("ACCELERATION: Accel triggered! \n");
           accel_success = MRWAcceleration(pphot,pran,dl,tauacc,ip);
@@ -113,6 +113,17 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
         step = dl; // TODO: Sample a path length? Moments will be incorrect as-is.
         tauremaining = 0.;
       }
+
+      // DEBUG: Print out photon position for each step in cartesian
+      //Real cth = cos(pphot->x2p[ip]);
+      //Real sth = sqrt(1. - SQR(cth));
+      //Real cph = cos(pphot->x3p[ip]);
+      //Real sph = sin(pphot->x3p[ip]);
+      //Real r = pphot->x1p[ip];
+      //Real x0 = r * sth * cph;
+      //Real y0 = r * sth * sph;
+      //Real z0 = r * cth;
+      //printf("%f %f %f %d\n", x0, y0, z0, accel_success);
 
       // SWD: Clean up these checks
       // Check if photon changed zones
