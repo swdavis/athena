@@ -585,29 +585,218 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe
 
 //----------------------------------------------------------------------------------------
 //! \fn void ScatterDust(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe)
-//! \brief Implements resonance line scattering
+//! \brief Implements dust scattering
 
 void ScatterDust(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
 
   MCRandom *pran = pmcb->pran;
+  PhotonMover *pmover = pmcb->pmover;
 
+  Real g=0.44; //will make an parameter
+  Real pl=0.43; //will make a parameter
+  Real pc=0;
+  Real sc = 1; //asymmentry of circular polariztion ---- idk what value for this
+      
   for (int ip=ips; ip<=ipe; ip++) {
 
-    // Copy from isotropic scattering
-    Real phi = 2.*PI * pran->uniform();
-    Real cphi = cos(phi);
-    Real sphi = sqrt(1. - SQR(cphi));
+    Real norm = pphot->sip[0];
+    Real stokes[3];
+    stokes[0] = 1.;
+    stokes[1] = pphot->sqp[ip] / norm;
+    stokes[2] = pphot->sup[ip] / norm;
+    stokes[3] = pphot->svp[ip] / norm;
+    //added stokes 3   
+ //old stokes values,
 
-    Real cth = 2. * pran->uniform() - 1.;
-    Real sth = sqrt(1. - SQR(cth));
+    // SWD: should be done outside of scattering -- i.e. transform to tetrad
+    //pmover->CurvalinearToCartesian(pphot);
 
-    // calculate new wave vector
-    pphot->k1p[ip] = sth * cphi;
-    pphot->k2p[ip] = sth * sphi;
-    pphot->k3p[ip] = cth;
+    // Polarized scattering must be computed relative to cartesian bases due to
+    // definition of stokes vectors
+    Real &kx = pphot->k1p[ip];
+    Real &ky = pphot->k2p[ip];
+    Real &kz = pphot->k3p[ip];
 
-  }
+    Real mu = kz;
+    Real stheta = sqrt(1. - SQR(mu));
+    Real phio = acos(kx / stheta);
+    if(ky < 0.0)
+      phio = 2.*PI - phio;
 
+    Real smu, sstheta, s1, s2, s3, s4, i1;  //added s4
+    Real ci1, si1, ci2, si2, s2i1, c2i1;
+    Real intensi;
+   
+    smu = (1.+SQR(g)-SQR((1-SQR(g))/(1-g+2*g*pran->uniform())))/(2*g);
+    sstheta = sqrt(1.0 - SQR(smu));
+   
+       Real theta = acos(smu); //this is theta right?
+    Real thetaf = theta*(3.13*sc*exp(-7*theta/PI)); //define thetaf  --what is s?
+      //changed to p12&3 from equation 32
+    s1 = (1-SQR(g))/pow((1+SQR(g)-(2*g*smu)),1.5);
+    s2 = -pl*s1*((1-SQR(smu))/1+SQR(smu));
+    s3 = s1*(2*smu)/(1+SQR(smu));
+    s4 = -pc*s1*(1-SQR(thetaf))/(1+SQR(cos(thetaf))); //also added p4
+
+    //  s4 = -pc*pl*(1-c)/(1+c);
+
+      //what are pl and pc
+      //pc=0
+
+    i1 = 2. * PI * pran->uniform();
+    ci1 = cos(i1);
+    si1 = sin(i1);
+    s2i1 = 2. * si1 * ci1;
+    c2i1 = 2. * ci1 * ci1 - 1.;
+    //added
+    Real i3 = 2. * PI - i1;
+    Real s2i3 = 2.*sin(i3)*cos(i3);
+    Real sci3 = 2.*cos(i3)*cos(i3)-1.; 
+    Real c2i3 = 2.*cos(i3)*cos(i3)-1.;
+
+
+    Real r00 =  s1;
+    Real r01 =  s2 * c2i1;
+    Real r02 = -s2 * s2i1;
+    
+    intensi = r00 * stokes[0] + r01 * stokes[1] + r02 * stokes[2];
+      
+
+
+    Real r10,r11,r12,r20,r21,r22;
+    Real r23, r31, r32, r33;
+    Real mup,sthetap,phip;
+    if(i1 < PI) {
+      mup = mu * smu + stheta * sstheta * ci1;
+      if(mup > 1.0)
+        mup = 1.0;
+      else if(mup < -1.0)
+        mup = -1.0;
+
+      sthetap = sqrt(1. - SQR(mup));
+
+      if( (sthetap != 0.) && (sstheta !=0.)) {
+        si2 = si1 * stheta / sthetap;
+        ci2 = (mu - mup * smu)/ (sthetap * sstheta);
+      } else {
+        if (sthetap == 0.0) {
+          si2 = 0.;
+          ci2 = 1.;
+        } else if (sstheta == 0.0) {
+          si2 = si1;
+          ci2 = -ci1;
+        }
+      }
+      Real s2i2 = 2. * si2 * ci2;
+      Real c2i2 = 2. * ci2 * ci2 - 1.;
+
+      Real cdphi = -ci1 * ci2 + si1 * si2 * smu;
+      if(cdphi > 1.)
+        cdphi = 1.0;
+      else if(cdphi < -1.)
+        cdphi = -1.;
+
+      phip = phio - acos(cdphi);
+      if(phip > 2.*PI)
+        phip = phip - 2.*PI;
+      else if (phip < 0.)
+        phip = phip + 2.*PI;
+
+      Real c1c2 = c2i1 * c2i2;
+      Real s1s2 = s2i1 * s2i2;
+      Real c1s2 = c2i1 * s2i2;
+      Real s1c2 = c2i2 * s2i1;
+
+      r10 =  s2 * c2i2;
+      r11 =  s1 * c1c2 - s3 * s1s2;
+      r12 = -s1 * s1c2 - s3 * c1s2;
+      r20 =  s2 * s2i2;
+      r21 =  s1 * c1s2 + s3 * s1c2;
+      r22 =  s3 * c1c2 - s1 * s1s2;
+      //add up to 33
+  
+      r23 =  -s4 * c2i2;
+      r31 =  -s4 * s2i3;
+      r32 =  s4 * c2i3;
+      r33 = s3;
+
+    } else {
+      si1 = -si1;
+      s2i1 = -s2i1;
+      mup = mu * smu + stheta * sstheta * ci1;
+      if(mup > 1.)
+        mup = 1.;
+      else if(mup < -1.)
+        mup = -1.;
+
+      sthetap = sqrt(1. - SQR(mup));
+      if( (sthetap != 0.) && (sstheta != 0.)) {
+        si2 = si1 * stheta / sthetap;
+        ci2 = (mu - mup * smu)/ (sthetap * sstheta);
+      }
+      else {
+        if (sstheta==0.0) {
+          si2 = 0.0;
+          ci2 = 1.0;
+        } else if (sthetap==0.0) {
+          si2 = si1;
+          ci2 = -ci1;
+        }
+      }
+
+      Real s2i2 = 2.0*si2*ci2;
+      Real c2i2 = 2.0*ci2*ci2-1.0;
+
+      Real cdphi = -ci1 * ci2 + si1 * si2 * smu;
+      if(cdphi > 1.)
+        cdphi = 1.0;
+      else if(cdphi < -1.)
+        cdphi = -1.;
+
+      phip = phio + acos(cdphi);
+      if(phip > 2.*PI) {
+        phip = phip - 2.*PI;
+      } else if (phip < 0.) {
+        phip = phip + 2.*PI;
+      }
+
+      Real c1c2 = c2i1 * c2i2;
+      Real s1s2 = s2i1 * s2i2;
+      Real c1s2 = c2i1 * s2i2;
+      Real s1c2 = c2i2 * s2i1;
+
+      r10 =  s2 * c2i2;
+      r11 =  s1 * c1c2 - s3 * s1s2;
+      r12 =  s1 * s1c2 + s3 * c1s2;
+      r20 = -s2 * s2i2;
+      r21 = -s1 * c1s2 - s3 * s1c2;
+      r22 =  s3 * c1c2 - s1 * s1s2;
+      r23 = -s4 * c2i2;
+      r31 =  s4 * s2i1;
+      r32 =  s4 * c2i1;
+      r33 =  s3;
+//added rest of matrix
+
+
+    } // end if (i1 < PI) else
+
+    // Calculate new stokes vectors from rotation matrix.  Note that the
+    // value of the overall intensity (stokes[0]) does not change
+    pphot->sqp[ip] = norm*(r10*stokes[0]+r11*stokes[1]+r12*stokes[2])/intensi;
+    pphot->sup[ip] = norm*(r20*stokes[0]+r21*stokes[1]+r22*stokes[2])/intensi;
+    pphot->svp[ip] = norm*(r31*stokes[1]+r32*stokes[2]+r33*stokes[3])/intensi;
+
+//added stoke 4; svp[ip]
+
+
+    // Calculate new photon direction
+    kx = sthetap * cos(phip);
+    ky = sthetap * sin(phip);
+    kz = mup;
+
+    // SWD: Should be done outside of scattering
+    //pmover->CartesianToCurvalinear(pphot);
+  } // end loop over ip
 }
 
 //----------------------------------------------------------------------------------------

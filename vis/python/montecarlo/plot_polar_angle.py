@@ -49,8 +49,8 @@ def plot_one(spectrum,ax,xunit,yunit,ix,iphi,plterr,**kwargs):
     # plot spectrum as function mu
     ilist = ix_handler(ix)
     for ix in ilist:
-        x,y,yerr,xlabel,ylabel = athenamc.plot_theta(spectrum,ix,plterr=plterr,
-                                 xunit=xunit,yunit=yunit)
+        x,y,yerr,xlabel,ylabel = athenamc.plot_theta(spectrum,ix,iphi=iphi,
+                                 plterr=plterr,xunit=xunit,yunit=yunit)
         athenamc.make_plot(x,y,yerr=yerr,xlabel=xlabel,ylabel=ylabel,ax=ax,**kwargs)
 
 
