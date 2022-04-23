@@ -20,6 +20,7 @@
 #   -g                enable general relativity
 #   -t                enable interface frame transformations for GR
 #   -mc               enable a monte carlo radiation tranfer calculation
+#   -p                enable particles
 #   -debug            enable debug flags (-g -O0); override other compiler options
 #   -coverage         enable compiler-dependent code coverage flags
 #   -float            enable single precision (default is double)
@@ -99,7 +100,7 @@ parser.add_argument('--eos',
 # --flux=[name] argument
 parser.add_argument('--flux',
                     default='default',
-                    choices=['default', 'hlle', 'hllc', 'hlld', 'roe', 'llf'],
+                    choices=['default', 'hlle', 'hllc', 'lhllc', 'hlld', 'lhlld', 'roe', 'llf'], # noqa
                     help='select Riemann solver')
 
 # --nghost=[value] argument
@@ -141,6 +142,12 @@ parser.add_argument('-t',
                     action='store_true',
                     default=False,
                     help='enable interface frame transformations for GR')
+
+# -p argument
+parser.add_argument('-p',
+                    action='store_true',
+                    default=False,
+                    help='enable particles')
 
 # -debug argument
 parser.add_argument('-debug',
@@ -319,8 +326,16 @@ if args['flux'] == 'hllc' and args['eos'] == 'isothermal':
     raise SystemExit('### CONFIGURE ERROR: HLLC flux cannot be used with isothermal EOS')
 if args['flux'] == 'hllc' and args['b']:
     raise SystemExit('### CONFIGURE ERROR: HLLC flux cannot be used with MHD')
+if args['flux'] == 'lhllc' and args['eos'] == 'isothermal':
+    raise SystemExit('### CONFIGURE ERROR: LHLLC flux cannot be used with isothermal EOS') # noqa
+if args['flux'] == 'lhllc' and args['b']:
+    raise SystemExit('### CONFIGURE ERROR: LHLLC flux cannot be used with MHD')
 if args['flux'] == 'hlld' and not args['b']:
     raise SystemExit('### CONFIGURE ERROR: HLLD flux can only be used with MHD')
+if args['flux'] == 'lhlld' and args['eos'] == 'isothermal':
+    raise SystemExit('### CONFIGURE ERROR: LHLLD flux cannot be used with isothermal EOS') # noqa
+if args['flux'] == 'lhlld' and not args['b']:
+    raise SystemExit('### CONFIGURE ERROR: LHLLD flux can only be used with MHD')
 
 # Check relativity
 if args['s'] and args['g']:
@@ -443,6 +458,9 @@ if args['g']:
     makefile_options['RSOLVER_FILE'] += '_rel'
     if not args['t']:
         makefile_options['RSOLVER_FILE'] += '_no_transform'
+
+# -p argument
+definitions['PARTICLES'] = '1' if args['p'] else '0'
 
 # --cxx=[name] argument
 if args['cxx'] == 'g++':
@@ -823,6 +841,7 @@ print('  Number of scalars:          ' + args['nscalars'])
 print('  Special relativity:         ' + ('ON' if args['s'] else 'OFF'))
 print('  General relativity:         ' + ('ON' if args['g'] else 'OFF'))
 print('  Frame transformations:      ' + ('ON' if args['t'] else 'OFF'))
+print('  Particles:                  ' + ('ON' if args['p'] else 'OFF'))
 print('  Self-Gravity:               ' + self_grav_string)
 print('  Super-Time-Stepping:        ' + ('ON' if args['sts'] else 'OFF'))
 print('  Monte Carlo:                ' + ('ON' if args['mc'] else 'OFF'))

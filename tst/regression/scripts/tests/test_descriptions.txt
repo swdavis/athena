@@ -279,6 +279,9 @@ outputs_all_outputs
     formatted table (.tab), VTK, and HDF5 (if available) outputs. Then reads last
     version of each file to make sure output data is correct
 
+particles_uniform_streaming
+    Test for uniform streaming between gas and particles.
+
 pgen_hdf5_reader_parallel
     Parallel test script for initializing problem with preexisting array
 

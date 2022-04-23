@@ -30,6 +30,7 @@
 #include "../hydro/hydro.hpp"
 #include "../mesh/mesh.hpp"
 #include "../orbital_advection/orbital_advection.hpp"
+#include "../particles/particles.hpp"
 #include "../scalars/scalars.hpp"
 #include "outputs.hpp"
 
@@ -47,21 +48,23 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
   Real real_max = std::numeric_limits<Real>::max();
   Real real_lowest = std::numeric_limits<Real>::lowest();
   AthenaArray<Real> vol(pmb->ncells1);
-  const int nhistory_output = NHISTORY_VARS + pm->nuser_history_output_;
+  const int nhistory_par(PARTICLES? Particles::NHISTORY : 0);
+  const int nhistory_predefined(NHISTORY_VARS + nhistory_par);
+  const int nhistory_output = nhistory_predefined + pm->nuser_history_output_;
   std::unique_ptr<Real[]> hst_data(new Real[nhistory_output]);
   // initialize built-in variable sums to 0.0
-  for (int n=0; n<NHISTORY_VARS; ++n) hst_data[n] = 0.0;
+  for (int n = 0; n < nhistory_predefined; ++n) hst_data[n] = 0.0;
   // initialize user-defined history outputs depending on the requested operation
   for (int n=0; n<pm->nuser_history_output_; n++) {
     switch (pm->user_history_ops_[n]) {
       case UserHistoryOperation::sum:
-        hst_data[NHISTORY_VARS+n] = 0.0;
+        hst_data[nhistory_predefined+n] = 0.0;
         break;
       case UserHistoryOperation::max:
-        hst_data[NHISTORY_VARS+n] = real_lowest;
+        hst_data[nhistory_predefined+n] = real_lowest;
         break;
       case UserHistoryOperation::min:
-        hst_data[NHISTORY_VARS+n] = real_max;
+        hst_data[nhistory_predefined+n] = real_max;
         break;
     }
   }
@@ -187,31 +190,38 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
             // TODO(felker): this should automatically volume-weight the sum, like the
             // built-in variables. But existing user-defined .hst fns are currently
             // weighting their returned values.
-            hst_data[NHISTORY_VARS+n] += usr_val;
+            hst_data[nhistory_predefined+n] += usr_val;
             break;
           case UserHistoryOperation::max:
-            hst_data[NHISTORY_VARS+n] = std::max(usr_val, hst_data[NHISTORY_VARS+n]);
+            hst_data[nhistory_predefined+n] =
+                std::max(usr_val, hst_data[nhistory_predefined+n]);
             break;
           case UserHistoryOperation::min:
-            hst_data[NHISTORY_VARS+n] = std::min(usr_val, hst_data[NHISTORY_VARS+n]);
+            hst_data[nhistory_predefined+n] =
+                std::min(usr_val, hst_data[nhistory_predefined+n]);
             break;
         }
       }
     }
   }  // end loop over MeshBlocks
 
+  // Get history output from Particles class.
+  // TODO(ccyang): consider computing this with meshblock-by-meshblock basis.
+  if (PARTICLES)
+    Particles::FindHistoryOutput(pm, hst_data.get(), NHISTORY_VARS);
+
 #ifdef MPI_PARALLEL
   // sum built-in/predefined hst_data[] over all ranks
   if (Globals::my_rank == 0) {
-    MPI_Reduce(MPI_IN_PLACE, hst_data.get(), NHISTORY_VARS, MPI_ATHENA_REAL, MPI_SUM, 0,
-               MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, hst_data.get(), nhistory_predefined, MPI_ATHENA_REAL,
+               MPI_SUM, 0, MPI_COMM_WORLD);
   } else {
-    MPI_Reduce(hst_data.get(), hst_data.get(), NHISTORY_VARS, MPI_ATHENA_REAL, MPI_SUM,
-               0, MPI_COMM_WORLD);
+    MPI_Reduce(hst_data.get(), hst_data.get(), nhistory_predefined, MPI_ATHENA_REAL,
+               MPI_SUM, 0, MPI_COMM_WORLD);
   }
   // apply separate chosen operations to each user-defined history output
   for (int n=0; n<pm->nuser_history_output_; n++) {
-    Real *usr_hst_data = hst_data.get() + NHISTORY_VARS + n;
+    Real *usr_hst_data = hst_data.get() + nhistory_predefined + n;
     MPI_Op usr_op;
     switch (pm->user_history_ops_[n]) {
       case UserHistoryOperation::sum:
@@ -274,6 +284,12 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
       }
       for (int n=0; n<NSCALARS; n++) {
         std::fprintf(pfile,"[%d]=%d-scalar    ", iout++, n);
+      }
+      if (PARTICLES) {
+        std::string output_names[Particles::NHISTORY];
+        Particles::GetHistoryOutputNames(output_names);
+        for (int i = 0; i < Particles::NHISTORY; ++i)
+          std::fprintf(pfile, "[%d]=%-7s", iout++, output_names[i].data());
       }
       for (int n=0; n<pm->nuser_history_output_; n++)
         std::fprintf(pfile,"[%d]=%-7s ", iout++,

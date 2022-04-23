@@ -18,6 +18,7 @@
 #include "../athena_arrays.hpp"
 #include "../bvals/cc/hydro/bvals_hydro.hpp"
 #include "hydro_diffusion/hydro_diffusion.hpp"
+#include "hydro_diffusion/mesh_diffusion.hpp"
 #include "srcterms/hydro_srcterms.hpp"
 
 class MeshBlock;
@@ -44,6 +45,8 @@ class Hydro {
   AthenaArray<Real> u1, w1;      // time-integrator memory register #2
   AthenaArray<Real> u2;          // time-integrator memory register #3
   AthenaArray<Real> u0, fl_div; // rkl2 STS memory registers;
+  // for the HL3D2 solver
+  AthenaArray<Real> dvn, dvt;
   // (no more than MAX_NREGISTER allowed)
 
   AthenaArray<Real> flux[3];  // face-averaged flux vector
@@ -84,6 +87,8 @@ class Hydro {
       AthenaArray<Real> &ey, AthenaArray<Real> &ez,
       AthenaArray<Real> &wct, const AthenaArray<Real> &dxw);
 #endif
+  void CalculateVelocityDifferences(const int k, const int j, const int il, const int iu,
+    const int ivx, AthenaArray<Real> &dvn, AthenaArray<Real> &dvt);
 
  private:
   AthenaArray<Real> dt1_, dt2_, dt3_;  // scratch arrays used in NewTimeStep
@@ -112,6 +117,8 @@ class Hydro {
   AthenaArray<Real> laplacian_l_fc_, laplacian_r_fc_;
 
   TimeStepFunc UserTimeStep_;
+
+  MeshDiffusion md_;
 
   void AddDiffusionFluxes();
   Real GetWeightForCT(Real dflx, Real rhol, Real rhor, Real dx, Real dt);

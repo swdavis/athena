@@ -81,9 +81,22 @@ bool operator==(const LogicalLocation &l1, const LogicalLocation &l2);
 struct RegionSize {  // aggregate and POD type; do NOT reorder member declarations:
   Real x1min, x2min, x3min;
   Real x1max, x2max, x3max;
+  Real x1len, x2len, x3len;
   Real x1rat, x2rat, x3rat; // ratio of dxf(i)/dxf(i-1)
   // the size of the root grid or a MeshBlock should not exceed std::int32_t limits
   int nx1, nx2, nx3;        // number of active cells (not including ghost zones)
+
+  RegionSize() {}
+
+  RegionSize(Real x1min, Real x2min, Real x3min,
+             Real x1max, Real x2max, Real x3max,
+             Real x1rat, Real x2rat, Real x3rat,
+             int nx1, int nx2, int nx3) :
+      x1min(x1min), x2min(x2min), x3min(x3min),
+      x1max(x1max), x2max(x2max), x3max(x3max),
+      x1len(x1max - x1min), x2len(x2max - x2min), x3len(x3max - x3min),
+      x1rat(x1rat), x2rat(x2rat), x3rat(x3rat),
+      nx1(nx1), nx2(nx2), nx3(nx3) {}
 };
 
 //---------------------------------------------------------------------------------------

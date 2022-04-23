@@ -71,6 +71,8 @@ lcov_capture_cmd="${lcov_cmd} --directory=${regression_abs_path}/obj/ --capture 
 time python -u ./run_tests.py pgen/pgen_compile --config=--cflag="$(../ci/set_warning_cflag.sh g++)"
 # For (most) regression tests compiled with GCC, perform Gcov code coverage analysis via Lcov front end:
 time python -u ./run_tests.py pgen/hdf5_reader_serial --coverage="${lcov_capture_cmd}" --silent
+time python -u ./run_tests.py particles/uniform_streaming --mpirun=srun --mpirun_opts=--job-name='GCC particles/uniform_streaming' \
+     --coverage="${lcov_capture_cmd}" --silent
 time python -u ./run_tests.py grav --mpirun=srun --mpirun_opts=--job-name='GCC grav/jeans_3d' \
      --coverage="${lcov_capture_cmd}" --silent
 time python -u ./run_tests.py turb --mpirun=srun --mpirun_opts=--job-name='GCC turb/' \
@@ -188,6 +190,7 @@ module list
 
 time python -u ./run_tests.py pgen/pgen_compile --config=--cxx=icpc --config=--cflag="$(../ci/set_warning_cflag.sh icpc)"
 time python -u ./run_tests.py pgen/hdf5_reader_serial --silent
+time python -u ./run_tests.py particles/uniform_streaming --config=--cxx=icpc --mpirun=srun --mpirun_opts=--job-name='ICC particles/uniform_streaming' --silent
 time python -u ./run_tests.py grav --config=--cxx=icpc --mpirun=srun --mpirun_opts=--job-name='ICC grav/jeans_3d' --silent
 time python -u ./run_tests.py turb --config=--cxx=icpc --mpirun=srun --mpirun_opts=--job-name='ICC turb/' --silent
 time python -u ./run_tests.py mpi --config=--cxx=icpc --mpirun=srun --mpirun_opts=--job-name='ICC mpi/mpi_linwave' --silent

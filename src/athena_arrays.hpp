@@ -16,6 +16,7 @@
 // C headers
 
 // C++ headers
+#include <algorithm>  // min()
 #include <cstddef>  // size_t
 #include <cstring>  // memset()
 #include <utility>  // swap()
@@ -76,6 +77,9 @@ class AthenaArray {
   __attribute__((nothrow)) void NewAthenaArray(int nx6, int nx5, int nx4, int nx3,
                                                int nx2, int nx1);
   void DeleteAthenaArray();
+
+  // function to resize the last dimension.
+  void ResizeLastDimension(int new_nx1);
 
   // public function to swap underlying data pointers of two equally-sized arrays
   void SwapAthenaArray(AthenaArray<T>& array2);
@@ -477,6 +481,45 @@ template<typename T>
 void AthenaArray<T>::SwapAthenaArray(AthenaArray<T>& array2) {
   std::swap(pdata_, array2.pdata_);
   return;
+}
+
+//--------------------------------------------------------------------------------------
+//! \fn void AthenaArray<T>::ResizeLastDimension()
+//  \brief resizes the last dimension either by augmenting zeros or cutting the data.
+
+template<typename T>
+void AthenaArray<T>::ResizeLastDimension(int new_nx1) {
+  // Do nothing if no change in dimensions.
+  if (nx1_ == new_nx1) return;
+
+  // Stage the data.
+  T *pdata_old = pdata_;
+
+  // Resize the last dimension.
+  int old_nx1 = nx1_;
+  nx1_ = new_nx1;
+
+  // Allocate new storage.
+  pdata_ = new T[nx1_*nx2_*nx3_*nx4_*nx5_]();
+
+  // Move the data.
+  int jold = 0, jnew = 0;
+  for (int ix5 = 0; ix5 < nx5_; ++ix5)
+    for (int ix4 = 0; ix4 < nx4_; ++ix4)
+      for (int ix3 = 0; ix3 < nx3_; ++ix3)
+        for (int ix2 = 0; ix2 < nx2_; ++ix2) {
+          int kold = jold, knew = jnew;
+          for (int ix1 = 0; ix1 < std::min(old_nx1,new_nx1); ++ix1)
+            pdata_[knew++] = pdata_old[kold++];
+          jold += old_nx1;
+          jnew += new_nx1;
+        }
+
+  // Delete the old storage.
+  if (state_ == DataStatus::shallow_slice)
+    state_ = DataStatus::allocated;
+  else
+    delete[] pdata_old;
 }
 
 //----------------------------------------------------------------------------------------

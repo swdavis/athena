@@ -445,7 +445,7 @@ int main(int argc, char *argv[]) {
 #endif
 
   while ((pmesh->time < pmesh->tlim) &&
-         (pmesh->nlim < 0 || pmesh->ncycle < pmesh->nlim) && 
+         (pmesh->nlim < 0 || pmesh->ncycle < pmesh->nlim) &&
          !(MONTE_CARLO_STATIC)) {
     if (Globals::my_rank == 0)
       pmesh->OutputCycleDiagnostics();
@@ -541,8 +541,15 @@ int main(int argc, char *argv[]) {
   if (Globals::my_rank == 0 && wtlim > 0)
     SignalHandler::CancelWallTimeAlarm();
 
+
   //--- Step 9. --------------------------------------------------------------------------
-  // Make the final outputs
+  // Output the final cycle diagnostics and make the final outputs
+
+  if (Globals::my_rank == 0)
+    pmesh->OutputCycleDiagnostics();
+
+  pmesh->UserWorkAfterLoop(pinput);
+
 #ifdef ENABLE_EXCEPTIONS
   try {
 #endif
@@ -566,13 +573,11 @@ int main(int argc, char *argv[]) {
   }
 #endif // ENABLE_EXCEPTIONS
 
-  pmesh->UserWorkAfterLoop(pinput);
-
   //--- Step 10. -------------------------------------------------------------------------
   // Print diagnostic messages related to the end of the simulation
+
   if (Globals::my_rank == 0) {
     if (!MONTE_CARLO_STATIC) {
-      pmesh->OutputCycleDiagnostics();
       if (SignalHandler::GetSignalFlag(SIGTERM) != 0) {
         std::cout << std::endl << "Terminating on Terminate signal" << std::endl;
       } else if (SignalHandler::GetSignalFlag(SIGINT) != 0) {
@@ -594,6 +599,7 @@ int main(int argc, char *argv[]) {
                   << " destroyed during this simulation." << std::endl;
       }
     }
+
     // Calculate and print the zone-cycles/cpu-second and wall-second
 #ifdef OPENMP_PARALLEL
     double omp_time = omp_get_wtime() - omp_start_time;

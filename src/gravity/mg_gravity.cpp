@@ -24,6 +24,7 @@
 #include "../mesh/mesh.hpp"
 #include "../multigrid/multigrid.hpp"
 #include "../parameter_input.hpp"
+#include "../particles/dust_particles.hpp"
 #include "gravity.hpp"
 #include "mg_gravity.hpp"
 
@@ -105,10 +106,20 @@ void MGGravityDriver::Solve(int stage) {
   for (int i=0; i<pmy_mesh_->nblocal; ++i)
     vmg_.push_back(pmy_mesh_->my_blocks(i)->pmg);
 
+  if (PARTICLES)
+    // Compute mass density of particles.
+    DustParticles::FindDensityOnMesh(pmy_mesh_, false);
+
   // load the source
   for (Multigrid* pmg : vmg_) {
     // assume all the data are located on the same node
-    pmg->LoadSource(pmg->pmy_block_->phydro->u, IDN, NGHOST, four_pi_G_);
+    if (PARTICLES) {
+      // TODO(ccyang): add gas density.
+      AthenaArray<Real> rho(pmg->pmy_block_->ppar->GetMassDensity());
+      pmg->LoadSource(rho, 0, NGHOST, four_pi_G_);
+    } else {
+      pmg->LoadSource(pmg->pmy_block_->phydro->u, IDN, NGHOST, four_pi_G_);
+    }
     if (mode_ >= 2) // iterative mode - load initial guess
       pmg->LoadFinestData(pmg->pmy_block_->pgrav->phi, 0, NGHOST);
   }

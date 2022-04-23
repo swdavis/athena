@@ -10,6 +10,7 @@
 // C headers
 
 // C++ headers
+#include <algorithm>  // min()
 #include <iostream>   // endl
 #include <sstream>    // sstream
 #include <stdexcept>  // runtime_error
@@ -28,6 +29,7 @@
 #include "../mesh/mesh.hpp"
 #include "../orbital_advection/orbital_advection.hpp"
 #include "../parameter_input.hpp"
+#include "../particles/particles.hpp"
 #include "../reconstruct/reconstruction.hpp"
 #include "../scalars/scalars.hpp"
 #include "task_list.hpp"
@@ -940,15 +942,19 @@ TimeIntegratorTaskList::TimeIntegratorTaskList(ParameterInput *pin, Mesh *pm) {
       AddTask(SRCTERM_HYD,INT_HYD);
     }
     if (ORBITAL_ADVECTION) {
+      // TODO(ccyang): incorporate particles
       AddTask(SEND_HYDORB,SRCTERM_HYD);
       AddTask(RECV_HYDORB,NONE);
       AddTask(CALC_HYDORB,(SEND_HYDORB|RECV_HYDORB));
       AddTask(SEND_HYD,CALC_HYDORB);
-      AddTask(RECV_HYD,NONE);
+      AddTask(RECV_HYD,CALC_HYDFLX);
       AddTask(SETB_HYD,(RECV_HYD|CALC_HYDORB));
     } else {
-      AddTask(SEND_HYD,SRCTERM_HYD);
-      AddTask(RECV_HYD,NONE);
+      if (PARTICLES)
+        AddTask(SEND_HYD,SRCTERM_HYD|RECV_PM);
+      else
+        AddTask(SEND_HYD,SRCTERM_HYD);
+      AddTask(RECV_HYD,CALC_HYDFLX);
       AddTask(SETB_HYD,(RECV_HYD|SRCTERM_HYD));
     }
 
@@ -985,6 +991,15 @@ TimeIntegratorTaskList::TimeIntegratorTaskList(ParameterInput *pin, Mesh *pm) {
         AddTask(SEND_SCLRSH,SETB_SCLR);
         AddTask(RECV_SCLRSH,SEND_SCLRSH);
       }
+    }
+
+    // evolve particles
+    if (PARTICLES) {
+      AddTask(INT_PAR, NONE);
+      AddTask(SEND_PAR, INT_PAR);
+      AddTask(RECV_PAR, NONE);
+      AddTask(SEND_PM, INT_PAR);
+      AddTask(RECV_PM, INT_HYD);
     }
 
     if (MAGNETIC_FIELDS_ENABLED) { // MHD
@@ -1344,6 +1359,31 @@ void TimeIntegratorTaskList::AddTask(const TaskID& id, const TaskID& dep) {
         static_cast<TaskStatus (TaskList::*)(MeshBlock*,int)>
         (&TimeIntegratorTaskList::DiffuseScalars);
     task_list_[ntasks].lb_time = true;
+  } else if (id == INT_PAR) {
+    task_list_[ntasks].TaskFunc=
+        static_cast<TaskStatus (TaskList::*)(MeshBlock*,int)>
+        (&TimeIntegratorTaskList::ParticlesIntegrate);
+    task_list_[ntasks].lb_time = true;
+  } else if (id == SEND_PAR) {
+    task_list_[ntasks].TaskFunc=
+        static_cast<TaskStatus (TaskList::*)(MeshBlock*,int)>
+        (&TimeIntegratorTaskList::ParticlesSend);
+    task_list_[ntasks].lb_time = true;
+  } else if (id == RECV_PAR) {
+    task_list_[ntasks].TaskFunc=
+        static_cast<TaskStatus (TaskList::*)(MeshBlock*,int)>
+        (&TimeIntegratorTaskList::ParticlesReceive);
+    task_list_[ntasks].lb_time = false;
+  } else if (id == SEND_PM) {
+    task_list_[ntasks].TaskFunc=
+        static_cast<TaskStatus (TaskList::*)(MeshBlock*,int)>
+        (&TimeIntegratorTaskList::ParticleMeshSend);
+    task_list_[ntasks].lb_time = true;
+  } else if (id == RECV_PM) {
+    task_list_[ntasks].TaskFunc=
+        static_cast<TaskStatus (TaskList::*)(MeshBlock*,int)>
+        (&TimeIntegratorTaskList::ParticleMeshReceive);
+    task_list_[ntasks].lb_time = false;
   } else if (id == SEND_HYDORB) {
     task_list_[ntasks].TaskFunc=
         static_cast<TaskStatus (TaskList::*)(MeshBlock*,int)>
@@ -1426,6 +1466,7 @@ void TimeIntegratorTaskList::StartupTaskList(MeshBlock *pmb, int stage) {
         || (stage_wghts[stage-1].ebeta != stage_wghts[stage-2].ebeta)))
       pmb->pbval->ComputeShear(time+dt_fc, time+dt_int);
   }
+  if (PARTICLES) pmb->ppar->StartReceiving();
 
   if (stage_wghts[stage-1].main_stage) {
     pmb->pbval->StartReceivingSubset(BoundaryCommSubset::all, pmb->pbval->bvars_main_int);
@@ -1456,6 +1497,7 @@ TaskStatus TimeIntegratorTaskList::ClearAllBoundary(MeshBlock *pmb, int stage) {
   if (stage_wghts[stage-1].orbital_stage && pmb->porb->orbital_advection_active) {
     pmb->porb->orb_bc->ClearBoundary(BoundaryCommSubset::all);
   }
+  if (PARTICLES) pmb->ppar->ClearBoundary();
 
   return TaskStatus::success;
 }
@@ -1950,6 +1992,62 @@ TaskStatus TimeIntegratorTaskList::ReceiveEMFShear(MeshBlock *pmb, int stage) {
 }
 
 //--------------------------------------------------------------------------------------
+// Functions to manage particles
+
+enum TaskStatus TimeIntegratorTaskList::ParticlesIntegrate(MeshBlock *pmb, int stage) {
+  if (stage <= nstages) {
+    IntegratorWeight &weight(stage_wghts[stage-1]);
+    if (weight.main_stage) {
+      Real t(pmb->pmy_mesh->time + weight.sbeta * pmb->pmy_mesh->dt);
+      Real dt(weight.beta * pmb->pmy_mesh->dt);
+      Real gamma[] = {weight.gamma_1, weight.gamma_2, weight.gamma_3};
+      pmb->ppar->Integrate(stage, t, dt, gamma);
+    }
+    return TaskStatus::next;
+  }
+  return TaskStatus::fail;
+}
+
+enum TaskStatus TimeIntegratorTaskList::ParticlesSend(MeshBlock *pmb, int stage) {
+  pmb->ppar->SendToNeighbors();
+  return TaskStatus::success;
+}
+
+enum TaskStatus TimeIntegratorTaskList::ParticlesReceive(MeshBlock *pmb, int stage) {
+  if (pmb->ppar->ReceiveFromNeighbors())
+    return TaskStatus::success;
+  else
+    return TaskStatus::fail;
+}
+
+enum TaskStatus TimeIntegratorTaskList::ParticleMeshSend(MeshBlock *pmb, int stage) {
+  if (stage <= nstages) {
+    if (stage_wghts[stage-1].main_stage) {
+      pmb->ppar->SendParticleMesh();
+      return TaskStatus::success;
+    }
+    return TaskStatus::next;
+  }
+  return TaskStatus::fail;
+}
+
+enum TaskStatus TimeIntegratorTaskList::ParticleMeshReceive(MeshBlock *pmb, int stage) {
+  if (stage <= nstages) {
+    IntegratorWeight &weight(stage_wghts[stage-1]);
+    if (weight.main_stage) {
+      Real t(pmb->pmy_mesh->time + weight.sbeta * pmb->pmy_mesh->dt);
+      Real dt(weight.beta * pmb->pmy_mesh->dt);
+      if (pmb->ppar->ReceiveParticleMesh(t, dt))
+        return TaskStatus::success;
+      else
+        return TaskStatus::fail;
+    }
+    return TaskStatus::next;
+  }
+  return TaskStatus::fail;
+}
+
+//--------------------------------------------------------------------------------------
 // Functions for everything else
 
 TaskStatus TimeIntegratorTaskList::Prolongation(MeshBlock *pmb, int stage) {
@@ -2077,6 +2175,11 @@ TaskStatus TimeIntegratorTaskList::NewBlockTimeStep(MeshBlock *pmb, int stage) {
   if (stage != nstages) return TaskStatus::success; // only do on last stage
 
   pmb->phydro->NewBlockTimeStep();
+  if (PARTICLES) {
+    Real min_dt(pmb->ppar->NewBlockTimeStep());
+    pmb->new_block_dt_particles_ = min_dt;
+    pmb->new_block_dt_ = std::min(pmb->new_block_dt_, min_dt);
+  }
   return TaskStatus::success;
 }
 

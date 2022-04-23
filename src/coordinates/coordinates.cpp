@@ -784,3 +784,121 @@ void Coordinates::Metric(
   pmy_block->pmy_mesh->UserMetric_(x1, x2, x3, pin, g, g_inv, dg_dx1, dg_dx2, dg_dx3);
   return;
 }
+
+//--------------------------------------------------------------------------------------
+//! \fn void Coordinates::MeshCoordsToIndices(
+//          Real x1, Real x2, Real x3, Real& xi1, Real& xi2, Real& xi3) const
+//  \brief returns in index coordinates (xi1, xi2, xi3) with respect to the local
+//         grid of MeshBlock pmb from the physical coordinates (x1, x2, x3).
+// TODO(ccyang): User-defined mesh generator is not supported yet.
+
+void Coordinates::MeshCoordsToIndices(
+    Real x1, Real x2, Real x3, Real& xi1, Real& xi2, Real& xi3) const {
+  // Get the meshblock info.
+  const int is = pmy_block->is, js = pmy_block->js, ks = pmy_block->ks;
+  const RegionSize& block_size = pmy_block->block_size;
+  const Real x1min = block_size.x1min, x1max = block_size.x1max;
+  const Real x2min = block_size.x2min, x2max = block_size.x2max;
+  const Real x3min = block_size.x3min, x3max = block_size.x3max;
+
+  // Make the conversion in X1.
+  if (pm->use_uniform_meshgen_fn_[X1DIR]) {
+    xi1 = is + (x1 - x1min) / dx1f(is);
+  } else {
+    Real r = block_size.x1rat, rn = std::pow(r, block_size.nx1);
+    xi1 = is + std::log(((x1max - rn * x1min) - (1.0 - rn) * x1) / block_size.x1len) /
+               std::log(r);
+  }
+
+  // Make the conversion in X2.
+  if (pm->use_uniform_meshgen_fn_[X2DIR]) {
+    xi2 = js + (x2 - x2min) / dx2f(js);
+  } else {
+    Real r = block_size.x2rat, rn = std::pow(r, block_size.nx2);
+    xi2 = js + std::log(((x2max - rn * x2min) - (1.0 - rn) * x2) / block_size.x2len) /
+               std::log(r);
+  }
+
+  // Make the conversion in X3.
+  if (pm->use_uniform_meshgen_fn_[X3DIR]) {
+    xi3 = ks + (x3 - x3min) / dx3f(ks);
+  } else {
+    Real r = block_size.x3rat, rn = std::pow(r, block_size.nx3);
+    xi3 = ks + std::log(((x3max - rn * x3min) - (1.0 - rn) * x3) / block_size.x3len) /
+               std::log(r);
+  }
+}
+
+//--------------------------------------------------------------------------------------
+//! \fn void Coordinates::IndicesToMeshCoords(
+//          Real xi1, Real xi2, Real xi3, Real& x1, Real& x2, Real& x3) const
+//  \brief returns in mesh coordinates (x1, x2, x3) from index coordinates
+//         (xi1, xi2, xi3) with respect to the local grid of MeshBlock pmb.
+
+void Coordinates::IndicesToMeshCoords(
+    Real xi1, Real xi2, Real xi3, Real& x1, Real& x2, Real& x3) const {
+  // Get the meshblock info.
+  const int is = pmy_block->is, js = pmy_block->js, ks = pmy_block->ks;
+  const RegionSize& block_size = pmy_block->block_size;
+
+  // Make the conversion in X1.
+  if (pm->use_uniform_meshgen_fn_[X1DIR])
+    x1 = block_size.x1min + (xi1 - is) * dx1f(is);
+  else
+    x1 = pm->MeshGenerator_[X1DIR]((xi1 - is) / block_size.nx1, block_size);
+
+  // Make the conversion in X2.
+  if (pm->use_uniform_meshgen_fn_[X2DIR])
+    x2 = block_size.x2min + (xi2 - js) * dx2f(js);
+  else
+    x2 = pm->MeshGenerator_[X2DIR]((xi2 - js) / block_size.nx2, block_size);
+
+  // Make the conversion in X3.
+  if (pm->use_uniform_meshgen_fn_[X3DIR])
+    x3 = block_size.x3min + (xi3 - ks) * dx3f(ks);
+  else
+    x3 = pm->MeshGenerator_[X3DIR]((xi3 - ks) / block_size.nx3, block_size);
+}
+
+//----------------------------------------------------------------------------------------
+// Stub functions.
+
+void Coordinates::CartesianToMeshCoords(
+    Real x, Real y, Real z, Real& x1, Real& x2, Real& x3) const {
+  std::stringstream msg;
+  msg << "### FATAL ERROR in function [Coordinates::CartesianToMeshCoords]" << std::endl
+      << "not implemented yet. " << std::endl;
+  ATHENA_ERROR(msg);
+  return;
+}
+
+void Coordinates::MeshCoordsToCartesian(
+    Real x1, Real x2, Real x3, Real& x, Real& y, Real& z) const {
+  std::stringstream msg;
+  msg << "### FATAL ERROR in function [Coordinates::MeshCoordsToCartesian]" << std::endl
+      << "not implemented yet. " << std::endl;
+  ATHENA_ERROR(msg);
+  return;
+}
+
+void Coordinates::CartesianToMeshCoordsVector(
+    Real x, Real y, Real z, Real vx, Real vy, Real vz,
+    Real& vx1, Real& vx2, Real& vx3) const {
+  std::stringstream msg;
+  msg << "### FATAL ERROR in function [Coordinates::CartesianToMeshCoordsVector]"
+      << std::endl
+      << "not implemented yet. " << std::endl;
+  ATHENA_ERROR(msg);
+  return;
+}
+
+void Coordinates::MeshCoordsToCartesianVector(
+    Real x1, Real x2, Real x3, Real vx1, Real vx2, Real vx3,
+    Real& vx, Real& vy, Real& vz) const {
+  std::stringstream msg;
+  msg << "### FATAL ERROR in function [Coordinates::MeshCoordsToCartesianVector]"
+      << std::endl
+      << "not implemented yet. " << std::endl;
+  ATHENA_ERROR(msg);
+  return;
+}

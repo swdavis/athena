@@ -96,6 +96,8 @@
 #include "../mesh/mesh.hpp"
 #include "../orbital_advection/orbital_advection.hpp"
 #include "../parameter_input.hpp"
+#include "../particles/dust_particles.hpp"
+#include "../particles/particles-output.hpp"
 #include "../scalars/scalars.hpp"
 #include "../monte_carlo/montecarlo.hpp"
 #include "outputs.hpp"
@@ -117,6 +119,7 @@ OutputType::OutputType(OutputParameters oparams) :
 
 Outputs::Outputs(Mesh *pm, ParameterInput *pin) {
   pfirst_type_ = nullptr;
+  pout_ = nullptr;
   std::stringstream msg;
   InputBlock *pib = pin->pfirst_block;
   OutputType *pnew_type;
@@ -145,140 +148,170 @@ Outputs::Outputs(Mesh *pm, ParameterInput *pin) {
 
       // set time of last output, time between outputs
       op.next_time = pin->GetOrAddReal(op.block_name,"next_time", pm->time);
-      op.dt = pin->GetReal(op.block_name,"dt");
+      op.dt = pin->GetOrAddReal(op.block_name,"dt", 0.0);
+      op.dcycle = pin->GetOrAddInteger(op.block_name,"dcycle", 0);
 
-      if (op.dt > 0.0) {  // only add output if dt>0
-        // set file number, basename, id, and format
+      if (op.dt == 0.0 && op.dcycle == 0) {
+        msg << "### FATAL ERROR in Outputs constructor" << std::endl
+            << "Either dt or dcycle must be specified in " << op.block_name
+            << std::endl;
+        ATHENA_ERROR(msg);
+      }
+      if (op.dt > 0.0 && op.dcycle > 0) {
+        msg << "### FATAL ERROR in Outputs constructor" << std::endl
+            << "dt and dcycle cannot be specified simultaneously in " << op.block_name
+            << std::endl;
+        ATHENA_ERROR(msg);
+      }
+      if (op.dt > 0.0 || op.dcycle > 0) {  // only add output if dt > 0 or dycle > 0
+        // set file number, basename, and format
         op.file_number = pin->GetOrAddInteger(op.block_name,"file_number",0);
         op.file_basename = pin->GetString("job","problem_id");
-        char define_id[10];
-        std::snprintf(define_id, sizeof(define_id),
-                      "out%d", op.block_number);  // default id="outN"
-        op.file_id = pin->GetOrAddString(op.block_name,"id",define_id);
         op.file_type = pin->GetString(op.block_name,"file_type");
 
-        // read slicing options.  Check that slice is within mesh
-        if (pin->DoesParameterExist(op.block_name,"x1_slice")) {
-          Real x1 = pin->GetReal(op.block_name,"x1_slice");
-          if (x1 >= pm->mesh_size.x1min && x1 < pm->mesh_size.x1max) {
-            op.x1_slice = x1;
-            op.output_slicex1 = true;
+        if (PARTICLES && op.block_name == "outputp") {
+          // Construct new particle output according to file_type.
+          if (op.file_type == "tab") {
+            pout_ = new POutFormattedTable(op);
+          } else if (op.file_type == "bin") {
+            pout_ = new POutBinaries(op);
           } else {
             msg << "### FATAL ERROR in Outputs constructor" << std::endl
-                << "Slice at x1=" << x1 << " in output block '" << op.block_name
-                << "' is out of range of Mesh" << std::endl;
+                << "Unrecognized file format = '" << op.file_type
+                << "' in output block '" << op.block_name << "' for particles"
+                << std::endl;
             ATHENA_ERROR(msg);
           }
-        }
+        } else {
+          // set id.
+          char define_id[10];
+          std::snprintf(define_id, sizeof(define_id),
+                        "out%d", op.block_number);  // default id="outN"
+          op.file_id = pin->GetOrAddString(op.block_name,"id",define_id);
 
-        if (pin->DoesParameterExist(op.block_name,"x2_slice")) {
-          Real x2 = pin->GetReal(op.block_name,"x2_slice");
-          if (x2 >= pm->mesh_size.x2min && x2 < pm->mesh_size.x2max) {
-            op.x2_slice = x2;
-            op.output_slicex2 = true;
-          } else {
+          // read slicing options.  Check that slice is within mesh
+          if (pin->DoesParameterExist(op.block_name,"x1_slice")) {
+            Real x1 = pin->GetReal(op.block_name,"x1_slice");
+            if (x1 >= pm->mesh_size.x1min && x1 < pm->mesh_size.x1max) {
+              op.x1_slice = x1;
+              op.output_slicex1 = true;
+            } else {
+              msg << "### FATAL ERROR in Outputs constructor" << std::endl
+                  << "Slice at x1=" << x1 << " in output block '" << op.block_name
+                  << "' is out of range of Mesh" << std::endl;
+              ATHENA_ERROR(msg);
+            }
+          }
+
+          if (pin->DoesParameterExist(op.block_name,"x2_slice")) {
+            Real x2 = pin->GetReal(op.block_name,"x2_slice");
+            if (x2 >= pm->mesh_size.x2min && x2 < pm->mesh_size.x2max) {
+              op.x2_slice = x2;
+              op.output_slicex2 = true;
+            } else {
+              msg << "### FATAL ERROR in Outputs constructor" << std::endl
+                  << "Slice at x2=" << x2 << " in output block '" << op.block_name
+                  << "' is out of range of Mesh" << std::endl;
+              ATHENA_ERROR(msg);
+            }
+          }
+
+          if (pin->DoesParameterExist(op.block_name,"x3_slice")) {
+            Real x3 = pin->GetReal(op.block_name,"x3_slice");
+            if (x3 >= pm->mesh_size.x3min && x3 < pm->mesh_size.x3max) {
+              op.x3_slice = x3;
+              op.output_slicex3 = true;
+            } else {
+              msg << "### FATAL ERROR in Outputs constructor" << std::endl
+                  << "Slice at x3=" << x3 << " in output block '" << op.block_name
+                  << "' is out of range of Mesh" << std::endl;
+              ATHENA_ERROR(msg);
+            }
+          }
+
+          // read sum options.  Check for conflicts with slicing.
+          op.output_sumx1 = pin->GetOrAddBoolean(op.block_name,"x1_sum",false);
+          if ((op.output_slicex1) && (op.output_sumx1)) {
             msg << "### FATAL ERROR in Outputs constructor" << std::endl
-                << "Slice at x2=" << x2 << " in output block '" << op.block_name
-                << "' is out of range of Mesh" << std::endl;
+                << "Cannot request both slice and sum along x1-direction"
+                << " in output block '" << op.block_name << "'" << std::endl;
             ATHENA_ERROR(msg);
           }
-        }
-
-        if (pin->DoesParameterExist(op.block_name,"x3_slice")) {
-          Real x3 = pin->GetReal(op.block_name,"x3_slice");
-          if (x3 >= pm->mesh_size.x3min && x3 < pm->mesh_size.x3max) {
-            op.x3_slice = x3;
-            op.output_slicex3 = true;
-          } else {
+          op.output_sumx2 = pin->GetOrAddBoolean(op.block_name,"x2_sum",false);
+          if ((op.output_slicex2) && (op.output_sumx2)) {
             msg << "### FATAL ERROR in Outputs constructor" << std::endl
-                << "Slice at x3=" << x3 << " in output block '" << op.block_name
-                << "' is out of range of Mesh" << std::endl;
+                << "Cannot request both slice and sum along x2-direction"
+                << " in output block '" << op.block_name << "'" << std::endl;
             ATHENA_ERROR(msg);
           }
-        }
+          op.output_sumx3 = pin->GetOrAddBoolean(op.block_name,"x3_sum",false);
+          if ((op.output_slicex3) && (op.output_sumx3)) {
+            msg << "### FATAL ERROR in Outputs constructor" << std::endl
+                << "Cannot request both slice and sum along x3-direction"
+                << " in output block '" << op.block_name << "'" << std::endl;
+            ATHENA_ERROR(msg);
+          }
 
-        // read sum options.  Check for conflicts with slicing.
-        op.output_sumx1 = pin->GetOrAddBoolean(op.block_name,"x1_sum",false);
-        if ((op.output_slicex1) && (op.output_sumx1)) {
-          msg << "### FATAL ERROR in Outputs constructor" << std::endl
-              << "Cannot request both slice and sum along x1-direction"
-              << " in output block '" << op.block_name << "'" << std::endl;
-          ATHENA_ERROR(msg);
-        }
-        op.output_sumx2 = pin->GetOrAddBoolean(op.block_name,"x2_sum",false);
-        if ((op.output_slicex2) && (op.output_sumx2)) {
-          msg << "### FATAL ERROR in Outputs constructor" << std::endl
-              << "Cannot request both slice and sum along x2-direction"
-              << " in output block '" << op.block_name << "'" << std::endl;
-          ATHENA_ERROR(msg);
-        }
-        op.output_sumx3 = pin->GetOrAddBoolean(op.block_name,"x3_sum",false);
-        if ((op.output_slicex3) && (op.output_sumx3)) {
-          msg << "### FATAL ERROR in Outputs constructor" << std::endl
-              << "Cannot request both slice and sum along x3-direction"
-              << " in output block '" << op.block_name << "'" << std::endl;
-          ATHENA_ERROR(msg);
-        }
-
-        // read ghost cell option
-        op.include_ghost_zones = pin->GetOrAddBoolean(op.block_name, "ghost_zones",
+          // read ghost cell option
+          op.include_ghost_zones = pin->GetOrAddBoolean(op.block_name, "ghost_zones",
                                                       false);
 
-        // read orbital system output option
-        op.orbital_system_output = pin->GetOrAddBoolean(op.block_name, "orbital_system",
+          // read orbital system output option
+          op.orbital_system_output = pin->GetOrAddBoolean(op.block_name, "orbital_system",
                                                         false);
 
-        // read cartesian mapping option
-        if (std::strcmp(COORDINATE_SYSTEM, "cylindrical") == 0 ||
-            std::strcmp(COORDINATE_SYSTEM, "spherical_polar") == 0)
-          op.cartesian_vector = pin->GetOrAddBoolean(op.block_name, "cartesian_vector",
-                                                   false);
-        else
-          op.cartesian_vector = false;
+          // read cartesian mapping option
+          if (std::strcmp(COORDINATE_SYSTEM, "cylindrical") == 0 ||
+              std::strcmp(COORDINATE_SYSTEM, "spherical_polar") == 0)
+            op.cartesian_vector = pin->GetOrAddBoolean(op.block_name, "cartesian_vector",
+                                                     false);
+          else
+            op.cartesian_vector = false;
 
-        // set output variable and optional data format string used in formatted writes
-        if (op.file_type.compare("hst") != 0 && op.file_type.compare("rst") != 0) {
-          op.variable = pin->GetString(op.block_name, "variable");
-        }
-        op.data_format = pin->GetOrAddString(op.block_name, "data_format", "%12.5e");
-        op.data_format.insert(0, " "); // prepend with blank to separate columns
+          // set output variable and optional data format string used in formatted writes
+          if (op.file_type.compare("hst") != 0 && op.file_type.compare("rst") != 0) {
+            op.variable = pin->GetString(op.block_name, "variable");
+          }
+          op.data_format = pin->GetOrAddString(op.block_name, "data_format", "%12.5e");
+          op.data_format.insert(0, " "); // prepend with blank to separate columns
 
-        // Construct new OutputType according to file format
-        // NEW_OUTPUT_TYPES: Add block to construct new types here
-        if (op.file_type.compare("hst") == 0) {
-          pnew_type = new HistoryOutput(op);
-          num_hst_outputs++;
-        } else if (op.file_type.compare("tab") == 0) {
-          pnew_type = new FormattedTableOutput(op);
-        } else if (op.file_type.compare("vtk") == 0) {
-          pnew_type = new VTKOutput(op);
-        } else if (op.file_type.compare("rst") == 0) {
-          pnew_type = new RestartOutput(op);
-          num_rst_outputs++;
-        } else if (op.file_type.compare("ath5") == 0
-                   || op.file_type.compare("hdf5") == 0) {
+          // Construct new OutputType according to file format
+          // NEW_OUTPUT_TYPES: Add block to construct new types here
+          if (op.file_type.compare("hst") == 0) {
+            pnew_type = new HistoryOutput(op);
+            num_hst_outputs++;
+          } else if (op.file_type.compare("tab") == 0) {
+            pnew_type = new FormattedTableOutput(op);
+          } else if (op.file_type.compare("vtk") == 0) {
+            pnew_type = new VTKOutput(op);
+          } else if (op.file_type.compare("rst") == 0) {
+            pnew_type = new RestartOutput(op);
+            num_rst_outputs++;
+          } else if (op.file_type.compare("ath5") == 0
+                     || op.file_type.compare("hdf5") == 0) {
 #ifdef HDF5OUTPUT
-          pnew_type = new ATHDF5Output(op);
+            pnew_type = new ATHDF5Output(op);
 #else
-          msg << "### FATAL ERROR in Outputs constructor" << std::endl
-              << "Executable not configured for HDF5 outputs, but HDF5 file format "
-              << "is requested in output block '" << op.block_name << "'" << std::endl;
-          ATHENA_ERROR(msg);
+            msg << "### FATAL ERROR in Outputs constructor" << std::endl
+                << "Executable not configured for HDF5 outputs, but HDF5 file format "
+                << "is requested in output block '" << op.block_name << "'" << std::endl;
+            ATHENA_ERROR(msg);
 #endif
-        } else {
-          msg << "### FATAL ERROR in Outputs constructor" << std::endl
-              << "Unrecognized file format = '" << op.file_type
-              << "' in output block '" << op.block_name << "'" << std::endl;
-          ATHENA_ERROR(msg);
-        }
+          } else {
+            msg << "### FATAL ERROR in Outputs constructor" << std::endl
+                << "Unrecognized file format = '" << op.file_type
+                << "' in output block '" << op.block_name << "'" << std::endl;
+            ATHENA_ERROR(msg);
+          }
 
-        // Append type as tail node in singly linked list
-        if (pfirst_type_ == nullptr) {
-          pfirst_type_ = pnew_type;
-        } else {
-          plast->pnext_type = pnew_type;
+          // Append type as tail node in singly linked list
+          if (pfirst_type_ == nullptr) {
+            pfirst_type_ = pnew_type;
+          } else {
+            plast->pnext_type = pnew_type;
+          }
+          plast = pnew_type;
         }
-        plast = pnew_type;
       }
     }
     pib = pib->pnext;  // move to next input block name
@@ -334,6 +367,7 @@ Outputs::~Outputs() {
     ptype = ptype->pnext_type;
     delete ptype_old;
   }
+  delete pout_;
 }
 
 //----------------------------------------------------------------------------------------
@@ -362,8 +396,8 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
   // NEW_OUTPUT_TYPES:
 
   // (lab-frame) density
-  if (output_params.variable.compare("D") == 0 ||
-      output_params.variable.compare("cons") == 0) {
+  if (ContainVariable(output_params.variable, "D") ||
+      ContainVariable(output_params.variable, "cons")) {
     pod = new OutputData;
     pod->type = "SCALARS";
     pod->name = "dens";
@@ -373,8 +407,8 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
   }
 
   // (rest-frame) density
-  if (output_params.variable.compare("d") == 0 ||
-      output_params.variable.compare("prim") == 0) {
+  if (ContainVariable(output_params.variable, "d") ||
+      ContainVariable(output_params.variable, "prim")) {
     pod = new OutputData;
     pod->type = "SCALARS";
     pod->name = "rho";
@@ -385,8 +419,8 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
 
   // total energy
   if (NON_BAROTROPIC_EOS) {
-    if (output_params.variable.compare("E") == 0 ||
-        output_params.variable.compare("cons") == 0) {
+    if (ContainVariable(output_params.variable, "E") ||
+        ContainVariable(output_params.variable, "cons")) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "Etot";
@@ -402,8 +436,8 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     }
 
     // pressure
-    if (output_params.variable.compare("p") == 0 ||
-        output_params.variable.compare("prim") == 0) {
+    if (ContainVariable(output_params.variable, "p") ||
+        ContainVariable(output_params.variable, "prim")) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "press";
@@ -414,8 +448,8 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
   }
 
   // momentum vector
-  if (output_params.variable.compare("m") == 0 ||
-      output_params.variable.compare("cons") == 0) {
+  if (ContainVariable(output_params.variable, "m") ||
+      ContainVariable(output_params.variable, "cons")) {
     pod = new OutputData;
     pod->type = "VECTORS";
     pod->name = "mom";
@@ -449,7 +483,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
   }
 
   // each component of momentum
-  if (output_params.variable.compare("m1") == 0) {
+  if (ContainVariable(output_params.variable, "m1")) {
     pod = new OutputData;
     pod->type = "SCALARS";
     pod->name = "mom1";
@@ -457,7 +491,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     AppendOutputDataNode(pod);
     num_vars_++;
   }
-  if (output_params.variable.compare("m2") == 0) {
+  if (ContainVariable(output_params.variable, "m2")) {
     pod = new OutputData;
     pod->type = "SCALARS";
     pod->name = "mom2";
@@ -472,7 +506,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     AppendOutputDataNode(pod);
     num_vars_++;
   }
-  if (output_params.variable.compare("m3") == 0) {
+  if (ContainVariable(output_params.variable, "m3")) {
     pod = new OutputData;
     pod->type = "SCALARS";
     pod->name = "mom3";
@@ -489,8 +523,8 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
   }
 
   // velocity vector
-  if (output_params.variable.compare("v") == 0 ||
-      output_params.variable.compare("prim") == 0) {
+  if (ContainVariable(output_params.variable, "v") ||
+      ContainVariable(output_params.variable, "prim")) {
     pod = new OutputData;
     pod->type = "VECTORS";
     pod->name = "vel";
@@ -523,8 +557,8 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
   }
 
   // each component of velocity
-  if (output_params.variable.compare("vx") == 0 ||
-      output_params.variable.compare("v1") == 0) {
+  if (ContainVariable(output_params.variable, "vx") ||
+      ContainVariable(output_params.variable, "v1")) {
     pod = new OutputData;
     pod->type = "SCALARS";
     pod->name = "vel1";
@@ -532,8 +566,8 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     AppendOutputDataNode(pod);
     num_vars_++;
   }
-  if (output_params.variable.compare("vy") == 0 ||
-      output_params.variable.compare("v2") == 0) {
+  if (ContainVariable(output_params.variable, "vy") ||
+      ContainVariable(output_params.variable, "v2")) {
     pod = new OutputData;
     pod->type = "SCALARS";
     pod->name = "vel2";
@@ -548,8 +582,8 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     AppendOutputDataNode(pod);
     num_vars_++;
   }
-  if (output_params.variable.compare("vz") == 0 ||
-      output_params.variable.compare("v3") == 0) {
+  if (ContainVariable(output_params.variable, "vz") ||
+      ContainVariable(output_params.variable, "v3")) {
     pod = new OutputData;
     pod->type = "SCALARS";
     pod->name = "vel3";
@@ -566,9 +600,9 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
   }
 
   if (SELF_GRAVITY_ENABLED) {
-    if (output_params.variable.compare("phi") == 0 ||
-        output_params.variable.compare("prim") == 0 ||
-        output_params.variable.compare("cons") == 0) {
+    if (ContainVariable(output_params.variable, "phi") ||
+        ContainVariable(output_params.variable, "prim") ||
+        ContainVariable(output_params.variable, "cons")) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "Phi";
@@ -584,8 +618,8 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     for (int n=0; n<NSCALARS; n++) {
       std::string scalar_name_cons = root_name_cons + std::to_string(n);
       std::string scalar_name_prim = root_name_prim + std::to_string(n);
-      if (output_params.variable.compare(scalar_name_cons) == 0 ||
-          output_params.variable.compare("cons") == 0) {
+      if (ContainVariable(output_params.variable, scalar_name_cons) ||
+          ContainVariable(output_params.variable, "cons")) {
         pod = new OutputData;
         pod->type = "SCALARS";
         pod->name = scalar_name_cons;
@@ -593,8 +627,8 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
         AppendOutputDataNode(pod);
         num_vars_++;
       }
-      if (output_params.variable.compare(scalar_name_prim) == 0 ||
-          output_params.variable.compare("prim") == 0) {
+      if (ContainVariable(output_params.variable, scalar_name_prim) ||
+          ContainVariable(output_params.variable, "prim")) {
         pod = new OutputData;
         pod->type = "SCALARS";
         pod->name = scalar_name_prim;
@@ -604,13 +638,50 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       }
     }
   }
+
+  if ((PARTICLES) && !(MONTE_CARLO_ENABLED)) {
+    ParticleMesh *ppm = pmb->ppar->ppm;
+
+    // particle number density
+    if (ContainVariable(output_params.variable, "np")) {
+      pod = new OutputData;
+      pod->type = "SCALARS";
+      pod->name = "np";
+      pod->data.InitWithShallowSlice(ppm->weight, 4, 0, 1);
+      AppendOutputDataNode(pod);
+      num_vars_++;
+    }
+
+    // particle velocity field
+    if (ContainVariable(output_params.variable, "vp") ||
+        ContainVariable(output_params.variable, "prim")) {
+      pod = new OutputData;
+      pod->type = "VECTORS";
+      pod->name = "vp";
+      pod->data = pmb->ppar->GetVelocityField();
+      AppendOutputDataNode(pod);
+      num_vars_ += 3;
+    }
+
+    // particle mass density
+    if (ContainVariable(output_params.variable, "rhop") ||
+        ContainVariable(output_params.variable, "prim")) {
+      pod = new OutputData;
+      pod->type = "SCALARS";
+      pod->name = "rhop";
+      pod->data = pmb->ppar->GetMassDensity();
+      AppendOutputDataNode(pod);
+      num_vars_++;
+    }
+  }
+
   // note, the Bcc variables are stored in a separate HDF5 dataset from the above Output
   // nodes, and it must come after those nodes in the linked list
   if (MAGNETIC_FIELDS_ENABLED) {
     // vector of cell-centered magnetic field
-    if (output_params.variable.compare("bcc") == 0 ||
-        output_params.variable.compare("prim") == 0 ||
-        output_params.variable.compare("cons") == 0) {
+    if (ContainVariable(output_params.variable, "bcc") ||
+        ContainVariable(output_params.variable, "prim") ||
+        ContainVariable(output_params.variable, "cons")) {
       pod = new OutputData;
       pod->type = "VECTORS";
       pod->name = "Bcc";
@@ -633,7 +704,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     }
 
     // each component of cell-centered magnetic field
-    if (output_params.variable.compare("bcc1") == 0) {
+    if (ContainVariable(output_params.variable, "bcc1")) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "Bcc1";
@@ -641,7 +712,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       AppendOutputDataNode(pod);
       num_vars_++;
     }
-    if (output_params.variable.compare("bcc2") == 0) {
+    if (ContainVariable(output_params.variable, "bcc2")) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "Bcc2";
@@ -649,7 +720,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       AppendOutputDataNode(pod);
       num_vars_++;
     }
-    if (output_params.variable.compare("bcc3") == 0) {
+    if (ContainVariable(output_params.variable, "bcc3")) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "Bcc3";
@@ -658,8 +729,8 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       num_vars_++;
     }
     // each component of face-centered magnetic field
-    if (output_params.variable.compare("b1") == 0
-        || output_params.variable.compare("b") == 0) {
+    if (ContainVariable(output_params.variable, "b1")
+        || ContainVariable(output_params.variable, "b")) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "B1";
@@ -667,8 +738,8 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       AppendOutputDataNode(pod);
       num_vars_++;
     }
-    if (output_params.variable.compare("b2") == 0
-        || output_params.variable.compare("b") == 0) {
+    if (ContainVariable(output_params.variable, "b2")
+        || ContainVariable(output_params.variable, "b")) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "B2";
@@ -676,8 +747,8 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       AppendOutputDataNode(pod);
       num_vars_++;
     }
-    if (output_params.variable.compare("b3") == 0
-        || output_params.variable.compare("b") == 0) {
+    if (ContainVariable(output_params.variable, "b3")
+        || ContainVariable(output_params.variable, "b")) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "B3";
@@ -771,42 +842,25 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     }
   } // endif (MONTE_CARLO_ENABLED)
 
-  if (output_params.variable.compare(0, 3, "uov") == 0
-      || output_params.variable.compare(0, 12, "user_out_var") == 0) {
-    int iv, ns = 0, ne = pmb->nuser_out_var-1;
-    if (sscanf(output_params.variable.c_str(), "uov%d", &iv)>0) {
-      if (iv>=0 && iv<pmb->nuser_out_var)
-        ns=iv, ne=iv;
-    } else if (sscanf(output_params.variable.c_str(), "user_out_var%d", &iv)>0) {
-      if (iv>=0 && iv<pmb->nuser_out_var)
-        ns=iv, ne=iv;
-    }
-    for (int n = ns; n <= ne; ++n) {
-      pod = new OutputData;
-      pod->type = "SCALARS";
-      if (pmb->user_out_var_names_[n].length() != 0) {
-        pod->name = pmb->user_out_var_names_[n];
-      } else {
-        char vn[16];
-        std::snprintf(vn, sizeof(vn), "user_out_var%d", n);
-        pod->name = vn;
-      }
-      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmb->user_out_var, 4, n, 1);
-      AppendOutputDataNode(pod);
-      num_vars_++;
-    }
-  }
   if (pmb != nullptr) {
     for (int n = 0; n < pmb->nuser_out_var; ++n) {
-      if (pmb->user_out_var_names_[n].length() != 0) {
-        if (output_params.variable.compare(pmb->user_out_var_names_[n]) == 0) {
-          pod = new OutputData;
-          pod->type = "SCALARS";
+      char abbr_name[16], full_name[32];
+      std::snprintf(abbr_name, sizeof(abbr_name), "uov%d", n);
+      std::snprintf(full_name, sizeof(full_name), "user_out_var%d", n);
+      if ((pmb->user_out_var_names_[n].length() != 0
+           && ContainVariable(output_params.variable, pmb->user_out_var_names_[n]))
+          || ContainVariable(output_params.variable, abbr_name)
+          || ContainVariable(output_params.variable, abbr_name)) {
+        pod = new OutputData;
+        pod->type = "SCALARS";
+        if (pmb->user_out_var_names_[n].length() != 0) {
           pod->name = pmb->user_out_var_names_[n];
-          if (pmb != nullptr) pod->data.InitWithShallowSlice(pmb->user_out_var, 4, n, 1);
-          AppendOutputDataNode(pod);
-          num_vars_++;
+        } else {
+          pod->name = full_name;
         }
+        pod->data.InitWithShallowSlice(pmb->user_out_var, 4, n, 1);
+        AppendOutputDataNode(pod);
+        num_vars_++;
       }
     }
   }
@@ -889,17 +943,23 @@ void Outputs::MakeOutputs(Mesh *pm, ParameterInput *pin, bool wtflag) {
   bool first=true;
   OutputType* ptype = pfirst_type_;
   while (ptype != nullptr) {
-    if ((pm->time == pm->start_time) ||
-        (pm->time >= ptype->output_params.next_time) ||
-        (pm->time >= pm->tlim) ||
-        (wtflag && ptype->output_params.file_type == "rst")) {
+    if ((pm->time == pm->start_time)
+      || (ptype->output_params.dt > 0.0 && pm->time >= ptype->output_params.next_time)
+      || (ptype->output_params.dcycle > 0 && pm->ncycle%ptype->output_params.dcycle == 0)
+      || (pm->time >= pm->tlim)
+      || (wtflag && ptype->output_params.file_type == "rst")) {
       if (first && ptype->output_params.file_type != "hst") {
         pm->ApplyUserWorkBeforeOutput(pin);
+        if (PARTICLES) DustParticles::FindDensityOnMesh(pm, true);
         first = false;
       }
       ptype->WriteOutputFile(pm, pin, wtflag);
     }
-    ptype = ptype->pnext_type; // move to next OutputType node in signly linked list
+    ptype = ptype->pnext_type; // move to next OutputType node in singly linked list
+  }
+  if (pout_ != nullptr && pout_->CheckTimer(pm)) {
+    pout_->WriteOutputFile(pm);
+    pout_->SetNextOutput(pin);
   }
 }
 
@@ -1176,4 +1236,17 @@ void OutputType::CalculateCartesianVector(AthenaArray<Real> &src, AthenaArray<Re
     }
   }
   return;
+}
+
+bool OutputType::ContainVariable(const std::string &haystack, const std::string &needle) {
+  if (haystack.compare(needle) == 0)
+    return true;
+  if (haystack.find(',' + needle + ',') != std::string::npos)
+    return true;
+  if (haystack.find(needle + ',') == 0)
+    return true;
+  if (haystack.find(',' + needle) != std::string::npos
+    && haystack.find(',' + needle) == haystack.length() - needle.length() - 1)
+    return true;
+  return false;
 }

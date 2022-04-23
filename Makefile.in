@@ -51,13 +51,14 @@ SRC_FILES := $(wildcard src/*.cpp) \
 	     $(wildcard src/multigrid/*.cpp) \
 	     $(wildcard src/orbital_advection/*.cpp) \
 	     $(wildcard src/outputs/*.cpp) \
+	     $(wildcard src/particles/*.cpp) \
+	     $(wildcard src/monte_carlo/*.cpp) \
 	     src/pgen/default_pgen.cpp \
 	     src/pgen/$(PROBLEM_FILE) \
 	     $(wildcard src/reconstruct/*.cpp) \
 	     $(wildcard src/scalars/*.cpp) \
 	     $(wildcard src/task_list/*.cpp) \
 	     $(wildcard src/utils/*.cpp) \
-             $(wildcard src/monte_carlo/*.cpp) \
 	     $(MPIFFT_FILE)
 OBJ_DIR := obj/
 OBJ_FILES := $(addprefix $(OBJ_DIR),$(notdir $(SRC_FILES:.cpp=.o)))

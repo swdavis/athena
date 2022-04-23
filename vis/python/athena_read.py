@@ -500,7 +500,7 @@ def athdf(filename, raw=False, data=None, quantities=None, dtype=None, level=Non
                     return 3.0/4.0 * (xp**4-xm**4) / (xp**3-xm**3)
             elif coord == 'schwarzschild':
                 def center_func_1(xm, xp):
-                    return (0.5*(xm**3+xp**3)) ** 1.0/3.0
+                    return (0.5*(xm**3+xp**3)) ** (1.0/3.0)
             else:
                 raise AthenaError('Coordinates not recognized')
         if center_func_2 is None:
@@ -1048,6 +1048,127 @@ def athinput(filename):
         data[key] = dict(map(parse_line, info))
     return data
 
+
+# ========================================================================================
+
+def particles(filename, indexing=True):
+    """Reads particle data.
+
+    Positional Argument
+        filename
+            Name of the data file.
+
+    Keyword Argument
+        indexing
+            If True, the particles are sorted and indexed by their id's
+            (minus one).  The id's must be contiguous from one to the
+            total number of particles.
+
+    Returned Values
+        time
+            Time of the snapshot.
+        pdata
+            A numpy record array of particles data.
+    """
+    import numpy as np
+    from struct import unpack
+
+    # Check the file type.
+    if ".pout." in filename:
+        if filename.endswith(".tab"): # Formatted ASCII table
+
+            # Function to get a key-value pair.
+            def get_key(words, key):
+                if key in words:
+                    index = words.index(key)
+                    if words[index+1] == "=":
+                        return words[index+2]
+                raise AthenaError("Unable to get key '" + key + "'. ")
+
+            # Parse the header.
+            with open(filename) as f:
+                words = f.readline().split()
+                time = float(get_key(words, "time"))
+                nint = int(get_key(words, "nint"))
+                nreal = int(get_key(words, "nreal"))
+                varnames = f.readline().split()[1:]
+
+            # Compose the data type.
+            if len(varnames) != nint + nreal:
+                raise AthenaError("Inconsistent number of particle properties. ")
+            dtype = np.dtype(dict(names=varnames, formats=nint*[int]+nreal*[float]))
+
+            # Read the particle data.
+            pdata = np.loadtxt(filename, dtype=dtype)
+
+        if filename.endswith(".dat"): # Binary raw data
+
+            with open(filename, "rb") as f:
+
+                # Function to read an integer.
+                def get_int():
+                    return unpack('i', f.read(4))[0]
+
+                # Check the size of a real.
+                rsize = get_int()
+                if rsize == 4:
+                    fmt = 'f'
+                elif rsize == 8:
+                    fmt = 'd'
+                else:
+                    raise AthenaError(f"Unknown size ({rsize}) of a Real. ")
+
+                # Function to read a real.
+                def get_real():
+                    return unpack(fmt, f.read(rsize))[0]
+
+                # Function to read a string.
+                def get_str():
+                    s = b""
+                    while True:
+                        c = f.read(1)
+                        if c == b'\x00': return s.decode("ascii")
+                        s += c
+
+                # Process the header.
+                time = get_real()
+                nint, nreal = get_int(), get_int()
+                ipnames = [ get_str() for i in range(nint) ]
+                rpnames = [ get_str() for i in range(nreal) ]
+                npar = get_int()
+
+                # Read the particle data.
+                names = ipnames + rpnames
+                formats = nint*[int] + nreal*[float]
+                dtype = np.dtype(dict(names=names, formats=formats))
+                pdata = []
+                for k in range(npar):
+                    values = [ get_int() for i in range(nint) ]
+                    values += [ get_real() for i in range(nreal) ]
+                    pdata.append(tuple(values))
+                pdata = np.array(pdata, dtype=dtype)
+
+        else:
+            raise AthenaError("Unknown data type for file '" + filename + "'. ")
+
+    else:
+        raise AthenaError("Was the file '" + filename + "' produced by <outputp>? ")
+
+    if indexing:
+        # Sort the particles by their id's.
+        ids = pdata["id"]
+        npar = len(ids)
+        if len(np.unique(ids)) != npar or ids.max() != npar:
+            raise AthenaError("Particle id's are not contiguous; " +
+                              "use indexing=False instead. ")
+        names = list(pdata.dtype.names)
+        axis = names.index("id")
+        pdata.sort(axis=axis)
+        del names[axis]
+        pdata = pdata[names]
+
+    # Read and return the data.
+    return time, np.rec.array(pdata)
 
 # ========================================================================================
 

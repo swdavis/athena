@@ -33,6 +33,7 @@ Hydro::Hydro(MeshBlock *pmb, ParameterInput *pin) :
     w(NHYDRO, pmb->ncells3, pmb->ncells2, pmb->ncells1),
     u1(NHYDRO, pmb->ncells3, pmb->ncells2, pmb->ncells1),
     w1(NHYDRO, pmb->ncells3, pmb->ncells2, pmb->ncells1),
+    dvn(pmb->ncells1), dvt(pmb->ncells1),
     // C++11: nested brace-init-list in Hydro member initializer list = aggregate init. of
     // flux[3] array --> direct list init. of each array element --> direct init. via
     // constructor overload resolution of non-aggregate class type AthenaArray<Real>
@@ -52,7 +53,8 @@ Hydro::Hydro(MeshBlock *pmb, ParameterInput *pin) :
                   AthenaArray<Real>::DataStatus::empty)),
     hbvar(pmb, &u, &coarse_cons_, flux, HydroBoundaryQuantity::cons),
     hsrc(this, pin),
-    hdif(this, pin) {
+    hdif(this, pin),
+    md_(pmb, pin) {
   int nc1 = pmb->ncells1, nc2 = pmb->ncells2, nc3 = pmb->ncells3;
   Mesh *pm = pmy_block->pmy_mesh;
 

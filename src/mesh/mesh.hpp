@@ -44,6 +44,7 @@ class Coordinates;
 class Reconstruction;
 class Hydro;
 class Field;
+class Particles;
 class PassiveScalars;
 class Gravity;
 class MGGravity;
@@ -70,6 +71,7 @@ class MeshBlock {
   friend class Mesh;
   friend class Hydro;
   friend class TaskList;
+  friend class TimeIntegratorTaskList;
 #ifdef HDF5OUTPUT
   friend class ATHDF5Output;
 #endif
@@ -115,6 +117,7 @@ class MeshBlock {
   // physics-related objects (possibly containing their derived bvals classes)
   Hydro *phydro;
   Field *pfield;
+  Particles *ppar;
   Gravity *pgrav;
   MGGravity* pmg;
   PassiveScalars *pscalars;
@@ -149,7 +152,7 @@ class MeshBlock {
  private:
   // data
   Real new_block_dt_, new_block_dt_hyperbolic_, new_block_dt_parabolic_,
-    new_block_dt_user_;
+       new_block_dt_particles_, new_block_dt_user_;
   //! \todo(felker):
   //! * make global TaskList a member of MeshBlock, store TaskStates in list
   //!   shared by main integrator + FFT gravity task lists.
@@ -280,6 +283,7 @@ class Mesh {
   int gids_, gide_;
   int *nslist, *ranklist, *nblist;
   double *costlist;
+  Real dt_particles;
   // 8x arrays used exclusively for AMR (not SMR):
   int *nref, *nderef;
   int *rdisp, *ddisp;

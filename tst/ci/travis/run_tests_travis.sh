@@ -37,6 +37,8 @@ if [ "$TRAVIS_OS_NAME" == "osx" ]; then
     time python3 run_tests.py omp --config=--cxx=g++ --config=--ccmd=/usr/local/bin/g++-9 --silent
     time python3 run_tests.py grav --config=--cxx=g++ --config=--ccmd=/usr/local/bin/g++-9 \
 	 --config=--mpiccmd='mpicxx -DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX' --mpirun_opts=$MPI_OPTS --silent # requires FFTW library
+    time python3 run_tests.py particles --config=--cxx=g++ --config=--ccmd=/usr/local/bin/g++-8 \
+	 --config=--mpiccmd='mpicxx -DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX' --mpirun_opts=$MPI_OPTS --silent
 else
     export OMPI_CC=$TEMP_CCMD
     export OMPI_CXX=$TEMP_CCMD
@@ -48,6 +50,7 @@ else
     time python3 run_tests.py hybrid --config=--cxx=$TEMP_CXX -c=--ccmd=$TEMP_CCMD --mpirun_opts=$MPI_OPTS --silent
     time python3 run_tests.py omp --config=--cxx=$TEMP_CXX -c=--ccmd=$TEMP_CCMD --silent
     time python3 run_tests.py grav --config=--cxx=$TEMP_CXX -c=--ccmd=$TEMP_CCMD --mpirun_opts=$MPI_OPTS --silent # requires FFTW library
+    time python3 run_tests.py particles --config=--cxx=$TEMP_CXX -c=--ccmd=$TEMP_CCMD --mpirun_opts=$MPI_OPTS --silent
 fi
 time python3 run_tests.py gr --config=--cxx=$TEMP_CXX -c=--ccmd=$TEMP_CCMD --silent
 #time python3 run_tests.py diffusion --config=--cxx=$TEMP_CXX -c=--ccmd=$TEMP_CCMD --silent
