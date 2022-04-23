@@ -34,30 +34,11 @@ public:
   // data
   MonteCarloBlock* pmy_mcb; // ptr to MonteCarlo containing this Photon
 
-  int i1,i2,i3; // zone indicies currently containing photon
-  int status; // photon status (escaped, absorbed, evolving)
-  int nuser_var; // number of user variables
-  int face;
-  // SWD: x can always include time, k could always include energy?
-
-  Real x[4];  // current photon position in spacetime
-  Real k[4];  // photon direction (momentum vector) curvalinear
-  Real dk[4]; // the change in photon direction used for general mover
-  Real stokes[4];  // stokes vectors
-  Real weight; // photon statistical weight
-  Real energy;  // photon energy
-  Real *user_var; // storage for user variables
-  Real sct_coef, abs_coef;  //scattering and absoprtion coefficients
   //std::complex<Real> polten[4][4]; // the polarization tensor
-
-  // functions
-  void CopyPhoton(Photon *pphot);
-  void PrintPhoton();
-  bool IsNanPhoton();
-  void AllocateUserVariables(int n);
 
   // ---------- New implementation -------------------------------------
 
+  int nuser_var;
   int npar;
   int nphot_limit;
   int &nphot;
@@ -96,8 +77,6 @@ public:
   void Resize(int new_npar);
   void RemoveOneParticle(int k);
   void PrintPhoton(int ip);
-  void VectorsToWorkingArrays(int n);
-  void WorkingArraysToVectors(int n);
   bool IsNanPhoton(int ip);
   void PolarizationToTetrad(std::complex<Real> ttet[4][4], Real ecov[4][4], const int ip);
   void PolarizationToCoord(std::complex<Real> ttet[4][4], Real econ[4][4], const int ip);

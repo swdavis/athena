@@ -128,6 +128,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
 
 void GeneralMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
 
+  /*
   Real r = pphot->x[IMC1];
   Real cth = cos(pphot->x[IMC2]);
   Real sth = sqrt(1. - SQR(cth));
@@ -144,7 +145,7 @@ void GeneralMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
   kcart[IMC1] /= norm;
   kcart[IMC2] /= norm;
   kcart[IMC3] /= norm;
-
+  */
 }
 
 //----------------------------------------------------------------------------------------

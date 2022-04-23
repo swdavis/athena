@@ -386,6 +386,8 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
 
 void SphericalPolarMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
 
+  // SWD: Broken by parallelization
+  /*
   Real cth = cos(pphot->x[IMC2]);
   Real sth = sqrt(1. - SQR(cth));
   Real cph = cos(pphot->x[IMC3]);
@@ -394,4 +396,5 @@ void SphericalPolarMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
   kcart[IMC1] = pphot->k[IMC1]*sth*cph + pphot->k[IMC2]*cth*cph - pphot->k[IMC3]*sph;
   kcart[IMC2] = pphot->k[IMC1]*sth*sph + pphot->k[IMC2]*cth*sph + pphot->k[IMC3]*cph;
   kcart[IMC3] = pphot->k[IMC1]*cth - pphot->k[IMC2]*sth;
+  */
 }

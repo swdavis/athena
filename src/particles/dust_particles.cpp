@@ -119,7 +119,7 @@ void DustParticles::SetOneParticleMass(Real new_mass) {
 //! \fn DustParticles::DustParticles(MeshBlock *pmb, ParameterInput *pin)
 //! \brief constructs a DustParticles instance.
 
-static std::vector<Real> dummy_vector(1, std::nan(NULL));
+static std::vector<Real> dummy_vector(1, std::nan(""));
 
 DustParticles::DustParticles(MeshBlock *pmb, ParameterInput *pin)
   : Particles(pmb, pin),

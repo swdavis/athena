@@ -635,7 +635,7 @@ void MonteCarloBlock::TransferPhotonsOld(int nphot) {
 
         if (iscat %  pmy_mc->checkscat == 0) {
           // Check for possible infinite loop due to NaN in photon
-          if (pphot->IsNanPhoton()) {
+          if (pphot->IsNanPhoton(ip)) {
             pphot->statp[ip] = DESTROYED;
             std::cout << "Warning: IsNanPhoton() returned true, photon destroyed"
                       << std::endl;
@@ -671,7 +671,6 @@ void MonteCarloBlock::TransferPhotonsOld(int nphot) {
     for (int ip=0; ip<pphot->nphot; ip++) {
 
     if (pphot->statp[ip] == ESCAPED) {
-      pphot->VectorsToWorkingArrays(ip);
       // User defined completion work
       FinalizePhoton(pphot,ip);
       // loop over spectra and update
@@ -873,7 +872,7 @@ void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign, int ips, i
       Real k[NCOORD];
       TetradToCoordinate(kcopy, k, econ); // updates pphot->k
 
-      Real energy_shift = kcopy[IMC0] / pphot->k[IMC0]; // new calculation
+      Real energy_shift = kcopy[IMC0] / pphot->k0p[ip]; // new calculation
 
       // transform energy and opacities
       pphot->ep[ip] *= energy_shift;
