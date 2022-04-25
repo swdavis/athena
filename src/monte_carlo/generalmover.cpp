@@ -46,11 +46,6 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
   MCRandom *pran = pmy_mcb->pran;
   PhotonTrajectoryList *ptraj = pmy_mcb->ptraj;
 
-  // ACCEL DEBUG CODE
-  //int n_accels = 0;
-  //int n_regsteps = 0;
-  //
-
   for (int ip=ips; ip<=ipe; ip++) {
     // get number of mean free paths photon will travel
     Real tauremaining = GetOpticalDepth(pran);
@@ -86,15 +81,15 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
         dl = std::min(dmin0, dw3); // Distance to nearest face
 
         // Try to perform MRW acceleration if optical depth is large enough
-        Real tauacc = 10.;
+        Real tauacc = 1000.;
         if (dl > tauacc / chi) {
+          //printf("%f\n", dl*chi);
           //printf("ACCELERATION: Accel triggered! \n");
           accel_success = MRWAcceleration(pphot,pran,dl,tauacc,ip);
           //printf("ACCELERATION: Accel success: %d \n", accel_success);
         }
       }
       if (!accel_success) {// Acceleration off or didn't work - take standard step
-        //n_regsteps++;
         if (tauremaining > chi * step) { // Photon hasn't yet reached tauremaining
           VerletStep(pphot,step,ip);
           if (pmy_mcb->pmy_mc->polarized)
@@ -107,7 +102,6 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
         }
         tauremaining -= chi * step;
       } else {
-        //n_accels++;
         // Photon has been given a new position on sphere of radius dl
         // Set exit parameters and continue the loop over photons
         step = dl; // TODO: Sample a path length? Moments will be incorrect as-is.
@@ -123,7 +117,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
       //Real x0 = r * sth * cph;
       //Real y0 = r * sth * sph;
       //Real z0 = r * cth;
-      //printf("%f %f %f %d\n", x0, y0, z0, accel_success);
+      //printf("%f %f %f %d\n", x0, y0, z0, accel_success)//, chi);
 
       // SWD: Clean up these checks
       // Check if photon changed zones
@@ -168,7 +162,6 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
       pphot->statp[ip] = DESTROYED;
     }
   } // end loop over ip
-  //printf("%d of %d steps accelerated (%.2f\%)\n", n_accels, n_accels+n_regsteps, static_cast<float>(n_accels)/(n_accels+n_regsteps)*100.);
 }
 
 // SWD: The conversion from Curvalinear  to Cartesian should be generalized or removed

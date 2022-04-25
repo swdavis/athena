@@ -149,29 +149,36 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
 
       // ********* FREQUENCY REDISTRIBUTION *********
       // Sample outgoing frequency from Dijkstra et al 2006 solution
-
-      Real tau0 = r0 * pphot->scp[ip]; //TODO: Is this right?
-
       int &i1 = pphot->i1p[ip];
       int &i2 = pphot->i2p[ip];
       int &i3 = pphot->i3p[ip];
 
-      // Compute atom thermal velocity
-      Real kb = 1.380649e-16;
-      Real mass = 1.660538782e-24;
-      Real tgas = pmcb->tgas(i3,i2,i1);
-      Real vth = sqrt( 2 * kb * tgas / mass);
-
-      // Compute line parameters
+      // Line constants
+      Real melectron = 9.10938215e-28;
+      Real charge = 4.80320427e-10;
+      Real osc_strength = 0.4164;
       Real nu0 = 2.468e15;
       Real c = 2.99792458e10;
+      Real h = 6.62607015e-27;
+      Real kb = 1.380649e-16;
+      Real mass = 1.660538782e-24;
+
+      // Cell properties
+      Real tgas = pmcb->tgas(i3,i2,i1);
+      Real rho = pmcb->rho(i3,i2,i1);
+
+      // Derived parameters
+      Real vth = sqrt( 2 * kb * tgas / mass);
       Real doppwidth = nu0 * vth / c;
       Real lorwidth = 6.265e8/(4.*PI);
       Real a = lorwidth / doppwidth;
-      Real h = 6.62607015e-27;
+      Real k = (rho/mass) * PI*charge*charge / (melectron*c) * osc_strength;
+      Real tau0 = k * r0 / sqrt(PI) / doppwidth;
 
       // Sample sigma and convert to frequency
-      Real samp_sigma = 2./sqrt(PI) * std::atanh(2.*pran->uniform() - 1.);
+      Real x_s = (pphot->ep[ip] / h - nu0)/doppwidth;
+      Real sigma_s = sqrt(2./3.) * PI/a * std::pow(x_s, 3.)/3.;
+      Real samp_sigma = tau0 * 2./sqrt(PI) * std::atanh(2.*pran->uniform() - 1.) + sigma_s;
       Real x = std::cbrt(3. * sqrt(3./2.) * a / PI * samp_sigma);
       Real nu = doppwidth * x + nu0;
       pphot->ep[ip] = h * nu;
