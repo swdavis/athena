@@ -68,27 +68,26 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
         // Get distance from photon to closest cell face
         Real dl;
         Real dw3, dw2, dw1;
-        Real dx3p = std::min(fabs(pphot->x3p[ip] - pcoord->x3f(pphot->i3p[ip])), 
-                             fabs(pphot->x3p[ip] - pcoord->x3f(pphot->i3p[ip] + 1)));
-        Real dx2p = std::min(fabs(pphot->x2p[ip] - pcoord->x2f(pphot->i2p[ip])), 
-                             fabs(pphot->x2p[ip] - pcoord->x2f(pphot->i2p[ip] + 1)));
-        Real dx1p = std::min(fabs(pphot->x1p[ip] - pcoord->x1f(pphot->i1p[ip])), 
-                             fabs(pphot->x1p[ip] - pcoord->x1f(pphot->i1p[ip] + 1)));
-        dw3 = dx3p * pphot->x1p[ip] * sin(pphot->x2p[ip]);
-        dw2 = dx2p * pphot->x1p[ip];
-        dw1 = dx1p;
-        Real dmin0 = std::min(dw1, dw2);
+        Real dx3f = fabs(pcoord->x3f(pphot->i3p[ip]) - pcoord->x3f(pphot->i3p[ip] + 1));
+        Real dx2f = fabs(pcoord->x2f(pphot->i2p[ip]) - pcoord->x2f(pphot->i2p[ip] + 1));
+        Real dx1f = fabs(pcoord->x1f(pphot->i1p[ip]) - pcoord->x1f(pphot->i1p[ip] + 1));
+        Real x1v = (pcoord->x1f(pphot->i1p[ip]) + pcoord->x1f(pphot->i1p[ip] + 1))/2.;
+        Real x2v = (pcoord->x2f(pphot->i2p[ip]) + pcoord->x2f(pphot->i2p[ip] + 1))/2.;
+        dw3 = dx3f * x1v * sin(x2v);
+        dw2 = dx2f * x1v;
+        Real dmin0 = std::min(dx1f, dw2);
         dl = std::min(dmin0, dw3); // Distance to nearest face
 
+        Real tauacc = 10000.;
         // Try to perform MRW acceleration if optical depth is large enough
-        Real tauacc = 1000.;
-        if (dl > tauacc / chi) {
+        if (dl*chi > tauacc) {
           //printf("%f\n", dl*chi);
           //printf("ACCELERATION: Accel triggered! \n");
           accel_success = MRWAcceleration(pphot,pran,dl,tauacc,ip);
           //printf("ACCELERATION: Accel success: %d \n", accel_success);
         }
       }
+
       if (!accel_success) {// Acceleration off or didn't work - take standard step
         if (tauremaining > chi * step) { // Photon hasn't yet reached tauremaining
           VerletStep(pphot,step,ip);
@@ -108,16 +107,34 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
         tauremaining = 0.;
       }
 
-      // DEBUG: Print out photon position for each step in cartesian
-      //Real cth = cos(pphot->x2p[ip]);
-      //Real sth = sqrt(1. - SQR(cth));
-      //Real cph = cos(pphot->x3p[ip]);
-      //Real sph = sin(pphot->x3p[ip]);
-      //Real r = pphot->x1p[ip];
-      //Real x0 = r * sth * cph;
-      //Real y0 = r * sth * sph;
-      //Real z0 = r * cth;
-      //printf("%f %f %f %d\n", x0, y0, z0, accel_success)//, chi);
+      // DEBUG: Print output accel data for plotting
+      // Line constants
+      //Real melectron = 9.10938215e-28;
+      //Real charge = 4.80320427e-10;
+      //Real osc_strength = 0.4164;
+      //Real nu0 = 2.468e15;
+      //Real c = 2.99792458e10;
+      //Real h = 6.62607015e-27;
+      //Real kb = 1.380649e-16;
+      //Real mass = 1.660538782e-24;
+
+      //int &i1 = pphot->i1p[ip];
+      //int &i2 = pphot->i2p[ip];
+      //int &i3 = pphot->i3p[ip];
+
+      // Cell properties
+      //Real tgas = pmcb->tgas(i3,i2,i1);
+      //Real rho = pmcb->rho(i3,i2,i1);
+
+      // Derived parameters
+      //Real vth = sqrt( 2 * kb * tgas / mass);
+      //Real doppwidth = nu0 * vth / c;
+      //Real lorwidth = 6.265e8/(4.*PI);
+      //Real a = lorwidth / doppwidth;
+
+      //Real x_s = (pphot->ep[ip] / h - nu0)/doppwidth;
+      //printf("%f %f %d\n", x_s, pphot->x1p[ip], accel_success);
+      ///////
 
       // SWD: Clean up these checks
       // Check if photon changed zones

@@ -90,14 +90,55 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
   if (resonance) {
     Real r0 = dist;
 
-    // ********* POSITION *********
-    // position packet on sphere of radius r0
-    Real mu = 2.*pran->uniform()-1.0;
+    // Line constants
+    Real melectron = 9.10938215e-28;
+    Real charge = 4.80320427e-10;
+    Real osc_strength = 0.4164;
+    Real nu0 = 2.468e15;
+    Real c = 2.99792458e10;
+    Real h = 6.62607015e-27;
+    Real kb = 1.380649e-16;
+    Real mass = 1.660538782e-24;
 
-    // Local angles within the sphere of radius r0
-    Real lsth = sqrt(1.0-mu*mu);
-    Real lphi = 2.*PI*pran->uniform();
     if (COORDINATE_SYSTEM == "spherical_polar") {
+
+      // ********* FREQUENCY REDISTRIBUTION *********
+      // Sample outgoing frequency from Dijkstra et al 2006 solution
+      int &i1 = pphot->i1p[ip];
+      int &i2 = pphot->i2p[ip];
+      int &i3 = pphot->i3p[ip];
+
+      // Cell properties
+      Real tgas = pmcb->tgas(i3,i2,i1);
+      Real rho = pmcb->rho(i3,i2,i1);
+
+      // Derived parameters
+      Real vth = sqrt( 2 * kb * tgas / mass);
+      Real doppwidth = nu0 * vth / c;
+      Real lorwidth = 6.265e8/(4.*PI);
+      Real a = lorwidth / doppwidth;
+      Real k = (rho/mass) * PI*charge*charge / (melectron*c) * osc_strength;
+      Real tau0 = k * r0 / sqrt(PI) / doppwidth;
+      //if (a*tau0 > 1.) {
+      //  return false;
+      //}
+
+      // Sample sigma and convert to frequency
+      Real x_s = (pphot->ep[ip] / h - nu0)/doppwidth;
+      Real sigma_s = sqrt(2./3.) * PI/a * std::pow(x_s, 3.)/3.;
+      Real samp_sigma = tau0 * 2./sqrt(PI) * std::atanh(2.*pran->uniform() - 1.) + sigma_s;
+      Real x = std::cbrt(3. * sqrt(3./2.) * a / PI * samp_sigma);
+      Real nu = doppwidth * x + nu0;
+      pphot->ep[ip] = h * nu;
+
+      // ********* POSITION *********
+      // position packet on sphere of radius r0
+      Real mu = 2.*pran->uniform()-1.0;
+
+      // Local angles within the sphere of radius r0
+      Real lsth = sqrt(1.0-mu*mu);
+      Real lphi = 2.*PI*pran->uniform();
+
       // convert to cartesian
       // Global simulation angles based on photon position
       Real cth = cos(pphot->x2p[ip]);
@@ -116,7 +157,6 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
       pphot->x3p[ip] = atan2(y0,x0);
       if (pphot->x3p[ip] < 0.)
         pphot->x3p[ip] += 2.*PI;
-      //printf("Acc moved from %f to %f r\n", r/1.e11, pphot->x[0]/1.e11);
 
       // ********* DIRECTION *********
       // Sample outgoing angles to local normal - zero ingoing flux, so must be outward
@@ -146,42 +186,6 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
       pphot->k1p[ip] = nx * sth * cph + ny * sth * sph + nz * cth;
       pphot->k2p[ip] = nx * cth * cph + ny * cth * sph - nz * sth;
       pphot->k3p[ip] = -nx * sph + ny * cph;
-
-      // ********* FREQUENCY REDISTRIBUTION *********
-      // Sample outgoing frequency from Dijkstra et al 2006 solution
-      int &i1 = pphot->i1p[ip];
-      int &i2 = pphot->i2p[ip];
-      int &i3 = pphot->i3p[ip];
-
-      // Line constants
-      Real melectron = 9.10938215e-28;
-      Real charge = 4.80320427e-10;
-      Real osc_strength = 0.4164;
-      Real nu0 = 2.468e15;
-      Real c = 2.99792458e10;
-      Real h = 6.62607015e-27;
-      Real kb = 1.380649e-16;
-      Real mass = 1.660538782e-24;
-
-      // Cell properties
-      Real tgas = pmcb->tgas(i3,i2,i1);
-      Real rho = pmcb->rho(i3,i2,i1);
-
-      // Derived parameters
-      Real vth = sqrt( 2 * kb * tgas / mass);
-      Real doppwidth = nu0 * vth / c;
-      Real lorwidth = 6.265e8/(4.*PI);
-      Real a = lorwidth / doppwidth;
-      Real k = (rho/mass) * PI*charge*charge / (melectron*c) * osc_strength;
-      Real tau0 = k * r0 / sqrt(PI) / doppwidth;
-
-      // Sample sigma and convert to frequency
-      Real x_s = (pphot->ep[ip] / h - nu0)/doppwidth;
-      Real sigma_s = sqrt(2./3.) * PI/a * std::pow(x_s, 3.)/3.;
-      Real samp_sigma = tau0 * 2./sqrt(PI) * std::atanh(2.*pran->uniform() - 1.) + sigma_s;
-      Real x = std::cbrt(3. * sqrt(3./2.) * a / PI * samp_sigma);
-      Real nu = doppwidth * x + nu0;
-      pphot->ep[ip] = h * nu;
 
     } else {
       std::stringstream msg;
