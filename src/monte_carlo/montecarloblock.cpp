@@ -42,7 +42,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   }
 
   // Construct pointer to photon
-  pphot  = new Photon(this,pmy_mc->nuser_var,pmy_mc->max_phots_init);
+  //pphot  = new Photon(this,pmy_mc->nuser_var,pmy_mc->max_phots_init);
+  pphot  = new Photon(this,pin);
 
   // Initialize to nullptr and set below
   pmover = nullptr;
@@ -123,8 +124,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   stepsize = pin->GetOrAddReal("montecarlo","stepsize",1.0e-3);
   minweight = pin->GetOrAddReal("montecarlo","minweight",1.0e-20);
 
-  // Flags for handling photon movement
-  general_mover_flag = pin->GetOrAddBoolean("montecarlo","general_mover",false);
+  // Flags for handling photon steps
   boyerlindquist_flag = pin->GetOrAddBoolean("montecarlo","boyerlindquist",false);
   orthotet_flag = pin->GetOrAddBoolean("montecarlo", "orthotet", false);
   varystep_flag = pin->GetOrAddBoolean("montecarlo", "varystep", false);
@@ -132,7 +132,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   // Set up photon movement and initialization methods
   if (COORDINATE_SYSTEM == "cartesian") {
     GetZonePosition = GetZonePositionCartesian;
-    if (general_mover_flag) {
+    if (pmy_mc->general_mover_flag) {
       pmover = new GeneralMover(this);
       if (pmb != nullptr)
         pcoord = new MCCartesian(pmb->pcoord,this);
@@ -149,7 +149,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     }
   } else if (COORDINATE_SYSTEM == "spherical_polar") {
     GetZonePosition = GetZonePositionSphericalPolar;
-    if (general_mover_flag) {
+    if (pmy_mc->general_mover_flag) {
       pmover = new GeneralMover(this);
       if (pmb != nullptr)
         pcoord = new MCSphericalPolar(pmb->pcoord,this);
@@ -375,7 +375,7 @@ void MonteCarloBlock::RayTracePhotons(int nphot) {
       // Emit photons to replace those that left meshblock or were terminated
       nloop = (nloop > nprop) ? nprop : nloop;
       int nold = pphot->nphot;
-      pphot->Resize(nloop);
+      pphot->AllocatePhotons(nloop);
       // user definied photon initialization
       InitializePhoton(pphot,nold,pphot->nphot-1);
       if (ptraj != nullptr) {
@@ -441,7 +441,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
     // Emit photons to replace those that left meshblock or were terminated
     nloop = (nloop > nprop) ? nprop : nloop;
     int nold = pphot->nphot;
-    pphot->Resize(nloop);
+    pphot->AllocatePhotons(nloop);
 
     //printf("nold: %d %d %d %d\n",nprop,nold,nprop,nloop);
     // user definied photon initialization
@@ -578,7 +578,7 @@ void MonteCarloBlock::TransferPhotonsOld(int nphot) {
   int nprop = (nphot > nphremain) ? nphremain : nphot;
 
   int nremain = nprop;
-  pphot->Resize(10);
+  pphot->AllocatePhotons(10);
   while(nremain > 0) {
     //while (pphot->nphot < pphot->nphot_limit) {
       // user definied photon initialization
@@ -894,7 +894,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
   Real k3 = pphot->k3p[ip];
 
   // Normalize k vector if using general mover in spherical polar coords
-  if ((COORDINATE_SYSTEM == "spherical_polar") && (general_mover_flag)) {
+  if ((COORDINATE_SYSTEM == "spherical_polar") && (pmy_mc->general_mover_flag)) {
     k2 *= pphot->x1p[ip];
     k3 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
   }
@@ -956,7 +956,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
     int k = pphot->i3p[ip];
 
     // SWD: Modify this appropriately
-    //if (general_mover_flag)
+    //if (pmy_mc->general_mover_flag)
     //  weight *= pphot->k0p[ip]
 
     // Add contribution to corresponding moments

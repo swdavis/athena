@@ -64,7 +64,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   acceleration = pin->GetOrAddBoolean("montecarlo","acceleration",false);
   time_acc = pin->GetOrAddBoolean("montecarlo","time_acc",false);
   raytrace_flag = pin->GetOrAddBoolean("montecarlo", "raytrace", false);
-
+  general_mover_flag = pin->GetOrAddBoolean("montecarlo","general_mover",false);
   nuser_var = 0; // Initialize photon user variables to zero
 
   // Set photon numbers
@@ -90,6 +90,9 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
 
   // Create and intitialize randon number generator
   iseed = pin->GetInteger("montecarlo","iseed");
+
+  // Initialize arrays sizes for photon instances
+  Photon::Initialize(this,pin);
 
   // Initialize ncells and broadcast
   if (Globals::my_rank == 0) {

@@ -201,6 +201,7 @@ public:
   bool acceleration;  // use MRW acceleration
   bool time_acc;  // use MRW acceleration with time limit
   bool raytrace_flag; // Will trace photons rather than scatter
+  bool general_mover_flag; // Use integration for photon movement
 
   // function pointers
   UserMoveFunc_t UserWorkInMove;
@@ -303,8 +304,6 @@ public:
 
   // Associated with general mover
   // SWD some of these should be eliminated others moved to MonteCarlo?
-  bool general_mover_flag; // use general integration (default for all but
-                           // cartesian, spherical
   bool boyerlindquist_flag; // use Boyer-Lindquist coordinates
   bool orthotet_flag; // use orthonormal tetrad for TransferPhotons()
   bool varystep_flag; // use variable (true) or constant (false) step

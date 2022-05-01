@@ -466,7 +466,8 @@ void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
         Real cph = cos(pphot->x3p[ip]);
         Real sph = sin(pphot->x3p[ip]);
         Real kr, kth, kph;
-        if (pphot->pmy_mcb->general_mover_flag) {
+        // SWD: This should be adjusted
+        if (pphot->pmy_mcb->pmy_mc->general_mover_flag) {
           kr = pphot->k1p[ip];
           kth = pphot->k2p[ip]*pphot->x1p[ip];
           kph = pphot->k3p[ip]*pphot->x1p[ip]*sth;
@@ -486,7 +487,8 @@ void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
     } else {
       if (COORDINATE_SYSTEM == "spherical_polar") {
         Real ksph[4];
-        if (pphot->pmy_mcb->general_mover_flag) {
+        // SWD: This should be adjusted
+        if (pphot->pmy_mcb->pmy_mc->general_mover_flag) {
           ksph[IMC1] = pphot->k1p[ip];
           ksph[IMC2] = pphot->k2p[ip]*pphot->x1p[ip];
           ksph[IMC3] = pphot->k3p[ip]*pphot->x1p[ip]*sin(pphot->x2p[ip]);

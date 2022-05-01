@@ -10,6 +10,7 @@
 
 // C/C++ Standard Libraries
 #include <string>
+#include <complex>
 #include <vector>
 
 // Athena headers
@@ -51,6 +52,7 @@ friend class OutputType;
 friend class ParticleGravity;
 friend class ParticleMesh;
 friend class DustParticles;
+friend class Photon;
 
  public:
   // Class methods
@@ -107,6 +109,7 @@ friend class DustParticles;
   // Class methods
   static int AddIntProperty(const std::string& name);
   static int AddRealProperty(const std::string& name);
+  static int AddComplexProperty(const std::string& name);
   static int AddAuxProperty();
   static int AddWorkingArray();
 
@@ -119,7 +122,7 @@ friend class DustParticles;
   static int nreal;         //!> numbers of real particle properties
   static int naux;          //!> number of auxiliary particle properties
   static int nwork;         //!> number of working arrays for particles
-
+  static int ncplx;         //!> numbers of complex particle properties
   static int ipid;                 //!> index for the particle ID
   static int ixp, iyp, izp;        // indices for the position components
   static int ivpx, ivpy, ivpz;     // indices for the velocity components
@@ -141,6 +144,7 @@ friend class DustParticles;
                                      // Data attached to the particles:
   std::vector<int> *intprop;         //!>   integer properties
   std::vector<Real> *rp, *rp1, *drp; //!>   real properties
+  std::vector<std::complex<Real>> *cplxprop; //!>   complex properties
   std::vector<Real> *aux;            //!>   auxiliary properties (communicated when
                                      //!>     particles moving to another meshblock)
   std::vector<Real> *work;           //!>   working arrays (not communicated)
@@ -188,6 +192,7 @@ friend class DustParticles;
   // Class variable
   static std::vector<std::string> ipname;  //!> names of integer properties
   static std::vector<std::string> rpname;  //!> names of real properties
+  static std::vector<std::string> cpname;  //!> names of complex properties
   static int idmax;
 
   // Instance variables

@@ -75,10 +75,13 @@ void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real l
   // Initialize weight
   pphot->wp[ip] *= exp(-x) * (lemax-lemin);
 
-  // Initialize Stokes vector
-  pphot->sip[ip] = 1.0;
-  pphot->sup[ip] = 0.0;
-  pphot->sqp[ip] = 0.0;
+  if (pmcb->pmy_mc->polarized) {
+    // Initialize Stokes vector
+    pphot->sip[ip] = 1.0;
+    pphot->sup[ip] = 0.0;
+    pphot->sqp[ip] = 0.0;
+    pphot->svp[ip] = 0.0;
+  }
 
   // Generate initial angle parameters
   Real phi = 2. * PI * pran->uniform();

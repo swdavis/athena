@@ -28,13 +28,14 @@
 #include "particles.hpp"
 
 // Class variable initialization
-std::vector<std::string> Particles::ipname, Particles::rpname;
+std::vector<std::string> Particles::ipname, Particles::rpname, Particles::cpname;
 bool Particles::initialized = false;
 int Particles::idmax = 0;
 int Particles::nint = 0;
 int Particles::nreal = 0;
 int Particles::naux = 0;
 int Particles::nwork = 0;
+int Particles::ncplx = 0;
 int Particles::ipid = -1;
 int Particles::ixp = -1, Particles::iyp = -1, Particles::izp = -1;
 int Particles::ivpx = -1, Particles::ivpy = -1, Particles::ivpz = -1;
@@ -122,31 +123,33 @@ void Particles::Initialize(Mesh *pm, ParameterInput *pin) {
   // Add particle ID.
   ipid = AddIntProperty("id");
 
-  // Add particle position.
-  ixp = AddRealProperty("xp");
-  iyp = AddRealProperty("yp");
-  izp = AddRealProperty("zp");
+  if(!MONTE_CARLO_ENABLED) {
+    // Add particle position.
+    ixp = AddRealProperty("xp");
+    iyp = AddRealProperty("yp");
+    izp = AddRealProperty("zp");
 
-  // Add particle velocity.
-  ivpx = AddRealProperty("vpx");
-  ivpy = AddRealProperty("vpy");
-  ivpz = AddRealProperty("vpz");
+    // Add particle velocity.
+    ivpx = AddRealProperty("vpx");
+    ivpy = AddRealProperty("vpy");
+    ivpz = AddRealProperty("vpz");
 
-  // Add particle position indices.
-  ixi1 = AddWorkingArray();
-  ixi2 = AddWorkingArray();
-  ixi3 = AddWorkingArray();
+    // Add particle position indices.
+    ixi1 = AddWorkingArray();
+    ixi2 = AddWorkingArray();
+    ixi3 = AddWorkingArray();
 
-  // Initiate ParticleMesh class.
-  ParticleMesh::Initialize(pin);
-  imom1 = ParticleMesh::AddMeshAux();
-  imom2 = ParticleMesh::AddMeshAux();
-  imom3 = ParticleMesh::AddMeshAux();
+    // Initiate ParticleMesh class.
+    ParticleMesh::Initialize(pin);
+    imom1 = ParticleMesh::AddMeshAux();
+    imom2 = ParticleMesh::AddMeshAux();
+    imom3 = ParticleMesh::AddMeshAux();
 
-  // Get the CFL number for particles.
-  cfl_par = pin->GetOrAddReal("particles", "cfl_par", pm->cfl_number);
+    // Get the CFL number for particles.
+    cfl_par = pin->GetOrAddReal("particles", "cfl_par", pm->cfl_number);
 
-  // Remember the pointer to input parameters.
+    // Remember the pointer to input parameters.
+  }
   pinput = pin;
 
 #ifdef MPI_PARALLEL
@@ -320,6 +323,7 @@ Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
   : intprop(new std::vector<int> [nint]),
     rp(new std::vector<Real> [nreal]), rp1(new std::vector<Real> [nreal]),
     drp(new std::vector<Real> [nreal]),
+    cplxprop(new std::vector<std::complex<Real>> [ncplx]),
     aux(new std::vector<Real> [naux]), work(new std::vector<Real> [nwork]),
     pid(intprop[ipid]),
     xp(rp[ixp]), yp(rp[iyp]), zp(rp[izp]), vpx(rp[ivpx]), vpy(rp[ivpy]), vpz(rp[ivpz]),
@@ -328,18 +332,20 @@ Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
     xi1(work[ixi1]), xi2(work[ixi2]), xi3(work[ixi3]) {
   // Point to the calling MeshBlock.
   pmy_block = pmb;
-  pmy_mesh = pmb->pmy_mesh;
-  pbval_ = pmb->pbval;
-  npar = 0;
+  //SWD: temporary
+  if (!MONTE_CARLO_ENABLED) {
+    pmy_mesh = pmb->pmy_mesh;
+    pbval_ = pmb->pbval;
+    npar = 0;
 
-  // Check active dimensions.
-  active1_ = pmy_mesh->mesh_size.nx1 > 1;
-  active2_ = pmy_mesh->mesh_size.nx2 > 1;
-  active3_ = pmy_mesh->mesh_size.nx3 > 1;
+    // Check active dimensions.
+    active1_ = pmy_mesh->mesh_size.nx1 > 1;
+    active2_ = pmy_mesh->mesh_size.nx2 > 1;
+    active3_ = pmy_mesh->mesh_size.nx3 > 1;
 
   // Allocate mesh auxiliaries.
   ppm = new ParticleMesh(this);
-
+  }
   // Initiate ParticleBuffer class.
   ParticleBuffer::SetNumberOfProperties(nint, 2 * nreal + naux);
 }
@@ -543,6 +549,8 @@ void Particles::RemoveOneParticle(int k) {
         aux[j][k] = aux[j].back();
       for (int j = 0; j < nwork; ++j)
         work[j][k] = work[j].back();
+      for (int j = 0; j < ncplx; ++j)
+        cplxprop[j][k] = cplxprop[j].back();
     }
     // Remove the last particle.
     for (int j = 0; j < nint; ++j)
@@ -555,6 +563,9 @@ void Particles::RemoveOneParticle(int k) {
       aux[j].pop_back();
     for (int j = 0; j < nwork; ++j)
       work[j].pop_back();
+    for (int j = 0; j < ncplx; ++j)
+      cplxprop[j].pop_back();
+
   } else {
     // Throw error when index k is invalid.
     std::stringstream msg;
@@ -1101,6 +1112,16 @@ int Particles::AddWorkingArray() {
 }
 
 //--------------------------------------------------------------------------------------
+//! \fn int Particles::AddComplexProperty(const std::string& name)
+//! \brief adds one complex property to the photon class and returns the index.
+int Particles::AddComplexProperty(const std::string& name) {
+  cpname.push_back(name);
+  return ncplx++;
+}
+
+
+
+//--------------------------------------------------------------------------------------
 //! \fn void Particles::Resize(int new_npar)
 //! \brief changes number of particles.
 
@@ -1116,6 +1137,8 @@ void Particles::Resize(int new_npar) {
     aux[i].resize(new_npar);
   for (int i = 0; i < nwork; ++i)
     work[i].resize(new_npar);
+  for (int i = 0; i < ncplx; ++i)
+    cplxprop[i].resize(new_npar);
 
   // Flag new particles.
   for (int k = npar; k < new_npar; ++k)

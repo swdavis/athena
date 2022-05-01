@@ -5,6 +5,8 @@ Read in photon lists written by independent processes and join
 into single file
 """
 
+#SWD modify writing to file in the case of larger of memory cap
+
 # python standard modules
 import argparse
 import numpy as np

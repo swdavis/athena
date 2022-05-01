@@ -317,7 +317,7 @@ void GeneralMover::PropogatePolarization(Photon *pphot, Real step, int ip) {
 // this should be updated with every iteration since k continuously changes
 Real GeneralMover::StepSize(Photon *pphot, int ip) {
 
-  if (!pphot->pmy_mcb->varystep_flag) {
+  if (!pmy_mcb->varystep_flag) {
     return step_par; // keep step constant
   }
 

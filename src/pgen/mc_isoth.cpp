@@ -188,7 +188,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     }
 
     // Convert k unit vector to k^\alpha
-    if (general_mover_flag) {
+    if (pmy_mc->general_mover_flag) {
       pphot->k0p[ip] = 1.;
       pphot->k2p[ip] /= pphot->x1p[ip];
       pphot->k3p[ip] /= (pphot->x1p[ip]*sin(pphot->x2p[ip]));

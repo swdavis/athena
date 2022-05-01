@@ -227,9 +227,12 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     x[IMC3] = pphot->x3p[ip] = phi;
 
     // Initialize Stokes vector as unpolarized
-    pphot->sip[ip] = 1.0;
-    pphot->sqp[ip] = 0.0;
-    pphot->sup[ip] = 0.0;
+    if (pphot->polarized) {
+      pphot->sip[ip] = 1.0;
+      pphot->sqp[ip] = 0.0;
+      pphot->sup[ip] = 0.0;
+      pphot->svp[ip] = 0.0;
+    }
 
     // Set the initial photon direction using alpha, beta and the position
 
