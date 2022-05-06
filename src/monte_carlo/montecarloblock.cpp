@@ -613,7 +613,7 @@ void MonteCarloBlock::TransferPhotonsOld(int nphot) {
 
     if (moments_flag) {
       for (int ip=0; ip<pphot->nphot; ip++) {
-        UpdateSourceTerms(pphot,0.,0.,ip);
+        UpdateSourceTerms(pphot,0.,0.,ip,0.,0.,0.);
       }
     }
     // move photon to next scattering/absorption or to boundary
@@ -641,7 +641,7 @@ void MonteCarloBlock::TransferPhotonsOld(int nphot) {
         }
       }
       if (moments_flag) {
-          UpdateSourceTerms(pphot,0.,weight0,ip);
+          UpdateSourceTerms(pphot,0.,weight0,ip,0.,0.,0.);
       }
 
       // Scatter the photon packet
@@ -674,7 +674,7 @@ void MonteCarloBlock::TransferPhotonsOld(int nphot) {
           LorentzTransform(pphot,to_eulr,ip,ip);
         }
         if (moments_flag) {
-            UpdateSourceTerms(pphot,e_pre_scat,0.,ip);
+            UpdateSourceTerms(pphot,e_pre_scat,0.,ip,0.,0.,0.);
         }
       }
 
@@ -1091,13 +1091,13 @@ void MonteCarloBlock::ResetMoments() {
 //                                          int ip)
 //! \brief compute net photon cooling rate
 
-void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0, Real k1p0, Real k2p0, Real k3p0, int ip) {
+void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0, int ip, Real k1p0, Real k2p0, Real k3p0) {
   Real c = 2.99792458e10;
 
   // Components of momentum change --- assumes orthonormal basis
-  Real dp1p = pphot->wp[ip] * pphot->k1p[ip] * pphot->ep[ip] / c - weight0 * k1p0 * energy0 / c
-  Real dp2p = pphot->wp[ip] * pphot->k2p[ip] * pphot->ep[ip] / c - weight0 * k2p0 * energy0 / c
-  Real dp3p = pphot->wp[ip] * pphot->k3p[ip] * pphot->ep[ip] / c - weight0 * k3p0 * energy0 / c
+  Real dp1p = pphot->wp[ip] * pphot->k1p[ip] * pphot->ep[ip] / c - weight0 * k1p0 * energy0 / c;
+  Real dp2p = pphot->wp[ip] * pphot->k2p[ip] * pphot->ep[ip] / c - weight0 * k2p0 * energy0 / c;
+  Real dp3p = pphot->wp[ip] * pphot->k3p[ip] * pphot->ep[ip] / c - weight0 * k3p0 * energy0 / c;
 
   Real cool = (pphot->wp[ip] * pphot->ep[ip]) - (weight0 * energy0);
   //if (energy0 == 0.0)
@@ -1114,7 +1114,7 @@ void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0, Real weight
   } else if ((std::isinf(dp3p)) || (std::isnan(dp3p))) {
     std::cout << "Warning: UpdateSourceTerms momentum change (k3p) is : " << dp3p << std::endl;
     pphot->PrintPhoton(ip);
-  else {
+  } else {
     int &i = pphot->i1p[ip];
     int &j = pphot->i2p[ip];
     int &k = pphot->i3p[ip];
