@@ -78,7 +78,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
         Real dmin0 = std::min(dx1f, dw2);
         dl = std::min(dmin0, dw3); // Distance to nearest face
 
-        Real tauacc = 10000.;
+        Real tauacc = 1000.;
         // Try to perform MRW acceleration if optical depth is large enough
         if (dl*chi > tauacc) {
           //printf("%f\n", dl*chi);
@@ -107,34 +107,16 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
         tauremaining = 0.;
       }
 
-      // DEBUG: Print output accel data for plotting
-      // Line constants
-      //Real melectron = 9.10938215e-28;
-      //Real charge = 4.80320427e-10;
-      //Real osc_strength = 0.4164;
-      //Real nu0 = 2.468e15;
-      //Real c = 2.99792458e10;
-      //Real h = 6.62607015e-27;
-      //Real kb = 1.380649e-16;
-      //Real mass = 1.660538782e-24;
-
-      //int &i1 = pphot->i1p[ip];
-      //int &i2 = pphot->i2p[ip];
-      //int &i3 = pphot->i3p[ip];
-
-      // Cell properties
-      //Real tgas = pmcb->tgas(i3,i2,i1);
-      //Real rho = pmcb->rho(i3,i2,i1);
-
-      // Derived parameters
-      //Real vth = sqrt( 2 * kb * tgas / mass);
-      //Real doppwidth = nu0 * vth / c;
-      //Real lorwidth = 6.265e8/(4.*PI);
-      //Real a = lorwidth / doppwidth;
-
-      //Real x_s = (pphot->ep[ip] / h - nu0)/doppwidth;
-      //printf("%f %f %d\n", x_s, pphot->x1p[ip], accel_success);
-      ///////
+      // DEBUG: Print out photon position for each step in cartesian
+      //Real cth = cos(pphot->x2p[ip]);
+      //Real sth = sqrt(1. - SQR(cth));
+      //Real cph = cos(pphot->x3p[ip]);
+      //Real sph = sin(pphot->x3p[ip]);
+      //Real r = pphot->x1p[ip];
+      //Real x0 = r * sth * cph;
+      //Real y0 = r * sth * sph;
+      //Real z0 = r * cth;
+      //printf("%f %f %f %d\n", x0, y0, z0, accel_success);
 
       // SWD: Clean up these checks
       // Check if photon changed zones

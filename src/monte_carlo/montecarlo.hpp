@@ -36,7 +36,7 @@ class MCOutoupt;
 class MCCoord;
 
 // SWD: Make into a general MACRO set by configure?
-#define NMOM 16
+#define NMOM 19
 
 // Flags for controlling monte carlo emission, scattering, absorption, bcs
 enum EmissionFlag {EMISUSER = 0, EMISNONE = 1, EMISFF = 2};
@@ -50,7 +50,7 @@ enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY
 // Array indices for monte carlo radiation moments
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
       MCIPR12=7, MCIPR13=8, MCIPR23=9, MCINET = 10, MCIEN = 11, MCIKJ = 12, MCIPR21=13,
-      MCIPR31=14, MCIPR32=15};
+      MCIPR31=14, MCIPR32=15, MCIP1=16, MCIP2=17, MCIP3=18};
 //----------------------------------------------------------------------------------------
 // function pointer prototypes for user-defined modules set at runtime
 typedef Real (*EmisFunc_t)(MonteCarloBlock *pmcb);
@@ -342,7 +342,7 @@ public:
   void UpdateMoments(Photon *pphot, Real dl, Real etau, int ip);
   void NormalizeMoments(bool normalize);
   void ResetMoments();
-  void UpdateCooling(Photon *pphot, Real energy0, Real weight0, int ip);
+  void UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0, int ip, Real k1p0, Real k2p0, Real k3p0);
   //void GetPhotonsFromNeighbors();
   //void SendPhotonsToNeighbors();
 

@@ -470,7 +470,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
     if (moments_flag) {
       // Update cooling to relect newly emitted photons
       for (int ip=nold; ip<pphot->nphot; ip++) {
-        UpdateCooling(pphot,0.,0.,ip);
+        UpdateSourceTerms(pphot,0.,0.,ip,0.,0.,0.);
       }
     }
 
@@ -482,6 +482,10 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
       if (pphot->statp[ip] == EVOLVING) {
         // Account for absorption
         Real weight0 = pphot->wp[ip];
+        Real energy0 = pphot->ep[ip];
+        Real k1p0 = pphot->k1p[ip];
+        Real k2p0 = pphot->k2p[ip];
+        Real k3p0 = pphot->k3p[ip];
         if (absorption_meth == ABSWEIGHT) {
           pphot->wp[ip] *= (pphot->scp[ip]/(pphot->scp[ip]+pphot->acp[ip]));
           if(pphot->wp[ip] <= minweight) {
@@ -497,13 +501,17 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
           }
         }
         if (moments_flag) {
-          UpdateCooling(pphot,0.,weight0,ip);
+          UpdateSourceTerms(pphot,energy0,weight0,ip,k1p0,k2p0,k3p0);
         }
       } // status == evolving
 
       if (pphot->statp[ip] == EVOLVING) {
         // Scatter the photon
         Real e_pre_scat = pphot->ep[ip];
+        Real weight_pre_scat = pphot->wp[ip];
+        Real k1p_pre_scat = pphot->k1p[ip];
+        Real k2p_pre_scat = pphot->k2p[ip];
+        Real k3p_pre_scat = pphot->k3p[ip];
         // Lorentz transform to comoving frame for scattering
         if (boosts) {
           LorentzTransform(pphot,to_comv,ip,ip);
@@ -532,7 +540,8 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
           LorentzTransform(pphot,to_eulr,ip,ip);
         }
         if (moments_flag) {
-            UpdateCooling(pphot,e_pre_scat,0.,ip);
+            UpdateSourceTerms(pphot,e_pre_scat,weight_pre_scat,ip,
+                              k1p_pre_scat,k2p_pre_scat,k3p_pre_scat);
         }
       } // status == evolving
 
@@ -604,7 +613,7 @@ void MonteCarloBlock::TransferPhotonsOld(int nphot) {
 
     if (moments_flag) {
       for (int ip=0; ip<pphot->nphot; ip++) {
-        UpdateCooling(pphot,0.,0.,ip);
+        UpdateSourceTerms(pphot,0.,0.,ip);
       }
     }
     // move photon to next scattering/absorption or to boundary
@@ -632,7 +641,7 @@ void MonteCarloBlock::TransferPhotonsOld(int nphot) {
         }
       }
       if (moments_flag) {
-          UpdateCooling(pphot,0.,weight0,ip);
+          UpdateSourceTerms(pphot,0.,weight0,ip);
       }
 
       // Scatter the photon packet
@@ -665,7 +674,7 @@ void MonteCarloBlock::TransferPhotonsOld(int nphot) {
           LorentzTransform(pphot,to_eulr,ip,ip);
         }
         if (moments_flag) {
-            UpdateCooling(pphot,e_pre_scat,0.,ip);
+            UpdateSourceTerms(pphot,e_pre_scat,0.,ip);
         }
       }
 
@@ -1078,23 +1087,41 @@ void MonteCarloBlock::ResetMoments() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::UpdateCooling(Photon *pphot, Real energy0, Real weight0,
+//! \fn void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0,
 //                                          int ip)
 //! \brief compute net photon cooling rate
 
-void MonteCarloBlock::UpdateCooling(Photon *pphot, Real energy0, Real weight0, int ip) {
+void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0, Real k1p0, Real k2p0, Real k3p0, int ip) {
+  Real c = 2.99792458e10;
 
-  Real cool = (pphot->wp[ip] - weight0) * (pphot->ep[ip] - energy0);
+  // Components of momentum change --- assumes orthonormal basis
+  Real dp1p = pphot->wp[ip] * pphot->k1p[ip] * pphot->ep[ip] / c - weight0 * k1p0 * energy0 / c
+  Real dp2p = pphot->wp[ip] * pphot->k2p[ip] * pphot->ep[ip] / c - weight0 * k2p0 * energy0 / c
+  Real dp3p = pphot->wp[ip] * pphot->k3p[ip] * pphot->ep[ip] / c - weight0 * k3p0 * energy0 / c
+
+  Real cool = (pphot->wp[ip] * pphot->ep[ip]) - (weight0 * energy0);
   //if (energy0 == 0.0)
   //  printf("weight, cool: %g %g\n",pphot->weight,cool);
   if ((std::isinf(cool)) || (std::isnan(cool))) {
-    std::cout << "Warning: UpdateCooling cooling is : " << cool << std::endl;
+    std::cout << "Warning: UpdateSourceTerms cooling is : " << cool << std::endl;
     pphot->PrintPhoton(ip);
-  } else {
+  } else if ((std::isinf(dp1p)) || (std::isnan(dp1p))) {
+    std::cout << "Warning: UpdateSourceTerms momentum change (k1p) is : " << dp1p << std::endl;
+    pphot->PrintPhoton(ip);
+  } else if ((std::isinf(dp2p)) || (std::isnan(dp2p))) {
+    std::cout << "Warning: UpdateSourceTerms momentum change (k2p) is : " << dp2p << std::endl;
+    pphot->PrintPhoton(ip);
+  } else if ((std::isinf(dp3p)) || (std::isnan(dp3p))) {
+    std::cout << "Warning: UpdateSourceTerms momentum change (k3p) is : " << dp3p << std::endl;
+    pphot->PrintPhoton(ip);
+  else {
     int &i = pphot->i1p[ip];
     int &j = pphot->i2p[ip];
     int &k = pphot->i3p[ip];
     moments(MCINET,k,j,i) -= cool;
+    moments(MCIP1,k,j,i) -= dp1p;
+    moments(MCIP2,k,j,i) -= dp2p;
+    moments(MCIP3,k,j,i) -= dp3p;
   }
 
 }
