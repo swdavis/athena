@@ -1105,11 +1105,27 @@ void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0, Real weight
     k2p0 *= pphot->x1p[ip];
     k3p0 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
   }
+  Real norm0 = sqrt(SQR(k1p0) + SQR(k2p0) + SQR(k3p0));
+  if ((fabs(norm0-1.) > 1.0e-8) && (norm0 > 1.0e-8)) {
+    k1p0 /= norm0;
+    k2p0 /= norm0;
+    k3p0 /= norm0;
+  }
+  Real norm = sqrt(SQR(k1) + SQR(k2) + SQR(k3));
+  if ((fabs(norm-1.) > 1.0e-8) && (norm > 1.0e-8)) {
+    k1 /= norm;
+    k2 /= norm;
+    k3 /= norm;
+  }
+  //norm0 = sqrt(SQR(k1p0) + SQR(k2p0) + SQR(k3p0));
+  //printf("norm0: %f\n", norm0);
+  //norm = sqrt(SQR(k1) + SQR(k2) + SQR(k3));
+  //printf("norm: %f\n", norm);
 
   // Components of momentum change --- assumes orthonormal basis
-  Real dp1p = pphot->wp[ip] * pphot->k1p[ip] * pphot->ep[ip] / c - weight0 * k1p0 * energy0 / c;
-  Real dp2p = pphot->wp[ip] * pphot->k2p[ip] * pphot->ep[ip] / c - weight0 * k2p0 * energy0 / c;
-  Real dp3p = pphot->wp[ip] * pphot->k3p[ip] * pphot->ep[ip] / c - weight0 * k3p0 * energy0 / c;
+  Real dp1p = pphot->wp[ip] * k1 * pphot->ep[ip] / c - weight0 * k1p0 * energy0 / c;
+  Real dp2p = pphot->wp[ip] * k2 * pphot->ep[ip] / c - weight0 * k2p0 * energy0 / c;
+  Real dp3p = pphot->wp[ip] * k3 * pphot->ep[ip] / c - weight0 * k3p0 * energy0 / c;
 
   Real cool = (pphot->wp[ip] * pphot->ep[ip]) - (weight0 * energy0);
   //if (energy0 == 0.0)
