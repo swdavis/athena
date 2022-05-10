@@ -749,6 +749,16 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       AppendOutputDataNode(pod);
       num_vars_++;
     }
+    // monte carlo rad force vector
+    if (output_params.variable.compare("mcmom") == 0 ||
+        output_params.variable.compare("Radforce") == 0) {
+      pod = new OutputData;
+      pod->type = "VECTORS";
+      pod->name = "Radforce";
+      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIP1,3);
+      AppendOutputDataNode(pod);
+      num_vars_+=3;
+    }
     // monte carlo mean energy
     if (output_params.variable.compare("mcmom") == 0 ||
         output_params.variable.compare("Eavemc") == 0) {

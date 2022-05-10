@@ -49,8 +49,8 @@ enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY
                      MC_USER_BNDRY = 6, MC_BLOCK_BNDRY = 7};
 // Array indices for monte carlo radiation moments
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
-      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCINET = 10, MCIEN = 11, MCIKJ = 12, MCIPR21=13,
-      MCIPR31=14, MCIPR32=15, MCIP1=16, MCIP2=17, MCIP3=18};
+      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCINET = 10, MCIP1=11, MCIP2=12, MCIP3=13, MCIEN = 14, 
+      MCIKJ = 15, MCIPR21=16, MCIPR31=17, MCIPR32=18};
 //----------------------------------------------------------------------------------------
 // function pointer prototypes for user-defined modules set at runtime
 typedef Real (*EmisFunc_t)(MonteCarloBlock *pmcb);

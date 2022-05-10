@@ -1031,7 +1031,7 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
           }
         }}}
     // Normalize remaining moments by volume and global norm (counts)
-    for (int n=0; n<11; ++n) {
+    for (int n=0; n<14; ++n) {
       Real norm = normall;
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
@@ -1049,7 +1049,7 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
         }}}
   } else {
     // Undo normalization for continuing evolution
-    for (int n=0; n<11; ++n) {
+    for (int n=0; n<14; ++n) {
       Real norm = normall;
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
@@ -1093,6 +1093,18 @@ void MonteCarloBlock::ResetMoments() {
 
 void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0, int ip, Real k1p0, Real k2p0, Real k3p0) {
   Real c = 2.99792458e10;
+
+  Real k1 = pphot->k1p[ip];
+  Real k2 = pphot->k2p[ip];
+  Real k3 = pphot->k3p[ip];
+
+  // Normalize k vector if using general mover in spherical polar coords
+  if ((COORDINATE_SYSTEM == "spherical_polar") && (general_mover_flag)) {
+    k2 *= pphot->x1p[ip];
+    k3 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
+    k2p0 *= pphot->x1p[ip];
+    k3p0 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
+  }
 
   // Components of momentum change --- assumes orthonormal basis
   Real dp1p = pphot->wp[ip] * pphot->k1p[ip] * pphot->ep[ip] / c - weight0 * k1p0 * energy0 / c;

@@ -78,7 +78,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
         Real dmin0 = std::min(dx1f, dw2);
         dl = std::min(dmin0, dw3); // Distance to nearest face
 
-        Real tauacc = 1000.;
+        Real tauacc = 10000.;
         // Try to perform MRW acceleration if optical depth is large enough
         if (dl*chi > tauacc) {
           //printf("%f\n", dl*chi);
