@@ -401,6 +401,30 @@ int main(int argc, char *argv[]) {
   }
 #endif // ENABLE_EXCEPTIONS
 
+#ifdef ENABLE_EXCEPTIONS
+  try {
+#endif
+    pmc->Initialize(pinput);
+#ifdef ENABLE_EXCEPTIONS
+  }
+  catch(std::bad_alloc& ba) {
+    std::cout << "### FATAL ERROR in main" << std::endl << "memory allocation failed "
+              << "in MonteCarlo problem generator " << ba.what() << std::endl;
+#ifdef MPI_PARALLEL
+    MPI_Finalize();
+#endif
+    return(0);
+  }
+  catch(std::exception const& ex) {
+    std::cout << ex.what() << std::endl;  // prints diagnostic message
+#ifdef MPI_PARALLEL
+    MPI_Finalize();
+#endif
+    return(0);
+  }
+#endif // ENABLE_EXCEPTIONS 
+
+
   //--- Step 7. --------------------------------------------------------------------------
   // Change to run directory, initialize outputs object, and make output of ICs
 
@@ -410,7 +434,7 @@ int main(int argc, char *argv[]) {
 #endif
     ChangeRunDir(prundir);
     pouts = new Outputs(pmesh, pinput);
-    if ((res_flag==0) && (!MONTE_CARLO_STATIC)) 
+    if ((res_flag==0) && (!MONTE_CARLO_STATIC))
       pouts->MakeOutputs(pmesh,pinput);
 #ifdef ENABLE_EXCEPTIONS
   }
@@ -445,10 +469,10 @@ int main(int argc, char *argv[]) {
 #endif
 
   while ((pmesh->time < pmesh->tlim) &&
-         (pmesh->nlim < 0 || pmesh->ncycle < pmesh->nlim) &&
-         !(MONTE_CARLO_STATIC)) {
+         (pmesh->nlim < 0 || pmesh->ncycle < pmesh->nlim)) {
     if (Globals::my_rank == 0)
-      pmesh->OutputCycleDiagnostics();
+      if (!MONTE_CARLO_STATIC)
+        pmesh->OutputCycleDiagnostics();
 
     if (STS_ENABLED) {
       pmesh->sts_loc = TaskType::op_split_before;
@@ -550,6 +574,8 @@ int main(int argc, char *argv[]) {
 
   pmesh->UserWorkAfterLoop(pinput);
 
+  if (MONTE_CARLO_ENABLED)
+    pmc->MakeOutputs();
 #ifdef ENABLE_EXCEPTIONS
   try {
 #endif

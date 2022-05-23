@@ -592,11 +592,11 @@ void ScatterDust(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
   MCRandom *pran = pmcb->pran;
   PhotonMover *pmover = pmcb->pmover;
 
-  Real g=0.44; //will make an parameter
-  Real pl=0.43; //will make a parameter
-  Real pc=0;
-  Real sc = 1; //asymmentry of circular polariztion ---- idk what value for this
-      
+  Real g=0.41; //will make an parameter
+  Real g2 = g*g;
+  Real pl=0.51; //will make a parameter
+  Real pc=0.;
+  Real sc = 1.; //asymmentry of circular polariztion ---- idk what value for this
   for (int ip=ips; ip<=ipe; ip++) {
 
     Real norm = pphot->sip[0];
@@ -605,11 +605,6 @@ void ScatterDust(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
     stokes[1] = pphot->sqp[ip] / norm;
     stokes[2] = pphot->sup[ip] / norm;
     stokes[3] = pphot->svp[ip] / norm;
-    //added stokes 3   
- //old stokes values,
-
-    // SWD: should be done outside of scattering -- i.e. transform to tetrad
-    //pmover->CurvalinearToCartesian(pphot);
 
     // Polarized scattering must be computed relative to cartesian bases due to
     // definition of stokes vectors
@@ -617,72 +612,64 @@ void ScatterDust(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
     Real &ky = pphot->k2p[ip];
     Real &kz = pphot->k3p[ip];
 
-    Real mu = kz;
-    Real stheta = sqrt(1. - SQR(mu));
-    Real phio = acos(kx / stheta);
-    if(ky < 0.0)
-      phio = 2.*PI - phio;
+    Real ctho = kz;
+    Real stho = sqrt(1. - SQR(ctho));
+    //printf("tho: %g %g\n",ctho,stho);
+    //Real phio = acos(kx / stho);
+    //if(ky < 0.0)
+    //  phio = 2.*PI - phio;
+    Real phio = atan2(ky,kx);
+    if(phio < 0.0)
+      phio += 2.*PI;
 
-    Real smu, sstheta, s1, s2, s3, s4, i1;  //added s4
-    Real ci1, si1, ci2, si2, s2i1, c2i1;
-    Real intensi;
-   
-    smu = (1.+SQR(g)-SQR((1-SQR(g))/(1-g+2*g*pran->uniform())))/(2*g);
-    sstheta = sqrt(1.0 - SQR(smu));
-   
-       Real theta = acos(smu); //this is theta right?
-    Real thetaf = theta*(3.13*sc*exp(-7*theta/PI)); //define thetaf  --what is s?
-      //changed to p12&3 from equation 32
-    s1 = (1-SQR(g))/pow((1+SQR(g)-(2*g*smu)),1.5);
-    s2 = -pl*s1*((1-SQR(smu))/1+SQR(smu));
-    s3 = s1*(2*smu)/(1+SQR(smu));
-    s4 = -pc*s1*(1-SQR(thetaf))/(1+SQR(cos(thetaf))); //also added p4
+    Real xi = pran->uniform();
+    Real cths = (1.+g2-SQR( (1. - g2) / (1. - g + 2.*g*xi)))/(2.*g);
+    //Real cths = (1.+g2-SQR((1.-g2)/(1.-g+2.*g*0.05)))/(2.*g); //SWD
+    Real sths = sqrt(1.0 - SQR(cths));
 
-    //  s4 = -pc*pl*(1-c)/(1+c);
+    //changed to p12&3 from equation 32
+    Real s1 = (1. - g2) / pow(1. + g2 - 2.*g*cths,1.5);
+    Real s2 = -pl * s1 * (1. - SQR(cths)) / (1. + SQR(cths));
+    Real s3 = s1 * (2. * cths) / (1. + SQR(cths));
+    Real ths = acos(cths); //scattering angle
+    Real thf = ths * (1. + (3.13 * sc *exp(-7. * ths / PI)));
+    Real s4 = -pc * s1 * (1. - SQR(cos(thf))) / (1. + SQR(cos(thf)));
 
-      //what are pl and pc
-      //pc=0
 
-    i1 = 2. * PI * pran->uniform();
-    ci1 = cos(i1);
-    si1 = sin(i1);
-    s2i1 = 2. * si1 * ci1;
-    c2i1 = 2. * ci1 * ci1 - 1.;
-    //added
-    Real i3 = 2. * PI - i1;
-    Real s2i3 = 2.*sin(i3)*cos(i3);
-    Real sci3 = 2.*cos(i3)*cos(i3)-1.; 
-    Real c2i3 = 2.*cos(i3)*cos(i3)-1.;
-
+    //Real i1 = 0.2*PI*2.; //SWD
+    //Real i1 = PI * pran->uniform()+PI;//SWD
+    Real i1 = 2. * PI * pran->uniform();
+    Real ci1 = cos(i1);
+    Real si1 = sin(i1);
+    Real s2i1 = 2. * si1 * ci1;
+    Real c2i1 = 2. * ci1 * ci1 - 1.;
 
     Real r00 =  s1;
     Real r01 =  s2 * c2i1;
     Real r02 = -s2 * s2i1;
-    
-    intensi = r00 * stokes[0] + r01 * stokes[1] + r02 * stokes[2];
-      
+    //printf("\ns %g %g %g %g\n",s1,s2,s3,s4);
+    //printf("r %g %g %g\n",r00,r01,r02);
+    Real inew = r00 * stokes[0] + r01 * stokes[1] + r02 * stokes[2];
+    Real r10, r11, r12, r13, r20, r21, r22, r23, r31, r32, r33;
+    Real cthp,sthp,phip;
+    if(i1 < PI) { // i1 < pi
+      cthp = ctho * cths + stho * sths * ci1;
+      if(cthp > 1.0)
+        cthp = 1.0;
+      else if(cthp < -1.0)
+        cthp = -1.0;
+      sthp = sqrt(1. - SQR(cthp));
 
-
-    Real r10,r11,r12,r20,r21,r22;
-    Real r23, r31, r32, r33;
-    Real mup,sthetap,phip;
-    if(i1 < PI) {
-      mup = mu * smu + stheta * sstheta * ci1;
-      if(mup > 1.0)
-        mup = 1.0;
-      else if(mup < -1.0)
-        mup = -1.0;
-
-      sthetap = sqrt(1. - SQR(mup));
-
-      if( (sthetap != 0.) && (sstheta !=0.)) {
-        si2 = si1 * stheta / sthetap;
-        ci2 = (mu - mup * smu)/ (sthetap * sstheta);
+      Real ci2,si2;
+      if( (sthp != 0.) && (sths !=0.)) {
+        //printf("%g %g %g\n",si1,stho,sthp);
+        si2 = si1 * stho / sthp;
+        ci2 = (ctho - cthp * cths)/ (sthp * sths);
       } else {
-        if (sthetap == 0.0) {
+        if (sthp == 0.0) {
           si2 = 0.;
           ci2 = 1.;
-        } else if (sstheta == 0.0) {
+        } else if (sths == 0.0) {
           si2 = si1;
           ci2 = -ci1;
         }
@@ -690,7 +677,7 @@ void ScatterDust(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
       Real s2i2 = 2. * si2 * ci2;
       Real c2i2 = 2. * ci2 * ci2 - 1.;
 
-      Real cdphi = -ci1 * ci2 + si1 * si2 * smu;
+      Real cdphi = -ci1 * ci2 + si1 * si2 * cths;
       if(cdphi > 1.)
         cdphi = 1.0;
       else if(cdphi < -1.)
@@ -706,39 +693,37 @@ void ScatterDust(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
       Real s1s2 = s2i1 * s2i2;
       Real c1s2 = c2i1 * s2i2;
       Real s1c2 = c2i2 * s2i1;
-
+      //printf("a %g %g %g %g %g %g\n",c1c2,s1s2,c2i1,c2i2,s2i1,s2i2);
       r10 =  s2 * c2i2;
       r11 =  s1 * c1c2 - s3 * s1s2;
       r12 = -s1 * s1c2 - s3 * c1s2;
+      r13 =  s4 * s2i2;
       r20 =  s2 * s2i2;
       r21 =  s1 * c1s2 + s3 * s1c2;
       r22 =  s3 * c1c2 - s1 * s1s2;
-      //add up to 33
-  
-      r23 =  -s4 * c2i2;
-      r31 =  -s4 * s2i3;
-      r32 =  s4 * c2i3;
-      r33 = s3;
-
-    } else {
+      r23 = -s4 * c2i2;
+      r31 =  s4 * s2i1;
+      r32 =  s4 * c2i1;
+      r33 =  s3;
+    } else { // i1 > pi
       si1 = -si1;
       s2i1 = -s2i1;
-      mup = mu * smu + stheta * sstheta * ci1;
-      if(mup > 1.)
-        mup = 1.;
-      else if(mup < -1.)
-        mup = -1.;
+      cthp = ctho * cths + stho * sths * ci1;
+      if(cthp > 1.)
+        cthp = 1.;
+      else if(cthp < -1.)
+        cthp = -1.;
+      sthp = sqrt(1. - SQR(cthp));
 
-      sthetap = sqrt(1. - SQR(mup));
-      if( (sthetap != 0.) && (sstheta != 0.)) {
-        si2 = si1 * stheta / sthetap;
-        ci2 = (mu - mup * smu)/ (sthetap * sstheta);
-      }
-      else {
-        if (sstheta==0.0) {
+      Real ci2, si2;
+      if( (sthp != 0.) && (sths != 0.)) {
+        si2 = si1 * stho / sthp;
+        ci2 = (ctho - cthp * cths)/ (sthp * sths);
+      } else {
+        if (sths==0.0) {
           si2 = 0.0;
           ci2 = 1.0;
-        } else if (sthetap==0.0) {
+        } else if (sthp==0.0) {
           si2 = si1;
           ci2 = -ci1;
         }
@@ -746,8 +731,7 @@ void ScatterDust(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
 
       Real s2i2 = 2.0*si2*ci2;
       Real c2i2 = 2.0*ci2*ci2-1.0;
-
-      Real cdphi = -ci1 * ci2 + si1 * si2 * smu;
+      Real cdphi = -ci1 * ci2 + si1 * si2 * cths;
       if(cdphi > 1.)
         cdphi = 1.0;
       else if(cdphi < -1.)
@@ -764,35 +748,38 @@ void ScatterDust(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
       Real s1s2 = s2i1 * s2i2;
       Real c1s2 = c2i1 * s2i2;
       Real s1c2 = c2i2 * s2i1;
-
+      //printf("b %g %g\n",c1c2,s1s2);
+      // matrix elements
       r10 =  s2 * c2i2;
       r11 =  s1 * c1c2 - s3 * s1s2;
       r12 =  s1 * s1c2 + s3 * c1s2;
+      r13 = -s4 * s2i2;
       r20 = -s2 * s2i2;
       r21 = -s1 * c1s2 - s3 * s1c2;
       r22 =  s3 * c1c2 - s1 * s1s2;
       r23 = -s4 * c2i2;
-      r31 =  s4 * s2i1;
+      r31 = -s4 * s2i1;
       r32 =  s4 * c2i1;
       r33 =  s3;
-//added rest of matrix
 
-
-    } // end if (i1 < PI) else
-
+    } // end (i1 < PI)
+    //printf("%g %g %g\n",phip,phio,phip-phio);
+    //printf("%g %g %g %g\n",r10,r11,r12,r13);
+    //printf("%g %g %g %g\n",r20,r21,r22,r23);
+    //printf("%g %g %g\n",r31,r32,r33);
     // Calculate new stokes vectors from rotation matrix.  Note that the
     // value of the overall intensity (stokes[0]) does not change
-    pphot->sqp[ip] = norm*(r10*stokes[0]+r11*stokes[1]+r12*stokes[2])/intensi;
-    pphot->sup[ip] = norm*(r20*stokes[0]+r21*stokes[1]+r22*stokes[2])/intensi;
-    pphot->svp[ip] = norm*(r31*stokes[1]+r32*stokes[2]+r33*stokes[3])/intensi;
+    pphot->sqp[ip] = norm*(r10*stokes[0]+r11*stokes[1]+r12*stokes[2]+r13*stokes[3])/s1;
+    pphot->sup[ip] = norm*(r20*stokes[0]+r21*stokes[1]+r22*stokes[2]+r23*stokes[3])/s1;
+    pphot->svp[ip] = norm*(r31*stokes[1]+r32*stokes[2]+r33*stokes[3])/s1;
 
 //added stoke 4; svp[ip]
 
 
     // Calculate new photon direction
-    kx = sthetap * cos(phip);
-    ky = sthetap * sin(phip);
-    kz = mup;
+    kx = sthp * cos(phip);
+    ky = sthp * sin(phip);
+    kz = cthp;
 
     // SWD: Should be done outside of scattering
     //pmover->CartesianToCurvalinear(pphot);

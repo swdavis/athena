@@ -19,6 +19,7 @@
 #include "photonmover.hpp"
 #include "../globals.hpp"
 #include "../outputs/io_wrapper.hpp"
+static int nspec = 0;
 
 namespace mcoutput {
 //----------------------------------------------------------------------------------------
@@ -429,6 +430,9 @@ bool Spectrum::ScreenCoordinates(Photon *pphot, int ip) {
 
 void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
 
+  nspec++;
+  MonteCarloBlock *pmcb = pphot->pmy_mcb;
+
   // if face is set, then determine if photon positions matches
   if (face != BoundaryFace::undef) {
     enum BoundaryFace photon_face = GetPhotonFace(pphot,ip);
@@ -630,6 +634,7 @@ void Spectrum::AddSpectrum(Spectrum *pspec) {
 enum BoundaryFace Spectrum::GetPhotonFace(Photon *pphot, int ip) {
 
   MonteCarloBlock *pmcb = pphot->pmy_mcb;
+
   if(pphot->i1p[ip] > pmcb->ie)
     return BoundaryFace::outer_x1;
   else if(pphot->i1p[ip] < pmcb->is)
@@ -1159,6 +1164,7 @@ void Spectrum::WriteSpectrumLegacy(std::string filename, Real norm) {
 
 void Spectrum::WriteSpectrum(std::string fname, int nphot) {
 
+  printf("nspec %d\n",nspec);
   // open file for output
   FILE *pfile;
   std::stringstream msg;
@@ -1297,12 +1303,16 @@ void MCOutput::CollectSpectrum(MonteCarlo *pmc) {
     int id = poutspec->id;
     poutspec->ResetSpectrum();
     // loop over monte carlo blocks
-    MonteCarloBlock *pmcb = pmc->pblock;
-    pblockspec = pmcb->pspec;
-    while (pblockspec->id != id) {
-      pblockspec = pblockspec->next;
+    for (int i=0; i<pmc->nblocal; i++) {
+      MonteCarloBlock *pmcb = pmc->my_blocks(i);
+      pblockspec = pmcb->pspec;
+      while (pblockspec->id != id) {
+        pblockspec = pblockspec->next;
+      }
+      if (pblockspec->id == id) {
+        poutspec->AddSpectrum(pblockspec);
+      }
     }
-    poutspec->AddSpectrum(pblockspec);
     poutspec = poutspec->next;
   }
 

@@ -940,6 +940,7 @@ void OutputType::ClearOutputData() {
 //! \brief scans through singly linked list of OutputTypes and makes any outputs needed.
 
 void Outputs::MakeOutputs(Mesh *pm, ParameterInput *pin, bool wtflag) {
+
   bool first=true;
   OutputType* ptype = pfirst_type_;
   while (ptype != nullptr) {

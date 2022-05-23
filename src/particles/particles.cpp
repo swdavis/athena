@@ -332,19 +332,19 @@ Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
     xi1(work[ixi1]), xi2(work[ixi2]), xi3(work[ixi3]) {
   // Point to the calling MeshBlock.
   pmy_block = pmb;
-  //SWD: temporary
+
+  pmy_mesh = pmb->pmy_mesh;
+  pbval_ = pmb->pbval;
+  npar = 0;
+
+  // Check active dimensions.
+  active1_ = pmy_mesh->mesh_size.nx1 > 1;
+  active2_ = pmy_mesh->mesh_size.nx2 > 1;
+  active3_ = pmy_mesh->mesh_size.nx3 > 1;
+
   if (!MONTE_CARLO_ENABLED) {
-    pmy_mesh = pmb->pmy_mesh;
-    pbval_ = pmb->pbval;
-    npar = 0;
-
-    // Check active dimensions.
-    active1_ = pmy_mesh->mesh_size.nx1 > 1;
-    active2_ = pmy_mesh->mesh_size.nx2 > 1;
-    active3_ = pmy_mesh->mesh_size.nx3 > 1;
-
-  // Allocate mesh auxiliaries.
-  ppm = new ParticleMesh(this);
+    // Allocate mesh auxiliaries.
+    ppm = new ParticleMesh(this);
   }
   // Initiate ParticleBuffer class.
   ParticleBuffer::SetNumberOfProperties(nint, 2 * nreal + naux);
@@ -388,7 +388,8 @@ void Particles::ClearBoundary() {
 #endif
   }
 
-  ppm->ClearBoundary();
+  if (!MONTE_CARLO_ENABLED)
+    ppm->ClearBoundary();
 }
 
 //--------------------------------------------------------------------------------------
@@ -523,9 +524,11 @@ void Particles::LinkNeighbors(MeshBlockTree &tree,
     }
   }
 
-  // Initiate ParticleMesh boundary data.
-  ppm->SetBoundaryAttributes();
-  ppm->InitiateBoundaryData();
+  if (!MONTE_CARLO_ENABLED) {
+    // Initiate ParticleMesh boundary data.
+    ppm->SetBoundaryAttributes();
+    ppm->InitiateBoundaryData();
+  }
 
   // Initiate boundary values.
   ClearBoundary();
@@ -1054,6 +1057,7 @@ struct Neighbor* Particles::FindTargetNeighbor(
 void Particles::FlushReceiveBuffer(ParticleBuffer& recv) {
   // Check the memory size.
   int nprecv(recv.npar), npar_old(npar);
+  //printf("npar,nprecv: %d %d\n",npar,nprecv);
   Resize(npar + nprecv);
 
   // Flush the receive buffers.
@@ -1071,8 +1075,8 @@ void Particles::FlushReceiveBuffer(ParticleBuffer& recv) {
   }
 
   // Find their position indices.
-  GetPositionIndices(npar_old, npar, xp, yp, zp, xi1, xi2, xi3);
-
+  if (!MONTE_CARLO_ENABLED)
+    GetPositionIndices(npar_old, npar, xp, yp, zp, xi1, xi2, xi3);
   // Clear the receive buffers.
   recv.npar = 0;
 }
@@ -1113,7 +1117,7 @@ int Particles::AddWorkingArray() {
 
 //--------------------------------------------------------------------------------------
 //! \fn int Particles::AddComplexProperty(const std::string& name)
-//! \brief adds one complex property to the photon class and returns the index.
+//! \brief adds one complex property to the particle class and returns the index.
 int Particles::AddComplexProperty(const std::string& name) {
   cpname.push_back(name);
   return ncplx++;

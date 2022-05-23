@@ -60,6 +60,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
 
   // Loop over MeshBlocks
   for (int b=0; b<pm->nblocal; ++b) {
+
     MeshBlock *pmb = pm->my_blocks(b);
     // set start/end array indices depending on whether ghost zones are included
     out_is = pmb->is; out_ie = pmb->ie;

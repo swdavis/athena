@@ -22,7 +22,7 @@
 
 class ParticleBuffer {
 friend class Particles;
-
+friend class Photon;
  public:
   // Class methods
   static void SetNumberOfProperties(int nint0, int nreal0);

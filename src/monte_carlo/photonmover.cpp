@@ -432,54 +432,42 @@ void PhotonMover::MovePhotonToNextZone(Photon *pphot, MCCoord *pco, MonteCarloBl
     //update x1 face
     if (ascend[0]) {
       pphot->i1p[ip]++;
-      if(pphot->i1p[ip] <= pmcb->ie)
-        pphot->x1p[ip] = pco->x1f(pphot->i1p[ip]);
-      else {
+      pphot->x1p[ip] = pco->x1f(pphot->i1p[ip]);
+      if(pphot->i1p[ip] > pmcb->ie)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::outer_x1](pmcb,pco,pphot,ip);
-      }
     } else {
       pphot->i1p[ip]--;
-      if(pphot->i1p[ip] >= pmcb->is)
-        pphot->x1p[ip] = pco->x1f(pphot->i1p[ip]+1);
-      else {
+      pphot->x1p[ip] = pco->x1f(pphot->i1p[ip]+1);
+      if(pphot->i1p[ip] < pmcb->is)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::inner_x1](pmcb,pco,pphot,ip);
-      }
     }
   }
   if ((face == 1) || (face == 3) || (face == 4) || (face == 6)) {
     //update x2 face
     if (ascend[1]) {
       pphot->i2p[ip]++;
-      if(pphot->i2p[ip] <= pmcb->je)
-        pphot->x2p[ip] = pco->x2f(pphot->i2p[ip]);
-      else {
+      pphot->x2p[ip] = pco->x2f(pphot->i2p[ip]);
+      if(pphot->i2p[ip] > pmcb->je)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::outer_x2](pmcb,pco,pphot,ip);
-      }
     } else {
       pphot->i2p[ip]--;
-      if(pphot->i2p[ip] >= pmcb->js)
-        pphot->x2p[ip] = pco->x2f(pphot->i2p[ip]+1);
-      else {
+      pphot->x2p[ip] = pco->x2f(pphot->i2p[ip]+1);
+      if(pphot->i2p[ip] < pmcb->js)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::inner_x2](pmcb,pco,pphot,ip);
-      }
     }
   }
   if ((face == 2) || (face == 4) || (face == 5) || (face == 6)) {
     //update x3 face
     if (ascend[2]) {
       pphot->i3p[ip]++;
-      if(pphot->i3p[ip] <= pmcb->ke)
-        pphot->x3p[ip] = pco->x3f(pphot->i3p[ip]);
-      else {
+      pphot->x3p[ip] = pco->x3f(pphot->i3p[ip]);
+      if(pphot->i3p[ip] > pmcb->ke)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::outer_x3](pmcb,pco,pphot,ip);
-      }
     } else {
       pphot->i3p[ip]--;
-      if(pphot->i3p[ip] >= pmcb->ks)
-        pphot->x3p[ip] = pco->x3f(pphot->i3p[ip]+1);
-      else {
+      pphot->x3p[ip] = pco->x3f(pphot->i3p[ip]+1);
+      if(pphot->i3p[ip] < pmcb->ks)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::inner_x3](pmcb,pco,pphot,ip);
-      }
     }
   }
 

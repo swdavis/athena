@@ -48,6 +48,19 @@ Real InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
         if (pmcb->emission(k,j,i) > emm_max) emm_max = pmcb->emission(k,j,i);
         if (pmcb->emission(k,j,i) < emm_min) emm_min = pmcb->emission(k,j,i);
       }}}
+#ifdef MPI_PARALLEL
+  if (Globals::my_rank == 0) {
+    MPI_Reduce(MPI_IN_PLACE,&emm_min,1,MPI_ATHENA_REAL,MPI_MIN,0,
+               MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE,&emm_max,1,MPI_ATHENA_REAL,MPI_MAX,0,
+               MPI_COMM_WORLD);
+  } else {
+    MPI_Reduce(&emm_min,&emm_min,1,MPI_ATHENA_REAL,MPI_MIN,0,
+               MPI_COMM_WORLD);
+    MPI_Reduce(&emm_max,&emm_max,1,MPI_ATHENA_REAL,MPI_MAX,0,
+               MPI_COMM_WORLD);
+  }
+#endif
   if (Globals::my_rank == 0) {
     std::cout << "Emission array range (min, max): " << emm_min << " " << emm_max
               << std::endl;

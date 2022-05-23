@@ -32,6 +32,7 @@
 #include "../particles/particles.hpp"
 #include "../reconstruct/reconstruction.hpp"
 #include "../scalars/scalars.hpp"
+#include "../monte_carlo/montecarlo.hpp"
 #include "task_list.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -101,6 +102,13 @@ TimeIntegratorTaskList::TimeIntegratorTaskList(ParameterInput *pin, Mesh *pm) {
           << std::endl;
       ATHENA_ERROR(msg);
     }
+  }
+  if (MONTE_CARLO_STATIC) {
+    //nstages = 1;
+    //{using namespace HydroIntegratorTaskNames;
+    //  AddTask(TRANS_STAT,NONE);
+    //}
+    return;
   }
 
   if (integrator == "vl2") {
@@ -886,9 +894,9 @@ TimeIntegratorTaskList::TimeIntegratorTaskList(ParameterInput *pin, Mesh *pm) {
 
   // Set cfl_number based on user input and time integrator CFL limit
   Real cfl_number;
-  if (MONTE_CARLO_STATIC)
-    cfl_number = 0.1;
-  else
+  //if (MONTE_CARLO_STATIC)
+  //  cfl_number = 0.1;
+  //else
     cfl_number = pin->GetReal("time","cfl_number");
   if (cfl_number > cfl_limit
       && pm->fluid_setup == FluidFormulation::evolve) {
@@ -1414,6 +1422,11 @@ void TimeIntegratorTaskList::AddTask(const TaskID& id, const TaskID& dep) {
         static_cast<TaskStatus (TaskList::*)(MeshBlock*,int)>
         (&TimeIntegratorTaskList::CalculateFieldOrbital);
     task_list_[ntasks].lb_time = true;
+  } else if (id == TRANS_STAT) {
+    task_list_[ntasks].TaskFunc=
+        static_cast<TaskStatus (TaskList::*)(MeshBlock*,int)>
+        (&TimeIntegratorTaskList::TransferPhotonsStatic);
+    task_list_[ntasks].lb_time = true;
   } else {
     std::stringstream msg;
     msg << "### FATAL ERROR in AddTask" << std::endl
@@ -1467,6 +1480,7 @@ void TimeIntegratorTaskList::StartupTaskList(MeshBlock *pmb, int stage) {
       pmb->pbval->ComputeShear(time+dt_fc, time+dt_int);
   }
   if (PARTICLES) pmb->ppar->StartReceiving();
+  //if (MONTE_CARLO_ENABLED) pmb->pmy_mcb->pphot->StartReceiving();
 
   if (stage_wghts[stage-1].main_stage) {
     pmb->pbval->StartReceivingSubset(BoundaryCommSubset::all, pmb->pbval->bvars_main_int);
@@ -2045,6 +2059,17 @@ enum TaskStatus TimeIntegratorTaskList::ParticleMeshReceive(MeshBlock *pmb, int 
     return TaskStatus::next;
   }
   return TaskStatus::fail;
+}
+
+//--------------------------------------------------------------------------------------
+// Functions for Monte Carlo
+
+TaskStatus TimeIntegratorTaskList::TransferPhotonsStatic(MeshBlock *pmb, int stage) {
+
+  pmb->pmy_mcb->TransferPhotonsStatic();
+
+  return TaskStatus::success;
+
 }
 
 //--------------------------------------------------------------------------------------

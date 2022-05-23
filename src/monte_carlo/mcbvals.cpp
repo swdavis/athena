@@ -22,7 +22,7 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
   // Inner x1
   switch(pmcb->mcb_bcs[BoundaryFace::inner_x1]) {
     case MC_PERIODIC_BNDRY:
-      BoundaryFunction_[BoundaryFace::inner_x1] = PeriodicInnerX1;
+      BoundaryFunction_[BoundaryFace::inner_x1] = Periodic;
       break;
     case MC_ESCAPE_BNDRY:
       BoundaryFunction_[BoundaryFace::inner_x1] = Escape;
@@ -39,6 +39,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
     case MC_REFLECT_BNDRY:
       BoundaryFunction_[BoundaryFace::inner_x1] = ReflectMCInnerX1;
       break;
+    case MC_BLOCK_BNDRY:
+      BoundaryFunction_[BoundaryFace::inner_x1] = Block;
+      break;
     case MC_USER_BNDRY:
       BoundaryFunction_[BoundaryFace::inner_x1] =
         pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::inner_x1];
@@ -53,7 +56,7 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
   // outer x1
   switch(pmcb->mcb_bcs[BoundaryFace::outer_x1]) {
     case MC_PERIODIC_BNDRY:
-      BoundaryFunction_[BoundaryFace::outer_x1] = PeriodicOuterX1;
+      BoundaryFunction_[BoundaryFace::outer_x1] = Periodic;
       break;
     case MC_ESCAPE_BNDRY:
       BoundaryFunction_[BoundaryFace::outer_x1] = Escape;
@@ -70,6 +73,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
     case MC_REFLECT_BNDRY:
       BoundaryFunction_[BoundaryFace::outer_x1] = ReflectMCOuterX1;
       break;
+    case MC_BLOCK_BNDRY:
+      BoundaryFunction_[BoundaryFace::outer_x1] = Block;
+      break;
     case MC_USER_BNDRY:
       BoundaryFunction_[BoundaryFace::outer_x1] =
         pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::outer_x1];
@@ -84,7 +90,7 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
   // Inner x2
   switch(pmcb->mcb_bcs[BoundaryFace::inner_x2]) {
     case MC_PERIODIC_BNDRY:
-      BoundaryFunction_[BoundaryFace::inner_x2] = PeriodicInnerX2;
+      BoundaryFunction_[BoundaryFace::inner_x2] = Periodic;
       break;
     case MC_ESCAPE_BNDRY:
       BoundaryFunction_[BoundaryFace::inner_x2] = Escape;
@@ -101,6 +107,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
     case MC_REFLECT_BNDRY:
       BoundaryFunction_[BoundaryFace::inner_x2] = ReflectMCInnerX2;
       break;
+    case MC_BLOCK_BNDRY:
+      BoundaryFunction_[BoundaryFace::inner_x2] = Block;
+      break;
     case MC_USER_BNDRY:
       BoundaryFunction_[BoundaryFace::inner_x2] =
         pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::inner_x2];
@@ -115,7 +124,7 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
   // outer x2
   switch(pmcb->mcb_bcs[BoundaryFace::outer_x2]) {
     case MC_PERIODIC_BNDRY:
-      BoundaryFunction_[BoundaryFace::outer_x2] = PeriodicOuterX2;
+      BoundaryFunction_[BoundaryFace::outer_x2] = Periodic;
       break;
     case MC_ESCAPE_BNDRY:
       BoundaryFunction_[BoundaryFace::outer_x2] = Escape;
@@ -132,6 +141,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
     case MC_REFLECT_BNDRY:
       BoundaryFunction_[BoundaryFace::outer_x2] = ReflectMCOuterX2;
       break;
+    case MC_BLOCK_BNDRY:
+      BoundaryFunction_[BoundaryFace::outer_x2] = Block;
+      break;
     case MC_USER_BNDRY:
       BoundaryFunction_[BoundaryFace::outer_x2] =
         pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::outer_x2];
@@ -146,7 +158,7 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
   // Inner x3
   switch(pmcb->mcb_bcs[BoundaryFace::inner_x3]) {
     case MC_PERIODIC_BNDRY:
-      BoundaryFunction_[BoundaryFace::inner_x3] = PeriodicInnerX3;
+      BoundaryFunction_[BoundaryFace::inner_x3] = Periodic;
       break;
     case MC_ESCAPE_BNDRY:
       BoundaryFunction_[BoundaryFace::inner_x3] = Escape;
@@ -163,6 +175,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
     case MC_REFLECT_BNDRY:
       BoundaryFunction_[BoundaryFace::inner_x3] = ReflectMCInnerX3;
       break;
+    case MC_BLOCK_BNDRY:
+      BoundaryFunction_[BoundaryFace::inner_x3] = Block;
+      break;
     case MC_USER_BNDRY:
       BoundaryFunction_[BoundaryFace::outer_x3] =
         pmcb->pmy_mc->BoundaryFunction_[BoundaryFace::outer_x3];
@@ -177,7 +192,7 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
   // outer x3
   switch(pmcb->mcb_bcs[BoundaryFace::outer_x3]) {
     case MC_PERIODIC_BNDRY:
-      BoundaryFunction_[BoundaryFace::outer_x3] = PeriodicOuterX3;
+      BoundaryFunction_[BoundaryFace::outer_x3] = Periodic;
       break;
     case MC_ESCAPE_BNDRY:
       BoundaryFunction_[BoundaryFace::outer_x3] = Escape;
@@ -193,6 +208,9 @@ MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
       break;
     case MC_REFLECT_BNDRY:
       BoundaryFunction_[BoundaryFace::outer_x3] = ReflectMCOuterX3;
+      break;
+    case MC_BLOCK_BNDRY:
+      BoundaryFunction_[BoundaryFace::outer_x3] = Block;
       break;
     case MC_USER_BNDRY:
       BoundaryFunction_[BoundaryFace::outer_x3] =
@@ -395,5 +413,24 @@ void Polar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
             << "Destroying photon." << std::endl;
   pphot->PrintPhoton(ip);
   pphot->statp[ip] = DESTROYED;
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Periodic(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
+//! \brief mark photon as being out of meshblock
+
+void Periodic(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
+
+  pphot->statp[ip] = BUFFERED;
+
+}
+//----------------------------------------------------------------------------------------
+//! \fn void Block(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
+//! \brief mark photon as being out of meshblock
+
+void Block(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
+
+  pphot->statp[ip] = BUFFERED;
 
 }

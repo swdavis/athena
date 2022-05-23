@@ -26,7 +26,8 @@
 // Global variable definitions
 Real xsect[NE + 1][NT + 1];
 Real dle, dlt, lmine, lmint;
-
+static Real kappad = 1.;
+static Real albedo = 1.;
 //----------------------------------------------------------------------------------------
 //! \fn Real NoOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip)
 //  \brief return zero for extinction coeffictent
@@ -75,7 +76,12 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 
 Real DustAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 
-  return 0.;
+  int &i1 = pphot->i1p[ip];
+  int &i2 = pphot->i2p[ip];
+  int &i3 = pphot->i3p[ip];
+  Real &energy = pphot->ep[ip];
+  Real kapdust = kappad*1.5e13*(1.-albedo)/albedo;
+  return kapdust*pmcb->rho(i3,i2,i1);
 
 }
 
@@ -183,9 +189,8 @@ Real DustScatteringOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   int &i2 = pphot->i2p[ip];
   int &i3 = pphot->i3p[ip];
   Real &energy = pphot->ep[ip];
-  Real kapdust = 9.9e14;
-  //printf("opacity: %g\n",kapdust);
-  //Real kapdust = 9.9e12;
+  Real kapdust = kappad*1.5e13;
+
   return kapdust*pmcb->rho(i3,i2,i1);
 
 }

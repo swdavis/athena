@@ -19,7 +19,7 @@
 class MonteCarloBlock;
 
 // photon status identifiers
-enum PhotonStatus {EVOLVING = 0, ESCAPED = 1, ABSORBED = 2, DESTROYED = 3};
+enum PhotonStatus {EVOLVING = 0, ESCAPED = 1, ABSORBED = 2, DESTROYED = 3, BUFFERED = 4};
 enum {IMC1 = 0, IMC2 = 1, IMC3 = 2, IMC0 = 3};
 
 //---------------------------------------------------------------------------------------
@@ -38,6 +38,10 @@ public:
   void PolarizationToTetrad(std::complex<Real> ttet[4][4], Real ecov[4][4], const int ip);
   void PolarizationToCoord(std::complex<Real> ttet[4][4], Real econ[4][4], const int ip);
   void AllocatePhotons(int nphot);
+  void SendToNeighbors();
+  void ApplyPeriodicBoundary(Real &x1, Real &x2, Real &x3);
+  bool ReceiveFromNeighbors();
+  void GetPositionIndices(int ibegin, int iend);
   static void Initialize(MonteCarlo *pmc, ParameterInput *pin);
 
   // public data

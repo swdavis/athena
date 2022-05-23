@@ -173,9 +173,12 @@ public:
   // data
   Mesh *pmy_mesh;
   MCOutput *pmcout;
-  MonteCarloBlock *pblock;
+  AthenaArray<MonteCarloBlock*> my_blocks;
 
   int nphtot;  // total number of photons to integrate
+  int nblock;  // number of photons per step per block
+  int nblocal; // number of montecarloblocks on this process
+  int nbtotal; // total number of montecarloblocks
   int cadence; // number of photons per output
   int nout;  // number of outputs
   int *nphlist; // number of photons per block
@@ -214,7 +217,7 @@ public:
   // functions
   // SWD: some of these functions could/should be private
   void RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput *pinput);
-  void RunStaticMonteCarloNew(void);
+  bool CheckAndBroadCastPhotonsRemaining();
   void InitUserMonteCarloData(ParameterInput *pin);
   // Enroll User functions
   void EnrollUserMCBoundaryFunction(enum BoundaryFace dir, MCBValFunc_t my_bc);
@@ -225,7 +228,9 @@ public:
   void EnrollUserScatteringFunction(ScatFunc_t scatfunc);
   void SendMonteCarloSpectra(int dest);
   void ReceiveMonteCarloSpectra(int source);
-  void CollectMoments(void);
+  //void CollectMoments(void);
+  void Initialize(ParameterInput *pinput);
+  void MakeOutputs();
 
 private:
 
@@ -234,15 +239,12 @@ private:
 
   void GetDensity(MonteCarloBlock *pmcb);
   void GetVelocity(MonteCarloBlock *pmcb);
-  void DistributePhotonsToBlocks(void);
-  void SendMonteCarloBlocks(int dest);
-  void ReceiveMonteCarloBlocks(ParameterInput *pin, int source);
-  void SendMonteCarloData(int dest);
-  void ReceiveMonteCarloData(int source);
-  unsigned int CreateMCMPITag(int bid);
-  void InitializeMonteCarloBlocks(ParameterInput *pinput);
-  void SendMoments(int dest);
-  void ReceiveMoments(int source, bool sum);
+  //void SendMonteCarloBlocks(int dest);
+  //void ReceiveMonteCarloBlocks(ParameterInput *pin, int source);
+  //void SendMonteCarloData(int dest);
+  //void ReceiveMonteCarloData(int source);
+  //void SendMoments(int dest);
+  //void ReceiveMoments(int source, bool sum);
 
 };
 
@@ -281,7 +283,8 @@ public:
 
   int nphdone; // Photons integrated thus far
   int nphremain; // total number of photons to integrate
-  int myblockid;
+  int nchunk;
+  int lid;
   int nx1,nx2,nx3;
   int is,ie,js,je,ks,ke;
   int nfreq, nmu, nphi, nsurf;
@@ -324,8 +327,7 @@ public:
   void InitUserMonteCarloBlockData(ParameterInput *pin);
   void MonteCarloProblemGenerator(ParameterInput *pin);
   void RayTracePhotons(int nphtot); // Ray trace photon on this block
-  void TransferPhotons(int nphtot); // Transfer photons on this block
-  void TransferPhotonsOld(int nphtot); // Transfer photons on this block
+  void TransferPhotonsStatic(); // Transfer photons on this block
   void CoordinateToComoving(Photon *pphot, int ips, int ipe);
   void ComovingToCoordinate(Photon *pphot, int ips, int ipe);
   void LorentzTransform(Photon *pphot, const Real sign, int ips, int ipe);

@@ -28,6 +28,16 @@ int Photon::idk0p = -1, Photon::idk1p = -1, Photon::idk2p = -1, Photon::idk3p = 
 int Photon::iep = -1, Photon::iwp = -1, Photon::iscp = -1, Photon::iacp = -1;
 int Photon::isip = -1, Photon::isqp = -1, Photon::isup = -1, Photon::isvp = -1;
 int Photon::iuserp = -1, Photon::ipolp = -1;
+
+// Local function prototypes
+static int CheckSide(int xi, int xi1, int xi2);
+static int nloc = 0;
+static int nper = 0;
+static int nbuf = 0;
+static int nnper = 0;
+static int nadj = 0;
+static int nmpi = 0;
+
 //----------------------------------------------------------------------------------------
 //! Photon constructor
 
@@ -260,4 +270,307 @@ void Photon::Initialize(MonteCarlo *pmc, ParameterInput *pin) {
 #endif
 
   initialized = true;
+}
+
+
+//--------------------------------------------------------------------------------------
+//! \fn void Photon::SendToNeighbors()
+//! \brief sends photons outside boundary to the buffers of neighboring meshblocks.
+
+void Photon::SendToNeighbors() {
+  const int IS = pmy_block->is;
+  const int IE = pmy_block->ie;
+  const int JS = pmy_block->js;
+  const int JE = pmy_block->je;
+  const int KS = pmy_block->ks;
+  const int KE = pmy_block->ke;
+
+  nbuf = nloc = nadj = nper = nnper = 0, nmpi = 0;
+  for (int k = npar-1; k >=0; ) {
+    if (statp[k] != BUFFERED) {
+      --k;
+      continue;
+    }
+    nbuf++;
+    // Find which boundary photon has passed beyond
+    int ox1 = CheckSide(i1p[k], IS, IE),
+        ox2 = CheckSide(i2p[k], JS, JE),
+        ox3 = CheckSide(i3p[k], KS, KE);
+    if (ox1 == 0 && ox2 == 0 && ox3 == 0) {
+      std::cout << "Warning: photon status is BUFFERED but not outside of boundary,"
+                << " photon marked destroyed" << std::endl;
+      statp[k] = DESTROYED;
+      --k;
+      continue;
+    }
+
+    // Apply periodic boundary conditions and find the mesh coordinates.
+    ApplyPeriodicBoundary(x1p[k], x2p[k], x3p[k]);
+
+    // Find the neighbor block to send it to.
+    if (!active1_) ox1 = 0;
+    if (!active2_) ox2 = 0;
+    if (!active3_) ox3 = 0;
+    Neighbor *pn = FindTargetNeighbor(ox1, ox2, ox3, i1p[k], i2p[k], i3p[k]);
+    NeighborBlock *pnb = pn->pnb;
+    if (pnb == nullptr) {
+      PrintPhoton(k);
+      RemoveOneParticle(k);
+      --k;
+      std::cout << "[SendToNeighbors] Warning: pnb==nullptr." << std::endl;
+      continue;
+    }
+
+    // Determine which particle buffer to use.
+    ParticleBuffer *ppb = NULL;
+    if (pnb->snb.rank == Globals::my_rank) {
+      // No need to send if back to the same block.
+      if (pnb->snb.gid == pmy_block->gid) {
+        Real xi1,xi2,xi3;
+        pmy_block->pcoord->MeshCoordsToIndices(x1p[k], x2p[k], x3p[k], xi1, xi2, xi3);
+        // Should be positive so no need for floor
+        GetPositionIndices(k,k);
+        //i1p[k] = static_cast<int>(xi1);
+        //i2p[k] = static_cast<int>(xi2);
+        //i3p[k] = static_cast<int>(xi3);
+        //statp[k] = EVOLVING;
+        --k;
+        nloc++;
+        continue;
+      }
+      // Use the target receive buffer.
+      ppb = &pn->pmb->pmy_mcb->pphot->recv_[pnb->targetid];
+      nadj++;
+    } else {
+#ifdef MPI_PARALLEL
+      nmpi++;
+      // Use the send buffer.
+      ppb = &send_[pnb->bufid];
+#endif
+    }
+
+    // Check the buffer size.
+    if (ppb->npar >= ppb->nparmax)
+      ppb->Reallocate((ppb->nparmax > 0) ? 2 * ppb->nparmax : 1);
+
+    // Copy the properties of the particle to the buffer.
+    int *pi = ppb->ibuf + ParticleBuffer::nint * ppb->npar;
+    for (int j = 0; j < nint; ++j)
+      *pi++ = intprop[j][k];
+    Real *pr(ppb->rbuf + ParticleBuffer::nreal * ppb->npar);
+    for (int j = 0; j < nreal; ++j) {
+      *pr++ = rp[j][k];
+      *pr++ = rp1[j][k];
+    }
+    for (int j = 0; j < naux; ++j)
+      *pr++ = aux[j][k];
+    ++ppb->npar;
+    // SWDNEW: ADD complex
+
+    // Pop the particle from the current MeshBlock.
+    RemoveOneParticle(k);
+    --k;
+  }
+
+  // Send to neighbor processes and update boundary status.
+  for (int i = 0; i < pbval_->nneighbor; ++i) {
+    NeighborBlock& nb = pbval_->neighbor[i];
+    int dst = nb.snb.rank;
+    if (dst == Globals::my_rank) {
+      Particles *ppar = pmy_mesh->FindMeshBlock(nb.snb.gid)->pmy_mcb->pphot;
+      ppar->bstatus_[nb.targetid] =
+          (ppar->recv_[nb.targetid].npar > 0) ? BoundaryStatus::arrived
+                                              : BoundaryStatus::completed;
+    } else {
+#ifdef MPI_PARALLEL
+      ParticleBuffer& send = send_[nb.bufid];
+      int npsend = send.npar;
+      MPI_Send(&npsend, 1, MPI_INT, nb.snb.rank, send.tag, my_comm);
+      if (npsend > 0) {
+        //printf("send: %d %d %d\n",Globals::my_rank,nb.snb.rank,npsend);
+        MPI_Request req = MPI_REQUEST_NULL;
+        MPI_Isend(send.ibuf, npsend * ParticleBuffer::nint, MPI_INT,
+                  dst, send.tag + 1, my_comm, &req);
+        MPI_Request_free(&req);
+        MPI_Isend(send.rbuf, npsend * ParticleBuffer::nreal, MPI_ATHENA_REAL,
+                  dst, send.tag + 2, my_comm, &req);
+        MPI_Request_free(&req);
+      }
+#endif
+    }
+  }
+  printf("send %d %d %d %d %d %d %d\n",Globals::my_rank,nbuf,nloc,nadj,nmpi,nper,nnper);
+}
+
+//--------------------------------------------------------------------------------------
+//! \fn void Photons::ApplyPeriodicBoundary(Real &x1, Real &x2, Real &x3)
+//! \brief applies periodic boundary conditions to photon k and returns its updated mesh
+//!        coordinates (x1,x2,x3).
+
+void Photon::ApplyPeriodicBoundary(Real &x1, Real &x2, Real &x3) {
+  bool flag = false;
+  RegionSize& mesh_size = pmy_mesh->mesh_size;
+  Coordinates *pcoord = pmy_block->pcoord;
+
+  // Apply periodic boundary conditions in X1.
+  if (x1 <= mesh_size.x1min) {
+    // Inner x1
+    x1 += mesh_size.x1len;
+    flag = true;
+  } else if (x1 >= mesh_size.x1max) {
+    // Outer x1
+    x1 -= mesh_size.x1len;
+    flag = true;
+  }
+
+  // Apply periodic boundary conditions in X2.
+  if (x2 <= mesh_size.x2min) {
+    // Inner x2
+    x2 += mesh_size.x2len;
+    flag = true;
+  } else if (x2 >= mesh_size.x2max) {
+    // Outer x2
+    x2 -= mesh_size.x2len;
+    flag = true;
+  }
+
+  // Apply periodic boundary conditions in X3.
+  if (x3 <= mesh_size.x3min) {
+    // Inner x3
+    x3 += mesh_size.x3len;
+    flag = true;
+  } else if (x3 >= mesh_size.x3max) {
+    // Outer x3
+    x3 -= mesh_size.x3len;
+    flag = true;
+  }
+  if (flag) {
+    nper++;
+  } else {
+    nnper++;
+  }
+}
+
+//--------------------------------------------------------------------------------------
+//! \fn bool Photon::ReceiveFromNeighbors()
+//! \brief receives particles from neighboring meshblocks and returns a flag indicating
+//!        if all receives are completed.
+
+bool Photon::ReceiveFromNeighbors() {
+  bool flag = true;
+
+  for (int i = 0; i < pbval_->nneighbor; ++i) {
+    NeighborBlock& nb = pbval_->neighbor[i];
+    enum BoundaryStatus& bstatus = bstatus_[nb.bufid];
+
+#ifdef MPI_PARALLEL
+    // Communicate with neighbor processes.
+    int nb_rank = nb.snb.rank;
+    //printf("%d %d %d %d\n",Globals::my_rank,i,nb_rank,bstatus);
+    if (nb_rank != Globals::my_rank && bstatus == BoundaryStatus::waiting) {
+      ParticleBuffer& recv = recv_[nb.bufid];
+      if (!recv.mpi_active) {
+        // Get the number of incoming particles.
+        MPI_Irecv(&recv.npar, 1, MPI_INT, nb_rank, recv.tag, my_comm, &recv.reqi);
+        recv.mpi_active = true;
+      }
+      if (!recv.flagn) {
+        MPI_Test(&recv.reqi, &recv.flagn, MPI_STATUS_IGNORE);
+        if (recv.flagn) {
+          if (recv.npar > 0) {
+            // Check the buffer size.
+            int nprecv = recv.npar;
+            if (nprecv > recv.nparmax) {
+              recv.npar = 0;
+              recv.Reallocate(2 * nprecv - recv.nparmax);
+              recv.npar = nprecv;
+            }
+            // Receive data from the neighbor.
+            MPI_Irecv(recv.ibuf, recv.npar * ParticleBuffer::nint, MPI_INT,
+                      nb_rank, recv.tag + 1, my_comm, &recv.reqi);
+            MPI_Irecv(recv.rbuf, recv.npar * ParticleBuffer::nreal, MPI_ATHENA_REAL,
+                      nb_rank, recv.tag + 2, my_comm, &recv.reqr);
+          } else {
+            // No incoming particles.
+            bstatus = BoundaryStatus::completed;
+          }
+        }
+      }
+      if (recv.flagn && recv.npar > 0) {
+        if (!recv.flagi)
+          MPI_Test(&recv.reqi, &recv.flagi, MPI_STATUS_IGNORE);
+        if (!recv.flagr)
+          MPI_Test(&recv.reqr, &recv.flagr, MPI_STATUS_IGNORE);
+        if (recv.flagi && recv.flagr)
+          bstatus = BoundaryStatus::arrived;
+      }
+    }
+#endif
+
+    switch (bstatus) {
+      case BoundaryStatus::completed:
+        break;
+
+      case BoundaryStatus::waiting:
+        flag = false;
+        break;
+
+      case BoundaryStatus::arrived:
+        ParticleBuffer& recv = recv_[nb.bufid];
+        int nparold = npar;
+        FlushReceiveBuffer(recv);
+        // Update Photon position indices
+        GetPositionIndices(nparold,npar-1);
+        //printf("recv %d %d %d\n",Globals::my_rank,nparold,npar-1);
+        bstatus = BoundaryStatus::completed;
+        break;
+    }
+  }
+
+  return flag;
+}
+
+//--------------------------------------------------------------------------------------
+//! \fn void Photon::GetPositionIndices(int ibegin, int iend)
+//! \brief finds the position indices of each particle with respect to the local grid.
+
+void Photon::GetPositionIndices(int ibegin, int iend) {
+
+  Real xi1, xi2, xi3;
+  for (int k = ibegin; k <= iend; ++k) {
+    // Convert to the index space.
+    pmy_block->pcoord->MeshCoordsToIndices(x1p[k], x2p[k], x3p[k], xi1, xi2, xi3);
+    i1p[k] = static_cast<int>(xi1);
+    i2p[k] = static_cast<int>(xi2);
+    i3p[k] = static_cast<int>(xi3);
+    statp[k] = EVOLVING;
+    MonteCarloBlock *pmcb = pmy_mcb;
+    if (pmcb->boosts) {
+      // Shift photon energy to comoving frame
+      Real shift = pmcb->LorentzTransformFrequencyShift(this,k);
+      ep[k] *= shift;
+      // compute opacities in comoving frame
+      acp[k] = pmcb->AbsorptionOpacity(pmcb,this,k);
+      scp[k] = pmcb->ScatteringOpacity(pmcb,this,k);
+      // Shift energy back to Eulerian frame
+      ep[k] /= shift;
+      // Shift opacities to Eulerian frame
+      acp[k] *= shift;
+      scp[k] *= shift;
+    } else {
+      // No distinction between comovinng frame and eulerian frame
+      acp[k] = pmcb->AbsorptionOpacity(pmcb,this,k);
+      scp[k] = pmcb->ScatteringOpacity(pmcb,this,k);
+    }
+  }
+}
+
+//--------------------------------------------------------------------------------------
+//! \fn int CheckSide(int xi, nx, int xi1, int xi2)
+//! \brief returns -1 if xi < xi1, +1 if xi > xi2, or 0 otherwise.
+
+inline int CheckSide(int xi, int xi1, int xi2) {
+  if (xi < xi1) return -1;
+  if (xi > xi2) return +1;
+  return 0;
 }

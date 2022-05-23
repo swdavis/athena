@@ -498,8 +498,10 @@ void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
     pphot->statp[ip] = DESTROYED;
     pphot->user[2][ip] = 0.;
     pphot->user[3][ip] = rh;
-    pphot->sqp[ip] = 0.;
-    pphot->sup[ip] = 0.;
+    if (pphot->polarized) {
+      pphot->sqp[ip] = 0.;
+      pphot->sup[ip] = 0.;
+    }
     return;
   }
 
@@ -526,7 +528,7 @@ void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
   } else if (static_cast<int>(pphot->user[4][ip]) % 2 == 1) {
     // photon has crossed plane an odd number
     if (pphot->x2p[ip] <= (M_PI / 2.0)) { //new crossing
-      if (pphot->x[IMC1] <= rdisk) {
+      if (pphot->x1p[ip] <= rdisk) {
         if (forward_integration)
           reverse = true;
         else
@@ -539,7 +541,7 @@ void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
   } else if (static_cast<int>(pphot->user[4][ip]) % 2 == 0) {
     // photon has crossed plane an evern number
     if (pphot->x2p[ip] <= (M_PI / 2.0)) { // new crossing
-      if (pphot->x[IMC1] <= rdisk) {
+      if (pphot->x1p[ip] <= rdisk) {
         if (forward_integration)
           reverse = true;
         else

@@ -478,11 +478,8 @@ Mesh::Mesh(ParameterInput *pin, int mesh_test) :
   tree.CountMeshBlock(nbtotal);
   loclist = new LogicalLocation[nbtotal];
   tree.GetMeshBlockList(loclist, nullptr, nbtotal);
-  if (MONTE_CARLO_STATIC) {
-    nrankmx = 1;
-  } else {
-    nrankmx = Globals::nranks;
-  }
+  nrankmx = Globals::nranks;
+
 #ifdef MPI_PARALLEL
   // check if there are sufficient blocks
   if (nbtotal < nrankmx) {
@@ -517,7 +514,6 @@ Mesh::Mesh(ParameterInput *pin, int mesh_test) :
   // initialize cost array with the simplest estimate; all the blocks are equal
   for (int i=0; i<nbtotal; i++) costlist[i] = 1.0;
 
-  //if ((!MONTE_CARLO_STATIC) || (Globals::my_rank == 0))
   CalculateLoadBalance(costlist, ranklist, nslist, nblist, nbtotal);
 
   // Output some diagnostic information to terminal

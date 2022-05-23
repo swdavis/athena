@@ -51,7 +51,7 @@ class photons:
             for i in range(self.nuser):
                 self.user[:,i] = phlist['list'][:,i+self.npars]
 
-def read_list(filename):
+def read_list(filename,data=True):
     """
     Read unformated list output and return as a dictionary
     """
@@ -111,29 +111,33 @@ def read_list(filename):
     phlist['coord'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
     current_index = end_of_line_index + 1
 
-    # Read in data
-    nelements = phlist['length'] * phlist['npars']
-    format_string = '>' + 'd'*nelements
-    begin_index = current_index
-    end_index = begin_index + 8*nelements
-    vals = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
-    phlist['list'] = vals.reshape((phlist['length'],phlist['npars']))
+    if (data):
+        # Read in data
+        nelements = phlist['length'] * phlist['npars']
+        format_string = '>' + 'd'*nelements
+        begin_index = current_index
+        end_index = begin_index + 8*nelements
+        vals = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
+        phlist['list'] = vals.reshape((phlist['length'],phlist['npars']))
 
     return phlist
 
-def write_list(filename,phlist):
+def write_list(filename,phlist,header=True,length=None):
     """
     Write photon list (dictionary) to file
     """
-    outfile = open(filename, 'w')
-
-    # Write header information
-    outfile.write("length={:d}\n".format(phlist['length']))
-    outfile.write("npars={:d}\n".format(phlist['npars']))
-    outfile.write("ntot={:d}\n".format(phlist['ntot']))
-    outfile.write("polarized={:d}\n".format(int(phlist['polarized'])))
-    outfile.write("coord="+phlist['coord']+"\n")
-    outfile.close()
+    if (header):
+        outfile = open(filename, 'w')
+        # Write header information
+        if (length is None):
+            outfile.write("length={:d}\n".format(phlist['length']))
+        else:
+            outfile.write("length={:d}\n".format(length))
+        outfile.write("npars={:d}\n".format(phlist['npars']))
+        outfile.write("ntot={:d}\n".format(phlist['ntot']))
+        outfile.write("polarized={:d}\n".format(int(phlist['polarized'])))
+        outfile.write("coord="+phlist['coord']+"\n")
+        outfile.close()
 
     # Write list data
     outfile = open(filename, 'ab')
@@ -383,7 +387,7 @@ def compute_pol_frac_error(intensity,errors=None):
         err = np.sqrt(((q*eq)**2+(u*eu)**2)/(q**2+u**2) + (q**2+u**2)*(ei/i)**2)/i
         return frac*100, err*100.
     else:
-        return frac, None
+        return frac*100, None
 
 def compute_pol_angle_error(intensity,errors=None):
     """
@@ -402,7 +406,7 @@ def compute_pol_angle_error(intensity,errors=None):
 
 def compute_q_error(intensity,errors=None):
     """
-    Compute q=Q/I and error if requested
+    Compute q=-Q/I and error if requested
     """
     i = intensity[0,:]
     q = intensity[1,:]
@@ -417,7 +421,7 @@ def compute_q_error(intensity,errors=None):
 
 def compute_u_error(intensity,errors=None):
     """
-    Compute q=Q/I and error if requested
+    Compute u=U/I and error if requested
     """
     i = intensity[0,:]
     u = intensity[2,:]
@@ -540,7 +544,7 @@ def plot_frequency(spectrum,imu,iphi='ave',xunit='kev',yunit='nulnu',
         ylabel = r"$N_\nu {\rm (counts/s/Hz)}$"
         y, yerr = compute_counts_error(intensity,nu,errors)
     elif (yunit == 'polfrac'):
-        ylabel = r"$\rm Pol.\; Fraction$"
+        ylabel = r"$\rm Pol.\; Fraction \; (\%)$"
         y, yerr = compute_pol_frac_error(intensity,errors)
     elif (yunit == 'polangle'):
         ylabel = r"$\rm Pol.\; Angle$"
@@ -561,7 +565,7 @@ def plot_frequency(spectrum,imu,iphi='ave',xunit='kev',yunit='nulnu',
 def plot_theta(spectrum,ix,iphi='ave',xunit='mu',yunit='lnu',
                plterr=True,nu=None):
     """
-    Generate plot verus polar angle (theta)
+    Generate plot versus polar angle (theta)
     """
 
     # Set up x axis as bin midpoints
@@ -600,7 +604,7 @@ def plot_theta(spectrum,ix,iphi='ave',xunit='mu',yunit='lnu',
             errors = np.sqrt(np.sum((errors)**2,axis=1))*norm
     else:
         iphi = int(iphi)
-        intensity = intensity[:iphi,:,:]
+        intensity = intensity[:,iphi,:,:]
         if plterr:
             errors = errors[:,iphi,:,:]
 
@@ -631,7 +635,97 @@ def plot_theta(spectrum,ix,iphi='ave',xunit='mu',yunit='lnu',
         ylabel = r"$N_\nu {\rm (counts/s/Hz)}$"
         y, yerr = compute_counts_error(intensity,nu,errors)
     elif (yunit == 'polfrac'):
-        ylabel = r"$\rm Pol.\; Fraction$"
+        ylabel = r"$\rm Pol.\; Fraction \; (\%)$"
+        y, yerr = compute_pol_frac_error(intensity,errors)
+    elif (yunit == 'polangle'):
+        ylabel = r"$\rm Pol.\; Angle$"
+        y, yerr = compute_pol_angle_error(intensity,errors)
+    elif (yunit == 'q'):
+        ylabel = r"$Q_\nu/I_\nu$"
+        y, yerr = compute_q_error(intensity,errors)
+    elif (yunit == 'u'):
+        ylabel = r"$U_\nu/I_\nu$"
+        y, yerr = compute_u_error(intensity,errors)
+    elif (yunit == 'fluxfrac'):
+        ylabel = r"$I_\nu/F_\nu$"
+        y, yerr = compute_flux_frac_error(intensity,xfaces,errors)
+
+    # Return x and y variables, there labels, and possible error on y
+    return x,y,yerr,xlabel,ylabel
+
+def plot_phi(spectrum,ix,imu='sum',xunit='phi',yunit='lnu',
+               plterr=True,nu=None):
+    """
+    Generate plot versus azimuthal angle (phi)
+    """
+
+    # Set up x axis as bin midpoints
+    xfaces = spectrum['phifaces']/(2.*np.pi)
+    x = 0.5*(xfaces[1:]+xfaces[:-1])
+
+    # Initialize x labels
+    xlabel = None
+    if (xunit == 'phi'):
+        xlabel = r"$\phi/(2\pi)$"
+
+    # Check if error requested and stored
+    if plterr:
+        if spectrum['yerror'] != "true":
+            print("Warning: error requested but not computed in spectrum.\n")
+            plterr = False
+
+    # Check whether spectrum has required polarization data
+    if (polarization_requested(yunit) and (spectrum['polarized'] != 'true')):
+        print("Error: polarization output "+yunit+" requested for unpolarized spectrum.")
+        return None
+
+    intensity = spectrum['intensity']
+    if plterr:
+        errors = spectrum['errors']
+    else:
+        errors = None
+
+    # Selection for polar angle
+    if (imu == 'sum'):
+        nmu = spectrum['nmu']
+        mumid = 0.5*(spectrum['mufaces'][1:]+spectrum['mufaces'][:-1])
+        intensity = np.tensordot(mumid,intensity,axes=[0,2])/nmu
+        if plterr:
+            errors = np.sqrt(np.tensordot((mumid)**2,(errors)**2,axes=[0,2]))/nmu
+    else:
+        imu = int(imu)
+        intensity = intensity[:,:,imu,:]
+        if plterr:
+            errors = errors[:,:,imu,:]
+
+    # Selection for frequency
+    if ix == 'sum':
+        nx = spectrum['nx']
+        dx = (spectrum['xfaces'][1:]-spectrum['xfaces'][:-1]).reshape(nx)
+        #intensity = np.dot(dx,intensity,axis=1)
+        intensity = np.tensordot(dx,intensity,axes=[0,2])
+        if plterr:
+            errors = np.sqrt(np.tensordot((dx)**2,(errors)**2,axes=[0,2]))
+    else:
+        ix = int(ix)
+        intensity = intensity[:,:,ix]
+        if plterr:
+            errors = errors[:,:,ix]
+
+    # Set y, yerr, and ylabel according to input units
+    yerr = None
+    ylabel = None
+    if (yunit == 'nulnu'):
+        ylabel = r"$\nu L_\nu {\rm (erg/s)}$"
+        y, yerr = compute_nulnu_error(intensity,nu,errors)
+    elif (yunit == 'lnu'):
+        ylabel = r"$L_\nu {\rm (erg/s/Hz)}$"
+        y, yerr = compute_lnu_error(intensity,errors)
+    elif (yunit == 'counts'):
+        ylabel = r"$N_\nu {\rm (counts/s/Hz)}$"
+        y, yerr = compute_counts_error(intensity,nu,errors)
+    elif (yunit == 'polfrac'):
+        ylabel = r"$\rm Pol.\; Fraction \; (\%)$"
         y, yerr = compute_pol_frac_error(intensity,errors)
     elif (yunit == 'polangle'):
         ylabel = r"$\rm Pol.\; Angle$"
@@ -651,7 +745,8 @@ def plot_theta(spectrum,ix,iphi='ave',xunit='mu',yunit='lnu',
 
 
 def make_plot(x,y,yerr=None,ax=None,xmin=None,xmax=None,ymin=None,ymax=None,
-              xlabel=None,ylabel=None,xscale=None,yscale=None,**kwargs):
+              xlabel=None,ylabel=None,xscale=None,yscale=None,fmt=None,
+              **kwargs):
     """
     General wrapper for plotting of Monte Carlo spectral plots
     """
@@ -661,10 +756,13 @@ def make_plot(x,y,yerr=None,ax=None,xmin=None,xmax=None,ymin=None,ymax=None,
         fig = plt.figure()
         ax = fig.add_subplot(1,1,1)
 
+    if (fmt is None):
+        fmt = '.'
+
     if (yerr is not None):
-        ax.errorbar(x,y,yerr=yerr,fmt='.',**kwargs)
+        ax.errorbar(x,y,yerr=yerr,fmt=fmt,**kwargs)
     else:
-        ax.plot(x,y,'.',**kwargs)
+        ax.plot(x,y,fmt,**kwargs)
 
     # Set axis labelx
     if (xlabel is not None):
