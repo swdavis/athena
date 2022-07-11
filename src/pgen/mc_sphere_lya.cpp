@@ -232,7 +232,9 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     }
 
     // Initialize Photon weights, energy, direction, polarization
-    pphot->wp[ip] = 1.0;
+    // TODO: Make this an input rather than hardcoding
+    Real target_lum = 1.e20;
+    pphot->wp[ip] = target_lum / energy0;
     pphot->ep[ip] = energy0;
 
     // Initialize Stokes vector

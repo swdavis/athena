@@ -1036,6 +1036,8 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
+//            if ((n==11) && (moments(n,k,j,i) != 0)) printf("moments: %g    vol: %g     norm: %g    i: %d   j: %d   k: %d    val: %g\n", moments(n,k,j,i), pcoord->vol(k,j,i), norm, i, j, k, moments(n,k,j,i)/pcoord->vol(k,j,i)/norm);
+//            if ((n==11) && (moments(n,k,j,i) != 0)) printf("%g\n", moments(n,k,j,i)/pcoord->vol(k,j,i)/norm);
             moments(n,k,j,i) /= (pcoord->vol(k,j,i) * norm);
           }}}
     }
