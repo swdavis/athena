@@ -94,13 +94,14 @@ void TrackIonization(MeshBlock *pmb, const Real time, const Real dt,
   Real mp = 1.6726e-24;
   Real Gamma = 1. / (6. * 60. * 60.); // s, photoionization rate coefficient
   Real alpha = 4.18e-13; // cm3 s-1 for T=1e4 K, recombination rate coefficient
+  Real nC = Gamma / alpha;
+  Real nR = 1. / alpha / dt;
   for (int k=pmb->ks; k<=pmb->ke; ++k) {
     for (int j=pmb->js; j<=pmb->je; ++j) {
       for (int i=pmb->is-NGHOST; i<=pmb->ie+NGHOST; ++i) {
         Real rho = prim(IDN,k,j,i);
         Real n_p = cons_scalar(0,k,j,i)/mp;
-        Real n_h = (rho - cons_scalar(0,k,j,i))/mp;
-        cons_scalar(0,k,j,i) += mp * dt * (Gamma * n_h - alpha * SQR(n_p));
+        cons_scalar(0,k,j,i) = 0.5 * mp * (-(nC + nR) + std::sqrt((nC + nR)*(nC + nR) + 4. * (nC*rho/mp + nR*n_p)));
       }
     }
   }
