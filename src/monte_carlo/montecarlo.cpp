@@ -19,6 +19,7 @@
 #include "../mesh/mesh.hpp"
 #include "../hydro/hydro.hpp"
 #include "../utils/buffer_utils.hpp"
+#include "../scalars/scalars.hpp"
 
 //----------------------------------------------------------------------------------------
 //! MonteCarlo constructor, builds monte carlo using parameters in input file
@@ -422,6 +423,24 @@ void MonteCarlo::GetDensity(MonteCarloBlock *pmcb) {
     for (int j=jl; j<=ju; ++j) {
       for (int i=il; i<=iu+1; ++i) {
         pmcb->rho(k,j,i) = pmcb->codetocgs_rho * pmcb->pmy_block->phydro->u(IDN,k,j,i);
+      }}}
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::GetScalars(MonteCarloBlock *pmcb)
+//! \brief Make hard copy of scalars from MeshBlock to MonteCarloBlock.
+
+void MonteCarlo::GetScalars(MonteCarloBlock *pmcb) {
+
+  // MonteCarloBlock ranges should always match MeshBlock ranges
+  int il = pmcb->is; int iu = pmcb->ie;
+  int jl = pmcb->js; int ju = pmcb->je;
+  int kl = pmcb->ks; int ku = pmcb->ke;
+
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=il; i<=iu+1; ++i) {
+        pmcb->scalars(k,j,i) = pmcb->pmy_block->pscalars->s(0,k,j,i);
       }}}
 }
 

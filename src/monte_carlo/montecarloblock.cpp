@@ -313,6 +313,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   rho.NewAthenaArray(ncells3,ncells2,ncells1);
   tgas.NewAthenaArray(ncells3,ncells2,ncells1);
   if (boosts) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
+  if (NSCALARS > 0) scalars.NewAthenaArray(NSCALARS,ncells3,ncells2,ncells1);
   // moments is 1 (Er) + 3 (Fr) + 9 (Pr) + 1 (Eave) + 1 (net cool)
   if (moments_flag) moments.NewAthenaArray(NMOM,ncells3,ncells2,ncells1);
   if (emission_array_flag) emission.NewAthenaArray(ncells3,ncells2,ncells1);
@@ -341,6 +342,7 @@ MonteCarloBlock::~MonteCarloBlock() {
   rho.DeleteAthenaArray();
   tgas.DeleteAthenaArray();
   if (boosts) vel.DeleteAthenaArray();
+  if (NSCALARS > 0) scalars.DeleteAthenaArray();
   if (moments_flag) moments.DeleteAthenaArray();
   if (emission_array_flag) emission.DeleteAthenaArray();
   if (acceleration && !(coherent_scattering) && !(scattering_meth == SCATRES)) {

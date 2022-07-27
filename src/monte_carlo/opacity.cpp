@@ -161,16 +161,20 @@ Real ResonanceLineOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   int &i1 = pphot->i1p[ip];
   int &i2 = pphot->i2p[ip];
   int &i3 = pphot->i3p[ip];
+  Real denscatterers;
   Real &energy = pphot->ep[ip];
 
   Real h = 6.62607015e-27;
   Real tgas = pmcb->tgas(i3, i2, i1);
   Real mass = 1.660538782e-24;
 
-  Real kappa = XsecVoigt(energy / h, tgas) / mass;
-
-  return kappa * pmcb->rho(i3,i2,i1);
-
+  if (NSCALARS > 0) {
+    denscatterers = pmcb->rho(i3,i2,i1) - pmcb->scalars(0,i3,i2,i1);
+  } else {
+    denscatterers = pmcb->rho(i3,i2,i1);
+  }
+  Real nh = denscatterers / mass;
+  return nh * XsecVoigt(energy / h, tgas);
 }
 
 //----------------------------------------------------------------------------------------

@@ -235,6 +235,7 @@ private:
   MCBValFunc_t BoundaryFunction_[6];
 
   void GetDensity(MonteCarloBlock *pmcb);
+  void GetScalars(MonteCarloBlock *pmcb);
   void GetVelocity(MonteCarloBlock *pmcb);
   void DistributePhotonsToBlocks(void);
   void SendMonteCarloBlocks(int dest);
@@ -320,6 +321,7 @@ public:
 
   AthenaArray<Real> emission;
   AthenaArray<Real> moments;
+  AthenaArray<Real> scalars;
   AthenaArray<Real> rho;
   AthenaArray<Real> tgas;
   AthenaArray<Real> vel;
