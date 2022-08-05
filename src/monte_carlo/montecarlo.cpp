@@ -421,7 +421,7 @@ void MonteCarlo::GetDensity(MonteCarloBlock *pmcb) {
 
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
-      for (int i=il; i<=iu+1; ++i) {
+      for (int i=il; i<=iu; ++i) {
         pmcb->rho(k,j,i) = pmcb->codetocgs_rho * pmcb->pmy_block->phydro->u(IDN,k,j,i);
       }}}
 }
@@ -439,7 +439,7 @@ void MonteCarlo::GetScalars(MonteCarloBlock *pmcb) {
 
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
-      for (int i=il; i<=iu+1; ++i) {
+      for (int i=il; i<=iu; ++i) {
         pmcb->scalars(k,j,i) = pmcb->pmy_block->pscalars->s(0,k,j,i);
       }}}
 }
@@ -458,7 +458,7 @@ void MonteCarlo::GetVelocity(MonteCarloBlock *pmcb) {
 
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
-      for (int i=il; i<=iu+1; ++i) {
+      for (int i=il; i<=iu; ++i) {
         Real rho = pmcb->pmy_block->phydro->u(IDN,k,j,i);
         pmcb->vel(0,k,j,i) = pmcb->codetocgs_vel *
           pmcb->pmy_block->phydro->u(IM1,k,j,i) / rho;
@@ -487,7 +487,7 @@ void DefaultGetTemperature(MonteCarloBlock *pmcb) {
   // get pressure
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
-      for (int i=il; i<=iu+1; ++i) {
+      for (int i=il; i<=iu; ++i) {
         pmcb->tgas(k,j,i) = pmcb->codetocgs_tgas * phydro->w(IEN,k,j,i) /
                             phydro->w(IDN,k,j,i)/rideal;
       }}}
@@ -582,6 +582,7 @@ void MonteCarlo::SendMonteCarloData(int dest) {
   int size = 3; //tgas,rho,vol
   if (boosts) size+=3;
   if (computedmin) size+=1; //dmin array
+  if (NSCALARS > 0) size+=1; //scalars array
   size *= (pmcb->nx1*pmcb->nx2*pmcb->nx3); // all blocks have same size
   size += pmcb->nx1+1; size += pmcb->nx2+1; size+= pmcb->nx3+1;
   send_buf = new Real[size];
@@ -601,6 +602,9 @@ void MonteCarlo::SendMonteCarloData(int dest) {
     if (computedmin)
       BufferUtility::PackData(pmcb->pcoord->dmin,send_buf,pmcb->is,pmcb->ie,pmcb->js,
                               pmcb->je,pmcb->ks,pmcb->ke,p);
+    if (NSCALARS > 0)
+      BufferUtility::PackData(pmcb->scalars,send_buf,pmcb->is,pmcb->ie,pmcb->js,pmcb->je,
+                              pmcb->ks,pmcb->ke,p);
     for (int i=pmcb->is; i<=pmcb->ie+1; ++i)
       send_buf[p++] = pmcb->pcoord->x1f(i);
      for (int i=pmcb->js; i<=pmcb->je+1; ++i)
@@ -627,6 +631,7 @@ void MonteCarlo::ReceiveMonteCarloData(int source) {
   int size = 3; //tgas,rho,vol
   if (boosts) size+=3;
   if (computedmin) size+=1; //dmin array
+  if (NSCALARS > 0) size+=1; //scalars array
   size *= (pmcb->nx1*pmcb->nx2*pmcb->nx3); // all blocks have same size
   size += pmcb->nx1+1; size += pmcb->nx2+1; size+= pmcb->nx3+1;
   recv_buf = new Real[size];
@@ -647,6 +652,9 @@ void MonteCarlo::ReceiveMonteCarloData(int source) {
                                 pmcb->je, pmcb->ks, pmcb->ke, p);
     if (computedmin)
       BufferUtility::UnpackData(recv_buf, pmcb->pcoord->dmin, pmcb->is, pmcb->ie,
+                                pmcb->js, pmcb->je, pmcb->ks, pmcb->ke, p);
+    if (NSCALARS > 0)
+      BufferUtility::UnpackData(recv_buf, pmcb->scalars, pmcb->is, pmcb->ie,
                                 pmcb->js, pmcb->je, pmcb->ks, pmcb->ke, p);
     for (int i=pmcb->is; i<=pmcb->ie+1; ++i)
       pmcb->pcoord->x1f(i) = recv_buf[p++];
@@ -884,6 +892,7 @@ void MonteCarlo::InitializeMonteCarloBlocks(ParameterInput *pinput) {
     if (InitEmission != NULL) InitEmission(pmcb);
     if (acceleration && !(pmcb->coherent_scattering) && !(scattering_meth == SCATRES))
       InitializeAccelerationOpacity(pmcb);
+    if (NSCALARS > 0) GetScalars(pmcb);
     pmcb = pmcb->next;
     while (pmcb != NULL) {
       GetDensity(pmcb);
@@ -892,6 +901,7 @@ void MonteCarlo::InitializeMonteCarloBlocks(ParameterInput *pinput) {
       if (InitEmission != NULL) InitEmission(pmcb);
       if (acceleration && !(pmcb->coherent_scattering) && !(scattering_meth == SCATRES))
         InitializeAccelerationOpacity(pmcb);
+      if (NSCALARS > 0) GetScalars(pmcb);
       pmcb = pmcb->next;
     }
     for(int i=0; i<nderv; ++i) {

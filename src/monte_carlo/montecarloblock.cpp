@@ -313,7 +313,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   rho.NewAthenaArray(ncells3,ncells2,ncells1);
   tgas.NewAthenaArray(ncells3,ncells2,ncells1);
   if (boosts) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
-  if (NSCALARS > 0) scalars.NewAthenaArray(NSCALARS,ncells3,ncells2,ncells1);
+  if (NSCALARS > 0) scalars.NewAthenaArray(ncells3,ncells2,ncells1);
   // moments is 1 (Er) + 3 (Fr) + 9 (Pr) + 1 (Eave) + 1 (net cool)
   if (moments_flag) moments.NewAthenaArray(NMOM,ncells3,ncells2,ncells1);
   if (emission_array_flag) emission.NewAthenaArray(ncells3,ncells2,ncells1);
@@ -475,7 +475,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
         UpdateSourceTerms(pphot,0.,0.,ip,0.,0.,0.);
       }
     }
-
+    // TODO: Set photon status to destroyed to check cooling/emissivity
     // move all photons to next interaction or boundary
     pmover->Move(pphot,0,pphot->nphot-1);
 
