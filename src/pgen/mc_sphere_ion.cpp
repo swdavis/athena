@@ -138,9 +138,8 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
     for (int j=js; j<=je; ++j) {
       for (int i=is; i<=ie; ++i) {
         Real np = scalars(k,j,i)/mp;
-//        printf("%d %d %d %d %g\n", Globals::my_rank,k,j,i,scalars(k,j,i));
-        Real vol = pcoord->vol(k,j,i);
-        emission(k,j,i) = alpha * SQR(np) * vol * ncells;
+        emission(k,j,i) = alpha * SQR(np) * pcoord->vol(k,j,i) * ncells;
+        //printf("%g %g\n", pcoord->vol(k, j, i), emission(k, j, i));
   }}}
 }
 

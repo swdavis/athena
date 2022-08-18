@@ -89,6 +89,7 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
 
   if (resonance) {
     Real r0 = dist;
+    //printf("DISTANCE: %g\n", r0);
 
     // Line constants
     Real melectron = 9.10938215e-28;
@@ -186,6 +187,14 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
       pphot->k1p[ip] = nx * sth * cph + ny * sth * sph + nz * cth;
       pphot->k2p[ip] = nx * cth * cph + ny * cth * sph - nz * sth;
       pphot->k3p[ip] = -nx * sph + ny * cph;
+
+      // Sample an escape time using the rejection method
+      Real tcoeff = 1.698161839733523; // from McClellan et al 2022, Fig 8
+      Real Pnm = 2.45; // Approx, non-parameterized value for Pnm coeff
+      Real tlc = r0 / c; // Light crossing time
+      Real tdiff = tlc * std::pow(a * tau0, 1./3.); // Diffusion timescale
+      Real lo_efreq = 1./(tcoeff * std::pow(a * tau0, 1./3.)); // Fit for the lowest-order eigenfreq
+      
 
     } else {
       std::stringstream msg;

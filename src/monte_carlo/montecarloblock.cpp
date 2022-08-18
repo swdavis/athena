@@ -475,12 +475,11 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
         UpdateSourceTerms(pphot,0.,0.,ip,0.,0.,0.);
       }
     }
-    // TODO: Set photon status to destroyed to check cooling/emissivity
+
     // move all photons to next interaction or boundary
     pmover->Move(pphot,0,pphot->nphot-1);
 
     for (int ip=0; ip<pphot->nphot; ip++) {
-
       if (pphot->statp[ip] == EVOLVING) {
         // Account for absorption
         Real weight0 = pphot->wp[ip];
