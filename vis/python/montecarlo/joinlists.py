@@ -39,7 +39,7 @@ def join(filelist,outfile,skip):
             phlist = athenamc.read_list(infile,data=False)
             firstlist = False
             ntot += phlist['ntot']
-            length += phlist['ntot']
+            length += phlist['length']
         else:
             addlist = athenamc.read_list(infile,data=False)
             if (list_match(phlist,addlist)):

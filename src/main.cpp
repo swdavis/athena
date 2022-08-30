@@ -467,7 +467,8 @@ int main(int argc, char *argv[]) {
 #ifdef OPENMP_PARALLEL
   double omp_start_time = omp_get_wtime();
 #endif
-
+  if (MONTE_CARLO_STATIC)
+    pmesh->time = pmesh->tlim;
   while ((pmesh->time < pmesh->tlim) &&
          (pmesh->nlim < 0 || pmesh->ncycle < pmesh->nlim)) {
     if (Globals::my_rank == 0)

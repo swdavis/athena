@@ -1,7 +1,8 @@
 #! /usr/bin/env python
 
 """
-Plot single athena++ spectrum.  Allows specification of multiple inclinations
+Plot single athena++ spectrum as function of cosine of polar angle.  Allows
+specification of multiple frequencies
 to be plotted simultaneously.
 """
 

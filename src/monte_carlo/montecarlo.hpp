@@ -12,7 +12,6 @@
 // implementations will evolve.
 
 #include <sstream>
-#include <gsl/gsl_randist.h>
 #include <complex>
 
 // Athena++ classes headers
@@ -23,6 +22,11 @@
 #include "mcbvals.hpp"
 #include "mcoutput.hpp"
 #include "mccoord.hpp"
+
+// GSL library
+#if RAN3 == 0
+#include <gsl/gsl_randist.h>
+#endif
 
 class Mesh;
 class MeshBlock;
@@ -135,6 +139,7 @@ enum AbsorptionOpacityFlag GetAbsorptionOpacityFlag(std::string input_string);
 enum AbsorptionMethodFlag GetAbsorptionMethodFlag(std::string input_string);
 enum ScatteringFlag GetScatteringFlag(std::string input_string);
 
+
 //----------------------------------------------------------------------------------------
 //! \struct MCBlockSize
 //! \brief physical size of monte carlo block
@@ -154,9 +159,16 @@ public:
   MCRandom(int iseed);
   ~MCRandom();
 
-  gsl_rng *dev;
+
   Real uniform();
   Real chisquare(int n);
+
+private:
+  long r3seed;
+#if RAN3 == 0
+  gsl_rng *dev;
+#endif
+  Real ran3(long *idum);
 };
 
 //----------------------------------------------------------------------------------------
@@ -176,6 +188,7 @@ public:
   AthenaArray<MonteCarloBlock*> my_blocks;
 
   int nphtot;  // total number of photons to integrate
+  int nphdone; // total photons completed accross all blocks on all processes
   int nblock;  // number of photons per step per block
   int nblocal; // number of montecarloblocks on this process
   int nbtotal; // total number of montecarloblocks
@@ -268,7 +281,7 @@ public:
   PhotonMover* pmover; // ptr to photon mover
   MCRandom *pran; // ptr to random number generator
   MCBoundaryValues *pbval; // ptr to MC boundary values
-  // SWD: Need to consider future where photons cross meshblocks
+
   Spectrum *pspec; // ptr to spectrum
   PhotonList *pphlist; // ptr to photon list
   PhotonTrajectoryList *ptraj;
@@ -283,6 +296,7 @@ public:
 
   int nphdone; // Photons integrated thus far
   int nphremain; // total number of photons to integrate
+  int nabs, nesc, ndes, nscat;
   int nchunk;
   int lid;
   int nx1,nx2,nx3;
@@ -336,7 +350,7 @@ public:
   void InitializePhoton(Photon *pphot, int ips, int ipe);
   void FinalizePhoton(Photon *pphot, int ip);
   void UpdateMoments(Photon *pphot, Real dl, Real etau, int ip);
-  void NormalizeMoments(bool normalize);
+  void NormalizeMoments(bool normalize, Real norm);
   void ResetMoments();
   void UpdateCooling(Photon *pphot, Real energy0, Real weight0, int ip);
   //void GetPhotonsFromNeighbors();

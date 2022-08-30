@@ -433,7 +433,7 @@ void MonteCarloBlock::TransferPhotonsStatic() {
 
   Real const to_comv = 1.0;
   Real const to_eulr = -1.0;
-  int nscat = 0, nesc = 0, nabs = 0, ndes = 0, nbuf = 0;
+  int nbuf = 0;
 
   // Emit photons to replace those that left meshblock or were terminated
   // Limit ntodo to number of remaining photons on block
@@ -574,13 +574,11 @@ void MonteCarloBlock::TransferPhotonsStatic() {
     }
   } // End loop over ip
 
-  std::cout  << "rank, ntot, nnew, nesc, nabs, ndes, nbuf, nscat: " << Globals::my_rank
+  /*std::cout  << "rank, ntot, nnew, nesc, nabs, ndes, nbuf, nscat: " << Globals::my_rank
              << ' ' << ntot << ' ' << ntodo << ' ' << nesc
-             << ' ' << nabs << ' ' << ndes << ' ' << nbuf << ' ';
-  if (ntot > 0)
-    std::cout << static_cast<Real>(nscat)/static_cast<Real>(ntot) << std::endl;
-  else
-    std::cout << 0. << std::endl;
+             << ' ' << nabs << ' ' << ndes << ' ' << nbuf
+             << ' ' << nscat << std::endl;*/
+
 }
 
 
@@ -1027,14 +1025,11 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::NormalizeMoments(bool normalize)
+//! \fn void MonteCarloBlock::NormalizeMoments(bool normalize, Real norm)
 //! \brief (un)normalized moments for output and copy symmetric elements
 
-void MonteCarloBlock::NormalizeMoments(bool normalize) {
+void MonteCarloBlock::NormalizeMoments(bool normalize, Real norm) {
 
-  // Normalize all moments by number of photons emitted
-  Real normall = static_cast<Real>(nphdone);
-  
   if (normalize) {
    // Normalize energy density weighted averages first
     for (int k=ks; k<=ke; ++k) {
@@ -1047,11 +1042,12 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
         }}}
     // Normalize remaining moments by volume and global norm (counts)
     for (int n=0; n<11; ++n) {
-      Real norm = normall;
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
             moments(n,k,j,i) /= (pcoord->vol(k,j,i) * norm);
+            //if (n == 0)
+            //  printf("%d %d %d %d %g\n",Globals::my_rank,k,j,i,moments(n,k,j,i));
           }}}
     }
     // Copy normalized moments to symmetric elements
@@ -1065,7 +1061,6 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
   } else {
     // Undo normalization for continuing evolution
     for (int n=0; n<11; ++n) {
-      Real norm = normall;
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
@@ -1162,7 +1157,8 @@ void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
   else
     mcb_bcs[BoundaryFace::outer_x3] = input_bcs[BoundaryFace::outer_x3];
 
-  printf("Bvals: %d %d %d %d %d %d\n",mcb_bcs[BoundaryFace::inner_x1],mcb_bcs[BoundaryFace::outer_x1],mcb_bcs[BoundaryFace::inner_x2],mcb_bcs[BoundaryFace::outer_x2],mcb_bcs[BoundaryFace::inner_x3],mcb_bcs[BoundaryFace::outer_x3]);
+  //printf("Bvals: %d %d %d %d %d %d\n",mcb_bcs[BoundaryFace::inner_x1],mcb_bcs[BoundaryFace::outer_x1],mcb_bcs[BoundaryFace::inner_x2],mcb_bcs[BoundaryFace::outer_x2],mcb_bcs[BoundaryFace::inner_x3],mcb_bcs[BoundaryFace::outer_x3]);
+
 }
 
 //----------------------------------------------------------------------------------------

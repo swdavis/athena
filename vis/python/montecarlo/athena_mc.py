@@ -5,6 +5,7 @@ Support for manipulating and plotting Monte Carlo outputs
 # standard python modules
 import numpy as np
 import struct
+import gc
 import matplotlib.pyplot as plt
 
 #SWD: Maybe photons be rewritten simply as dictionary
@@ -51,17 +52,21 @@ class photons:
             for i in range(self.nuser):
                 self.user[:,i] = phlist['list'][:,i+self.npars]
 
-def read_list(filename,data=True):
+def read_list(filename,data=True,header=True):
     """
     Read unformated list output and return as a dictionary
     """
+
+    mxh_ = 1000
+    mxl_ = 1000000
 
     try:
         # Read raw data
         with open(filename, 'rb') as data_file:
             raw_data = data_file.read()
-        raw_data_ascii = raw_data.decode('ascii', 'replace')
+        raw_data_ascii = raw_data[0:mxh_].decode('ascii', 'replace')
     except:
+        print("Could not open "+filename+" for reading.")
         return None
 
     # Store in dictionary
@@ -76,49 +81,80 @@ def read_list(filename,data=True):
             raise RuntimeError('File not formatted as expected')
         return current_index+expected_string_len
 
-    current_index = skip_string("length=")
-    end_of_line_index = current_index + 1
-    while raw_data_ascii[end_of_line_index] != '\n':
-        end_of_line_index += 1
-    phlist['length'] = \
-      list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
-    current_index = end_of_line_index + 1
-    current_index = skip_string("npars=")
-    end_of_line_index = current_index + 1
-    while raw_data_ascii[end_of_line_index] != '\n':
-        end_of_line_index += 1
-    phlist['npars'] = \
-      list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
-    current_index = end_of_line_index + 1
-    current_index = skip_string("ntot=")
-    end_of_line_index = current_index + 1
-    while raw_data_ascii[end_of_line_index] != '\n':
-        end_of_line_index += 1
-    phlist['ntot'] = \
-      list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
-    current_index = end_of_line_index + 1
-    current_index = skip_string("polarized=")
-    end_of_line_index = current_index + 1
-    while raw_data_ascii[end_of_line_index] != '\n':
-        end_of_line_index += 1
-    phlist['polarized'] = \
-      bool(list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0])
-    current_index = end_of_line_index + 1
-    current_index = skip_string("coord=")
-    end_of_line_index = current_index + 1
-    while raw_data_ascii[end_of_line_index] != '\n':
-        end_of_line_index += 1
-    phlist['coord'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
-    current_index = end_of_line_index + 1
+    if (header):
+        current_index = skip_string("length=")
+        end_of_line_index = current_index + 1
+        while raw_data_ascii[end_of_line_index] != '\n':
+            end_of_line_index += 1
+        phlist['length'] = list(map(int,
+                           raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
+        current_index = end_of_line_index + 1
 
+        current_index = skip_string("npars=")
+        end_of_line_index = current_index + 1
+        while raw_data_ascii[end_of_line_index] != '\n':
+            end_of_line_index += 1
+        phlist['npars'] = list(map(int,
+            raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
+        current_index = end_of_line_index + 1
+
+        current_index = skip_string("ntot=")
+        end_of_line_index = current_index + 1
+        while raw_data_ascii[end_of_line_index] != '\n':
+            end_of_line_index += 1
+        phlist['ntot'] = list(map(int,
+                         raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
+        current_index = end_of_line_index + 1
+
+        current_index = skip_string("polarized=")
+        end_of_line_index = current_index + 1
+        while raw_data_ascii[end_of_line_index] != '\n':
+            end_of_line_index += 1
+        phlist['polarized'] = bool(list(map(int,
+            raw_data_ascii[current_index:end_of_line_index].split(' ')))[0])
+        current_index = end_of_line_index + 1
+
+        current_index = skip_string("coord=")
+        end_of_line_index = current_index + 1
+        while raw_data_ascii[end_of_line_index] != '\n':
+            end_of_line_index += 1
+        phlist['coord'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
+        current_index = end_of_line_index + 1
+
+    old = False
     if (data):
         # Read in data
-        nelements = phlist['length'] * phlist['npars']
-        format_string = '>' + 'd'*nelements
-        begin_index = current_index
-        end_index = begin_index + 8*nelements
-        vals = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
-        phlist['list'] = vals.reshape((phlist['length'],phlist['npars']))
+        npars = phlist['npars']
+        length = phlist['length']
+        nelements = length * npars
+        if (old):
+            format_string = '>' + 'd'*nelements
+            begin_index = current_index
+            end_index = begin_index + 8*nelements
+            vals = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
+            phlist['list'] = vals.reshape((phlist['length'],phlist['npars']))
+        else:
+            begin_index = current_index
+            sizeloop = mxl_*npars
+            nloop = nelements // sizeloop
+            sizelast = nelements % sizeloop
+            vals = ()
+            for i in range(nloop+1):
+                if (i == nloop):
+                    size = sizelast
+                else:
+                    size = sizeloop
+                end_index = begin_index + 8*size
+                format_string = '>' + 'd'*size
+                if (i > 0):
+                    print(i,"/",nloop)
+                vals = struct.unpack(format_string, raw_data[begin_index:end_index])
+                begin_index = end_index
+                if (i == 0):
+                    phlist['list'] = np.array(vals)
+                else:
+                    phlist['list'] = np.append(phlist['list'],np.array(vals))
+            phlist['list'] = phlist['list'].reshape((length,npars))
 
     return phlist
 
@@ -559,11 +595,11 @@ def plot_frequency(spectrum,imu,iphi='ave',xunit='kev',yunit='nulnu',
         print("Error: yunit ("+yunit+") not specified correctly")
         return None
 
-    # Return x and y variables, there labels, and possible error on y
+    # Return x and y variables, their labels, and possible error on y
     return x,y,yerr,xlabel,ylabel
 
 def plot_theta(spectrum,ix,iphi='ave',xunit='mu',yunit='lnu',
-               plterr=True,nu=None):
+               plterr=True,nu=None,verbose=False):
     """
     Generate plot versus polar angle (theta)
     """
@@ -649,6 +685,17 @@ def plot_theta(spectrum,ix,iphi='ave',xunit='mu',yunit='lnu',
     elif (yunit == 'fluxfrac'):
         ylabel = r"$I_\nu/F_\nu$"
         y, yerr = compute_flux_frac_error(intensity,xfaces,errors)
+
+    if (verbose):
+        print(yunit)
+        if (isinstance(ix,int)):
+            print("x: ",spectrum['xfaces'][ix],' ',spectrum['units'])
+        else:
+            print("x: ",ix)
+        if (isinstance(iphi,int)):
+            print("phi: ",spectrum['phifaces'][iphi])
+        else:
+            print("phi: ",iphi)
 
     # Return x and y variables, there labels, and possible error on y
     return x,y,yerr,xlabel,ylabel
@@ -896,14 +943,14 @@ def get_angle_bins_cartesian(photons,nmu,mufaces,nphi,phifaces):
     if (skipmu and skipphi):
         return np.zeros(photons.nphot,dtype=int),np.zeros(photons.nphot,dtype=int)
 
-    if photons.coord == 'spherical':
-        kr = photon.k1
-        kth = photon.k2
-        kph = photon.k3
-        cth = np.cos(photon.x2)
-        sth = np.sin(photon.x2)
-        cph = np.cos(photon.x3)
-        sph = np.sin(photon.x3)
+    if photons.coord == 'spherical_polar':
+        kr = photons.k1
+        kth = photons.k2
+        kph = photons.k3
+        cth = np.cos(photons.x2)
+        sth = np.sin(photons.x2)
+        cph = np.cos(photons.x3)
+        sph = np.sin(photons.x3)
         if (not skipphi):
             kx = kr*sth*cph + kth*cth*cph - kph*sph
             ky = kr*sth*sph + kth*cth*sph - kph*cph

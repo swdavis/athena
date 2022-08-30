@@ -19,7 +19,6 @@
 #include "photonmover.hpp"
 #include "../globals.hpp"
 #include "../outputs/io_wrapper.hpp"
-static int nspec = 0;
 
 namespace mcoutput {
 //----------------------------------------------------------------------------------------
@@ -430,7 +429,6 @@ bool Spectrum::ScreenCoordinates(Photon *pphot, int ip) {
 
 void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
 
-  nspec++;
   MonteCarloBlock *pmcb = pphot->pmy_mcb;
 
   // if face is set, then determine if photon positions matches
@@ -1164,7 +1162,6 @@ void Spectrum::WriteSpectrumLegacy(std::string filename, Real norm) {
 
 void Spectrum::WriteSpectrum(std::string fname, int nphot) {
 
-  printf("nspec %d\n",nspec);
   // open file for output
   FILE *pfile;
   std::stringstream msg;

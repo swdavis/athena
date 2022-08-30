@@ -20,6 +20,7 @@
 #   -g                enable general relativity
 #   -t                enable interface frame transformations for GR
 #   -mc               enable a monte carlo radiation tranfer calculation
+#   -ran3             use ran3 (rather than default gsl) for random numbers
 #   -p                enable particles
 #   -debug            enable debug flags (-g -O0); override other compiler options
 #   -coverage         enable compiler-dependent code coverage flags
@@ -304,6 +305,12 @@ parser.add_argument('-mc',
     action='store_true',
     default=False,
     help='enable monte carlo')
+
+# -ran3 argument
+parser.add_argument('-ran3',
+    action='store_true',
+    default=False,
+    help='use ran3 for random number generation')
 
 # Parse command-line inputs
 args = vars(parser.parse_args())
@@ -792,6 +799,12 @@ else:
   definitions['MONTE_CARLO_ENABLED'] = '0'
   definitions['MONTE_CARLO_STATIC'] = '0'
 
+# -ran3 argument
+if args['ran3']:
+  definitions['RAN3'] = '1'
+else:
+  definitions['RAN3'] = '0'
+
 # Assemble all flags of any sort given to compiler
 definitions['COMPILER_FLAGS'] = ' '.join(
     [makefile_options[opt+'_FLAGS'] for opt in
@@ -845,6 +858,7 @@ print('  Particles:                  ' + ('ON' if args['p'] else 'OFF'))
 print('  Self-Gravity:               ' + self_grav_string)
 print('  Super-Time-Stepping:        ' + ('ON' if args['sts'] else 'OFF'))
 print('  Monte Carlo:                ' + ('ON' if args['mc'] else 'OFF'))
+print('  Using ran3:                 ' + ('ON' if args['ran3'] else 'OFF'))
 print('  Debug flags:                ' + ('ON' if args['debug'] else 'OFF'))
 print('  Code coverage flags:        ' + ('ON' if args['coverage'] else 'OFF'))
 print('  Linker flags:               ' + makefile_options['LINKER_FLAGS'] + ' '

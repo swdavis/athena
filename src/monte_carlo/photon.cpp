@@ -399,7 +399,7 @@ void Photon::SendToNeighbors() {
 #endif
     }
   }
-  printf("send %d %d %d %d %d %d %d\n",Globals::my_rank,nbuf,nloc,nadj,nmpi,nper,nnper);
+  //printf("send %d %d %d %d %d %d %d\n",Globals::my_rank,nbuf,nloc,nadj,nmpi,nper,nnper);
 }
 
 //--------------------------------------------------------------------------------------

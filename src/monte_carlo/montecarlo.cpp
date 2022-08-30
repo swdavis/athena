@@ -6,9 +6,6 @@
 //! \file monte_carlo.cpp
 //! \brief implementation of functions in class MonteCarlo, MCRandom
 
-// GSL library
-#include <gsl/gsl_randist.h>
-
 // C++ headers
 #include <stdexcept>  // runtime_error
 
@@ -19,6 +16,11 @@
 #include "../mesh/mesh.hpp"
 #include "../hydro/hydro.hpp"
 #include "../utils/buffer_utils.hpp"
+
+// GSL library
+#if RAN3 == 0
+#include <gsl/gsl_randist.h>
+#endif
 
 //----------------------------------------------------------------------------------------
 //! MonteCarlo constructor, builds monte carlo using parameters in input file
@@ -76,7 +78,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   nout = nphtot/cadence;
   max_phots_init = 10000;
 #ifdef MPI_PARALLEL
-  max_list_size = cadence/(Globals::nranks-1)+1;
+  max_list_size = cadence/(Globals::nranks)+1;
 #else
   max_list_size = cadence;
 #endif
@@ -151,7 +153,7 @@ enum AbsorptionOpacityFlag GetAbsorptionOpacityFlag(std::string input_string) {
     msg << "### FATAL ERROR in GetAbsorptionOpacityFlag" << std::endl
         << "Input string=" << input_string << " not valid absorption opacity"
         << std::endl;
-    throw std::runtime_error(msg.str().c_str());
+    ATHENA_ERROR(msg);
   }
 }
 
@@ -170,7 +172,7 @@ enum AbsorptionMethodFlag GetAbsorptionMethodFlag(std::string input_string) {
     std::stringstream msg;
     msg << "### FATAL ERROR in GetAbsorptionMethodFlag" << std::endl
         << "Input string=" << input_string << " not valid absorption method" << std::endl;
-    throw std::runtime_error(msg.str().c_str());
+    ATHENA_ERROR(msg);
   }
 
 }
@@ -198,7 +200,7 @@ enum ScatteringFlag GetScatteringFlag(std::string input_string) {
     std::stringstream msg;
     msg << "### FATAL ERROR in GetScatteringFlag" << std::endl
         << "Input string=" << input_string << " not valid scattering type" << std::endl;
-    throw std::runtime_error(msg.str().c_str());
+    ATHENA_ERROR(msg);
   }
 
 }
@@ -219,7 +221,7 @@ enum EmissionFlag GetEmissionFlag(std::string input_string) {
     std::stringstream msg;
     msg << "### FATAL ERROR in GetEmissionFlag" << std::endl
         << "Input string=" << input_string << " not valid emission type" << std::endl;
-    throw std::runtime_error(msg.str().c_str());
+    ATHENA_ERROR(msg);
   }
 
 }
@@ -240,7 +242,7 @@ void MonteCarlo::EnrollUserMCBoundaryFunction(enum BoundaryFace dir, MCBValFunc_
     msg << "### FATAL ERROR in EnrollUserMCBoundaryFunction" << std::endl
         << "The boundary condition flag must be set to the string 'user' in the "
         << " <mesh> block in the input file to use user-enrolled BCs" << std::endl;
-    throw std::runtime_error(msg.str().c_str());
+    ATHENA_ERROR(msg);
   }
   BoundaryFunction_[dir]=my_bc;
   return;
@@ -318,7 +320,7 @@ enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string) {
     std::stringstream msg;
     msg << "### FATAL ERROR in GetMCBoundaryFlag" << std::endl
         << "Input string=" << input_string << " not valid boundary type" << std::endl;
-    throw std::runtime_error(msg.str().c_str());
+    ATHENA_ERROR(msg);
   }
 
 }
@@ -783,16 +785,21 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
   if (GetTemperature == nullptr)
     GetTemperature = DefaultGetTemperature;
 
+  // Initialize monte carlo blocks
   for (int i=0; i<nblocal; i++) {
     MonteCarloBlock *pmcb = my_blocks(i);
     // Initialize variables over all blocks
     GetDensity(pmcb);
     GetTemperature(pmcb);
     if (boosts) GetVelocity(pmcb);
-    if (InitEmission != nullptr) InitEmission(pmcb);
-    // set photons to be computed
+    if (InitEmission != nullptr) {
+      pmcb->minweight *= InitEmission(pmcb);
+    }
+    // set photons to be computed and counters
     pmcb->nphremain = nblock;
+    pmcb->nphdone = 0;
     pmcb->nchunk = nchunk;
+    pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
     // Call problem generators for Monte Carlo
     pmcb->MonteCarloProblemGenerator(pin);
   }
@@ -806,6 +813,9 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
 void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
                                      ParameterInput *pinput) {
 
+  // initialize counter
+  int ntot = 0;
+
   bool photons_remain = true; // True if photons on any process
   while(photons_remain) {
 
@@ -814,6 +824,49 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
     }
     photons_remain = CheckAndBroadCastPhotonsRemaining();
   }
+
+  // Report diagnostic results from all blocks
+  int nesc = 0, nabs = 0, ndes = 0, nscat = 0;
+  for(int nb=0; nb<nblocal; ++nb){
+    MonteCarloBlock *pmcb = my_blocks(nb);
+    nesc += pmcb->nesc;
+    nabs += pmcb->nabs;
+    ndes += pmcb->ndes;
+    nscat += pmcb->nscat;
+    ntot += pmcb->nphdone;
+  }
+  std::cout  << "rank, ntot, nesc, nabs, ndes, nscat: " << Globals::my_rank << ' '
+             << ' ' << ntot << ' ' << nesc
+             << ' ' << nabs << ' ' << ndes << ' ' << nscat << ' ';
+  if (ntot > 0)
+    std::cout << static_cast<Real>(nscat)/static_cast<Real>(ntot) << std::endl;
+  else
+    std::cout << 0. << std::endl;
+#ifdef MPI_PARALLEL
+  MPI_Allreduce(MPI_IN_PLACE,&nesc,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&nabs,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&ndes,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&nscat,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&ntot,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+#endif
+  if (Globals::my_rank == 0) {
+    std::cout  << "ntot, nesc, nabs, ndes, nscat: "
+               << ' ' << ntot << ' ' << nesc
+               << ' ' << nabs << ' ' << ndes << ' ' << nscat << ' ';
+    if (ntot > 0)
+      std::cout << static_cast<Real>(nscat)/static_cast<Real>(ntot) << std::endl;
+    else
+      std::cout << 0. << std::endl;
+  }
+
+  if (pmcout->moments) {
+    // normalize moments for output
+    for(int nb=0; nb<nblocal; ++nb){
+      MonteCarloBlock *pmcb = my_blocks(nb);
+      pmcb->NormalizeMoments(true,static_cast<Real>(ntot));
+    }
+  }
+
 }
 
 //----------------------------------------------------------------------------------------
@@ -850,15 +903,16 @@ bool MonteCarlo::CheckAndBroadCastPhotonsRemaining() {
     nprop += pmcb->pphot->nphot;
   }
 #ifdef MPI_PARALLEL
-  MPI_Allreduce(MPI_IN_PLACE,&nprop,1,MPI_INT,MPI_MIN,MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE,&nremain,1,MPI_INT,MPI_MIN,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&nprop,1,MPI_INT,MPI_MAX,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&nremain,1,MPI_INT,MPI_MAX,MPI_COMM_WORLD);
 #endif
-  //printf("rank, nremain, nprop: %d %d %d\n",Globals::my_rank,nremain,nprop);
+
   bool active;
-  if ((nremain > 0) || (nprop > 0))
+  if ((nremain > 0) || (nprop > 0)) {
     active = true;
-  else
+  } else {
     active = false;
+  }
   return active;
 }
 
@@ -958,10 +1012,15 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
 //  current implementation is wrapper for gsl function
 
 MCRandom::MCRandom(int iseed) {
-  if (MONTE_CARLO_ENABLED) {
-    dev = gsl_rng_alloc(gsl_rng_mt19937);
-    gsl_rng_set(dev, iseed);
-  }
+
+#if RAN3
+  r3seed = static_cast<long>(-iseed);
+  ran3(&r3seed);
+#else
+  dev = gsl_rng_alloc(gsl_rng_mt19937);
+  gsl_rng_set(dev, iseed);
+#endif
+
 }
 
 //----------------------------------------------------------------------------------------
@@ -972,11 +1031,69 @@ MCRandom::~MCRandom() {
 }
 
 Real MCRandom::uniform() {
-  if (MONTE_CARLO_ENABLED)
-    return static_cast<Real>(gsl_rng_uniform(dev));
+
+#if RAN3
+  return ran3(&r3seed);
+#else
+  return static_cast<Real>(gsl_rng_uniform(dev));
+#endif
 }
 
 Real MCRandom::chisquare(int n) {
-  if (MONTE_CARLO_ENABLED)
-    return static_cast<Real>(gsl_ran_chisq(dev,n));
+#if RAN3
+  std::stringstream msg;
+  msg << "### FATAL ERROR in MCRandom::chisquare" << std::endl
+      << "Not supported with RAN3 random number generator" << std::endl;
+  ATHENA_ERROR(msg);
+#else
+  return static_cast<Real>(gsl_ran_chisq(dev,n));
+#endif
+
+}
+
+// Used by ran3
+#define MBIG 1000000000
+#define MSEED 161803398
+#define MZ 0
+#define FAC (1.0/MBIG)
+
+Real MCRandom::ran3(long *idum) {
+
+  static int inext,inextp;
+  static long ma[56];       // The value 56 (range ma[1..55]) is special and
+  static int iff=0;         // should not be modified; see Knuth.
+
+  long mj,mk;
+  int i,ii,k;
+
+  if (*idum < 0 || iff == 0) {    //Initialization.
+    iff=1;
+    mj=labs(MSEED-labs(*idum));   // Initialize ma[55] using the seed idum
+    mj %= MBIG;                   // and the large number MSEED.
+    ma[55]=mj;
+    mk=1;
+    for (i=1;i<=54;i++) {         //  Now initialize the rest of the table,
+      ii=(21*i) % 55;             //  in a slightly random order,with
+      ma[ii]=mk;                  //  numbers that are not especially random.
+      mk=mj-mk;
+      if (mk < MZ) mk += MBIG;
+      mj=ma[ii];
+    }
+    for (k=1;k<=4;k++)    // We randomize them by "warming up the generator."
+      for (i=1;i<=55;i++) {
+        ma[i] -= ma[1+(i+30) % 55];
+        if (ma[i] < MZ) ma[i] += MBIG;
+      }
+    inext=0;     // Prepare indices for our first generated number.
+    inextp=31;   //  The constant 31 is special; see Knuth.
+    *idum=1;
+  }
+  // Here is where we start, except on initialization.
+  if (++inext == 56) inext=1;     // Increment inext and inextp, wrapping
+  if (++inextp == 56) inextp=1;   // around  56 to 1.
+
+  mj=ma[inext]-ma[inextp];   // Generate a new random number subtractively.
+  if (mj < MZ) mj += MBIG;   // Be sure that it is in range.
+  ma[inext]=mj;              // Store it,
+  return static_cast<Real>(mj*FAC);             // and output the derived uniform deviate.
 }
