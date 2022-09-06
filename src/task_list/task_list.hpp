@@ -213,7 +213,7 @@ class TimeIntegratorTaskList : public TaskList {
   TaskStatus ReceiveFieldOrbital(MeshBlock *pmb, int stage);
   TaskStatus CalculateFieldOrbital(MeshBlock *pmb, int stage);
 
-  TaskStatus TransferPhotonsStatic(MeshBlock *pmb, int stage);
+  TaskStatus CoupleMonteCarlo(MeshBlock *pmb, int stage);
 
   bool CheckNextMainStage(int stage) const {return stage_wghts[stage%nstages].main_stage;}
 
@@ -364,5 +364,6 @@ const TaskID SEND_PM(71);
 const TaskID RECV_PM(72);
 
 const TaskID TRANS_STAT(73);
+const TaskID COUPLE_MC(74);
 }  // namespace HydroIntegratorTaskNames
 #endif  // TASK_LIST_TASK_LIST_HPP_

@@ -61,6 +61,7 @@ public:
   static int isip, isqp, isup, isvp;
   static int iuserp;
   static int ipolp;
+  static int idtp;
 
   std::vector<int> &statp, &nscp, &trp;
   std::vector<int> &i1p, &i2p, &i3p;
@@ -69,6 +70,7 @@ public:
   std::vector<Real> &dk0p, &dk1p, &dk2p, &dk3p;
   std::vector<Real> &ep, &wp, &scp, &acp;
   std::vector<Real> &sip, &sqp, &sup, &svp;
+  std::vector<Real> &dtp;
   std::vector<Real> *user;     //!>   user variable arrays
   std::vector<std::complex<Real>> *polten; //!> polarization tensor
 

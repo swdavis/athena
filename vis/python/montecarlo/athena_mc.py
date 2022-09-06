@@ -17,6 +17,7 @@ class photons:
     #Initialization from dictionary
     def __init__(self, phlist):
         self.npars = 10
+        self.dt = phlist['dt']
         self.polarized = phlist['polarized']
         self.ntot = phlist['ntot']
         self.coord = phlist['coord']
@@ -82,6 +83,18 @@ def read_list(filename,data=True,header=True):
         return current_index+expected_string_len
 
     if (header):
+        try:
+            current_index = skip_string("dt=")
+            end_of_line_index = current_index + 1
+            while raw_data_ascii[end_of_line_index] != '\n':
+                end_of_line_index += 1
+            phlist['dt'] = list(map(float,
+                           raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
+            current_index = end_of_line_index + 1
+        except:
+            print("List file contains no dt entry. Setting to 1.")
+            phlist['dt'] = 1.
+
         current_index = skip_string("length=")
         end_of_line_index = current_index + 1
         while raw_data_ascii[end_of_line_index] != '\n':
@@ -165,6 +178,7 @@ def write_list(filename,phlist,header=True,length=None):
     if (header):
         outfile = open(filename, 'w')
         # Write header information
+        outfile.write("dt={:.8e}\n".format(phlist['dt']))
         if (length is None):
             outfile.write("length={:d}\n".format(phlist['length']))
         else:
@@ -197,6 +211,7 @@ def write_spectrum(filename,spectrum):
     nphi = spectrum['nphi']
 
     # Write header information
+    outfile.write("dt={:.8e}\n".format(spectrum['dt']))
     outfile.write("nx={:d}\n".format(nx))
     outfile.write("nmu={:d}\n".format(nmu))
     outfile.write("nphi={:d}\n".format(nphi))
@@ -247,6 +262,17 @@ def read_spectrum(filename):
         if raw_data_ascii[current_index:current_index+expected_string_len] != expected_string:
             raise RuntimeError('File not formatted as expected')
         return current_index+expected_string_len
+
+    try:
+        current_index = skip_string("dt=")
+        end_of_line_index = current_index + 1
+        while raw_data_ascii[end_of_line_index] != '\n':
+            end_of_line_index += 1
+        spectrum['dt'] = list(map(float,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
+        current_index = end_of_line_index + 1
+    except:
+        print("Spectrum file contains no dt entry. Setting to 1.")
+        spectrum['dt'] = 1.
 
     current_index = skip_string("nx=")
     end_of_line_index = current_index + 1
@@ -930,6 +956,9 @@ def get_bins_binary_search(xphots,xfaces,nx):
     return xbins
 
 def get_angle_bins_cartesian(photons,nmu,mufaces,nphi,phifaces):
+    """
+    Bin angles in theta, phi defined relative to x,y,z axes
+    """
 
     if ((nmu == 1) and (mufaces[0] <= 0.) and (mufaces[1] >= 1.0)):
         skipmu = True
@@ -986,14 +1015,85 @@ def get_angle_bins_cartesian(photons,nmu,mufaces,nphi,phifaces):
     return mubins,phibins
 
 
+def get_angle_bins_spherical(photons,nmu,mufaces):
+    """
+    Bin angles relative to local radial direction.  Here we only bin
+    in polar angle.
+    """
+    if ((nmu == 1) and (mufaces[0] <= 0.) and (mufaces[1] >= 1.0)):
+        skipmu = True
+    else:
+        skipmu = False
+
+    if (skipmu):
+        return np.zeros(photons.nphot,dtype=int),np.zeros(photons.nphot,dtype=int)
+
+    if photons.coord == 'spherical_polar':
+        kr = photons.k1
+    else:
+        cth = np.cos(photons.x2)
+        sth = np.sin(photons.x2)
+        cph = np.cos(photons.x3)
+        sph = np.sin(photons.x3)
+        kr = sth*(cph*photons.k1+sph*photons.k2)+cth*photons.k3
+
+    # Bin based on k_r
+    mu = kr
+    mubins = get_bins(mu,mufaces,nmu,log=False)
+
+    # return 0 for phi
+    phibins = np.zeros(photons.nphot,dtype=int)
+
+    return mubins,phibins
+
+def get_angle_bins_hybrid(photons,nmu,mufaces,nphi,phifaces):
+    """
+    Bin angles in theta, phi defined relative to x,y,z axes, but with phi
+    defined by local azimuthal angle
+    """
+    if (nmu == 1):
+        printf("Error: this function requires nmu > 1")
+        return  np.zeros(photons.nphot,dtype=int),np.zeros(photons.nphot,dtype=int)
+    if (nphi == 1):
+        printf("Error: this function requires nphi > 1")
+        return np.zeros(photons.nphot,dtype=int),np.zeros(photons.nphot,dtype=int)
+
+    if (photons.coord != 'spherical_polar'):
+        printf("Error: this function only works with spherical polar")
+        return np.zeros(photons.nphot,dtype=int),np.zeros(photons.nphot,dtype=int)
+    else:
+        kr = photons.k1
+        kth = photons.k2
+        kph = photons.k3
+        cth = np.cos(photons.x2)
+        sth = np.sin(photons.x2)
+        kz = kr*cth - kth*sth
+
+    # Bin based on k . z
+    mu = abs(kz)
+    mubins = get_bins(mu,mufaces,nmu,log=False)
+
+    phi = np.arcsin(kph)
+    # inds should be empty for outgoing photons
+    inds = (kr < 0.).nonzero()
+    phi[inds] = np.pi - phi[inds]
+    phi[(phi<0.).nonzero()] += 2.*np.pi
+    phibins = get_bins(phi,phifaces,nphi,log=False)
+
+    return mubins,phibins
+
 def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1.,
-                  nphi=1,phimin=0,phimax=2.*np.pi,yerror=True,mask=None,xfunc=None,**kwargs):
+                  nphi=1,phimin=0,phimax=2.*np.pi,yerror=True,mask=None,
+                  xfunc=None,anglebin='cartesian',**kwargs):
     """
     Makes spectrum (dict) from photon object
     """
 
     # Store spectrum as a dictionary
     spectrum = {}
+
+    # Store integration time
+    spectrum['dt'] = phots.dt
 
     # Store total number of photons for refernce
     spectrum['ntot'] = phots.ntot
@@ -1039,7 +1139,15 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     phifaces = build_bins(phimin,phimax,nphi,False)
     spectrum['phifaces'] = phifaces
 
-    mubins, phibins = get_angle_bins_cartesian(phots,nmu,mufaces,nphi,phifaces)
+    print(anglebin)
+    if (anglebin == 'cartesian'):
+        mubins, phibins = get_angle_bins_cartesian(phots,nmu,mufaces,nphi,phifaces)
+    elif (anglebin == 'spherical'):
+        mubins, phibins = get_angle_bins_spherical(phots,nmu,mufaces)
+    elif (anglebin == 'hybrid'):
+        mubins, phibins = get_angle_bins_hybrid(phots,nmu,mufaces,nphi,phifaces)
+    else:
+        print("Error: anglebin == "+anglebin+". Must be cartesian, spherical, or hybrid.")
 
     # Create intensity grid and loop over photons to add contribution
     nintens = 1
@@ -1097,7 +1205,7 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     for k in range(nintens):
         for j in range(nphi):
             for i in range(nmu):
-                fac = nphi*nmu*emid/(mumid[i]*dnu*2.*np.pi)
+                fac = nphi*nmu*emid/(mumid[i]*dnu*2.*np.pi*phots.dt)
                 intensity[k,j,i,:] *= fac/phots.ntot
                 if yerror:
                     errors[k,j,i,:] *= fac**2/phots.ntot

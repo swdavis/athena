@@ -53,11 +53,12 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
     Real step = StepSize(pphot,ip);
     int count = 0;
     int iter = 0;
+    Real c_cgs = 2.99792458e10;
     int zone_counter = 0;
     Real chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
 
     while ( (pphot->statp[ip] == EVOLVING) && (tauremaining > TINY_NUMBER) &&
-            (iter < checkmove)) {
+            (iter < checkmove) && (pphot->dtp[ip] > 0.) ) {
       //printf("%d %g\n",iter,step);
       //pphot->PrintPhoton(ip);
       iter++;
@@ -87,6 +88,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
         pphot->PrintPhoton(ip);
       }
 
+      pphot->dtp[ip] -= step/c_cgs;
       // Update moments
       if (pmcb->moments_flag) {
         pmcb->UpdateMoments(pphot,step,1.,ip);

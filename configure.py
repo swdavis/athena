@@ -301,10 +301,21 @@ parser.add_argument(
     help='name of library to link against (-l<lib>); can be specified multiple times')
 
 # -mc argument
-parser.add_argument('-mc',
+parser.add_argument(
+    '-mc',
     action='store_true',
     default=False,
     help='enable monte carlo')
+
+# -mcev argument
+parser.add_argument(
+    '--mcev',
+    default='static',
+    choices=[
+        'static',
+        'dynamic',
+        'coupled'],
+    help='set time dependence of monte carlo')
 
 # -ran3 argument
 parser.add_argument('-ran3',
@@ -793,11 +804,23 @@ for library_name in args['lib']:
 # -mc argument
 if args['mc']:
   definitions['MONTE_CARLO_ENABLED'] = '1'
-  definitions['MONTE_CARLO_STATIC'] = '1'
   makefile_options['LIBRARY_FLAGS'] += ' -lgsl -lgslcblas'
+  if (args['mcev'] == 'static'):
+      definitions['MONTE_CARLO_STATIC'] = '1'
+      definitions['MONTE_CARLO_DYNAMIC'] = '0'
+      definitions['MONTE_CARLO_COUPLED'] = '0'
+  if (args['mcev'] == 'dynamic'):
+      definitions['MONTE_CARLO_STATIC'] = '0'
+      definitions['MONTE_CARLO_DYNAMIC'] = '1'
+      definitions['MONTE_CARLO_COUPLED'] = '0'
+  if (args['mcev'] == 'coupled'):
+      definitions['MONTE_CARLO_STATIC'] = '0'
+      definitions['MONTE_CARLO_DYNAMIC'] = '1'
+      definitions['MONTE_CARLO_COUPLED'] = '1'
 else:
   definitions['MONTE_CARLO_ENABLED'] = '0'
   definitions['MONTE_CARLO_STATIC'] = '0'
+  definitions['MONTE_CARLO_DYNAMIC'] = '0'
 
 # -ran3 argument
 if args['ran3']:
@@ -858,6 +881,7 @@ print('  Particles:                  ' + ('ON' if args['p'] else 'OFF'))
 print('  Self-Gravity:               ' + self_grav_string)
 print('  Super-Time-Stepping:        ' + ('ON' if args['sts'] else 'OFF'))
 print('  Monte Carlo:                ' + ('ON' if args['mc'] else 'OFF'))
+print('  Monte Carlo evolution:      ' + args['mcev'])
 print('  Using ran3:                 ' + ('ON' if args['ran3'] else 'OFF'))
 print('  Debug flags:                ' + ('ON' if args['debug'] else 'OFF'))
 print('  Code coverage flags:        ' + ('ON' if args['coverage'] else 'OFF'))

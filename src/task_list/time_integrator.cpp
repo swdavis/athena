@@ -1010,6 +1010,11 @@ TimeIntegratorTaskList::TimeIntegratorTaskList(ParameterInput *pin, Mesh *pm) {
       AddTask(RECV_PM, INT_HYD);
     }
 
+    // couple particles to gas
+    if (MONTE_CARLO_COUPLED) {
+      AddTask(COUPLE_MC, INT_HYD);
+    }
+
     if (MAGNETIC_FIELDS_ENABLED) { // MHD
       // compute MHD fluxes, integrate field
       AddTask(CALC_FLDFLX,CALC_HYDFLX);
@@ -1422,10 +1427,10 @@ void TimeIntegratorTaskList::AddTask(const TaskID& id, const TaskID& dep) {
         static_cast<TaskStatus (TaskList::*)(MeshBlock*,int)>
         (&TimeIntegratorTaskList::CalculateFieldOrbital);
     task_list_[ntasks].lb_time = true;
-  } else if (id == TRANS_STAT) {
+  } else if (id == COUPLE_MC) {
     task_list_[ntasks].TaskFunc=
         static_cast<TaskStatus (TaskList::*)(MeshBlock*,int)>
-        (&TimeIntegratorTaskList::TransferPhotonsStatic);
+        (&TimeIntegratorTaskList::CoupleMonteCarlo);
     task_list_[ntasks].lb_time = true;
   } else {
     std::stringstream msg;
@@ -2064,9 +2069,11 @@ enum TaskStatus TimeIntegratorTaskList::ParticleMeshReceive(MeshBlock *pmb, int 
 //--------------------------------------------------------------------------------------
 // Functions for Monte Carlo
 
-TaskStatus TimeIntegratorTaskList::TransferPhotonsStatic(MeshBlock *pmb, int stage) {
+TaskStatus TimeIntegratorTaskList::CoupleMonteCarlo(MeshBlock *pmb, int stage) {
 
-  pmb->pmy_mcb->TransferPhotonsStatic();
+  // Only couple once per timestep after completion of hydro integration
+  if (stage == nstages)
+    pmb->pmy_mcb->CoupleMonteCarloToFluid(pmb->pmy_mesh->dt);
 
   return TaskStatus::success;
 

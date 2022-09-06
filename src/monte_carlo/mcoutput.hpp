@@ -42,12 +42,13 @@ public:
   bool polar_axis;
   bool coordinates;
   bool logarithmic;
-  bool legacy; // Output format to be used (temporarily retained for testing)
+
   Spectrum *next;  // next spectrum
   enum BoundaryFace face;
   int id;
   int output_number;// current output number
   Real x1min,x1max,x2min,x2max,x3min,x3max;
+  Real dt; // integration time for this spectrum
 
   AthenaArray<Real> energies;
   AthenaArray<Real> intensity;
@@ -70,7 +71,7 @@ public:
   void ResetSpectrum();
   void AddSpectrum(Spectrum *pspec);
   void WriteSpectrum(std::string filename, int ntot);
-  void WriteSpectrumLegacy(std::string filename, Real norm);
+
 };
 
 //----------------------------------------------------------------------------------------
@@ -89,6 +90,8 @@ public:
   int output_number;// current output number
   int nuser_out;
   bool polarized;
+  Real dt;
+
   AthenaArray<Real> photons;  // array of photon properies
 
   //functions

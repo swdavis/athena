@@ -51,6 +51,8 @@
 // enable monte carlo? default=0 (false)
 #define MONTE_CARLO_ENABLED @MONTE_CARLO_ENABLED@
 #define MONTE_CARLO_STATIC @MONTE_CARLO_STATIC@
+#define MONTE_CARLO_DYNAMIC @MONTE_CARLO_DYNAMIC@
+#define MONTE_CARLO_COUPLED @MONTE_CARLO_COUPLED@
 
 // usre ran3 for random numbers? default=0 (false)
 #define RAN3 @RAN3@

@@ -187,6 +187,8 @@ public:
   MCOutput *pmcout;
   AthenaArray<MonteCarloBlock*> my_blocks;
 
+  Real dt;     // Monte Carlo timestep
+  Real tmax;   // Maximum evolution time
   int nphtot;  // total number of photons to integrate
   int nphdone; // total photons completed accross all blocks on all processes
   int nblock;  // number of photons per step per block
@@ -230,6 +232,7 @@ public:
   // functions
   // SWD: some of these functions could/should be private
   void RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput *pinput);
+  void RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput *pinput);
   bool CheckAndBroadCastPhotonsRemaining();
   void InitUserMonteCarloData(ParameterInput *pin);
   // Enroll User functions
@@ -342,6 +345,8 @@ public:
   void MonteCarloProblemGenerator(ParameterInput *pin);
   void RayTracePhotons(int nphtot); // Ray trace photon on this block
   void TransferPhotonsStatic(); // Transfer photons on this block
+  void TransferPhotonsDynamic(); // time dependent transfer on this block
+  void CoupleMonteCarloToFluid(Real dt);  // couple monte carlo to mesh
   void CoordinateToComoving(Photon *pphot, int ips, int ipe);
   void ComovingToCoordinate(Photon *pphot, int ips, int ipe);
   void LorentzTransform(Photon *pphot, const Real sign, int ips, int ipe);

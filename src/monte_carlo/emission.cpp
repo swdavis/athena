@@ -29,6 +29,8 @@ Real InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
   //eta0 *= 12.;  // Added to match the Athena++ prescription
 
   Real ncells = static_cast<Real>(pmcb->pmy_mc->ncells);
+  Real dt = pmcb->pmy_mc->dt;
+
   int il = pmcb->is; int iu = pmcb->ie;
   int jl = pmcb->js; int ju = pmcb->je;
   int kl = pmcb->ks; int ku = pmcb->ke;
@@ -44,7 +46,7 @@ Real InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
         Real nhe = nh*heabund;
         Real ne = nh + 2.*nhe;
         Real vol = pmcb->pcoord->vol(k,j,i);
-        pmcb->emission(k,j,i) = eta0/sqrt(temp)*ne*(nh+4.*nhe)*g*vol*ncells;
+        pmcb->emission(k,j,i) = eta0/sqrt(temp)*ne*(nh+4.*nhe)*g*vol*dt*ncells;
         if (pmcb->emission(k,j,i) > emm_max) emm_max = pmcb->emission(k,j,i);
         if (pmcb->emission(k,j,i) < emm_min) emm_min = pmcb->emission(k,j,i);
       }}}

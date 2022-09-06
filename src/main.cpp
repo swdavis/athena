@@ -499,6 +499,9 @@ int main(int argc, char *argv[]) {
 
     if (pmesh->turb_flag > 1) pmesh->ptrbd->Driving(); // driven turbulence
 
+    if (MONTE_CARLO_DYNAMIC)
+      pmc->RunDynamicMonteCarlo(pouts,pmesh,pinput);;
+
     for (int stage=1; stage<=ptlist->nstages; ++stage) {
       ptlist->DoTaskListOneStage(pmesh, stage);
       if (ptlist->CheckNextMainStage(stage)) {

@@ -23,7 +23,7 @@
 #include "../monte_carlo/photon.hpp"
 #include "../monte_carlo/photonmover.hpp"
 
-#if !MONTE_CARLO_STATIC
+#if !MONTE_CARLO_ENABLED
 #error "This problem requires monte carlo"
 #endif
 
@@ -163,8 +163,11 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     GetZonePosition(pphot,pran,pcoord,ip);
 
     // Set weight according to the emission array, which is the relative number of photons
-    // per unit time emitted in each cell
+    // emitted in each cell
     pphot->wp[ip] = emission(i3,i2,i1);
+
+    // Set maximum integration time
+    pphot->dtp[ip] = pphot->pmy_mcb->pmy_mc->tmax;
 
     // Obtain intitial energy, polarization, direction and weight
     // Utilize free-free emission function in emission.cpp

@@ -78,8 +78,11 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
     Real kz = kr*cth - kth*sth;
 
     int iter = 0;
+    Real c_cgs = 2.99792458e10;
+
     // Move photon until requisite # of mean free paths or escape
-    while( (tauremaining > 0.) && (pphot->statp[ip] == EVOLVING) && (iter < checkmove)) {
+    while( (tauremaining > 0.) && (pphot->statp[ip] == EVOLVING) && (iter < checkmove) &&
+           (pphot->dtp[ip] > 0.) ) {
       iter++;
       // Compute cartesian positions
       Real r0 = pphot->x1p[ip];
@@ -291,6 +294,7 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
             break; // break out of while loop
           // compute distance remaining in zone
           dl = tauremaining/chi;
+          pphot->dtp[ip] -= dl/c_cgs;
           // Update moments
           if (pmcb->moments_flag)
             pmcb->UpdateMoments(pphot,dl,1.,ip);
@@ -316,6 +320,7 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
 
       } else { // Photon moves to next zone and reduce tauremaining
         // Update moments
+        pphot->dtp[ip] -= dl/c_cgs;
         if (pmcb->moments_flag)
           pmcb->UpdateMoments(pphot,dl,1.,ip);
         // Update positions

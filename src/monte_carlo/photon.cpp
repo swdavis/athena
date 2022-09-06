@@ -27,7 +27,7 @@ int Photon::ik0p = -1, Photon::ik1p = -1, Photon::ik2p = -1, Photon::ik3p = -1;
 int Photon::idk0p = -1, Photon::idk1p = -1, Photon::idk2p = -1, Photon::idk3p = -1;
 int Photon::iep = -1, Photon::iwp = -1, Photon::iscp = -1, Photon::iacp = -1;
 int Photon::isip = -1, Photon::isqp = -1, Photon::isup = -1, Photon::isvp = -1;
-int Photon::iuserp = -1, Photon::ipolp = -1;
+int Photon::iuserp = -1, Photon::ipolp = -1, Photon::idtp = -1;
 
 // Local function prototypes
 static int CheckSide(int xi, int xi1, int xi2);
@@ -53,7 +53,8 @@ Photon::Photon(MonteCarloBlock *pmcb, ParameterInput *pin)
     dk0p(rp[idk0p]), dk1p(rp[idk1p]), dk2p(rp[idk2p]),
     dk3p(rp[idk3p]),
     ep(rp[iep]), wp(rp[iwp]), scp(rp[iscp]), acp(rp[iacp]),
-  sip(rp[isip]), sqp(rp[isqp]), sup(rp[isup]), svp(rp[isvp]) {
+    sip(rp[isip]), sqp(rp[isqp]), sup(rp[isup]), svp(rp[isvp]),
+    dtp(rp[idtp]) {
 
   pmy_mcb = pmcb;
   nphot_limit = pmcb->pmy_mc->max_phots_init;
@@ -90,9 +91,9 @@ void Photon::PrintPhoton(int ip) {
               << dk0p[ip] << std::endl;
   }
   if (polarized) {
-    std:: cout << "stokes: " << sip[ip] << " " << sqp[ip] << " " << sup[ip] << std::endl
-               << "opacity: " << scp[ip] << " " << acp[ip] << std::endl;
+    std:: cout << "stokes: " << sip[ip] << " " << sqp[ip] << " " << sup[ip] << std::endl;
   }
+  std::cout << "opacity: " << scp[ip] << " " << acp[ip] << std::endl;
   if (nuser_var > 0) {
     std::cout << "User vars:";
       for (int i=0; i<nuser_var; i++) {
@@ -100,12 +101,17 @@ void Photon::PrintPhoton(int ip) {
       }
       std::cout << std::endl;
   }
+  std::cout << "dt: " << dtp[ip] << " ";
   if (statp[ip] == EVOLVING)
     std::cout << "EVOLVING" << std::endl;
   else if (statp[ip] == ESCAPED)
     std::cout << "ESCAPED" << std::endl;
   else if (statp[ip] == DESTROYED)
     std::cout << "DESTROYED" << std::endl;
+  else if (statp[ip] == BUFFERED)
+    std::cout << "BUFFERED" << std::endl;
+  else
+    std::cout << std::endl;
 }
 
 //----------------------------------------------------------------------------------------
@@ -233,6 +239,9 @@ void Photon::Initialize(MonteCarlo *pmc, ParameterInput *pin) {
   iscp = AddRealProperty("scp");
   iacp = AddRealProperty("acp");
 
+  // Add time remaining parameter
+  idtp = AddRealProperty("dtp");
+
   if (pmc->polarized) {
     polarized = true;
     // Add stokes vectors
@@ -306,7 +315,7 @@ void Photon::SendToNeighbors() {
 
     // Apply periodic boundary conditions and find the mesh coordinates.
     ApplyPeriodicBoundary(x1p[k], x2p[k], x3p[k]);
-
+    //printf("%d %d %g %g %g\n",Globals::my_rank,k,x1p[k],x2p[k],x3p[k]);
     // Find the neighbor block to send it to.
     if (!active1_) ox1 = 0;
     if (!active2_) ox2 = 0;
@@ -326,14 +335,7 @@ void Photon::SendToNeighbors() {
     if (pnb->snb.rank == Globals::my_rank) {
       // No need to send if back to the same block.
       if (pnb->snb.gid == pmy_block->gid) {
-        Real xi1,xi2,xi3;
-        pmy_block->pcoord->MeshCoordsToIndices(x1p[k], x2p[k], x3p[k], xi1, xi2, xi3);
-        // Should be positive so no need for floor
         GetPositionIndices(k,k);
-        //i1p[k] = static_cast<int>(xi1);
-        //i2p[k] = static_cast<int>(xi2);
-        //i3p[k] = static_cast<int>(xi3);
-        //statp[k] = EVOLVING;
         --k;
         nloc++;
         continue;
@@ -412,38 +414,41 @@ void Photon::ApplyPeriodicBoundary(Real &x1, Real &x2, Real &x3) {
   RegionSize& mesh_size = pmy_mesh->mesh_size;
   Coordinates *pcoord = pmy_block->pcoord;
 
+  Real frac = 1.0e-8;
+
   // Apply periodic boundary conditions in X1.
   if (x1 <= mesh_size.x1min) {
     // Inner x1
-    x1 += mesh_size.x1len;
+    x1 = mesh_size.x1max*(1.-frac);
     flag = true;
   } else if (x1 >= mesh_size.x1max) {
     // Outer x1
-    x1 -= mesh_size.x1len;
+    x1 = mesh_size.x1min*(1.+frac);
     flag = true;
   }
 
   // Apply periodic boundary conditions in X2.
   if (x2 <= mesh_size.x2min) {
     // Inner x2
-    x2 += mesh_size.x2len;
+    x2 = mesh_size.x2max*(1.-frac);
     flag = true;
   } else if (x2 >= mesh_size.x2max) {
     // Outer x2
-    x2 -= mesh_size.x2len;
+    x2 = mesh_size.x2min*(1.+frac);
     flag = true;
   }
 
   // Apply periodic boundary conditions in X3.
   if (x3 <= mesh_size.x3min) {
     // Inner x3
-    x3 += mesh_size.x3len;
+    x3 = mesh_size.x3max*(1.-frac);
     flag = true;
   } else if (x3 >= mesh_size.x3max) {
     // Outer x3
-    x3 -= mesh_size.x3len;
+    x3 = mesh_size.x3min*(1.+frac);
     flag = true;
   }
+
   if (flag) {
     nper++;
   } else {
@@ -521,7 +526,7 @@ bool Photon::ReceiveFromNeighbors() {
         FlushReceiveBuffer(recv);
         // Update Photon position indices
         GetPositionIndices(nparold,npar-1);
-        //printf("recv %d %d %d\n",Globals::my_rank,nparold,npar-1);
+        //        printf("recv %d %d %d\n",Globals::my_rank,nparold,npar-1);
         bstatus = BoundaryStatus::completed;
         break;
     }
@@ -537,17 +542,29 @@ bool Photon::ReceiveFromNeighbors() {
 void Photon::GetPositionIndices(int ibegin, int iend) {
 
   Real xi1, xi2, xi3;
+  int is = pmy_mcb->is, ie = pmy_mcb->ie;
+  int js = pmy_mcb->js, je = pmy_mcb->je;
+  int ks = pmy_mcb->ks, ke = pmy_mcb->ke;
   for (int k = ibegin; k <= iend; ++k) {
     // Convert to the index space.
     pmy_block->pcoord->MeshCoordsToIndices(x1p[k], x2p[k], x3p[k], xi1, xi2, xi3);
     i1p[k] = static_cast<int>(xi1);
+    if (i1p[k] < is) i1p[k] = is;
+    if (i1p[k] > ie) i1p[k] = ie;
     i2p[k] = static_cast<int>(xi2);
+    if (i2p[k] < js) i2p[k] = js;
+    if (i2p[k] > je) i2p[k] = je;
     i3p[k] = static_cast<int>(xi3);
+    if (i3p[k] < ks) i3p[k] = ks;
+    if (i3p[k] > ke) i3p[k] = ke;
     statp[k] = EVOLVING;
     MonteCarloBlock *pmcb = pmy_mcb;
     if (pmcb->boosts) {
       // Shift photon energy to comoving frame
       Real shift = pmcb->LorentzTransformFrequencyShift(this,k);
+      if (( std::isinf(shift)) || (std::isnan(shift)) ) {
+        printf("shift: %d %d %d %g %g %g %g\n",i1p[k],i2p[k],i3p[k],shift,xi1,xi2,xi3);
+      }
       ep[k] *= shift;
       // compute opacities in comoving frame
       acp[k] = pmcb->AbsorptionOpacity(pmcb,this,k);
