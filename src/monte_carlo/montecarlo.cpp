@@ -62,6 +62,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
     BoundaryFunction_[dir]=nullptr;
 
   boosts = pin->GetOrAddBoolean("montecarlo","boosts",false);
+  coupled = pin->GetOrAddBoolean("montecarlo","coupled",false);
   polarized = pin->GetOrAddBoolean("montecarlo","polarized",false);
   acceleration = pin->GetOrAddBoolean("montecarlo","acceleration",false);
   time_acc = pin->GetOrAddBoolean("montecarlo","time_acc",false);

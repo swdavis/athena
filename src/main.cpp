@@ -471,9 +471,9 @@ int main(int argc, char *argv[]) {
     pmesh->time = pmesh->tlim;
   while ((pmesh->time < pmesh->tlim) &&
          (pmesh->nlim < 0 || pmesh->ncycle < pmesh->nlim)) {
+
     if (Globals::my_rank == 0)
-      if (!MONTE_CARLO_STATIC)
-        pmesh->OutputCycleDiagnostics();
+      pmesh->OutputCycleDiagnostics();
 
     if (STS_ENABLED) {
       pmesh->sts_loc = TaskType::op_split_before;
@@ -578,7 +578,7 @@ int main(int argc, char *argv[]) {
 
   pmesh->UserWorkAfterLoop(pinput);
 
-  if (MONTE_CARLO_ENABLED)
+  if (MONTE_CARLO_STATIC)
     pmc->MakeOutputs();
 #ifdef ENABLE_EXCEPTIONS
   try {

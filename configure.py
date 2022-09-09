@@ -313,8 +313,7 @@ parser.add_argument(
     default='static',
     choices=[
         'static',
-        'dynamic',
-        'coupled'],
+        'dynamic'],
     help='set time dependence of monte carlo')
 
 # -ran3 argument
@@ -808,25 +807,18 @@ if args['mc']:
   if (args['mcev'] == 'static'):
       definitions['MONTE_CARLO_STATIC'] = '1'
       definitions['MONTE_CARLO_DYNAMIC'] = '0'
-      definitions['MONTE_CARLO_COUPLED'] = '0'
-  if (args['mcev'] == 'dynamic'):
+  elif (args['mcev'] == 'dynamic'):
       definitions['MONTE_CARLO_STATIC'] = '0'
       definitions['MONTE_CARLO_DYNAMIC'] = '1'
-      definitions['MONTE_CARLO_COUPLED'] = '0'
-  if (args['mcev'] == 'coupled'):
-      definitions['MONTE_CARLO_STATIC'] = '0'
-      definitions['MONTE_CARLO_DYNAMIC'] = '1'
-      definitions['MONTE_CARLO_COUPLED'] = '1'
-else:
-  definitions['MONTE_CARLO_ENABLED'] = '0'
-  definitions['MONTE_CARLO_STATIC'] = '0'
-  definitions['MONTE_CARLO_DYNAMIC'] = '0'
+  else:
+      definitions['MONTE_CARLO_ENABLED'] = '0'
+      definitions['MONTE_CARLO_DYNAMIC'] = '0'
 
 # -ran3 argument
 if args['ran3']:
-  definitions['RAN3'] = '1'
+    definitions['RAN3'] = '1'
 else:
-  definitions['RAN3'] = '0'
+    definitions['RAN3'] = '0'
 
 # Assemble all flags of any sort given to compiler
 definitions['COMPILER_FLAGS'] = ' '.join(

@@ -60,6 +60,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   // SWD: eliminate some or all of these?
   // set local flags based on monte_carlo
   boosts = pmy_mc->boosts;
+  coupled = pmy_mc->coupled;
   emission_array_flag = pmy_mc->emission_array_flag;
   moments_flag = pmy_mc->pmcout->moments; // set in mcoutput
   moments_comoving = pmy_mc->pmcout->moments_comoving;

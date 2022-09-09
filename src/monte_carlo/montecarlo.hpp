@@ -214,6 +214,7 @@ public:
   enum MCBoundaryFlag mc_bcs[6];
 
   bool boosts;  // Compute lorentz transformations
+  bool coupled; // is monte carlo evolution coupled to hydro
   bool emission_array_flag;  // Compute and save zone emissivities
   bool polarized;// track photon polarization
   bool acceleration;  // use MRW acceleration
@@ -312,6 +313,7 @@ public:
   bool moments_comoving; // Compute in comoving frame
   bool emission_array_flag;  // Compute and save zone emissivities
   bool boosts;  // Compute lorentz transformations
+  bool coupled; // Whether time dependent code is coupled to hydro
   bool coherent_scattering; // photon does notchange energy after scattering
   bool acceleration;  // use MRW acceleration
   bool time_acc;  // use MRW acceleration with time limit

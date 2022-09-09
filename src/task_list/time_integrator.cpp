@@ -1011,7 +1011,7 @@ TimeIntegratorTaskList::TimeIntegratorTaskList(ParameterInput *pin, Mesh *pm) {
     }
 
     // couple particles to gas
-    if (MONTE_CARLO_COUPLED) {
+    if (MONTE_CARLO_DYNAMIC) {
       AddTask(COUPLE_MC, INT_HYD);
     }
 
@@ -2072,7 +2072,7 @@ enum TaskStatus TimeIntegratorTaskList::ParticleMeshReceive(MeshBlock *pmb, int 
 TaskStatus TimeIntegratorTaskList::CoupleMonteCarlo(MeshBlock *pmb, int stage) {
 
   // Only couple once per timestep after completion of hydro integration
-  if (stage == nstages)
+  if ( (stage == nstages) && (pmb->pmy_mcb->coupled) )
     pmb->pmy_mcb->CoupleMonteCarloToFluid(pmb->pmy_mesh->dt);
 
   return TaskStatus::success;
