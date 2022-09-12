@@ -141,35 +141,34 @@ def read_list(filename,data=True,header=True):
         npars = phlist['npars']
         length = phlist['length']
         nelements = length * npars
-        if (old):
-            format_string = '>' + 'd'*nelements
-            begin_index = current_index
-            end_index = begin_index + 8*nelements
-            vals = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
-            phlist['list'] = vals.reshape((phlist['length'],phlist['npars']))
-        else:
-            begin_index = current_index
-            sizeloop = mxl_*npars
-            nloop = nelements // sizeloop
-            sizelast = nelements % sizeloop
-            vals = ()
-            for i in range(nloop+1):
-                if (i == nloop):
-                    size = sizelast
-                else:
-                    size = sizeloop
-                end_index = begin_index + 8*size
-                format_string = '>' + 'd'*size
-                if (i > 0):
-                    print(i,"/",nloop)
-                vals = struct.unpack(format_string, raw_data[begin_index:end_index])
-                begin_index = end_index
-                if (i == 0):
-                    phlist['list'] = np.array(vals)
-                else:
-                    phlist['list'] = np.append(phlist['list'],np.array(vals))
-            phlist['list'] = phlist['list'].reshape((length,npars))
 
+        begin_index = current_index
+        sizeloop = mxl_*npars
+        nloop = nelements // sizeloop
+        sizelast = nelements % sizeloop
+        # SWD: temporary to read broken list
+        #for i in range(nloop):
+        for i in range(nloop+1):
+            vals = ()
+            if (i == nloop):
+                size = sizelast
+            else:
+                size = sizeloop
+            end_index = begin_index + 8*size
+            format_string = '>' + 'd'*size
+            if (i > 0):
+                print(i,"/",nloop)
+            vals = struct.unpack(format_string, raw_data[begin_index:end_index])
+            begin_index = end_index
+            if (i == 0):
+                phlist['list'] = np.array(vals)
+            else:
+                phlist['list'] = np.append(phlist['list'],np.array(vals))
+
+        phlist['list'] = phlist['list'].reshape((length,npars))
+        # SWD: temporary to read broken list
+        #phlist['length'] = nloop*mxl_
+        #phlist['list'] = phlist['list'].reshape((nloop*mxl_,npars))
     return phlist
 
 def write_list(filename,phlist,header=True,length=None):
@@ -1257,7 +1256,7 @@ def get_image_bins(phots,rcam,ifaces,xfaces,yfaces):
         kz = phots.k3
         kdx = xp*kx+yp*ky+zp*kz
 
-    dl = np.sqrt(rcam**2-rp**2+2.*kdx)-kdx
+    dl = np.sqrt(rcam**2-rp**2+kdx**2)-kdx
     xf = xp + dl * kx
     yf = yp + dl * ky
     zf = zp + dl * kz
@@ -1267,23 +1266,24 @@ def get_image_bins(phots,rcam,ifaces,xfaces,yfaces):
     phf =  np.arctan2(yf,xf)
     cphf = np.cos(phf)
     sphf = np.sin(phf)
-    np.set_printoptions(threshold=1000)
+    #np.set_printoptions(threshold=1000)
 
     ibins = get_bins(cthf,ifaces,ninc,log=False)
 
     kth = kx*cthf*cphf + ky*cthf*sphf - kz*sthf
     kph = -kx*sphf + ky*cphf
     norm = np.sqrt(1.+kth**2+kph**2)
-    x = kth*rcam*norm
-    y = kph*rcam*sthf*norm
+    y = kth*rcam*norm
+    x = kph*rcam*norm
 
     xbins = get_bins(x,xfaces,nx,log=False)
     ybins = get_bins(y,yfaces,ny,log=False)
-
+    #for i,q in enumerate(cthf):
+    #    print(q,ibins[i],x[i],y[i],xbins[i],ybins[i])
     return ibins, xbins, ybins
 
 def make_image_mc(phots,rcam,ninc,imin,imax,nen,emin,emax,
-                  nx,xmin,xmax,ny,ymin,ymax,**kwargs):
+                  nx,xmin,xmax,ny,ymin,ymax,mask=None,**kwargs):
     """
     Create a binned image from photon list
     """
@@ -1322,33 +1322,42 @@ def make_image_mc(phots,rcam,ninc,imin,imax,nen,emin,emax,
     # Create intensity grid and loop over photons to add contribution
     nintens = 1
     if phots.polarized:
-        image['polarized'] = 'true'
+        image['polarized'] = True
         nintens += 2
     else:
-        image['polarized'] = 'false'
+        image['polarized'] = False
     image['nintens'] = nintens
+
+
+    if (mask is not None):
+        ibins[mask] = -1
 
     intensity = np.zeros((nintens,ninc,nen,ny,nx))
     for i in range(phots.nphot):
         if ((ibins[i] >= 0) and (ebins[i] >= 0) and (xbins[i] >= 0) and (ybins[i] >= 0)):
-            wght = phots.weight[i]
+            # Weight includes energy -- slightly different from spectra
+            wght = phots.weight[i]*phots.energy[i]
             intensity[0,ibins[i],ebins[i],ybins[i],xbins[i]] += wght
             if phots.polarized:
                 intensity[1,ibins[i],ebins[i],ybins[i],xbins[i]] += wght*phots.q[i]
                 intensity[2,ibins[i],ebins[i],ybins[i],xbins[i]] += wght*phots.u[i]
 
     # Normalize intensities
-    mumid = 0.5*(ifaces[1:]+ifaces[:-1])
+    mumid = abs(0.5*(ifaces[1:]+ifaces[:-1]))
     dmu = ifaces[1:]-ifaces[:-1]
-    h = 6.62607015e-27
-    everg = 1.6021772e-12
-    dnu = (efaces[1:]-efaces[:-1])*1000.*everg/h
-    emid = 0.5*(efaces[1:]+efaces[:-1])*1000.*everg
+
+    if (image['nen'] == 1):
+        dnu = np.array([1.])
+    else:
+        h = 6.62607015e-27
+        everg = 1.6021772e-12
+        dnu = (efaces[1:]-efaces[:-1])*1000.*everg/h
+
     for k in range(nintens):
         for j in range(ninc):
             for i in range(nen):
                 # not divided by dnu for now
-                fac = emid[i]/(dmu[j]*mumid[j]*2.*np.pi*phots.dt)
+                fac = 1./(dnu[i]*dmu[j]*mumid[j]*2.*np.pi*phots.dt)
                 intensity[k,j,i,:,:] *= fac/phots.ntot
 
 
@@ -1356,47 +1365,32 @@ def make_image_mc(phots,rcam,ninc,imin,imax,nen,emin,emax,
 
     return image
 
-def plot_image_old(image,iinc,yvar='intens',xmin=None,xmax=None,ymin=None,ymax=None,
-               cmap='hot',vmin=None,vmax=None,ax=None):
-    """
-    Plots image using pcolormesh
-    """
-    if (ax is None):
-        # Create figure, axis and assume a single plot window
-        fig = plt.figure()
-        ax = fig.add_subplot(1,1,1)
-
-    if (yvar == 'intens'):
-        vals = image['intensity'][0,iinc,:,:]
-
-    print(vals.shape)
-    x_grid, y_grid = np.meshgrid(image['xfaces'],image['yfaces'])
-    im = ax.pcolormesh(x_grid, y_grid, vals, cmap=cmap, vmin=vmin, vmax=vmax)
-
-
 def subsample_polarization(q,u,x,y,step,average):
+    """
+    Subsampling of itensity array
+    """
 
     nx = len(x)
     ny = len(y)
 
     if (not average):
-        x = x[step//2:nx:step]
-        y = y[step//2:ny:step]
-        q = q[step//2:nx:step,step//2:ny:step]
-        u = u[step//2:nx:step,step//2:ny:step]
+        x = x[step // 2:nx:step]
+        y = y[step // 2:ny:step]
+        q = q[step // 2:nx:step,step // 2:ny:step]
+        u = u[step // 2:nx:step,step // 2:ny:step]
         return q,u,x,y
     else:
         # too lazy to work out pythony way of doing this
-        xp = np.zeros(nx/step)
-        yp = np.zeros(ny/step)
-        qp = np.zeros((nx/step,ny/step))
-        up = np.zeros((nx/step,ny/step))
-        for i in range(nx/step):
+        xp = np.zeros(nx // step)
+        yp = np.zeros(ny // step)
+        qp = np.zeros((nx // step,ny // step))
+        up = np.zeros((nx // step,ny // step))
+        for i in range(nx // step):
             xp[i] = np.average(x[i*step:(i+1)*step])
-        for i in range(ny/step):
+        for i in range(ny // step):
             yp[i] = np.average(y[i*step:(i+1)*step])
-        for i in range(nx/step):
-            for j in range(ny/step):
+        for i in range(nx // step):
+            for j in range(ny // step):
                 qp[i,j] = np.average(q[i*step:(i+1)*step,j*step:(j+1)*step])
                 up[i,j] = np.average(u[i*step:(i+1)*step,j*step:(j+1)*step])
 
@@ -1419,44 +1413,47 @@ def plot_image(image,iinc,polarization=False,average=False,step=4,ax=None,**kwar
     plt.figure()
 
     if kwargs['vnorm']:
-        vals = image['intensity'][0,0,0,:,:] / np.max(image['intensity'])
+        vals = image['intensity'][0,iinc,0,:,:] / np.max(image['intensity'])
         vmax = 1.
         if vmin is None:
             vmin = 1.e-5
     else:
-        vals = image['intensity'][0,0,0,:,:]
+        vals = image['intensity'][0,iinc,0,:,:]
         if vmin is None:
             vmin = 1.e-5*np.max(vals)
     if (kwargs['logc']):
+        vals[vals <= 0.] = 1.e-12
         norm = colors.LogNorm(vmin=vmin,vmax=vmax)
     else:
         norm = colors.Normalize(vmin=vmin,vmax=vmax)
 
-    x_2d, y_2d = np.meshgrid(image['xfaces'],image['yfaces'],indexing='ij')
-
+    x = 0.5*(image['xfaces'][1:]+image['xfaces'][:-1])
+    y = 0.5*(image['yfaces'][1:]+image['yfaces'][:-1])
+    #x_2d, y_2d = np.meshgrid(x,y,indexing='ij')
+    x_2d, y_2d = np.meshgrid(x,y)
     im = plt.pcolormesh(x_2d, y_2d, vals, cmap=cmap, norm=norm)
-    plt.xlim(image['xfaces'][0],image['xfaces'][image['nx']-1])
-    plt.ylim(image['yfaces'][0],image['yfaces'][image['ny']-1])
+
+    plt.xlim(image['xfaces'][0],image['xfaces'][-1])
+    plt.ylim(image['yfaces'][0],image['yfaces'][-1])
     plt.xlabel('$x$')
     plt.ylabel('$y$')
     plt.colorbar(im)
     plt.gca().set_aspect('equal')
     if (polarization):
-        x = 0.5*(image['xfaces'][1:]+image['xfaces'][:-1])
-        y = 0.5*(image['yfaces'][1:]+image['yfaces'][:-1])
-        #x = image['x']
-        #y = image['y']
-        q = image['q']
-        u = image['u']
-        q, u, x, y = subsample_polarization(q,u,x,y,step,average)
-        x_pol, y_pol = np.meshgrid(x,y,indexing='ij')
-        pol_angle = 0.5 * np.arctan2(u,q)
-        pol_frac = np.sqrt(q*q+u*u)
+        if (image['polarized']):
+            q = image['intensity'][1,iinc,0,:,:]
+            u = image['intensity'][2,iinc,0,:,:]
+            q, u, x, y = subsample_polarization(q,u,x,y,step,average)
+            x_pol, y_pol = np.meshgrid(x,y)
 
-        vx = pol_frac*np.cos(pol_angle)
-        vy = pol_frac*np.sin(pol_angle)
-        plt.quiver(x_pol, y_pol, vx, vy, color='k',headwidth=0, headlength=0, headaxislength=0, scale = None,pivot='middle')
-
+            pol_angle = 0.5 * np.arctan2(u,q)
+            pol_frac = np.sqrt(q*q+u*u)
+            vx = pol_frac*np.cos(pol_angle)
+            vy = pol_frac*np.sin(pol_angle)
+            plt.quiver(x_pol, y_pol, vx, vy, color='k',headwidth=0, headlength=0,
+                       headaxislength=0, scale = None,pivot='middle')
+        else:
+            raise RuntimeError('Polarization requested but image is unpolarized')
 
 def write_image(filename,image):
     """
@@ -1479,7 +1476,10 @@ def write_image(filename,image):
     outfile.write("ny={:d}\n".format(ny))
     outfile.write("ntot={:d}\n".format(image['ntot']))
     outfile.write("nintens={:d}\n".format(image['nintens']))
-    outfile.write("polarized="+image['polarized']+"\n")
+    if image['polarized']:
+        outfile.write("polarized=true\n")
+    else:
+        outfile.write("polarized=false\n")
     outfile.close()
 
     # Write binfaces
@@ -1497,7 +1497,7 @@ def write_image(filename,image):
     bin=struct.pack(myfmt,*(image['yfaces']))
     outfile.write(bin)
     # Write data
-    nelements = (image['nintens']*ninc*nen*nx*ny)
+    nelements = (image['nintens']*ninc*nen*ny*nx)
     myfmt='>'+'d'*nelements
     bin=struct.pack(myfmt,*(image['intensity'].reshape(nelements)))
     outfile.write(bin)
@@ -1576,6 +1576,10 @@ def read_image(filename):
         end_of_line_index += 1
     image['polarized'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
     current_index = end_of_line_index + 1
+    if image['polarized'] == 'false':
+        image['polarized'] = False
+    if image['polarized'] == 'true':
+        image['polarized'] = True
 
     # Read in faces
     ninc = image['ninc']
@@ -1585,7 +1589,7 @@ def read_image(filename):
     image['ifaces'] = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
     nen = image['nen']
     format_string = '>' + 'd'*(nen+1)
-    begin_index = current_index
+    begin_index = end_index
     end_index = begin_index + 8*(nen+1)
     image['efaces'] = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
     nx = image['nx']
@@ -1601,10 +1605,10 @@ def read_image(filename):
 
     # Read intensities
     nintens = image['nintens']
-    nelements = nintens*ninc*nen*nx*ny
+    nelements = nintens*ninc*nen*ny*nx
     format_string = '>' + 'd'*nelements
     begin_index = end_index
     end_index = begin_index + 8*nelements
     vals = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
-    image['intensity'] = vals.reshape((nintens,ninc,nen,nx,ny))
+    image['intensity'] = vals.reshape((nintens,ninc,nen,ny,nx))
     return image
