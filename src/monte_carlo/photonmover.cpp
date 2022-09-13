@@ -76,6 +76,171 @@ void PhotonMover::Move(Photon *pphot, int ips, int ipe) {
 
 }
 
+// Time-sampling rejection method functions
+// p(t), original function
+Real OriginalFunction(Real t, Real decayRate, Real diffusionTime) {
+  return exp(-(SQR(diffusionTime / t))) * decayRate * exp(-decayRate * t);
+}
+
+// f(t), comparison function
+Real ComparisonFunction(Real t, Real decayRate) {
+  return decayRate * exp(-decayRate * t);
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn Real PhotonMover::SampleEscapeTime(MCRandom *pran, Real decayRate, Real sphereRadius,
+//!                                        Real diffusionTime) {
+//! \brief Sample a photon escape time from a sphere using the rejection method
+Real PhotonMover::SampleEscapeTime(MCRandom *pran, Real decayRate, Real sphereRadius,
+                                   Real diffusionTime) {
+  Real c = 2.99792458e10;
+  Real lightCrossingTime = sphereRadius / c;
+  Real timeSample;
+  
+  bool reject = true;
+  while (reject) {
+    // Sample an area under the comparison function
+    Real areaSample = pran->uniform();
+
+    // Find t for which the area under f(t) to the left of t is equal to areaSample
+    timeSample = - 1. / decayRate * log(exp(-decayRate * lightCrossingTime) - areaSample);
+
+    // Sample a value between 0 and f(timeSample)
+    Real comparisonSample = ComparisonFunction(timeSample, decayRate) * pran->uniform();
+
+    // Reject or accept based on value
+    if (comparisonSample <= OriginalFunction(timeSample, decayRate, diffusionTime)) {
+      reject = false;
+    }
+  }
+  return timeSample;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn bool PhotonMover::MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real dist, 
+//!                                       Real tauacc, int ip)
+//! \brief Accelerate photon diffusion with modified random walk method
+
+Real PhotonMover::MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real tauacc,
+                                           int ip) {
+  MonteCarloBlock *pmcb = pmy_mcb;
+  Real r0 = dist;
+  Real path_length;
+
+  // Line constants
+  Real melectron = 9.10938215e-28;
+  Real charge = 4.80320427e-10;
+  Real osc_strength = 0.4164;
+  Real nu0 = 2.468e15;
+  Real c = 2.99792458e10;
+  Real h = 6.62607015e-27;
+  Real kb = 1.380649e-16;
+  Real mass = 1.660538782e-24;
+
+  if (COORDINATE_SYSTEM == "spherical_polar") {
+
+    // ********* FREQUENCY REDISTRIBUTION *********
+    // Sample outgoing frequency from Dijkstra et al 2006 solution
+    int &i1 = pphot->i1p[ip];
+    int &i2 = pphot->i2p[ip];
+    int &i3 = pphot->i3p[ip];
+
+    // Cell properties
+    Real tgas = pmcb->tgas(i3,i2,i1);
+    Real rho = pmcb->rho(i3,i2,i1);
+
+    // Derived parameters
+    Real vth = sqrt( 2 * kb * tgas / mass);
+    Real doppwidth = nu0 * vth / c;
+    Real lorwidth = 6.265e8/(4.*PI);
+    Real a = lorwidth / doppwidth;
+    Real k = (rho/mass) * PI*charge*charge / (melectron*c) * osc_strength;
+    Real tau0 = k * r0 / sqrt(PI) / doppwidth;
+    //if (a*tau0 > 1.) {
+    //  return false;
+    //}
+
+    // Sample sigma and convert to frequency
+    Real x_s = (pphot->ep[ip] / h - nu0)/doppwidth;
+    Real sigma_s = sqrt(2./3.) * PI/a * std::pow(x_s, 3.)/3.;
+    Real samp_sigma = tau0 * 2./sqrt(PI) * std::atanh(2.*pran->uniform() - 1.) + sigma_s;
+    Real x = std::cbrt(3. * sqrt(3./2.) * a / PI * samp_sigma);
+    Real nu = doppwidth * x + nu0;
+    pphot->ep[ip] = h * nu;
+
+    // ********* POSITION *********
+    // position packet on sphere of radius r0
+    Real mu = 2.*pran->uniform()-1.0;
+
+    // Local angles within the sphere of radius r0
+    Real lsth = sqrt(1.0-mu*mu);
+    Real lphi = 2.*PI*pran->uniform();
+
+    // convert to cartesian
+    // Global simulation angles based on photon position
+    Real cth = cos(pphot->x2p[ip]);
+    Real sth = sqrt(1. - SQR(cth));
+    Real cph = cos(pphot->x3p[ip]);
+    Real sph = sin(pphot->x3p[ip]);
+    Real r = pphot->x1p[ip];
+    Real x0 = r * sth * cph;
+    Real y0 = r * sth * sph;
+    Real z0 = r * cth;
+    x0 += lsth*cos(lphi) * r0;
+    y0 += lsth*sin(lphi) * r0;
+    z0 += mu * r0;
+    pphot->x1p[ip] = sqrt(SQR(x0)+SQR(y0)+SQR(z0));
+    pphot->x2p[ip] = acos(z0 / pphot->x1p[ip]);
+    pphot->x3p[ip] = atan2(y0,x0);
+    if (pphot->x3p[ip] < 0.)
+      pphot->x3p[ip] += 2.*PI;
+
+    // ********* DIRECTION *********
+    // Sample outgoing angles to local normal - zero ingoing flux, so must be outward
+    Real sq3 = 2.*sqrt(3.);
+    Real xi = pran->uniform();
+    Real samp_cth = (2./sq3)*(sqrt(-sq3 * xi - 3.*xi + sq3 + 4.) - 1.);
+    Real samp_sth = sqrt(1.0 - samp_cth*samp_cth);
+    Real samp_phi = 2.*PI*pran->uniform();
+
+    // Local cos and sin of phi - positions in sphere of radius r0
+    Real lcph = cos(lphi);
+    Real lsph = sin(lphi);
+
+    // Cartesian direction vectors in local sphere
+    // n = er * samp_cth + etheta * samp_sth * cos(samp_phi) + ephi * samp_sth * sin(samp_phi)
+    Real nx = lsth * lcph * samp_cth + mu * lcph * samp_sth * cos(samp_phi) - lsph * samp_sth * sin(samp_phi);
+    Real ny = lsth * lsph * samp_cth + mu * lsph * samp_sth * cos(samp_phi) + lcph * samp_sth * sin(samp_phi);
+    Real nz = mu * samp_cth - lsth * samp_sth * cos(samp_phi);
+
+    // Updated global coordinates after the move onto surf of sphere
+    cth = cos(pphot->x2p[ip]);
+    sth = sqrt(1. - SQR(cth));
+    cph = cos(pphot->x3p[ip]);
+    sph = sin(pphot->x3p[ip]);
+
+    // Global sphpol direction vectors from local cartesian on the sphere
+    pphot->k1p[ip] = nx * sth * cph + ny * sth * sph + nz * cth;
+    pphot->k2p[ip] = nx * cth * cph + ny * cth * sph - nz * sth;
+    pphot->k3p[ip] = -nx * sph + ny * cph;
+
+    // Sample an escape time using the rejection method
+    Real tcoeff = 1.698161839733523; // from McClellan et al 2022, Fig 8
+    Real tdiff = r0 / c * std::pow(a * tau0, 1./3.); // Diffusion timescale
+    Real decayRate = 1./(tcoeff * std::pow(a * tau0, 1./3.)); // Fit for the lowest-order eigenfreq
+    Real timeSample = SampleEscapeTime(pran, decayRate, r0, tdiff);
+    path_length = timeSample * c;
+
+  } else {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in function [PhotonMover::MRWAcceleration]"
+          <<std::endl<< "Specified coordinate system not implemented for resonance acceleration" <<std::endl;
+    throw std::runtime_error(msg.str().c_str());
+  }
+  return path_length;
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, 
 //!                                       Real tauacc, int ip)
@@ -87,344 +252,224 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
   MonteCarloBlock *pmcb = pmy_mcb;
   bool accel_success = true;
 
-  if (resonance) {
-    Real r0 = dist;
-    //printf("DISTANCE: %g\n", r0);
-
-    // Line constants
-    Real melectron = 9.10938215e-28;
-    Real charge = 4.80320427e-10;
-    Real osc_strength = 0.4164;
-    Real nu0 = 2.468e15;
-    Real c = 2.99792458e10;
-    Real h = 6.62607015e-27;
-    Real kb = 1.380649e-16;
-    Real mass = 1.660538782e-24;
-
-    if (COORDINATE_SYSTEM == "spherical_polar") {
-
-      // ********* FREQUENCY REDISTRIBUTION *********
-      // Sample outgoing frequency from Dijkstra et al 2006 solution
-      int &i1 = pphot->i1p[ip];
-      int &i2 = pphot->i2p[ip];
-      int &i3 = pphot->i3p[ip];
-
-      // Cell properties
-      Real tgas = pmcb->tgas(i3,i2,i1);
-      Real rho = pmcb->rho(i3,i2,i1);
-
-      // Derived parameters
-      Real vth = sqrt( 2 * kb * tgas / mass);
-      Real doppwidth = nu0 * vth / c;
-      Real lorwidth = 6.265e8/(4.*PI);
-      Real a = lorwidth / doppwidth;
-      Real k = (rho/mass) * PI*charge*charge / (melectron*c) * osc_strength;
-      Real tau0 = k * r0 / sqrt(PI) / doppwidth;
-      //if (a*tau0 > 1.) {
-      //  return false;
-      //}
-
-      // Sample sigma and convert to frequency
-      Real x_s = (pphot->ep[ip] / h - nu0)/doppwidth;
-      Real sigma_s = sqrt(2./3.) * PI/a * std::pow(x_s, 3.)/3.;
-      Real samp_sigma = tau0 * 2./sqrt(PI) * std::atanh(2.*pran->uniform() - 1.) + sigma_s;
-      Real x = std::cbrt(3. * sqrt(3./2.) * a / PI * samp_sigma);
-      Real nu = doppwidth * x + nu0;
-      pphot->ep[ip] = h * nu;
-
-      // ********* POSITION *********
-      // position packet on sphere of radius r0
-      Real mu = 2.*pran->uniform()-1.0;
-
-      // Local angles within the sphere of radius r0
-      Real lsth = sqrt(1.0-mu*mu);
-      Real lphi = 2.*PI*pran->uniform();
-
-      // convert to cartesian
-      // Global simulation angles based on photon position
-      Real cth = cos(pphot->x2p[ip]);
-      Real sth = sqrt(1. - SQR(cth));
-      Real cph = cos(pphot->x3p[ip]);
-      Real sph = sin(pphot->x3p[ip]);
-      Real r = pphot->x1p[ip];
-      Real x0 = r * sth * cph;
-      Real y0 = r * sth * sph;
-      Real z0 = r * cth;
-      x0 += lsth*cos(lphi) * r0;
-      y0 += lsth*sin(lphi) * r0;
-      z0 += mu * r0;
-      pphot->x1p[ip] = sqrt(SQR(x0)+SQR(y0)+SQR(z0));
-      pphot->x2p[ip] = acos(z0 / pphot->x1p[ip]);
-      pphot->x3p[ip] = atan2(y0,x0);
-      if (pphot->x3p[ip] < 0.)
-        pphot->x3p[ip] += 2.*PI;
-
-      // ********* DIRECTION *********
-      // Sample outgoing angles to local normal - zero ingoing flux, so must be outward
-      Real sq3 = 2.*sqrt(3.);
-      Real xi = pran->uniform();
-      Real samp_cth = (2./sq3)*(sqrt(-sq3 * xi - 3.*xi + sq3 + 4.) - 1.);
-      Real samp_sth = sqrt(1.0 - samp_cth*samp_cth);
-      Real samp_phi = 2.*PI*pran->uniform();
-
-      // Local cos and sin of phi - positions in sphere of radius r0
-      Real lcph = cos(lphi);
-      Real lsph = sin(lphi);
-
-      // Cartesian direction vectors in local sphere
-      // n = er * samp_cth + etheta * samp_sth * cos(samp_phi) + ephi * samp_sth * sin(samp_phi)
-      Real nx = lsth * lcph * samp_cth + mu * lcph * samp_sth * cos(samp_phi) - lsph * samp_sth * sin(samp_phi);
-      Real ny = lsth * lsph * samp_cth + mu * lsph * samp_sth * cos(samp_phi) + lcph * samp_sth * sin(samp_phi);
-      Real nz = mu * samp_cth - lsth * samp_sth * cos(samp_phi);
-
-      // Updated global coordinates after the move onto surf of sphere
-      cth = cos(pphot->x2p[ip]);
-      sth = sqrt(1. - SQR(cth));
-      cph = cos(pphot->x3p[ip]);
-      sph = sin(pphot->x3p[ip]);
-
-      // Global sphpol direction vectors from local cartesian on the sphere
-      pphot->k1p[ip] = nx * sth * cph + ny * sth * sph + nz * cth;
-      pphot->k2p[ip] = nx * cth * cph + ny * cth * sph - nz * sth;
-      pphot->k3p[ip] = -nx * sph + ny * cph;
-
-      // Sample an escape time using the rejection method
-      Real tcoeff = 1.698161839733523; // from McClellan et al 2022, Fig 8
-      Real Pnm = 2.45; // Approx, non-parameterized value for Pnm coeff
-      Real tlc = r0 / c; // Light crossing time
-      Real tdiff = tlc * std::pow(a * tau0, 1./3.); // Diffusion timescale
-      Real lo_efreq = 1./(tcoeff * std::pow(a * tau0, 1./3.)); // Fit for the lowest-order eigenfreq
-      
-
-    } else {
-      std::stringstream msg;
-      msg << "### FATAL ERROR in function [PhotonMover::MRWAcceleration]"
-            <<std::endl<< "Specified coordinate system not implemented for resonance acceleration" <<std::endl;
-      throw std::runtime_error(msg.str().c_str());
-    }
-
-
-  } else {
-    // draw from path length distribution and reduce weight accordingly
-    //Real mrw = MRWDist(pran);
-    //while (mrw <= 0.)
-    //  mrw = MRWDist(pran);
-    //Real delta = -log(mrw);
-    Real delta = InterpPathTime(pphot->scp[ip]*dist,pran->uniform());
-    //printf("delta: %g\n",delta);
-    Real chi;
-    if (!compton)
-      chi = 3. * (pphot->acp[ip]+pphot->scp[ip]) / SQR(PI);
-    else {
-      //chi = 3. * pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) / SQR(PI);
-      chi = 3. * pphot->scp[ip] / SQR(PI);
-    }
-    Real ct,r0;
-    Real beta[3], beta2, gamma, gonembdk;
-    if (boosts) {
-      // tranform relevant quanitites to comoving frame
-      beta[0] = pmcb->vel(0,pphot->i3p[ip],pphot->i2,pphot->i1) / 2.99792458e10;
-      beta[1] = pmcb->vel(1,pphot->i3p[ip],pphot->i2,pphot->i1) / 2.99792458e10;
-      beta[2] = pmcb->vel(2,pphot->i3p[ip],pphot->i2,pphot->i1) / 2.99792458e10;
-      beta2 = SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
-      gamma = 1./sqrt(1.-beta2);
-      Real bdk = (pphot->k[0] * beta[0] + pphot->k[1] * beta[1] + pphot->k[2] * beta[2]);
-      gonembdk = gamma * (1. - bdk);
-      chi *= (1.+4.*beta2)/gonembdk;
-      pphot->abs_coef /= gonembdk;
-      pphot->sct_coef /= gonembdk;
-      pphot->energy *= gonembdk;
-      // multiply beta by gamma
-      Real betagamma = sqrt(beta2)*gamma;
-      for(int i=0; i<3; ++i)
-        beta[i] *= gamma;
-      // Compute radius of sphere in comoving frame
-      if (betagamma > 0.) {
-        r0 = 0.5*(sqrt(1.+4.*chi*dist*delta*betagamma)-1.)/(delta*betagamma*chi);
-        Real tau;
-        if (!compton)
-          tau = (pphot->abs_coef+pphot->sct_coef) * r0;
-        else {
-          //tau = pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) *r0;
-          tau = pphot->sct_coef*r0;
-        }
-        if (tau > tauacc) {
-          ct = delta*SQR(r0)*chi;
-        } else {
-          accel_success = false;
-        }
+  // draw from path length distribution and reduce weight accordingly
+  //Real mrw = MRWDist(pran);
+  //while (mrw <= 0.)
+  //  mrw = MRWDist(pran);
+  //Real delta = -log(mrw);
+  Real delta = InterpPathTime(pphot->scp[ip]*dist,pran->uniform());
+  //printf("delta: %g\n",delta);
+  Real chi;
+  if (!compton)
+    chi = 3. * (pphot->acp[ip]+pphot->scp[ip]) / SQR(PI);
+  else {
+    //chi = 3. * pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) / SQR(PI);
+    chi = 3. * pphot->scp[ip] / SQR(PI);
+  }
+  Real ct,r0;
+  Real beta[3], beta2, gamma, gonembdk;
+  if (boosts) {
+    // tranform relevant quanitites to comoving frame
+    beta[0] = pmcb->vel(0,pphot->i3p[ip],pphot->i2,pphot->i1) / 2.99792458e10;
+    beta[1] = pmcb->vel(1,pphot->i3p[ip],pphot->i2,pphot->i1) / 2.99792458e10;
+    beta[2] = pmcb->vel(2,pphot->i3p[ip],pphot->i2,pphot->i1) / 2.99792458e10;
+    beta2 = SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
+    gamma = 1./sqrt(1.-beta2);
+    Real bdk = (pphot->k[0] * beta[0] + pphot->k[1] * beta[1] + pphot->k[2] * beta[2]);
+    gonembdk = gamma * (1. - bdk);
+    chi *= (1.+4.*beta2)/gonembdk;
+    pphot->abs_coef /= gonembdk;
+    pphot->sct_coef /= gonembdk;
+    pphot->energy *= gonembdk;
+    // multiply beta by gamma
+    Real betagamma = sqrt(beta2)*gamma;
+    for(int i=0; i<3; ++i)
+      beta[i] *= gamma;
+    // Compute radius of sphere in comoving frame
+    if (betagamma > 0.) {
+      r0 = 0.5*(sqrt(1.+4.*chi*dist*delta*betagamma)-1.)/(delta*betagamma*chi);
+      Real tau;
+      if (!compton)
+        tau = (pphot->abs_coef+pphot->sct_coef) * r0;
+      else {
+        //tau = pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) *r0;
+        tau = pphot->sct_coef*r0;
+      }
+      if (tau > tauacc) {
+        ct = delta*SQR(r0)*chi;
       } else {
-        // zone has zero velocity so use method for static MRW
-        for(int i=0; i<3; ++i)
-          beta[i] = 0.;
-        ct = delta*SQR(dist)*chi;
-        //Real tau = pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) * dist;
-        //ct = -log(pran->uniform())*3./SQR(PI)*SQR(tau+2./3.);
-        r0 = dist;
+        accel_success = false;
       }
     } else {
-      // use method for static MRW
+      // zone has zero velocity so use method for static MRW
       for(int i=0; i<3; ++i)
         beta[i] = 0.;
       ct = delta*SQR(dist)*chi;
-      /*if (!compton) {
-        Real tau = (pphot->abs_coef+pphot->sct_coef) * dist;
-        ct = -log(pran->uniform())*3./SQR(PI)*SQR(tau+2./3.) /
-              (pphot->abs_coef+pphot->sct_coef);
-      } else {
-        Real tau =  pphot->sct_coef * dist;
-        //printf("%g %g\n",tau,dist);
-        ct = -log(pran->uniform())*3./SQR(PI)*SQR(tau+2./3.) /
-              pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1);
-        }*/
+      //Real tau = pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) * dist;
+      //ct = -log(pran->uniform())*3./SQR(PI)*SQR(tau+2./3.);
       r0 = dist;
     }
-    if (accel_success) {
-      Real tauabs;
-      //pphot->path += ct;
-      if (!compton) {
-        tauabs = ct*pphot->abs_coef;
-        pphot->weight *= exp(-tauabs);
-      } else {
-
-        //tauabs = ct*sqrt(pphot->abs_coef*pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1));
-        //tauabs = ct*pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1);
-        //tauabs = ct*pphot->abs_coef;
-        Real opaci = pphot->abs_coef;
-        Real c = 2.99792458e10;
-        Real kb = 1.380649e-16;
-        Real me = 9.1093897e-28;
-        Real temp = pmcb->tgas(pphot->i3,pphot->i2,pphot->i1);
-        Real xi = pphot->energy  / (kb *temp);
-        Real ypar = pphot->sct_coef*ct*kb*temp/(me*c*c);
-        Real xf = InterpComptonEnergy(xi,ypar,pran->uniform());
-
-        pphot->energy = xf * kb * temp;
-        //tauabs = ct*pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1);
-        //pphot->energy = PlanckDist(pmcb->tgas(pphot->i3,pphot->i2,pphot->i1),pran);
-        pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
-        Real opacf = pphot->abs_coef;
-        //Real opacf = std::max(pphot->abs_coef,pmcb->planck_opacity(pphot->i3,pphot->i2,
-        //pphot->i1));
-        //tauabs = ct*sqrt(opaci*pphot->abs_coef);
-        //tauabs = ct*sqrt(opaci*(opacf));
-        //tauabs = ct*(opaci-opacf)/(2.*log(xf/xi));
-        Real ct0 = ypar/ct*log(xf/xi);
-        Real ct1 = ct;
-        //tauabs = ct0*(opaci-opacf)/(2.*log(xf/xi))+opacf*ct1;
-        if (xi < 1.) {
-          if (xf > 1.) {
-            tauabs = ct1*(opaci-2./3.*opacf)/(2.*log(xf/xi));
-          } else  {
-            tauabs = ct1*(opaci-opacf)/(2.*log(xf/xi));
-          }
-        } else {
-          if (xf > 1.) {
-            tauabs = ct1*(opaci-opacf)/(3.*log(xf/xi));
-          } else  {
-            tauabs = ct1*(opaci-opacf)/(2.*log(xf/xi));
-          }
-        }
-        //tauabs = opaci/8./ypar*ct;
-
-        Real y = exp(4.*ypar);
-        Real tau0 = tauabs;
-        //tauabs = (-SQR(4-xi)+4.*y*(xi-4)*xi+SQR(y)*(16.+8.*xi+(4.*ypar-3.)*
-        //         SQR(xi)))/32./SQR(y)*opaci/ypar*ct;
-        //tauabs = (1.-1./SQR(y))/8.*opaci/ypar*ct;
-        //tauabs = fabs(opaci-opacf)/8./ypar*ct;
-        Real us = fabs(0.25*log(xf/xi));
-        Real u0 = ct/ypar;
-        //tauabs = fabs(opaci-opacf)/8.*u0;
-        //printf("%g %g %g %g %g %g %g\n",ct,tauabs,tau0,opaci,opacf,xi,xf);
-        pphot->weight *= exp(-tauabs);
-      }
-
-      // position packet on sphere of radius r0
-      Real mu = 2.*pran->uniform()-1.0;
-      Real stheta = sqrt(1.0-mu*mu);
-      Real phi = 2.*PI*pran->uniform();
-      if (COORDINATE_SYSTEM == "cartesian") {
-        pphot->x[0] += stheta*cos(phi) * r0 + beta[0] * ct;
-        pphot->x[1] += stheta*sin(phi) * r0 + beta[1] * ct;
-        pphot->x[2] += mu * r0 + beta[2] * ct;
-      } else if (COORDINATE_SYSTEM == "spherical_polar") {
-        // convert to carteisan
-        Real cth = cos(pphot->x[1]);
-        Real sth = sqrt(1. - SQR(cth));
-        Real cph = cos(pphot->x[2]);
-        Real sph = sin(pphot->x[2]);
-        Real r = pphot->x[0];
-        Real x0 = r * sth * cph;
-        Real y0 = r * sth * sph;
-        Real z0 = r * cth;
-        Real betax = beta[0] * sth*cph + beta[1] * cth*cph + beta[2] * sph;
-        Real betay = beta[0] * sth*sph + beta[1] * cth*sph + beta[2] * cph;
-        Real betaz = beta[0] * cth + beta[1] * sth;
-        x0 += stheta*cos(phi) * r0 + betax * ct;
-        y0 += stheta*sin(phi) * r0 + betay * ct;
-        z0 += mu * r0 + betaz * ct;
-        pphot->x[0] = sqrt(SQR(x0)+SQR(y0)+SQR(z0));
-        pphot->x[1] = acos(z0 / pphot->x[0]);
-        pphot->x[2] = atan2(y0,x0);
-        if (pphot->x[2] < 0.)
-          pphot->x[2] += 2.*PI;
-      }
-
-      // Check if photon has left original zone and update
-      bool newzone = UpdateZone(pphot,0); //SWDFIX
-      if (newzone) {
-        // Check if photon is absorbed or escape due to boundary condition
-        if (pphot->status != EVOLVING)
-          return false;
-      }
-      if (newzone || compton) {
-        // update opacity if zone or energy has changed
-        pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
-        pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,pphot,ip);
-      }
-
-      // update direction assuming isotropic random direction in comoving frame
-      mu = 2.*pran->uniform()-1.0;
-      stheta = sqrt(1.0-mu*mu);
-      phi = 2.*PI*pran->uniform();
-      pphot->k[0] = stheta*cos(phi);
-      pphot->k[1] = stheta*sin(phi);
-      pphot->k[2] = mu;
-      if (boosts) {
-        //transform back to Eulerian frame
-        for(int i=0; i<3; ++i) {
-          // undo multiply by gamma above and flip sign
-          beta[i] /= -gamma;
-        }
-        if(beta2 > 0.) {
-          Real bdk = (pphot->k[0] * beta[0] + pphot->k[1] * beta[1] +
-                      pphot->k[2] * beta[2]);
-          Real gonembdk = gamma * (1. - bdk);
-          Real aber = gamma*(1.-gamma*bdk/(gamma+1.));
-          pphot->k[0] = (pphot->k[0] - aber * beta[0]) / gonembdk;
-          pphot->k[1] = (pphot->k[1] - aber * beta[1]) / gonembdk;
-          pphot->k[2] = (pphot->k[2] - aber * beta[2]) / gonembdk;
-          pphot->energy *= gonembdk;
-          pphot->abs_coef /= gonembdk;
-          pphot->sct_coef /= gonembdk;
-        }
-      }
-
-      if (pphot->IsNanPhoton())
-        pphot->PrintPhoton();
-
+  } else {
+    // use method for static MRW
+    for(int i=0; i<3; ++i)
+      beta[i] = 0.;
+    ct = delta*SQR(dist)*chi;
+    /*if (!compton) {
+      Real tau = (pphot->abs_coef+pphot->sct_coef) * dist;
+      ct = -log(pran->uniform())*3./SQR(PI)*SQR(tau+2./3.) /
+            (pphot->abs_coef+pphot->sct_coef);
     } else {
-      // return properties to eulerian frame if modified
-      if (boosts) { // should always be true if !accel_success
-        pphot->energy /= gonembdk;
-        pphot->abs_coef *= gonembdk;
-        pphot->sct_coef *= gonembdk;
+      Real tau =  pphot->sct_coef * dist;
+      //printf("%g %g\n",tau,dist);
+      ct = -log(pran->uniform())*3./SQR(PI)*SQR(tau+2./3.) /
+            pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1);
+      }*/
+    r0 = dist;
+  }
+  if (accel_success) {
+    Real tauabs;
+    //pphot->path += ct;
+    if (!compton) {
+      tauabs = ct*pphot->abs_coef;
+      pphot->weight *= exp(-tauabs);
+    } else {
+
+      //tauabs = ct*sqrt(pphot->abs_coef*pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1));
+      //tauabs = ct*pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1);
+      //tauabs = ct*pphot->abs_coef;
+      Real opaci = pphot->abs_coef;
+      Real c = 2.99792458e10;
+      Real kb = 1.380649e-16;
+      Real me = 9.1093897e-28;
+      Real temp = pmcb->tgas(pphot->i3,pphot->i2,pphot->i1);
+      Real xi = pphot->energy  / (kb *temp);
+      Real ypar = pphot->sct_coef*ct*kb*temp/(me*c*c);
+      Real xf = InterpComptonEnergy(xi,ypar,pran->uniform());
+
+      pphot->energy = xf * kb * temp;
+      //tauabs = ct*pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1);
+      //pphot->energy = PlanckDist(pmcb->tgas(pphot->i3,pphot->i2,pphot->i1),pran);
+      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
+      Real opacf = pphot->abs_coef;
+      //Real opacf = std::max(pphot->abs_coef,pmcb->planck_opacity(pphot->i3,pphot->i2,
+      //pphot->i1));
+      //tauabs = ct*sqrt(opaci*pphot->abs_coef);
+      //tauabs = ct*sqrt(opaci*(opacf));
+      //tauabs = ct*(opaci-opacf)/(2.*log(xf/xi));
+      Real ct0 = ypar/ct*log(xf/xi);
+      Real ct1 = ct;
+      //tauabs = ct0*(opaci-opacf)/(2.*log(xf/xi))+opacf*ct1;
+      if (xi < 1.) {
+        if (xf > 1.) {
+          tauabs = ct1*(opaci-2./3.*opacf)/(2.*log(xf/xi));
+        } else  {
+          tauabs = ct1*(opaci-opacf)/(2.*log(xf/xi));
+        }
+      } else {
+        if (xf > 1.) {
+          tauabs = ct1*(opaci-opacf)/(3.*log(xf/xi));
+        } else  {
+          tauabs = ct1*(opaci-opacf)/(2.*log(xf/xi));
+        }
       }
+      //tauabs = opaci/8./ypar*ct;
+
+      Real y = exp(4.*ypar);
+      Real tau0 = tauabs;
+      //tauabs = (-SQR(4-xi)+4.*y*(xi-4)*xi+SQR(y)*(16.+8.*xi+(4.*ypar-3.)*
+      //         SQR(xi)))/32./SQR(y)*opaci/ypar*ct;
+      //tauabs = (1.-1./SQR(y))/8.*opaci/ypar*ct;
+      //tauabs = fabs(opaci-opacf)/8./ypar*ct;
+      Real us = fabs(0.25*log(xf/xi));
+      Real u0 = ct/ypar;
+      //tauabs = fabs(opaci-opacf)/8.*u0;
+      //printf("%g %g %g %g %g %g %g\n",ct,tauabs,tau0,opaci,opacf,xi,xf);
+      pphot->weight *= exp(-tauabs);
+    }
+
+    // position packet on sphere of radius r0
+    Real mu = 2.*pran->uniform()-1.0;
+    Real stheta = sqrt(1.0-mu*mu);
+    Real phi = 2.*PI*pran->uniform();
+    if (COORDINATE_SYSTEM == "cartesian") {
+      pphot->x[0] += stheta*cos(phi) * r0 + beta[0] * ct;
+      pphot->x[1] += stheta*sin(phi) * r0 + beta[1] * ct;
+      pphot->x[2] += mu * r0 + beta[2] * ct;
+    } else if (COORDINATE_SYSTEM == "spherical_polar") {
+      // convert to carteisan
+      Real cth = cos(pphot->x[1]);
+      Real sth = sqrt(1. - SQR(cth));
+      Real cph = cos(pphot->x[2]);
+      Real sph = sin(pphot->x[2]);
+      Real r = pphot->x[0];
+      Real x0 = r * sth * cph;
+      Real y0 = r * sth * sph;
+      Real z0 = r * cth;
+      Real betax = beta[0] * sth*cph + beta[1] * cth*cph + beta[2] * sph;
+      Real betay = beta[0] * sth*sph + beta[1] * cth*sph + beta[2] * cph;
+      Real betaz = beta[0] * cth + beta[1] * sth;
+      x0 += stheta*cos(phi) * r0 + betax * ct;
+      y0 += stheta*sin(phi) * r0 + betay * ct;
+      z0 += mu * r0 + betaz * ct;
+      pphot->x[0] = sqrt(SQR(x0)+SQR(y0)+SQR(z0));
+      pphot->x[1] = acos(z0 / pphot->x[0]);
+      pphot->x[2] = atan2(y0,x0);
+      if (pphot->x[2] < 0.)
+        pphot->x[2] += 2.*PI;
+    }
+
+    // Check if photon has left original zone and update
+    bool newzone = UpdateZone(pphot,0); //SWDFIX
+    if (newzone) {
+      // Check if photon is absorbed or escape due to boundary condition
+      if (pphot->status != EVOLVING)
+        return false;
+    }
+    if (newzone || compton) {
+      // update opacity if zone or energy has changed
+      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
+      pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,pphot,ip);
+    }
+
+    // update direction assuming isotropic random direction in comoving frame
+    mu = 2.*pran->uniform()-1.0;
+    stheta = sqrt(1.0-mu*mu);
+    phi = 2.*PI*pran->uniform();
+    pphot->k[0] = stheta*cos(phi);
+    pphot->k[1] = stheta*sin(phi);
+    pphot->k[2] = mu;
+    if (boosts) {
+      //transform back to Eulerian frame
+      for(int i=0; i<3; ++i) {
+        // undo multiply by gamma above and flip sign
+        beta[i] /= -gamma;
+      }
+      if(beta2 > 0.) {
+        Real bdk = (pphot->k[0] * beta[0] + pphot->k[1] * beta[1] +
+                    pphot->k[2] * beta[2]);
+        Real gonembdk = gamma * (1. - bdk);
+        Real aber = gamma*(1.-gamma*bdk/(gamma+1.));
+        pphot->k[0] = (pphot->k[0] - aber * beta[0]) / gonembdk;
+        pphot->k[1] = (pphot->k[1] - aber * beta[1]) / gonembdk;
+        pphot->k[2] = (pphot->k[2] - aber * beta[2]) / gonembdk;
+        pphot->energy *= gonembdk;
+        pphot->abs_coef /= gonembdk;
+        pphot->sct_coef /= gonembdk;
+      }
+    }
+
+    if (pphot->IsNanPhoton())
+      pphot->PrintPhoton();
+
+  } else {
+    // return properties to eulerian frame if modified
+    if (boosts) { // should always be true if !accel_success
+      pphot->energy /= gonembdk;
+      pphot->abs_coef *= gonembdk;
+      pphot->sct_coef *= gonembdk;
     }
   }
   return accel_success;
-
 }
 
 //----------------------------------------------------------------------------------------

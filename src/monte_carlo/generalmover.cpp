@@ -51,6 +51,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
     Real tauremaining = GetOpticalDepth(pran);
 
     Real step = StepSize(pphot,ip);
+    Real path_length;
     int count = 0;
     int iter = 0;
     int zone_counter = 0;
@@ -78,13 +79,13 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
         Real dmin0 = std::min(dx1f, dw2);
         dl = std::min(dmin0, dw3); // Distance to nearest face
 
-        Real tauacc = 10000.;
+        Real tauacc = 1000.;
         // Try to perform MRW acceleration if optical depth is large enough
         if (dl*chi > tauacc) {
-          //printf("%f\n", dl*chi);
-          //printf("ACCELERATION: Accel triggered! \n");
-          accel_success = MRWAcceleration(pphot,pran,dl,tauacc,ip);
-          //printf("ACCELERATION: Accel success: %d \n", accel_success);
+          path_length = MRWResonanceAcceleration(pphot,pran,dl,tauacc,ip);
+          accel_success = true;
+        } else {
+          path_length = step;
         }
       }
 
@@ -103,7 +104,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
       } else {
         // Photon has been given a new position on sphere of radius dl
         // Set exit parameters and continue the loop over photons
-        step = dl; // TODO: Sample a path length? Moments will be incorrect as-is.
+        step = dl;
         tauremaining = 0.;
       }
 
@@ -131,7 +132,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
 
       // Update moments
       if (pmcb->moments_flag) {
-        pmcb->UpdateMoments(pphot,step,1.,ip);
+        pmcb->UpdateMoments(pphot,step,path_length,1.,ip);
       }
 
       if (pphot->IsNanPhoton(ip)) {

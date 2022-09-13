@@ -342,9 +342,11 @@ public:
   void InitializePhoton(Photon *pphot, int ips, int ipe);
   void FinalizePhoton(Photon *pphot, int ip);
   void UpdateMoments(Photon *pphot, Real dl, Real etau, int ip);
+  void UpdateMoments(Photon *pphot, Real dl, Real pl, Real etau, int ip);
   void NormalizeMoments(bool normalize);
   void ResetMoments();
-  void UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0, int ip, Real k1p0, Real k2p0, Real k3p0);
+  void UpdateSourceTermsAfterScatter(Photon *pphot, Real energy0, Real weight0, int ip, Real k1p0, Real k2p0, Real k3p0);
+  void UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0, int ip);
   //void GetPhotonsFromNeighbors();
   //void SendPhotonsToNeighbors();
 

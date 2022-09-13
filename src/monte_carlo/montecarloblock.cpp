@@ -472,7 +472,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
     if (moments_flag) {
       // Update cooling to relect newly emitted photons
       for (int ip=nold; ip<pphot->nphot; ip++) {
-        UpdateSourceTerms(pphot,0.,0.,ip,0.,0.,0.);
+        UpdateSourceTerms(pphot,0.,0.,ip);
       }
     }
 
@@ -502,7 +502,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
           }
         }
         if (moments_flag) {
-          UpdateSourceTerms(pphot,energy0,weight0,ip,k1p0,k2p0,k3p0);
+          UpdateSourceTerms(pphot,energy0,weight0,ip);
         }
       } // status == evolving
 
@@ -541,8 +541,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
           LorentzTransform(pphot,to_eulr,ip,ip);
         }
         if (moments_flag) {
-            UpdateSourceTerms(pphot,e_pre_scat,weight_pre_scat,ip,
-                              k1p_pre_scat,k2p_pre_scat,k3p_pre_scat);
+            UpdateSourceTerms(pphot,e_pre_scat,weight_pre_scat,ip);
         }
       } // status == evolving
 
@@ -614,7 +613,7 @@ void MonteCarloBlock::TransferPhotonsOld(int nphot) {
 
     if (moments_flag) {
       for (int ip=0; ip<pphot->nphot; ip++) {
-        UpdateSourceTerms(pphot,0.,0.,ip,0.,0.,0.);
+        UpdateSourceTerms(pphot,0.,0.,ip);
       }
     }
     // move photon to next scattering/absorption or to boundary
@@ -642,7 +641,7 @@ void MonteCarloBlock::TransferPhotonsOld(int nphot) {
         }
       }
       if (moments_flag) {
-          UpdateSourceTerms(pphot,0.,weight0,ip,0.,0.,0.);
+          UpdateSourceTerms(pphot,0.,weight0,ip);
       }
 
       // Scatter the photon packet
@@ -675,7 +674,7 @@ void MonteCarloBlock::TransferPhotonsOld(int nphot) {
           LorentzTransform(pphot,to_eulr,ip,ip);
         }
         if (moments_flag) {
-            UpdateSourceTerms(pphot,e_pre_scat,0.,ip,0.,0.,0.);
+            UpdateSourceTerms(pphot,e_pre_scat,0.,ip);
         }
       }
 
@@ -905,11 +904,21 @@ void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign, int ips, i
   } // loop over ip
 }
 
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip)
+//! \brief Overload for UpdateMoments with additional wait time argument
+
+void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
+  Real pl = dl; // If path length not given, set it equal to displacement
+  UpdateMoments(pphot, dl, pl, etau, ip);
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip)
 //! \brief add contribution to radiation moments in current zone
 
-void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
+void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real etau, int ip) {
   // SWD: needs to be modifed for non general mover kvectors
   
   Real k1 = pphot->k1p[ip];
@@ -966,6 +975,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
   }
   // Weight moments by time spent in domain
   Real weight = pphot->wp[ip] * energy * leff / 2.99792458e10;
+  Real path_weight = weight * (pl / dl);
   if ((std::isinf(weight)) || (std::isnan(weight))) {
     std::cout << "Warning: UpdateMoments weight is : " << weight << std::endl;
   } else {
@@ -984,13 +994,19 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
 
     // Add contribution to corresponding moments
     // Energy density
-    moments(MCIER,k,j,i) += weight;
+    moments(MCIER,k,j,i) += path_weight;
+
     // Flux
     moments(MCIFR1,k,j,i) += weight1 * 2.99792458e10;
     moments(MCIFR2,k,j,i) += weight2 * 2.99792458e10;
     moments(MCIFR3,k,j,i) += weight3 * 2.99792458e10;
-    // Radiation Pressure
 
+    // Radiative Acceleration
+    moments(MCIP1,k,j,i) += pphot->scp[ip] * weight1; // TODO: change this to total opacity
+    moments(MCIP2,k,j,i) += pphot->scp[ip] * weight2; //TODO: Direction needs to be outward from sphere, not kvec
+    moments(MCIP3,k,j,i) += pphot->scp[ip] * weight3;
+
+    // Radiation Pressure
     Real weightp = weight1 * 2.99792458e10;
     moments(MCIPR11,k,j,i) += weightp;
     weightp = weight2 * k2;
@@ -1090,11 +1106,13 @@ void MonteCarloBlock::ResetMoments() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0,
-//                                          int ip)
-//! \brief compute net photon cooling rate
+//! \fn void MonteCarloBlock::UpdateSourceTermsAfterScatter(Photon *pphot, Real energy0, Real weight0,
+//                                          int ip, Real k1p0, Real k2p0, Real k3p0)
+//! \brief compute net photon cooling rate and momentum change
+// BCM: DEPRECATED
 
-void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0, int ip, Real k1p0, Real k2p0, Real k3p0) {
+void MonteCarloBlock::UpdateSourceTermsAfterScatter(Photon *pphot, Real energy0, Real weight0, 
+                                                    int ip, Real k1p0, Real k2p0, Real k3p0) {
   Real c = 2.99792458e10;
 
   Real k1 = pphot->k1p[ip];
@@ -1156,6 +1174,27 @@ void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0, Real weight
   }
 
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0,
+//                                          int ip, Real k1p0, Real k2p0, Real k3p0)
+//! \brief compute net photon cooling rate and momentum change
+
+void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0, int ip) {
+
+  Real cool = (pphot->wp[ip] * pphot->ep[ip]) - (weight0 * energy0);
+  if ((std::isinf(cool)) || (std::isnan(cool))) {
+    std::cout << "Warning: UpdateSourceTerms cooling is : " << cool << std::endl;
+    pphot->PrintPhoton(ip);
+  } else {
+    int &i = pphot->i1p[ip];
+    int &j = pphot->i2p[ip];
+    int &k = pphot->i3p[ip];
+
+    moments(MCINET,k,j,i) -= cool;
+  }
+}
+
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs)
