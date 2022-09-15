@@ -571,11 +571,6 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe
     Real sth_in = sqrt(1. - SQR(kz));
     Real phi_in = atan2(ky , kx);
 
-//    printf("coordinates: %s\n", COORDINATE_SYSTEM);
-//    printf("general mover: %d\n", pmcb->general_mover_flag);
-//    printf("knorm: %f\n", sqrt(SQR(kx) + SQR(ky) + SQR(kz)));
-//    printf("k: %f %f %f\n \n", kx, ky, kz);
-
     // Sample outgoing angles
     Real cth,sth,phi,cgam;
     do {

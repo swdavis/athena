@@ -63,31 +63,17 @@ MCCoord::MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb) {
   if (computedmin) {
     dmin.NewAthenaArray(ncells3,ncells2,ncells1);
     Real dw1,dw2,dw3;
-    //AthenaArray<Real> dw1,dw2,dw3;
-    //dw1.NewAthenaArray(ncells1);
-    //dw2.NewAthenaArray(ncells2);
-    //dw3.NewAthenaArray(ncells3);
-    // Initialize dmin array
     for (int k=pmcb->ks; k<=pmcb->ke; ++k) {
       for (int j=pmcb->js; j<=pmcb->je; ++j) {
         for (int i=pmcb->is; i<=pmcb->ie; ++i) {
-          if (pmcb->sphpol_alt_flag) {
-            dw3 = pcoord->dx3f(k) * pcoord->x1v(i) * sin(pcoord->x2v(j));
-            dw2 = pcoord->dx2f(j) * pcoord->x1v(i);
-            dw1 = pcoord->dx1f(i);
-          } else {
-            dw3 = pcoord->dx3f(k);
-            dw2 = pcoord->dx2f(j);
-            dw1 = pcoord->dx1f(i);
-          }
+          dw3 = pcoord->dx3f(k);
+          dw2 = pcoord->dx2f(j);
+          dw1 = pcoord->dx1f(i);
           Real dmin0 = std::min(dw1,dw2);
           dmin(k,j,i) = std::min(dmin0,dw3);
         }
       }
     }
-    //dw1.DeleteAthenaArray();
-    //dw2.DeleteAthenaArray();
-    //dw3.DeleteAthenaArray();
   }
 }
 
@@ -104,7 +90,6 @@ MCCoord::MCCoord(int ncells1, int ncells2, int ncells3, bool cdmin) {
   computedmin = cdmin;
   if (cdmin)
     dmin.NewAthenaArray(ncells3,ncells2,ncells1);
-
 }
 
 //----------------------------------------------------------------------------------------

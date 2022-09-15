@@ -755,9 +755,9 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       pod = new OutputData;
       pod->type = "VECTORS";
       pod->name = "Radforce";
-      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIP1,3);
+      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIRA1,6);
       AppendOutputDataNode(pod);
-      num_vars_+=3;
+      num_vars_+=6;
     }
     // monte carlo mean energy
     if (output_params.variable.compare("mcmom") == 0 ||

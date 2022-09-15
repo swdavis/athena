@@ -79,17 +79,22 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
         Real dmin0 = std::min(dx1f, dw2);
         dl = std::min(dmin0, dw3); // Distance to nearest face
 
-        Real tauacc = 1000.;
+        Real tauacc = 1000.; //BCM: make this an input parameter
+        Real path_length;
+        Real k1, k2, k3;
         // Try to perform MRW acceleration if optical depth is large enough
         if (dl*chi > tauacc) {
-          path_length = MRWResonanceAcceleration(pphot,pran,dl,tauacc,ip);
+          MRWResonanceAcceleration(pphot,pran,dl,tauacc,path_length,k1,k2,k3,ip);
           accel_success = true;
         } else {
           path_length = step;
+          k1 = pphot->k1p[ip];
+          k2 = pphot->k2p[ip];
+          k3 = pphot->k3p[ip];
         }
       }
 
-      if (!accel_success) {// Acceleration off or didn't work - take standard step
+      if (!accel_success) {// Acceleration not triggered - take standard step
         if (tauremaining > chi * step) { // Photon hasn't yet reached tauremaining
           VerletStep(pphot,step,ip);
           if (pmy_mcb->pmy_mc->polarized)
@@ -108,17 +113,6 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
         tauremaining = 0.;
       }
 
-      // DEBUG: Print out photon position for each step in cartesian
-      //Real cth = cos(pphot->x2p[ip]);
-      //Real sth = sqrt(1. - SQR(cth));
-      //Real cph = cos(pphot->x3p[ip]);
-      //Real sph = sin(pphot->x3p[ip]);
-      //Real r = pphot->x1p[ip];
-      //Real x0 = r * sth * cph;
-      //Real y0 = r * sth * sph;
-      //Real z0 = r * cth;
-      //printf("%f %f %f %d\n", x0, y0, z0, accel_success);
-
       // SWD: Clean up these checks
       // Check if photon changed zones
       if (UpdateZone(pphot,ip)) {
@@ -132,7 +126,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
 
       // Update moments
       if (pmcb->moments_flag) {
-        pmcb->UpdateMoments(pphot,step,path_length,1.,ip);
+        pmcb->UpdateMoments(pphot,step,path_length,k1,k2,k3,1.,ip);
       }
 
       if (pphot->IsNanPhoton(ip)) {

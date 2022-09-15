@@ -472,7 +472,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
     if (moments_flag) {
       // Update cooling to relect newly emitted photons
       for (int ip=nold; ip<pphot->nphot; ip++) {
-        UpdateSourceTerms(pphot,0.,0.,ip);
+        UpdateSourceTermsAfterScatter(pphot,0.,0.,ip,0.,0.,0.);
       }
     }
 
@@ -502,7 +502,7 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
           }
         }
         if (moments_flag) {
-          UpdateSourceTerms(pphot,energy0,weight0,ip);
+          UpdateSourceTermsAfterScatter(pphot,energy0,weight0,ip,k1p0,k2p0,k3p0);
         }
       } // status == evolving
 
@@ -541,7 +541,8 @@ void MonteCarloBlock::TransferPhotons(int nphot) {
           LorentzTransform(pphot,to_eulr,ip,ip);
         }
         if (moments_flag) {
-            UpdateSourceTerms(pphot,e_pre_scat,weight_pre_scat,ip);
+            UpdateSourceTermsAfterScatter(pphot,e_pre_scat,weight_pre_scat,ip,
+                                          k1p_pre_scat,k2p_pre_scat,k3p_pre_scat);
         }
       } // status == evolving
 
@@ -911,24 +912,27 @@ void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign, int ips, i
 
 void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
   Real pl = dl; // If path length not given, set it equal to displacement
-  UpdateMoments(pphot, dl, pl, etau, ip);
+  Real k1 = pphot->k1p[ip]; // If k not given, set it equal to photon k
+  Real k2 = pphot->k2p[ip];
+  Real k3 = pphot->k3p[ip];
+  UpdateMoments(pphot, dl, pl, k1, k2, k3, etau, ip);
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip)
 //! \brief add contribution to radiation moments in current zone
 
-void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real etau, int ip) {
-  // SWD: needs to be modifed for non general mover kvectors
-  
-  Real k1 = pphot->k1p[ip];
-  Real k2 = pphot->k2p[ip];
-  Real k3 = pphot->k3p[ip];
+void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Real k2, 
+                                    Real k3, Real etau, int ip) {
+ 
+  Real k1p = pphot->k1p[ip];
+  Real k2p = pphot->k2p[ip];
+  Real k3p = pphot->k3p[ip];
 
   // Normalize k vector if using general mover in spherical polar coords
   if ((COORDINATE_SYSTEM == "spherical_polar") && (general_mover_flag)) {
-    k2 *= pphot->x1p[ip];
-    k3 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
+    k2p *= pphot->x1p[ip];
+    k3p *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
   }
 
   Real energy, abs_coef, step;
@@ -944,14 +948,14 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real etau, 
 
     if(beta2 > 0.) {
       Real gamma = 1. / sqrt(1. - beta2); // assumes v^2 < c^2 checked elsewhere
-      Real bdk = k1 * beta[0] + k2 * beta[1] + k3 * beta[2];
+      Real bdk = k1p * beta[0] + k2p * beta[1] + k3p * beta[2];
       Real gonembdk = gamma * (1. - bdk);
       Real aber = gamma*(1.-gamma*bdk/(gamma+1.));
 
       energy *= gonembdk;
-      k1 = (k1 - aber * beta[0]) / gonembdk;
-      k2 = (k2 - aber * beta[1]) / gonembdk;
-      k3 = (k3 - aber * beta[2]) / gonembdk;
+      k1p = (k1p - aber * beta[0]) / gonembdk;
+      k2p = (k2p - aber * beta[1]) / gonembdk;
+      k3p = (k3p - aber * beta[2]) / gonembdk;
       abs_coef = pphot->acp[ip] / gonembdk;
       step = dl * gonembdk;
     }
@@ -979,7 +983,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real etau, 
   if ((std::isinf(weight)) || (std::isnan(weight))) {
     std::cout << "Warning: UpdateMoments weight is : " << weight << std::endl;
   } else {
-    // Higher order moments are weighted by curvalinear coordinates k
+    // Higher order moments are weighted by displacement direction vector k
     Real weight1 = weight * k1;
     Real weight2 = weight * k2;
     Real weight3 = weight * k3;
@@ -987,10 +991,6 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real etau, 
     int i = pphot->i1p[ip];
     int j = pphot->i2p[ip];
     int k = pphot->i3p[ip];
-
-    // SWD: Modify this appropriately
-    //if (general_mover_flag)
-    //  weight *= pphot->k0p[ip]
 
     // Add contribution to corresponding moments
     // Energy density
@@ -1001,23 +1001,23 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real etau, 
     moments(MCIFR2,k,j,i) += weight2 * 2.99792458e10;
     moments(MCIFR3,k,j,i) += weight3 * 2.99792458e10;
 
-    // Radiative Acceleration
-    moments(MCIP1,k,j,i) += pphot->scp[ip] * weight1; // TODO: change this to total opacity
-    moments(MCIP2,k,j,i) += pphot->scp[ip] * weight2; //TODO: Direction needs to be outward from sphere, not kvec
-    moments(MCIP3,k,j,i) += pphot->scp[ip] * weight3;
+    // Radiative Acceleration from flux
+    moments(MCIRA1,k,j,i) += (pphot->scp[ip]+abs_coef) * weight1;
+    moments(MCIRA2,k,j,i) += (pphot->scp[ip]+abs_coef) * weight2;
+    moments(MCIRA3,k,j,i) += (pphot->scp[ip]+abs_coef) * weight3;
 
     // Radiation Pressure
     Real weightp = weight1 * 2.99792458e10;
     moments(MCIPR11,k,j,i) += weightp;
-    weightp = weight2 * k2;
+    weightp = weight2 * k2p;
     moments(MCIPR22,k,j,i) += weightp;
-    weightp = weight3 * k3;
+    weightp = weight3 * k3p;
     moments(MCIPR33,k,j,i) += weightp;
-    weightp = weight1 * k2;
+    weightp = weight1 * k2p;
     moments(MCIPR12,k,j,i) += weightp;
-    weightp = weight1 * k3;
+    weightp = weight1 * k3p;
     moments(MCIPR13,k,j,i)  += weightp;
-    weightp = weight2 * k3;
+    weightp = weight2 * k3p;
     moments(MCIPR23,k,j,i) += weightp;
     // Photon mean energy
     moments(MCIEN,k,j,i) += weight * energy;
@@ -1048,7 +1048,7 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
           }
         }}}
     // Normalize remaining moments by volume and global norm (counts)
-    for (int n=0; n<14; ++n) {
+    for (int n=0; n<17; ++n) {
       Real norm = normall;
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
@@ -1068,7 +1068,7 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
         }}}
   } else {
     // Undo normalization for continuing evolution
-    for (int n=0; n<14; ++n) {
+    for (int n=0; n<17; ++n) {
       Real norm = normall;
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
@@ -1095,7 +1095,7 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
 void MonteCarloBlock::ResetMoments() {
 
     // set moments to zero
-  for (int n=0; n<11; ++n) {
+  for (int n=0; n<17; ++n) {
     for (int k=ks; k<=ke; ++k) {
       for (int j=js; j<=je; ++j) {
         for (int i=is; i<=ie; ++i) {
@@ -1113,6 +1113,7 @@ void MonteCarloBlock::ResetMoments() {
 
 void MonteCarloBlock::UpdateSourceTermsAfterScatter(Photon *pphot, Real energy0, Real weight0, 
                                                     int ip, Real k1p0, Real k2p0, Real k3p0) {
+  // Updates 
   Real c = 2.99792458e10;
 
   Real k1 = pphot->k1p[ip];
@@ -1168,9 +1169,9 @@ void MonteCarloBlock::UpdateSourceTermsAfterScatter(Photon *pphot, Real energy0,
     int &j = pphot->i2p[ip];
     int &k = pphot->i3p[ip];
     moments(MCINET,k,j,i) -= cool;
-    moments(MCIP1,k,j,i) -= dp1p;
-    moments(MCIP2,k,j,i) -= dp2p;
-    moments(MCIP3,k,j,i) -= dp3p;
+    moments(MCIRA4,k,j,i) -= dp1p;
+    moments(MCIRA5,k,j,i) -= dp2p;
+    moments(MCIRA5,k,j,i) -= dp3p;
   }
 
 }

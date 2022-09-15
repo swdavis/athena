@@ -122,24 +122,6 @@ public:
 };
 
 //----------------------------------------------------------------------------------------
-//! \class SphericalPolarAltMover
-//! \brief derived class for moving in spherical-polar coordinates
-
-class SphericalPolarAltMover : public PhotonMover {
-public:
-  SphericalPolarAltMover(MonteCarloBlock *pmcb);
-  ~SphericalPolarAltMover();
-
-  Real step_par;
-  Real gamma[NCOORD][NCOORD][NCOORD];
-
-  // functions
-  bool UpdateSingleZone(Photon *pphot, int ip, bool *multizone);
-  void Move(Photon *pphot, int ips, int ipe);
-  void UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip);
-};
-
-//----------------------------------------------------------------------------------------
 //! \class GeneralMover
 //! \brief derived class for moving in general coordinates
 

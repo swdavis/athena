@@ -122,11 +122,10 @@ Real PhotonMover::SampleEscapeTime(MCRandom *pran, Real decayRate, Real sphereRa
 //!                                       Real tauacc, int ip)
 //! \brief Accelerate photon diffusion with modified random walk method
 
-Real PhotonMover::MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real tauacc,
-                                           int ip) {
+void PhotonMover::MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real tauacc,
+                                           Real &path_length, Real &k1, Real &k2, Real &k3, Real int ip) {
   MonteCarloBlock *pmcb = pmy_mcb;
   Real r0 = dist;
-  Real path_length;
 
   // Line constants
   Real melectron = 9.10938215e-28;
@@ -184,17 +183,40 @@ Real PhotonMover::MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real d
     Real cph = cos(pphot->x3p[ip]);
     Real sph = sin(pphot->x3p[ip]);
     Real r = pphot->x1p[ip];
-    Real x0 = r * sth * cph;
+
+    // Cartesian position before move
+    Real x0 = r * sth * cph; 
     Real y0 = r * sth * sph;
     Real z0 = r * cth;
-    x0 += lsth*cos(lphi) * r0;
-    y0 += lsth*sin(lphi) * r0;
-    z0 += mu * r0;
-    pphot->x1p[ip] = sqrt(SQR(x0)+SQR(y0)+SQR(z0));
-    pphot->x2p[ip] = acos(z0 / pphot->x1p[ip]);
-    pphot->x3p[ip] = atan2(y0,x0);
+
+    // Cartesian position after move
+    Real x1 = x0 + lsth*cos(lphi) * r0;
+    Real y1 = y0 + lsth*sin(lphi) * r0;
+    Real z1 = z0 + mu * r0;
+
+    // Updated photon position in global spherical polar coordinates
+    pphot->x1p[ip] = sqrt(SQR(x1)+SQR(y1)+SQR(z1));
+    pphot->x2p[ip] = acos(z1 / pphot->x1p[ip]);
+    pphot->x3p[ip] = atan2(y1,x1);
     if (pphot->x3p[ip] < 0.)
       pphot->x3p[ip] += 2.*PI;
+
+    // Updated global coordinate angles after the move onto surf of sphere
+    cth = cos(pphot->x2p[ip]);
+    sth = sqrt(1. - SQR(cth));
+    cph = cos(pphot->x3p[ip]);
+    sph = sin(pphot->x3p[ip]);
+
+    // Cartesion displacement direction vectors
+    Real disp = sqrt(SQR(x1-x0)+SQR(y1-y0)+SQR(z1-z0));
+    Real k1cart = (x1 - x0) / disp;
+    Real k2cart = (y1 - y0) / disp;
+    Real k3cart = (z1 - z0) / disp;
+
+    // Spherical polar displacement direction vectors - set vars passed by reference
+    k1 = k1cart * sth * cph + k2cart * sth * sph + k3cart * cth;
+    k2 = k1cart * cth * cph + k2cart * cth * sph - k3cart * sth;
+    k3 = -k1cart * sph + k2cart * cph;
 
     // ********* DIRECTION *********
     // Sample outgoing angles to local normal - zero ingoing flux, so must be outward
@@ -214,12 +236,6 @@ Real PhotonMover::MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real d
     Real ny = lsth * lsph * samp_cth + mu * lsph * samp_sth * cos(samp_phi) + lcph * samp_sth * sin(samp_phi);
     Real nz = mu * samp_cth - lsth * samp_sth * cos(samp_phi);
 
-    // Updated global coordinates after the move onto surf of sphere
-    cth = cos(pphot->x2p[ip]);
-    sth = sqrt(1. - SQR(cth));
-    cph = cos(pphot->x3p[ip]);
-    sph = sin(pphot->x3p[ip]);
-
     // Global sphpol direction vectors from local cartesian on the sphere
     pphot->k1p[ip] = nx * sth * cph + ny * sth * sph + nz * cth;
     pphot->k2p[ip] = nx * cth * cph + ny * cth * sph - nz * sth;
@@ -230,7 +246,7 @@ Real PhotonMover::MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real d
     Real tdiff = r0 / c * std::pow(a * tau0, 1./3.); // Diffusion timescale
     Real decayRate = 1./(tcoeff * std::pow(a * tau0, 1./3.)); // Fit for the lowest-order eigenfreq
     Real timeSample = SampleEscapeTime(pran, decayRate, r0, tdiff);
-    path_length = timeSample * c;
+    path_length = timeSample * c; // set path length passed by reference
 
   } else {
     std::stringstream msg;
@@ -238,7 +254,6 @@ Real PhotonMover::MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real d
           <<std::endl<< "Specified coordinate system not implemented for resonance acceleration" <<std::endl;
     throw std::runtime_error(msg.str().c_str());
   }
-  return path_length;
 }
 
 //----------------------------------------------------------------------------------------

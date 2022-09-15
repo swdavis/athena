@@ -36,7 +36,7 @@ class MCOutoupt;
 class MCCoord;
 
 // SWD: Make into a general MACRO set by configure?
-#define NMOM 19
+#define NMOM 22
 
 // Flags for controlling monte carlo emission, scattering, absorption, bcs
 enum EmissionFlag {EMISUSER = 0, EMISNONE = 1, EMISFF = 2};
@@ -49,8 +49,9 @@ enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY
                      MC_USER_BNDRY = 6, MC_BLOCK_BNDRY = 7};
 // Array indices for monte carlo radiation moments
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
-      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCINET = 10, MCIP1=11, MCIP2=12, MCIP3=13, MCIEN = 14, 
-      MCIKJ = 15, MCIPR21=16, MCIPR31=17, MCIPR32=18};
+      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCINET = 10, MCIRA1=11, MCIRA2=12, MCIRA3=13, 
+      MCIRA4=14, MCIRA5=15, MCIRA6=16, MCIEN = 17, MCIKJ = 18, MCIPR21=19, MCIPR31=20, 
+      MCIPR32=21};
 //----------------------------------------------------------------------------------------
 // function pointer prototypes for user-defined modules set at runtime
 typedef Real (*EmisFunc_t)(MonteCarloBlock *pmcb);
@@ -342,7 +343,7 @@ public:
   void InitializePhoton(Photon *pphot, int ips, int ipe);
   void FinalizePhoton(Photon *pphot, int ip);
   void UpdateMoments(Photon *pphot, Real dl, Real etau, int ip);
-  void UpdateMoments(Photon *pphot, Real dl, Real pl, Real etau, int ip);
+  void UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Real k2, Real k3, Real etau, int ip);
   void NormalizeMoments(bool normalize);
   void ResetMoments();
   void UpdateSourceTermsAfterScatter(Photon *pphot, Real energy0, Real weight0, int ip, Real k1p0, Real k2p0, Real k3p0);
