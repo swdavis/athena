@@ -214,10 +214,12 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
         pphot->ep[ip] = energy0;
 
       // Initialize Stokes vector
-      pphot->sip[ip] = 1.0;
-      pphot->sqp[ip] = 0.0;
-      pphot->sup[ip] = 0.0;
-
+      if (pphot->polarized) {
+        pphot->sip[ip] = 1.0;
+        pphot->sqp[ip] = 0.0;
+        pphot->sup[ip] = 0.0;
+        pphot->svp[ip] = 0.0;
+      }
       // Generate initial angle parameters
       Real phi = 2. * PI * pran->uniform();
       Real cphi = cos(phi);

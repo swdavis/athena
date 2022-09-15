@@ -156,7 +156,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     pphot->k3p[ip] = cth;
 
     // Convert k unit vector to k^\alpha
-    if (general_mover_flag) {
+    if (pmy_mc->general_mover_flag) {
       pphot->k2p[ip] /= pphot->x1p[ip];
       pphot->k3p[ip] /= (pphot->x1p[ip]*sin(pphot->x2p[ip]));
       pphot->dk0p[ip] = 0.;
@@ -166,9 +166,12 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     }
 
     // Initialize Stokes vector
-    pphot->sip[ip] = 1.0;
-    pphot->sup[ip] = 0.0;
-    pphot->sqp[ip] = 0.0;
+    if (pphot->polarized) {
+      pphot->sip[ip] = 1.0;
+      pphot->sqp[ip] = 0.0;
+      pphot->sup[ip] = 0.0;
+      pphot->svp[ip] = 0.0;
+    }
 
     // Initialize the absorption and scattering extinction coefficients
     pphot->acp[ip] = opac; // all photons start with this opacity

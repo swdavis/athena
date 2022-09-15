@@ -40,6 +40,8 @@ void Escape(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
 void Absorb(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
 void Destroy(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
 void Polar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
+void Periodic(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
+void Block(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
 
 //----------------------------------------------------------------------------------------
 //! \class MCBoundaryValues

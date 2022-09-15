@@ -12,7 +12,6 @@
 // implementations will evolve.
 
 #include <sstream>
-#include <gsl/gsl_randist.h>
 #include <complex>
 
 // Athena++ classes headers
@@ -23,6 +22,11 @@
 #include "mcbvals.hpp"
 #include "mcoutput.hpp"
 #include "mccoord.hpp"
+
+// GSL library
+#if RAN3 == 0
+#include <gsl/gsl_randist.h>
+#endif
 
 class Mesh;
 class MeshBlock;
@@ -136,6 +140,7 @@ enum AbsorptionOpacityFlag GetAbsorptionOpacityFlag(std::string input_string);
 enum AbsorptionMethodFlag GetAbsorptionMethodFlag(std::string input_string);
 enum ScatteringFlag GetScatteringFlag(std::string input_string);
 
+
 //----------------------------------------------------------------------------------------
 //! \struct MCBlockSize
 //! \brief physical size of monte carlo block
@@ -155,9 +160,16 @@ public:
   MCRandom(int iseed);
   ~MCRandom();
 
-  gsl_rng *dev;
+
   Real uniform();
   Real chisquare(int n);
+
+private:
+  long r3seed;
+#if RAN3 == 0
+  gsl_rng *dev;
+#endif
+  Real ran3(long *idum);
 };
 
 //----------------------------------------------------------------------------------------
@@ -174,9 +186,15 @@ public:
   // data
   Mesh *pmy_mesh;
   MCOutput *pmcout;
-  MonteCarloBlock *pblock;
+  AthenaArray<MonteCarloBlock*> my_blocks;
 
+  Real dt;     // Monte Carlo timestep
+  Real tmax;   // Maximum evolution time
   int nphtot;  // total number of photons to integrate
+  int nphdone; // total photons completed accross all blocks on all processes
+  int nblock;  // number of photons per step per block
+  int nblocal; // number of montecarloblocks on this process
+  int nbtotal; // total number of montecarloblocks
   int cadence; // number of photons per output
   int nout;  // number of outputs
   int *nphlist; // number of photons per block
@@ -198,12 +216,14 @@ public:
   enum ScatteringFlag scattering_meth;
 
   bool boosts;  // Compute lorentz transformations
+  bool coupled; // is monte carlo evolution coupled to hydro
   bool emission_array_flag;  // Compute and save zone emissivities
   bool polarized;// track photon polarization
   bool acceleration;  // use MRW acceleration
   bool computedmin;
   bool time_acc;  // use MRW acceleration with time limit
   bool raytrace_flag; // Will trace photons rather than scatter
+  bool general_mover_flag; // Use integration for photon movement
 
 
   // function pointers
@@ -217,7 +237,8 @@ public:
   // functions
   // SWD: some of these functions could/should be private
   void RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput *pinput);
-  void RunStaticMonteCarloNew(void);
+  void RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput *pinput);
+  bool CheckAndBroadCastPhotonsRemaining();
   void InitUserMonteCarloData(ParameterInput *pin);
   // Enroll User functions
   void EnrollUserMCBoundaryFunction(enum BoundaryFace dir, MCBValFunc_t my_bc);
@@ -228,7 +249,9 @@ public:
   void EnrollUserScatteringFunction(ScatFunc_t scatfunc);
   void SendMonteCarloSpectra(int dest);
   void ReceiveMonteCarloSpectra(int source);
-  void CollectMoments(void);
+  //void CollectMoments(void);
+  void Initialize(ParameterInput *pinput);
+  void MakeOutputs();
 
 private:
 
@@ -238,15 +261,12 @@ private:
   void GetDensity(MonteCarloBlock *pmcb);
   void GetScalars(MonteCarloBlock *pmcb);
   void GetVelocity(MonteCarloBlock *pmcb);
-  void DistributePhotonsToBlocks(void);
-  void SendMonteCarloBlocks(int dest);
-  void ReceiveMonteCarloBlocks(ParameterInput *pin, int source);
-  void SendMonteCarloData(int dest);
-  void ReceiveMonteCarloData(int source);
-  unsigned int CreateMCMPITag(int bid);
-  void InitializeMonteCarloBlocks(ParameterInput *pinput);
-  void SendMoments(int dest);
-  void ReceiveMoments(int source, bool sum);
+  //void SendMonteCarloBlocks(int dest);
+  //void ReceiveMonteCarloBlocks(ParameterInput *pin, int source);
+  //void SendMonteCarloData(int dest);
+  //void ReceiveMonteCarloData(int source);
+  //void SendMoments(int dest);
+  //void ReceiveMoments(int source, bool sum);
 
 };
 
@@ -270,7 +290,7 @@ public:
   PhotonMover* pmover; // ptr to photon mover
   MCRandom *pran; // ptr to random number generator
   MCBoundaryValues *pbval; // ptr to MC boundary values
-  // SWD: Need to consider future where photons cross meshblocks
+
   Spectrum *pspec; // ptr to spectrum
   PhotonList *pphlist; // ptr to photon list
   PhotonTrajectoryList *ptraj;
@@ -285,7 +305,9 @@ public:
 
   int nphdone; // Photons integrated thus far
   int nphremain; // total number of photons to integrate
-  int myblockid;
+  int nabs, nesc, ndes, nscat;
+  int nchunk;
+  int lid;
   int nx1,nx2,nx3;
   int is,ie,js,je,ks,ke;
   int nfreq, nmu, nphi, nsurf;
@@ -296,6 +318,7 @@ public:
   bool moments_comoving; // Compute in comoving frame
   bool emission_array_flag;  // Compute and save zone emissivities
   bool boosts;  // Compute lorentz transformations
+  bool coupled; // Whether time dependent code is coupled to hydro
   bool coherent_scattering; // photon does notchange energy after scattering
   bool acceleration;  // use MRW acceleration
   bool computedmin;
@@ -309,8 +332,6 @@ public:
 
   // Associated with general mover
   // SWD some of these should be eliminated others moved to MonteCarlo?
-  bool general_mover_flag; // use general integration (default for all but
-                           // cartesian, spherical
   bool boyerlindquist_flag; // use Boyer-Lindquist coordinates
   bool orthotet_flag; // use orthonormal tetrad for TransferPhotons()
   bool varystep_flag; // use variable (true) or constant (false) step
@@ -332,8 +353,8 @@ public:
   void InitUserMonteCarloBlockData(ParameterInput *pin);
   void MonteCarloProblemGenerator(ParameterInput *pin);
   void RayTracePhotons(int nphtot); // Ray trace photon on this block
-  void TransferPhotons(int nphtot); // Transfer photons on this block
-  void TransferPhotonsOld(int nphtot); // Transfer photons on this block
+  void TransferPhotonsOnBlock(); // Transfer photons on this block
+  void CoupleMonteCarloToFluid(Real dt);  // couple monte carlo to mesh
   void CoordinateToComoving(Photon *pphot, int ips, int ipe);
   void ComovingToCoordinate(Photon *pphot, int ips, int ipe);
   void LorentzTransform(Photon *pphot, const Real sign, int ips, int ipe);
@@ -343,7 +364,7 @@ public:
   void FinalizePhoton(Photon *pphot, int ip);
   void UpdateMoments(Photon *pphot, Real dl, Real etau, int ip);
   void UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Real k2, Real k3, Real etau, int ip);
-  void NormalizeMoments(bool normalize);
+  void NormalizeMoments(bool normalize, Real norm);
   void ResetMoments();
   void UpdateSourceTermsAfterScatter(Photon *pphot, Real energy0, Real weight0, int ip, Real k1p0, Real k2p0, Real k3p0);
   void UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0, int ip);

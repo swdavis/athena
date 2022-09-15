@@ -149,7 +149,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     int i3 = pphot->i3p[ip];
     // Set weight and energy
     pphot->wp[ip] = 1.0;
-    pphot->ep[ip] = 1.0;
+    pphot->ep[ip] = 1.602176634e-12;
 
     // Initialize Stokes vector
     pphot->sip[ip] = 1.0;
@@ -159,9 +159,11 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
     // Generate initial angle parameters
     Real phi = 2. * PI * pran->uniform();
+    //Real phi =0.;
     Real cphi = cos(phi);
     Real sphi = sin(phi);
     Real cth = 2. * pran->uniform() - 1.;
+    //Real cth = 0.;
     Real sth = sqrt(1. - SQR(cth));
 
     // Initialize wave vector with isotropic distribution

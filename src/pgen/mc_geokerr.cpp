@@ -214,9 +214,12 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     ktet[IMC3] = pphot->ep[ip]*sth*cos(phi);
 
     // Initialize Stokes vector as unpolarized
-    pphot->sip[ip] = 1.0;
-    pphot->sqp[ip] = 0.0;
-    pphot->sup[ip] = 0.0;
+    if (pphot->polarized) {
+      pphot->sip[ip] = 1.0;
+      pphot->sqp[ip] = 0.0;
+      pphot->sup[ip] = 0.0;
+      pphot->svp[ip] = 0.0;
+    }
 
     // Initialize the absorption and scattering extinction coefficients
     // to the values appropriate in the emitted zone

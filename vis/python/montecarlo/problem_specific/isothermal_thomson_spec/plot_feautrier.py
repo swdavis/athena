@@ -12,7 +12,7 @@ import matplotlib.gridspec as gridspec
 #from scipy import interpolate
 
 # Athena++ modules
-import athena_mc_spec as mcspec
+import athena_mc as mcspec
 import feautrier as feaut
 
 def interp_feaut(mu0,mu,varin):
@@ -29,8 +29,8 @@ def interp_feaut(mu0,mu,varin):
 def main(**kwargs):
 
     # Use latex labels
-    plt.rc('text',usetex=True)
-    plt.rc('font', **{'family' :"serif"})
+    #plt.rc('text',usetex=True)
+    #plt.rc('font', **{'family' :"serif"})
 
     # filenames for io
     infile = kwargs.pop('infile')
@@ -66,41 +66,41 @@ def main(**kwargs):
 
     # Get imu or imus for plotting different polar angles
     ilist = imu_handler(kwargs.pop('imu'))
-    
-    # plot spectrum
-    if kwargs['yunit'] == 'specfrac':
-        kwargs.pop('yunit')
-        fig = plt.figure()
-        gs = gridspec.GridSpec(5,1)
-        ax1 = fig.add_subplot(gs[0:3,0])
-        kwargs1 = dict(kwargs)
-        kwargs1['yscale'] = 'log'
-        kwargs1['yunit'] = 'nulnu'
-        for imu in ilist:
-            x, nu, ax1 = mcspec.plot_spectrum(spectrum,imu,ax1,**kwargs1)
-            ax1.tick_params(labelbottom=False)
-            ax1.set_xlabel("")
-            iinterp = interp_feaut(mumid[imu],muf,intensf)
-            ax1.plot(evf,nuf*iinterp*fnorm)
 
-        ax2 = fig.add_subplot(gs[3:5,0])
-        kwargs2 = dict(kwargs)
-        kwargs2['yunit'] = 'q'
-        kwargs2.pop('ymin','ymax')
-        for imu in ilist:
-            x, nu, ax2 = mcspec.plot_polarization(spectrum,imu,ax2,**kwargs2)
-            pinterp = interp_feaut(mumid[imu],muf,polf)
-            
-            ax2.plot(evf,pinterp*100)
+    # plot bottom spectra
+    fig = plt.figure()
+    gs = gridspec.GridSpec(5,1)
+    ax1 = fig.add_subplot(gs[0:3,0])
+    kwargs['yscale'] = 'log'
+    yunitt = kwargs.pop('yunittop')
+    yunitb = kwargs.pop('yunitbot')
+    iphi = kwargs.pop("iphi")
+    plterr = kwargs.pop("ploterr")
+    xunit = kwargs.pop("xunit")
 
-        plt.tight_layout()
+    for imu in ilist:
+        x,y,yerr,xlabel,ylabel = \
+        mcspec.plot_frequency(spectrum,imu,iphi=iphi,plterr=plterr,xunit=xunit,
+                              yunit=yunitt)
+        mcspec.make_plot(x,y,yerr=yerr,xlabel=xlabel,ylabel=ylabel,ax=ax1,**kwargs)
+        ax1.tick_params(labelbottom=False)
+        ax1.set_xlabel("")
+        iinterp = interp_feaut(mumid[imu],muf,intensf)
+        ax1.plot(evf,nuf*iinterp*fnorm)
 
-    else:
-        fig = plt.figure()
-        ax = fig.add_subplot(1,1,1)
-        for imu in ilist:
-            x, nu, ax = mcspec.plot_polarization(spectrum,imu,ax,**kwargs)
-    
+    # plot top spectra
+    ax2 = fig.add_subplot(gs[3:5,0])
+    kwargs['yscale'] = 'linear'
+    for imu in ilist:
+        x,y,yerr,xlabel,ylabel = \
+        mcspec.plot_frequency(spectrum,imu,iphi=iphi,plterr=plterr,xunit=xunit,
+                              yunit=yunitb)
+        mcspec.make_plot(x,y,yerr=yerr,xlabel=xlabel,ylabel=ylabel,ax=ax2,**kwargs)
+        pinterp = interp_feaut(mumid[imu],muf,polf)
+        ax2.plot(evf,pinterp)
+
+    plt.tight_layout()
+
     # save plot to outfile
     if outfile is None:
         outfile = infile.replace('.spec','.pdf')
@@ -139,9 +139,12 @@ if __name__ == '__main__':
     parser.add_argument('--xunit',
         default='kev',
         help='variable to be used for x axis: ev, kev, nu, lambda')
-    parser.add_argument('--yunit',
-        default='frac',
-        help='variable to be used for y axis: frac, angle')
+    parser.add_argument('--yunittop',
+        default='nulnu',
+        help='variable to be used for top y axis: frac, angle')
+    parser.add_argument('--yunitbot',
+        default='q',
+        help='variable to be used for botom y axis: frac, angle')
     parser.add_argument('--ploterr',
         action='store_true',
         help='plot intensity with error bar')

@@ -6,9 +6,6 @@
 //! \file monte_carlo.cpp
 //! \brief implementation of functions in class MonteCarlo, MCRandom
 
-// GSL library
-#include <gsl/gsl_randist.h>
-
 // C++ headers
 #include <stdexcept>  // runtime_error
 
@@ -21,6 +18,11 @@
 #include "../utils/buffer_utils.hpp"
 #include "../scalars/scalars.hpp"
 
+// GSL library
+#if RAN3 == 0
+#include <gsl/gsl_randist.h>
+#endif
+
 //----------------------------------------------------------------------------------------
 //! MonteCarlo constructor, builds monte carlo using parameters in input file
 
@@ -31,23 +33,22 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
 
   pmy_mesh = pmesh;
 
-  UserWorkInMove=NULL;
-  InitEmission=NULL;
-  GetTemperature=NULL;
+  UserWorkInMove=nullptr;
+  InitEmission=nullptr;
+  GetTemperature=nullptr;
 
   // Set flags that control emission, absorption and scattering
   emission_meth = GetEmissionFlag(pin->GetOrAddString("montecarlo","emission","none"));
   if (emission_meth == EMISNONE) {
-    InitEmission = NULL; // left unset
+    InitEmission = nullptr; // left unset
     emission_array_flag = false; // do not allocate memory for array
   } else if (emission_meth ==  EMISUSER) {
-    InitEmission = NULL; // must be set in InitUserMonteCarloData
+    InitEmission = nullptr; // must be set in InitUserMonteCarloData
     emission_array_flag = true; // allocate memory for array
   } else if (emission_meth ==  EMISFF) {
     InitEmission = InitializeEmissionFreeFree;
     emission_array_flag = true; // allocate memory for array
   }
-
 
   // read bc flags for each of the 6 physical boundaries.
   mc_bcs[BoundaryFace::inner_x1] = GetMCBoundaryFlag(pin->GetString("mesh","ix1_mc_bc"));
@@ -56,18 +57,24 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   mc_bcs[BoundaryFace::outer_x2] = GetMCBoundaryFlag(pin->GetString("mesh","ox2_mc_bc"));
   mc_bcs[BoundaryFace::inner_x3] = GetMCBoundaryFlag(pin->GetString("mesh","ix3_mc_bc"));
   mc_bcs[BoundaryFace::outer_x3] = GetMCBoundaryFlag(pin->GetString("mesh","ox3_mc_bc"));
+
   // intitialize boundary functions
   for (int dir=0; dir<6; dir++)
-    BoundaryFunction_[dir]=NULL;
+    BoundaryFunction_[dir]=nullptr;
 
   boosts = pin->GetOrAddBoolean("montecarlo","boosts",false);
+  coupled = pin->GetOrAddBoolean("montecarlo","coupled",false);
   polarized = pin->GetOrAddBoolean("montecarlo","polarized",false);
   acceleration = pin->GetOrAddBoolean("montecarlo","acceleration",false);
   time_acc = pin->GetOrAddBoolean("montecarlo","time_acc",false);
   raytrace_flag = pin->GetOrAddBoolean("montecarlo", "raytrace", false);
+  if (raytrace_flag)
+    general_mover_flag = true;
+  else
+    general_mover_flag = pin->GetOrAddBoolean("montecarlo","general_mover",false);
   scattering_meth = GetScatteringFlag(pin->GetOrAddString("montecarlo","scattering",
                                                           "none"));
-
+                                                          
   nuser_var = 0; // Initialize photon user variables to zero
 
   // Set photon numbers
@@ -76,7 +83,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   nout = nphtot/cadence;
   max_phots_init = 10000;
 #ifdef MPI_PARALLEL
-  max_list_size = cadence/(Globals::nranks-1)+1;
+  max_list_size = cadence/(Globals::nranks)+1;
 #else
   max_list_size = cadence;
 #endif
@@ -94,6 +101,9 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   // Create and intitialize randon number generator
   iseed = pin->GetInteger("montecarlo","iseed");
 
+  // Initialize arrays sizes for photon instances
+  Photon::Initialize(this,pin);
+
   // Initialize ncells and broadcast
   if (Globals::my_rank == 0) {
     ncells = pmesh->GetTotalCells();
@@ -103,102 +113,21 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   MPI_Bcast(&ncells, sizeof(int64_t), MPI_BYTE, 0, MPI_COMM_WORLD);
 #endif
 
-  // Initialize all montecarlo blocks to correspond to mesh blocks
-  // SWD: Current implementation assumes entire mesh is read by each process and
-  // distributes photon uniformly accross processes, which is not optimal but
-  // is relatively simple.
-
-  int nmesh = 1;
-  mcranks = (Globals::nranks) - nmesh;
-  if(Globals::my_rank < nmesh) {
-    // use mesh blocks initialized on my process
-    int myblockid = pmesh->nslist[Globals::my_rank];
-
-    MeshBlock *pmb = pmesh->my_blocks(0);
-    pblock = new MonteCarloBlock(pmb, NULL, this, pin);
-    pfirst = pblock;
-    for (int i=1; i<pmesh->nblocal; ++i) {
-      pmb = pmesh->my_blocks(i);
-      pblock->next = new MonteCarloBlock(pmb, NULL, this, pin);
-      pblock = pblock->next;
-    }
-    pblock = pfirst;
-
-    // set list of destination processes
-    origin = -1;
-    nderv = 0;
-    for(int i=nmesh; i<Globals::nranks; ++i) {
-      if ((i % nmesh)==Globals::my_rank)
-        nderv++;
-    }
-    derv = new int[nderv];
-    int j = 0;
-    for(int i=nmesh; i<Globals::nranks; ++i) {
-      if ((i % nmesh)==Globals::my_rank) {
-        derv[j++] = i;
-        SendMonteCarloBlocks(i);
-      }
-    }
-  } else {
-    // no mesh blocks on my process, copy from origin process
-    nderv = 0;
-    derv = NULL;
-    origin = Globals::my_rank % nmesh;
-    ReceiveMonteCarloBlocks(pin,origin);
-  }
-
-  // set number of photons for each block
-  // nphtot is total number of photons over all blocks
-  // nbtotal runs over the number meshblocks on this rank
-  // Globals::nranks is total number of cores
-  // nphlist is number of photons on each meshblock
-
-  int nbtotal = pmesh->nbtotal;
-  nphlist = new int[nbtotal];
-  int nperb = nphtot / nbtotal;
-
-  for (int i=0; i<nbtotal; ++i) {
-    nphlist[i] = nperb;
-    if (i == nbtotal-1)
-      nphlist[i] += nphtot % nbtotal;
-  }
-  // ensure equal number of photons per mesh block assuming all meshblocks have
-  // same number of zones; nphtot may differ from input nphtot
-  nphtot = 0;
-  for (int i=0; i<nbtotal; ++i) {
-    nphtot += nphlist[i];
-  }
-  if(nphtot < nbtotal) {
-    msg << "###FATAL ERROR Monte Carlo Constructor" << std::endl
-        << "Number of photons < number of mesh blocks= " << nphtot << " "
-        << nbtotal << std::endl;
-    throw std::runtime_error(msg.str().c_str());
-  }
-  // Divide photons between ranks and set blockid
-  // nranks[i] is the number of different monte carlo blocks contributing to
-  // meshblock i
-  int *nranks;
-  nranks = new int[nmesh];
-  for(int i=0; i<nmesh; ++i)
-    nranks[i]=0;
-  for(int i=0; i<Globals::nranks; ++i) {
-    nranks[i % nmesh]++;
-  }
-  int my_mesh_rank = Globals::my_rank % nmesh;
-  int myblockid = pmesh->nslist[my_mesh_rank];
-  MonteCarloBlock *pmcb = pblock;
-  while (pmcb != NULL) {
-    //pmcb->myblockid = myblockid;
-    // allocates an even number of photons per monte carlo block
-    // SWD: should be modified to allow block to have different amounts of photons
-#ifdef MPI_PARALLEL
-    pmcb->nphremain = nphlist[myblockid++]/(nranks[my_mesh_rank]-1);//somewhatold
-#else
-    pmcb->nphremain = nphlist[myblockid++]/(nranks[my_mesh_rank]);
-#endif
-    //pmcb->nphremain = nphlist[myblockid++];//new
-    pmcb->cadence = pmcb->nphremain / nout;
-    pmcb = pmcb->next;
+  // Create MonteCarloBlock for each MeshBlock for this process
+  nblocal = pmy_mesh->nblocal;
+  nbtotal = pmy_mesh->nbtotal;
+  int root_level = pmy_mesh->root_level;
+  my_blocks.NewAthenaArray(nblocal);
+  for (int i=0; i<nblocal; i++) {
+    MeshBlock *pmb = pmy_mesh->my_blocks(i);
+    my_blocks(i) = new MonteCarloBlock(pmb, NULL, this, pin);
+    pmb->pmy_mcb = my_blocks(i);
+    // Set neighbors for photon class
+    // SWD: ideally moved to mesh constructor, but awkward
+    int nrbx1 = pmy_mesh->mesh_size.nx1/pmb->block_size.nx1;
+    int nrbx2 = pmy_mesh->mesh_size.nx2/pmb->block_size.nx2;
+    int nrbx3 = pmy_mesh->mesh_size.nx3/pmb->block_size.nx3;
+    my_blocks(i)->pphot->LinkNeighbors(pmy_mesh->tree, nrbx1, nrbx2, nrbx3, root_level);
   }
 }
 
@@ -208,12 +137,6 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
 MonteCarlo::~MonteCarlo() {
 
   delete pmcout;
-  if (pblock != NULL) {
-    while(pblock->next != NULL)
-      delete pblock->next;
-    delete pblock;
-  }
-  delete nphlist;
 
 }
 
@@ -235,7 +158,7 @@ enum AbsorptionOpacityFlag GetAbsorptionOpacityFlag(std::string input_string) {
     msg << "### FATAL ERROR in GetAbsorptionOpacityFlag" << std::endl
         << "Input string=" << input_string << " not valid absorption opacity"
         << std::endl;
-    throw std::runtime_error(msg.str().c_str());
+    ATHENA_ERROR(msg);
   }
 }
 
@@ -254,7 +177,7 @@ enum AbsorptionMethodFlag GetAbsorptionMethodFlag(std::string input_string) {
     std::stringstream msg;
     msg << "### FATAL ERROR in GetAbsorptionMethodFlag" << std::endl
         << "Input string=" << input_string << " not valid absorption method" << std::endl;
-    throw std::runtime_error(msg.str().c_str());
+    ATHENA_ERROR(msg);
   }
 
 }
@@ -282,7 +205,7 @@ enum ScatteringFlag GetScatteringFlag(std::string input_string) {
     std::stringstream msg;
     msg << "### FATAL ERROR in GetScatteringFlag" << std::endl
         << "Input string=" << input_string << " not valid scattering type" << std::endl;
-    throw std::runtime_error(msg.str().c_str());
+    ATHENA_ERROR(msg);
   }
 
 }
@@ -303,7 +226,7 @@ enum EmissionFlag GetEmissionFlag(std::string input_string) {
     std::stringstream msg;
     msg << "### FATAL ERROR in GetEmissionFlag" << std::endl
         << "Input string=" << input_string << " not valid emission type" << std::endl;
-    throw std::runtime_error(msg.str().c_str());
+    ATHENA_ERROR(msg);
   }
 
 }
@@ -324,7 +247,7 @@ void MonteCarlo::EnrollUserMCBoundaryFunction(enum BoundaryFace dir, MCBValFunc_
     msg << "### FATAL ERROR in EnrollUserMCBoundaryFunction" << std::endl
         << "The boundary condition flag must be set to the string 'user' in the "
         << " <mesh> block in the input file to use user-enrolled BCs" << std::endl;
-    throw std::runtime_error(msg.str().c_str());
+    ATHENA_ERROR(msg);
   }
   BoundaryFunction_[dir]=my_bc;
   return;
@@ -402,7 +325,7 @@ enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string) {
     std::stringstream msg;
     msg << "### FATAL ERROR in GetMCBoundaryFlag" << std::endl
         << "Input string=" << input_string << " not valid boundary type" << std::endl;
-    throw std::runtime_error(msg.str().c_str());
+    ATHENA_ERROR(msg);
   }
 
 }
@@ -493,6 +416,7 @@ void DefaultGetTemperature(MonteCarloBlock *pmcb) {
       }}}
 }
 
+/*
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::SendMonteCarloBlocks(int dest)
 //! \brief send all monte carlo blocks to another process
@@ -505,7 +429,7 @@ void MonteCarlo::SendMonteCarloBlocks(int dest) {
   int head_buf[10];
   blcnt = 0;
   MonteCarloBlock *pmcb = pblock;
-  while (pmcb != NULL) {
+  while (pmcb != nullptr) {
     blcnt++;
     pmcb = pmcb->next;
   }
@@ -556,11 +480,11 @@ void MonteCarlo::ReceiveMonteCarloBlocks(ParameterInput *pin, int source) {
   blocksize.ke = head_buf[9];
 
   // create monte carlo blocks to receive data
-  MonteCarloBlock *pfirst, *plast=NULL;
+  MonteCarloBlock *pfirst, *plast=nullptr;
 
   for(int i=0; i<blcnt; ++i) {
-    pblock = new MonteCarloBlock(NULL, &blocksize, this, pin);
-    if (plast == NULL)
+    pblock = new MonteCarloBlock(nullptr, &blocksize, this, pin);
+    if (plast == nullptr)
       pfirst = pblock;
     else
       plast->next = pblock;
@@ -588,7 +512,7 @@ void MonteCarlo::SendMonteCarloData(int dest) {
   send_buf = new Real[size];
   MPI_Request send_rq;
   unsigned int tag = 1;
-  while (pmcb != NULL) {
+  while (pmcb != nullptr) {
     int p=0;
     BufferUtility::PackData(pmcb->rho,send_buf,pmcb->is,pmcb->ie,pmcb->js,pmcb->je,
                             pmcb->ks,pmcb->ke,p);
@@ -637,7 +561,7 @@ void MonteCarlo::ReceiveMonteCarloData(int source) {
   recv_buf = new Real[size];
   MPI_Request recv_rq;
   unsigned int tag = 1;
-  while (pmcb != NULL) {
+  while (pmcb != nullptr) {
     MPI_Irecv(recv_buf,size,MPI_ATHENA_REAL,source,tag++,MPI_COMM_WORLD,&recv_rq);
     MPI_Wait(&recv_rq, MPI_STATUS_IGNORE);
     int p=0;
@@ -663,7 +587,7 @@ void MonteCarlo::ReceiveMonteCarloData(int source) {
     for (int i=pmcb->ks; i<=pmcb->ke+1; ++i)
       pmcb->pcoord->x3f(i) = recv_buf[p++];
     // initialize emission array
-    if (InitEmission != NULL)
+    if (InitEmission != nullptr)
       pmcb->minweight *= InitEmission(pmcb);
     if (acceleration && !(pmcb->coherent_scattering) && !(scattering_meth == SCATRES))
       InitializeAccelerationOpacity(pmcb);
@@ -672,7 +596,7 @@ void MonteCarlo::ReceiveMonteCarloData(int source) {
   delete recv_buf;
 #endif
 }
-
+*/
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::SendMonteCarloSpectra(int dest)
 //! \brief send all monte carlo spectra to another process
@@ -682,7 +606,7 @@ void MonteCarlo::SendMonteCarloSpectra(int dest) {
   Spectrum *pspec = pmcout->pspec;
 
   int maxsize = 0;
-  while (pspec != NULL) {
+  while (pspec != nullptr) {
     int ne = pspec->range.ne;
     int ncth = pspec->range.ncth;
     int nphi = pspec->range.nphi;
@@ -700,7 +624,7 @@ void MonteCarlo::SendMonteCarloSpectra(int dest) {
   unsigned int tag = 100;
 
   pspec = pmcout->pspec;
-  while (pspec != NULL) {
+  while (pspec != nullptr) {
     int p=0;
     int ne = pspec->range.ne;
     int ncth = pspec->range.ncth;
@@ -726,6 +650,19 @@ void MonteCarlo::SendMonteCarloSpectra(int dest) {
 #endif
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::MakeOutputs()
+//! \brief write MonteCarlo outputs
+
+void MonteCarlo::MakeOutputs() {
+
+  nphrun = nphtot;
+  pmcout->OutputSpectrum(this);
+  pmcout->OutputPhotonList(nblock);
+  pmcout->OutputTrajectoryList();
+
+}
+
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::ReceiveMonteCarloSpectra(int dest)
@@ -735,7 +672,7 @@ void MonteCarlo::ReceiveMonteCarloSpectra(int source) {
 #ifdef MPI_PARALLEL
   Spectrum *pspec = pmcout->pspec;
   int maxsize = 0;
-  while (pspec != NULL) {
+  while (pspec != nullptr) {
     int ne = pspec->range.ne;
     int ncth = pspec->range.ncth;
     int nphi = pspec->range.nphi;
@@ -752,7 +689,7 @@ void MonteCarlo::ReceiveMonteCarloSpectra(int source) {
   unsigned int tag = 100; // temporary
 
   pspec = pmcout->pspec;
-  while (pspec != NULL) {
+  while (pspec != nullptr) {
     int ne = pspec->range.ne;
     int ncth = pspec->range.ncth;
     int nphi = pspec->range.nphi;
@@ -781,6 +718,7 @@ void MonteCarlo::ReceiveMonteCarloSpectra(int source) {
 #endif
 }
 
+/*
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::CollectMoments(void)
 //! \brief collect moments from other processes for output
@@ -790,7 +728,7 @@ void MonteCarlo::CollectMoments(void) {
   if (origin < 0) {
     // Set Moments to zero on origin blocks
     MonteCarloBlock *pmcb=pblock;
-    while (pmcb != NULL) {
+    while (pmcb != nullptr) {
       pmcb->ResetMoments();
       pmcb=pmcb->next;
     }
@@ -799,7 +737,7 @@ void MonteCarlo::CollectMoments(void) {
       ReceiveMoments(derv[i],true);
     }
     pmcb=pblock;
-    while (pmcb != NULL) {
+    while (pmcb != nullptr) {
       pmcb->nphdone = nphlist[pmcb->myblockid];
       pmcb->NormalizeMoments(true);
       pmcb=pmcb->next;
@@ -823,7 +761,7 @@ void MonteCarlo::SendMoments(int dest) {
   send_buf = new Real[size];
   MPI_Request send_rq;
   unsigned int tag = 1000; // temporary
-  while (pmcb != NULL) {
+  while (pmcb != nullptr) {
     int p=0;
     BufferUtility::PackData(pmcb->moments,send_buf,0,(NMOM-4),pmcb->is,pmcb->ie,pmcb->js,
                             pmcb->je,pmcb->ks,pmcb->ke,p);
@@ -848,7 +786,7 @@ void MonteCarlo::ReceiveMoments(int source, bool sum_moments) {
   recv_buf = new Real[size];
   MPI_Request recv_rq;
   unsigned int tag = 1000; //temporary
-  while (pmcb != NULL) {
+  while (pmcb != nullptr) {
     MPI_Irecv(recv_buf,size,MPI_ATHENA_REAL,MPI_ANY_SOURCE,tag,MPI_COMM_WORLD,&recv_rq);
     MPI_Wait(&recv_rq, MPI_STATUS_IGNORE);
     int p=0;
@@ -863,61 +801,47 @@ void MonteCarlo::ReceiveMoments(int source, bool sum_moments) {
   delete recv_buf;
 #endif
 }
+*/
 
 //----------------------------------------------------------------------------------------
-//! \fn unsigned int MonteCarlo::CreateMCMPITag(int bid)
-//! \brief calculate an MPI tag for monte carlo communications
-
-unsigned int MonteCarlo::CreateMCMPITag(int bid) {
-  return bid;
-}
-
-
-//----------------------------------------------------------------------------------------
-//! \fn void MonteCarlo::InitializeMonteCarloBlocks(ParameterInput *pinput)
+//! \fn void MonteCarlo::Initialize(ParameterInput *pinput)
 //! \brief initialize grid data in each monte carlo block
 
-void MonteCarlo::InitializeMonteCarloBlocks(ParameterInput *pinput) {
+void MonteCarlo::Initialize(ParameterInput *pin) {
 
-  if (GetTemperature == NULL)
+  if (MONTE_CARLO_STATIC) {
+    // initialize timing parameters if static calculation
+    dt = pin->GetOrAddReal("montecarlo","dt",1.);
+    tmax = pin->GetOrAddReal("montecarlo","tmax",HUGE_NUMBER);
+  } else if (MONTE_CARLO_DYNAMIC) {
+    dt = tmax = pmy_mesh->dt;
+  }
+
+  // Set number of photons per montecarloblock
+  nblock = nphtot / nbtotal;
+  nphtot = nblock * nbtotal; // reset nblock to be multiple of nbtotal
+  int nchunk = nblock / 2;
+  if (GetTemperature == nullptr)
     GetTemperature = DefaultGetTemperature;
 
-  if (origin < 0) {
-    MonteCarloBlock *pmcb = pblock;
+  // Initialize monte carlo blocks
+  for (int i=0; i<nblocal; i++) {
+    MonteCarloBlock *pmcb = my_blocks(i);
     // Initialize variables over all blocks
     GetDensity(pmcb);
     GetTemperature(pmcb);
-    //(pmcb->*(pmcb->GetTemperature2))();
     if (boosts) GetVelocity(pmcb);
-    if (InitEmission != NULL) InitEmission(pmcb);
-    if (acceleration && !(pmcb->coherent_scattering) && !(scattering_meth == SCATRES))
-      InitializeAccelerationOpacity(pmcb);
-    if (NSCALARS > 0) GetScalars(pmcb);
-    pmcb = pmcb->next;
-    while (pmcb != NULL) {
-      GetDensity(pmcb);
-      GetTemperature(pmcb);
-      if (boosts) GetVelocity(pmcb);
-      if (InitEmission != NULL) InitEmission(pmcb);
-      if (acceleration && !(pmcb->coherent_scattering) && !(scattering_meth == SCATRES))
-        InitializeAccelerationOpacity(pmcb);
-      if (NSCALARS > 0) GetScalars(pmcb);
-      pmcb = pmcb->next;
+    if (InitEmission != nullptr) {
+      pmcb->minweight *= InitEmission(pmcb);
     }
-    for(int i=0; i<nderv; ++i) {
-      SendMonteCarloData(derv[i]);
-    }
-  } else {
-    // Get data from another process
-    ReceiveMonteCarloData(origin);
+    // set photons to be computed and counters
+    pmcb->nphremain = nblock;
+    pmcb->nphdone = 0;
+    pmcb->nchunk = nchunk;
+    pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
+    // Call problem generators for Monte Carlo
+    pmcb->MonteCarloProblemGenerator(pin);
   }
-  // Call problem generators for Monte Carlo after all MonteCarloBlocks initialized
-  MonteCarloBlock *pmcb = pblock;
-  while (pmcb != NULL) {
-    pmcb->MonteCarloProblemGenerator(pinput);
-    pmcb = pmcb->next;
-  }
-
 }
 
 //----------------------------------------------------------------------------------------
@@ -928,89 +852,185 @@ void MonteCarlo::InitializeMonteCarloBlocks(ParameterInput *pinput) {
 void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
                                      ParameterInput *pinput) {
 
-  InitializeMonteCarloBlocks(pinput);
+  // initialize counter
+  int ntot = 0;
 
-  MonteCarloBlock *pmcb = pblock;
-  // transfer photons over all blocks
-  //  Assumes all blocks are allocated the same number photons to transfer
-  nphrun = 0;
+  bool photons_remain = true; // True if photons on any process
+  while(photons_remain) {
+
+    for(int nb=0; nb<nblocal; ++nb){
+      my_blocks(nb)->TransferPhotonsOnBlock();
+    }
+    photons_remain = CheckAndBroadCastPhotonsRemaining();
+  }
+
+  // Report diagnostic results from all blocks
+  int nesc = 0, nabs = 0, ndes = 0, nscat = 0;
+  for(int nb=0; nb<nblocal; ++nb){
+    MonteCarloBlock *pmcb = my_blocks(nb);
+    nesc += pmcb->nesc;
+    nabs += pmcb->nabs;
+    ndes += pmcb->ndes;
+    nscat += pmcb->nscat;
+    ntot += pmcb->nphdone;
+  }
+
 #ifdef MPI_PARALLEL
-  if (origin < 0) {
-    for (int i=0; i<nout; ++i) {
-      nphrun += pmcb->cadence*mcranks; //not general, counts all processes
-      pmcb = pmcb->next;
-      while (pmcb != NULL) {
-        nphrun += pmcb->cadence*mcranks;//not general
-        pmcb = pmcb->next;
-      }
-      pmcb = pblock;
-      pmcout->OutputSpectrum(this);
-      if (pmcout->moments) {
-        CollectMoments();
-        pouts->MakeOutputs(pmesh,pinput,true);
-      }
-    }
-  } else {
-    //while (pmcb->nphremain > 0) {
-    nphrun = 0;
-    for (int i=0; i<nout; i++) {
-      nphrun += pmcb->cadence; // only count photons on this process
-      if (raytrace_flag)
-        pmcb->RayTracePhotons(pmcb->cadence);
-      else
-        pmcb->TransferPhotons(pmcb->cadence);
-      pmcb->nphremain -= pmcb->cadence;
-      pmcb = pmcb->next;
-      while (pmcb != NULL) {
-        nphrun += cadence;
-        if (raytrace_flag)
-          pmcb->RayTracePhotons(pmcb->cadence);
-        else
-          pmcb->TransferPhotons(pmcb->cadence);
-        pmcb->nphremain -= pmcb->cadence;
-        pmcb = pmcb->next;
-      }
-      pmcb = pblock;
-      pmcout->OutputSpectrum(this);
-      pmcout->OutputPhotonList(pmcb->cadence);
-      pmcout->OutputTrajectoryList();
-      if (pmcout->moments) {
-        CollectMoments();
-        pouts->MakeOutputs(pmesh,pinput,true);
-      }
-    }
-  }
-  MPI_Barrier(MPI_COMM_WORLD);
-#else
-  for (int i=0; i<nout; i++) {
-    nphrun += pmcb->cadence;
-    if (raytrace_flag)
-      pmcb->RayTracePhotons(pmcb->cadence);
+  MPI_Allreduce(MPI_IN_PLACE,&nesc,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&nabs,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&ndes,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&nscat,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&ntot,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+#endif
+  if (Globals::my_rank == 0) {
+    std::cout  << "ntot, nesc, nabs, ndes, nscat: "
+               << ' ' << ntot << ' ' << nesc
+               << ' ' << nabs << ' ' << ndes << ' ' << nscat << ' ';
+    if (ntot > 0)
+      std::cout << static_cast<Real>(nscat)/static_cast<Real>(ntot) << std::endl;
     else
-      pmcb->TransferPhotons(pmcb->cadence);
-    pmcb->nphremain -= pmcb->cadence;
-    pmcb = pmcb->next;
-    while (pmcb != NULL) {
-      if (raytrace_flag)
-        pmcb->RayTracePhotons(pmcb->cadence);
-      else
-        pmcb->TransferPhotons(pmcb->cadence);
-      pmcb->nphremain -= pmcb->cadence;
-      pmcb = pmcb->next;
-    }
-    pmcb = pblock;
-    pmcout->OutputSpectrum(this);
-    pmcout->OutputPhotonList(pmcb->cadence);
-    pmcout->OutputTrajectoryList();
-    if (pmcout->moments) {
-      CollectMoments();
-      pouts->MakeOutputs(pmesh,pinput,true);
+      std::cout << 0. << std::endl;
+  }
+
+  if (pmcout->moments) {
+    // normalize moments for output
+    for(int nb=0; nb<nblocal; ++nb){
+      MonteCarloBlock *pmcb = my_blocks(nb);
+      pmcb->NormalizeMoments(true,static_cast<Real>(ntot));
     }
   }
 
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::RunStaticMonteCarlo()
+//! \brief Checks if photons remain on any process and sends message to rank 0
+//!        process if none remaining.
+
+bool MonteCarlo::CheckAndBroadCastPhotonsRemaining() {
+
+  // Send photons from all blocks
+  for(int nb=0; nb<nblocal; ++nb){
+    my_blocks(nb)->pphot->SendToNeighbors();
+  }
+
+  // Receive photons from all blocks
+  bool complete = false;
+  while(!complete) {
+    complete = true;
+    for(int nb=0; nb<nblocal; ++nb) {
+      bool success = my_blocks(nb)->pphot->ReceiveFromNeighbors();
+      if (!success)
+        complete = false;
+    }
+  }
+  // Clear Boundaries
+  for(int nb=0; nb<nblocal; ++nb)
+    my_blocks(nb)->pphot->ClearBoundary();
+
+  // Check if photons have completed
+  int nremain=0,nprop=0;
+  for(int nb=0; nb<nblocal; ++nb){
+    MonteCarloBlock *pmcb = my_blocks(nb);
+    nremain += pmcb->nphremain;
+    nprop += pmcb->pphot->nphot;
+  }
+#ifdef MPI_PARALLEL
+  MPI_Allreduce(MPI_IN_PLACE,&nprop,1,MPI_INT,MPI_MAX,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&nremain,1,MPI_INT,MPI_MAX,MPI_COMM_WORLD);
 #endif
 
-  return;
+  bool active;
+  if ((nremain > 0) || (nprop > 0)) {
+    active = true;
+  } else {
+    active = false;
+  }
+  return active;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
+//!                                          ParameterInput *pinput)
+//! \brief Run one step in dynamic MC calculation
+
+void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
+                                     ParameterInput *pinput) {
+
+  // initialize counter
+  int ntot = 0;
+
+  dt = tmax = pmy_mesh->dt;
+
+  // Rest monte carlo blocks
+  for (int i=0; i<nblocal; i++) {
+    MonteCarloBlock *pmcb = my_blocks(i);
+    // Initialize variables over all blocks
+    GetDensity(pmcb);
+    GetTemperature(pmcb);
+    if (boosts) GetVelocity(pmcb);
+    if (InitEmission != nullptr) {
+      pmcb->minweight *= InitEmission(pmcb);
+    }
+    // set photons to be computed and counters
+    pmcb->nphremain = nblock;
+    pmcb->nphdone = 0;
+    pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
+  }
+
+  if (pmcout->moments) {
+    // reset moments at start of new timestep
+    for(int nb=0; nb<nblocal; ++nb){
+      MonteCarloBlock *pmcb = my_blocks(nb);
+      pmcb->ResetMoments();
+    }
+  }
+
+  bool photons_remain = true; // True if photons on any process
+  while(photons_remain) {
+
+    for(int nb=0; nb<nblocal; ++nb){
+      my_blocks(nb)->TransferPhotonsOnBlock();
+    }
+    photons_remain = CheckAndBroadCastPhotonsRemaining();
+  }
+
+  // Report diagnostic results from all blocks
+  int nesc = 0, nabs = 0, ndes = 0, nscat = 0;
+  for(int nb=0; nb<nblocal; ++nb){
+    MonteCarloBlock *pmcb = my_blocks(nb);
+    nesc += pmcb->nesc;
+    nabs += pmcb->nabs;
+    ndes += pmcb->ndes;
+    nscat += pmcb->nscat;
+    ntot += pmcb->nphdone;
+  }
+
+#ifdef MPI_PARALLEL
+  MPI_Allreduce(MPI_IN_PLACE,&nesc,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&nabs,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&ndes,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&nscat,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&ntot,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+#endif
+  if (Globals::my_rank == 0) {
+    std::cout  << "ntot, nesc, nabs, ndes, nscat: "
+               << ' ' << ntot << ' ' << nesc
+               << ' ' << nabs << ' ' << ndes << ' ' << nscat << ' ';
+    if (ntot > 0)
+      std::cout << static_cast<Real>(nscat)/static_cast<Real>(ntot) << std::endl;
+    else
+      std::cout << 0. << std::endl;
+  }
+
+  if (pmcout->moments) {
+    // normalize moments for output
+    for(int nb=0; nb<nblocal; ++nb){
+      MonteCarloBlock *pmcb = my_blocks(nb);
+      pmcb->NormalizeMoments(true,static_cast<Real>(ntot));
+    }
+  }
+
 }
 
 
@@ -1019,10 +1039,15 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
 //  current implementation is wrapper for gsl function
 
 MCRandom::MCRandom(int iseed) {
-  if (MONTE_CARLO_ENABLED) {
-    dev = gsl_rng_alloc(gsl_rng_mt19937);
-    gsl_rng_set(dev, iseed);
-  }
+
+#if RAN3
+  r3seed = static_cast<long>(-iseed);
+  ran3(&r3seed);
+#else
+  dev = gsl_rng_alloc(gsl_rng_mt19937);
+  gsl_rng_set(dev, iseed);
+#endif
+
 }
 
 //----------------------------------------------------------------------------------------
@@ -1033,11 +1058,69 @@ MCRandom::~MCRandom() {
 }
 
 Real MCRandom::uniform() {
-  if (MONTE_CARLO_ENABLED)
-    return static_cast<Real>(gsl_rng_uniform(dev));
+
+#if RAN3
+  return ran3(&r3seed);
+#else
+  return static_cast<Real>(gsl_rng_uniform(dev));
+#endif
 }
 
 Real MCRandom::chisquare(int n) {
-  if (MONTE_CARLO_ENABLED)
-    return static_cast<Real>(gsl_ran_chisq(dev,n));
+#if RAN3
+  std::stringstream msg;
+  msg << "### FATAL ERROR in MCRandom::chisquare" << std::endl
+      << "Not supported with RAN3 random number generator" << std::endl;
+  ATHENA_ERROR(msg);
+#else
+  return static_cast<Real>(gsl_ran_chisq(dev,n));
+#endif
+
+}
+
+// Used by ran3
+#define MBIG 1000000000
+#define MSEED 161803398
+#define MZ 0
+#define FAC (1.0/MBIG)
+
+Real MCRandom::ran3(long *idum) {
+
+  static int inext,inextp;
+  static long ma[56];       // The value 56 (range ma[1..55]) is special and
+  static int iff=0;         // should not be modified; see Knuth.
+
+  long mj,mk;
+  int i,ii,k;
+
+  if (*idum < 0 || iff == 0) {    //Initialization.
+    iff=1;
+    mj=labs(MSEED-labs(*idum));   // Initialize ma[55] using the seed idum
+    mj %= MBIG;                   // and the large number MSEED.
+    ma[55]=mj;
+    mk=1;
+    for (i=1;i<=54;i++) {         //  Now initialize the rest of the table,
+      ii=(21*i) % 55;             //  in a slightly random order,with
+      ma[ii]=mk;                  //  numbers that are not especially random.
+      mk=mj-mk;
+      if (mk < MZ) mk += MBIG;
+      mj=ma[ii];
+    }
+    for (k=1;k<=4;k++)    // We randomize them by "warming up the generator."
+      for (i=1;i<=55;i++) {
+        ma[i] -= ma[1+(i+30) % 55];
+        if (ma[i] < MZ) ma[i] += MBIG;
+      }
+    inext=0;     // Prepare indices for our first generated number.
+    inextp=31;   //  The constant 31 is special; see Knuth.
+    *idum=1;
+  }
+  // Here is where we start, except on initialization.
+  if (++inext == 56) inext=1;     // Increment inext and inextp, wrapping
+  if (++inextp == 56) inextp=1;   // around  56 to 1.
+
+  mj=ma[inext]-ma[inextp];   // Generate a new random number subtractively.
+  if (mj < MZ) mj += MBIG;   // Be sure that it is in range.
+  ma[inext]=mj;              // Store it,
+  return static_cast<Real>(mj*FAC);             // and output the derived uniform deviate.
 }

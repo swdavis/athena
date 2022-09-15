@@ -112,7 +112,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     pphot->k3p[ip] = cth;
 
     // Convert k unit vector to k^\alpha
-    if (general_mover_flag) {
+    if (pmy_mc->general_mover_flag) {
       pphot->k2p[ip] /= pphot->x1p[ip];
       pphot->k3p[ip] /= (pphot->x1p[ip]*sin(pphot->x2p[ip]));
       pphot->dk0p[ip] = 0.;
@@ -122,9 +122,11 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     }
 
     // Initialize Stokes vector
-    pphot->sip[ip] = 1.0;
-    pphot->sup[ip] = 0.0;
-    pphot->sqp[ip] = 0.0;
+    if (pphot->polarized) {
+      pphot->sip[ip] = 1.0;
+      pphot->sup[ip] = 0.0;
+      pphot->sqp[ip] = 0.0;
+    }
 
     // Initialize energy
     pphot->ep[ip] = 1.;
@@ -156,6 +158,7 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot, int ip) {
     Real rf = pphot->user[1][ip];
     Real thf = pphot->user[2][ip];
     Real phf = pphot->user[3][ip];
+ 
     Real xp = rf * sin(thf) * cos(phf);
     Real yp = rf * sin(thf) * sin(phf);
     Real zp = rf * cos(thf);
@@ -188,7 +191,7 @@ void FinalPositionSphericalPolar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pp
   Real sph = sin(pphot->x3p[ip]);
 
   Real kr, kth, kph;
-  if (pmcb->general_mover_flag) {
+  if (pmcb->pmy_mc->general_mover_flag) {
     kr = pphot->k1p[ip];
     kth = r * pphot->k2p[ip];
     kph = r * sth * pphot->k3p[ip];

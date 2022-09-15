@@ -55,11 +55,12 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
     Real k1, k2, k3;
     int count = 0;
     int iter = 0;
+    Real c_cgs = 2.99792458e10;
     int zone_counter = 0;
     Real chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
 
     while ( (pphot->statp[ip] == EVOLVING) && (tauremaining > TINY_NUMBER) &&
-            (iter < checkmove)) {
+            (iter < checkmove) && (pphot->dtp[ip] > 0.) ) {
       //printf("%d %g\n",iter,step);
       //pphot->PrintPhoton(ip);
       iter++;
@@ -123,6 +124,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
         pphot->PrintPhoton(ip);
       }
 
+      pphot->dtp[ip] -= step/c_cgs;
       // Update moments
       if (pmcb->moments_flag) {
         pmcb->UpdateMoments(pphot,step,path_length,k1,k2,k3,1.,ip);
@@ -164,6 +166,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
 
 void GeneralMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
 
+  /*
   Real r = pphot->x[IMC1];
   Real cth = cos(pphot->x[IMC2]);
   Real sth = sqrt(1. - SQR(cth));
@@ -180,7 +183,7 @@ void GeneralMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
   kcart[IMC1] /= norm;
   kcart[IMC2] /= norm;
   kcart[IMC3] /= norm;
-
+  */
 }
 
 //----------------------------------------------------------------------------------------
@@ -352,7 +355,7 @@ void GeneralMover::PropogatePolarization(Photon *pphot, Real step, int ip) {
 // this should be updated with every iteration since k continuously changes
 Real GeneralMover::StepSize(Photon *pphot, int ip) {
 
-  if (!pphot->pmy_mcb->varystep_flag) {
+  if (!pmy_mcb->varystep_flag) {
     return step_par; // keep step constant
   }
 

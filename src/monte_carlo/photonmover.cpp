@@ -285,17 +285,17 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
   Real beta[3], beta2, gamma, gonembdk;
   if (boosts) {
     // tranform relevant quanitites to comoving frame
-    beta[0] = pmcb->vel(0,pphot->i3p[ip],pphot->i2,pphot->i1) / 2.99792458e10;
-    beta[1] = pmcb->vel(1,pphot->i3p[ip],pphot->i2,pphot->i1) / 2.99792458e10;
-    beta[2] = pmcb->vel(2,pphot->i3p[ip],pphot->i2,pphot->i1) / 2.99792458e10;
+    beta[0] = pmcb->vel(0,pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]) / 2.99792458e10;
+    beta[1] = pmcb->vel(1,pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]) / 2.99792458e10;
+    beta[2] = pmcb->vel(2,pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]) / 2.99792458e10;
     beta2 = SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
     gamma = 1./sqrt(1.-beta2);
-    Real bdk = (pphot->k[0] * beta[0] + pphot->k[1] * beta[1] + pphot->k[2] * beta[2]);
+    Real bdk = (pphot->k1p[ip]*beta[0]+pphot->k2p[ip]*beta[1]+pphot->k3p[ip]*beta[2]);
     gonembdk = gamma * (1. - bdk);
     chi *= (1.+4.*beta2)/gonembdk;
-    pphot->abs_coef /= gonembdk;
-    pphot->sct_coef /= gonembdk;
-    pphot->energy *= gonembdk;
+    pphot->acp[ip] /= gonembdk;
+    pphot->scp[ip] /= gonembdk;
+    pphot->ep[ip] *= gonembdk;
     // multiply beta by gamma
     Real betagamma = sqrt(beta2)*gamma;
     for(int i=0; i<3; ++i)
@@ -305,10 +305,10 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
       r0 = 0.5*(sqrt(1.+4.*chi*dist*delta*betagamma)-1.)/(delta*betagamma*chi);
       Real tau;
       if (!compton)
-        tau = (pphot->abs_coef+pphot->sct_coef) * r0;
+        tau = (pphot->acp[ip]+pphot->scp[ip]) * r0;
       else {
         //tau = pmcb->planck_inv_opacity(pphot->i3,pphot->i2,pphot->i1) *r0;
-        tau = pphot->sct_coef*r0;
+        tau = pphot->scp[ip]*r0;
       }
       if (tau > tauacc) {
         ct = delta*SQR(r0)*chi;
@@ -345,27 +345,27 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
     Real tauabs;
     //pphot->path += ct;
     if (!compton) {
-      tauabs = ct*pphot->abs_coef;
-      pphot->weight *= exp(-tauabs);
+      tauabs = ct*pphot->acp[ip];
+      pphot->wp[ip] *= exp(-tauabs);
     } else {
 
       //tauabs = ct*sqrt(pphot->abs_coef*pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1));
       //tauabs = ct*pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1);
       //tauabs = ct*pphot->abs_coef;
-      Real opaci = pphot->abs_coef;
+      Real opaci = pphot->acp[ip];
       Real c = 2.99792458e10;
       Real kb = 1.380649e-16;
       Real me = 9.1093897e-28;
-      Real temp = pmcb->tgas(pphot->i3,pphot->i2,pphot->i1);
-      Real xi = pphot->energy  / (kb *temp);
-      Real ypar = pphot->sct_coef*ct*kb*temp/(me*c*c);
+      Real temp = pmcb->tgas(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]);
+      Real xi = pphot->ep[ip]  / (kb *temp);
+      Real ypar = pphot->scp[ip]*ct*kb*temp/(me*c*c);
       Real xf = InterpComptonEnergy(xi,ypar,pran->uniform());
 
-      pphot->energy = xf * kb * temp;
+      pphot->ep[ip] = xf * kb * temp;
       //tauabs = ct*pmcb->planck_opacity(pphot->i3,pphot->i2,pphot->i1);
       //pphot->energy = PlanckDist(pmcb->tgas(pphot->i3,pphot->i2,pphot->i1),pran);
-      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
-      Real opacf = pphot->abs_coef;
+      pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
+      Real opacf = pphot->acp[ip];
       //Real opacf = std::max(pphot->abs_coef,pmcb->planck_opacity(pphot->i3,pphot->i2,
       //pphot->i1));
       //tauabs = ct*sqrt(opaci*pphot->abs_coef);
@@ -399,7 +399,7 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
       Real u0 = ct/ypar;
       //tauabs = fabs(opaci-opacf)/8.*u0;
       //printf("%g %g %g %g %g %g %g\n",ct,tauabs,tau0,opaci,opacf,xi,xf);
-      pphot->weight *= exp(-tauabs);
+      pphot->wp[ip] *= exp(-tauabs);
     }
 
     // position packet on sphere of radius r0
@@ -407,16 +407,16 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
     Real stheta = sqrt(1.0-mu*mu);
     Real phi = 2.*PI*pran->uniform();
     if (COORDINATE_SYSTEM == "cartesian") {
-      pphot->x[0] += stheta*cos(phi) * r0 + beta[0] * ct;
-      pphot->x[1] += stheta*sin(phi) * r0 + beta[1] * ct;
-      pphot->x[2] += mu * r0 + beta[2] * ct;
+      pphot->x1p[ip] += stheta*cos(phi) * r0 + beta[0] * ct;
+      pphot->x2p[ip] += stheta*sin(phi) * r0 + beta[1] * ct;
+      pphot->x3p[ip] += mu * r0 + beta[2] * ct;
     } else if (COORDINATE_SYSTEM == "spherical_polar") {
       // convert to carteisan
-      Real cth = cos(pphot->x[1]);
+      Real cth = cos(pphot->x2p[ip]);
       Real sth = sqrt(1. - SQR(cth));
-      Real cph = cos(pphot->x[2]);
-      Real sph = sin(pphot->x[2]);
-      Real r = pphot->x[0];
+      Real cph = cos(pphot->x3p[ip]);
+      Real sph = sin(pphot->x3p[ip]);
+      Real r = pphot->x1p[ip];
       Real x0 = r * sth * cph;
       Real y0 = r * sth * sph;
       Real z0 = r * cth;
@@ -426,33 +426,33 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
       x0 += stheta*cos(phi) * r0 + betax * ct;
       y0 += stheta*sin(phi) * r0 + betay * ct;
       z0 += mu * r0 + betaz * ct;
-      pphot->x[0] = sqrt(SQR(x0)+SQR(y0)+SQR(z0));
-      pphot->x[1] = acos(z0 / pphot->x[0]);
-      pphot->x[2] = atan2(y0,x0);
-      if (pphot->x[2] < 0.)
-        pphot->x[2] += 2.*PI;
+      pphot->x1p[ip] = sqrt(SQR(x0)+SQR(y0)+SQR(z0));
+      pphot->x2p[ip] = acos(z0 / pphot->x1p[ip]);
+      pphot->x3p[ip] = atan2(y0,x0);
+      if (pphot->x3p[ip] < 0.)
+        pphot->x3p[ip] += 2.*PI;
     }
 
     // Check if photon has left original zone and update
     bool newzone = UpdateZone(pphot,0); //SWDFIX
     if (newzone) {
       // Check if photon is absorbed or escape due to boundary condition
-      if (pphot->status != EVOLVING)
+      if (pphot->statp[ip] != EVOLVING)
         return false;
     }
     if (newzone || compton) {
       // update opacity if zone or energy has changed
-      pphot->abs_coef = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
-      pphot->sct_coef = pmcb->ScatteringOpacity(pmcb,pphot,ip);
+      pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
+      pphot->scp[ip] = pmcb->ScatteringOpacity(pmcb,pphot,ip);
     }
 
     // update direction assuming isotropic random direction in comoving frame
     mu = 2.*pran->uniform()-1.0;
     stheta = sqrt(1.0-mu*mu);
     phi = 2.*PI*pran->uniform();
-    pphot->k[0] = stheta*cos(phi);
-    pphot->k[1] = stheta*sin(phi);
-    pphot->k[2] = mu;
+    pphot->k1p[ip] = stheta*cos(phi);
+    pphot->k2p[ip] = stheta*sin(phi);
+    pphot->k3p[ip] = mu;
     if (boosts) {
       //transform back to Eulerian frame
       for(int i=0; i<3; ++i) {
@@ -460,28 +460,28 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
         beta[i] /= -gamma;
       }
       if(beta2 > 0.) {
-        Real bdk = (pphot->k[0] * beta[0] + pphot->k[1] * beta[1] +
-                    pphot->k[2] * beta[2]);
+        Real bdk = (pphot->k1p[ip] * beta[0] + pphot->k2p[ip] * beta[1] +
+                    pphot->k3p[ip] * beta[2]);
         Real gonembdk = gamma * (1. - bdk);
         Real aber = gamma*(1.-gamma*bdk/(gamma+1.));
-        pphot->k[0] = (pphot->k[0] - aber * beta[0]) / gonembdk;
-        pphot->k[1] = (pphot->k[1] - aber * beta[1]) / gonembdk;
-        pphot->k[2] = (pphot->k[2] - aber * beta[2]) / gonembdk;
-        pphot->energy *= gonembdk;
-        pphot->abs_coef /= gonembdk;
-        pphot->sct_coef /= gonembdk;
+        pphot->k1p[ip] = (pphot->k1p[ip] - aber * beta[0]) / gonembdk;
+        pphot->k2p[ip] = (pphot->k2p[ip] - aber * beta[1]) / gonembdk;
+        pphot->k3p[ip] = (pphot->k3p[ip] - aber * beta[2]) / gonembdk;
+        pphot->ep[ip] *= gonembdk;
+        pphot->acp[ip] /= gonembdk;
+        pphot->scp[ip] /= gonembdk;
       }
     }
 
-    if (pphot->IsNanPhoton())
-      pphot->PrintPhoton();
+    if (pphot->IsNanPhoton(ip))
+      pphot->PrintPhoton(ip);
 
   } else {
     // return properties to eulerian frame if modified
     if (boosts) { // should always be true if !accel_success
-      pphot->energy /= gonembdk;
-      pphot->abs_coef *= gonembdk;
-      pphot->sct_coef *= gonembdk;
+      pphot->ep[ip] /= gonembdk;
+      pphot->acp[ip] *= gonembdk;
+      pphot->scp[ip] *= gonembdk;
     }
   }
   return accel_success;
@@ -612,54 +612,42 @@ void PhotonMover::MovePhotonToNextZone(Photon *pphot, MCCoord *pco, MonteCarloBl
     //update x1 face
     if (ascend[0]) {
       pphot->i1p[ip]++;
-      if(pphot->i1p[ip] <= pmcb->ie)
-        pphot->x1p[ip] = pco->x1f(pphot->i1p[ip]);
-      else {
+      pphot->x1p[ip] = pco->x1f(pphot->i1p[ip]);
+      if(pphot->i1p[ip] > pmcb->ie)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::outer_x1](pmcb,pco,pphot,ip);
-      }
     } else {
       pphot->i1p[ip]--;
-      if(pphot->i1p[ip] >= pmcb->is)
-        pphot->x1p[ip] = pco->x1f(pphot->i1p[ip]+1);
-      else {
+      pphot->x1p[ip] = pco->x1f(pphot->i1p[ip]+1);
+      if(pphot->i1p[ip] < pmcb->is)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::inner_x1](pmcb,pco,pphot,ip);
-      }
     }
   }
   if ((face == 1) || (face == 3) || (face == 4) || (face == 6)) {
     //update x2 face
     if (ascend[1]) {
       pphot->i2p[ip]++;
-      if(pphot->i2p[ip] <= pmcb->je)
-        pphot->x2p[ip] = pco->x2f(pphot->i2p[ip]);
-      else {
+      pphot->x2p[ip] = pco->x2f(pphot->i2p[ip]);
+      if(pphot->i2p[ip] > pmcb->je)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::outer_x2](pmcb,pco,pphot,ip);
-      }
     } else {
       pphot->i2p[ip]--;
-      if(pphot->i2p[ip] >= pmcb->js)
-        pphot->x2p[ip] = pco->x2f(pphot->i2p[ip]+1);
-      else {
+      pphot->x2p[ip] = pco->x2f(pphot->i2p[ip]+1);
+      if(pphot->i2p[ip] < pmcb->js)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::inner_x2](pmcb,pco,pphot,ip);
-      }
     }
   }
   if ((face == 2) || (face == 4) || (face == 5) || (face == 6)) {
     //update x3 face
     if (ascend[2]) {
       pphot->i3p[ip]++;
-      if(pphot->i3p[ip] <= pmcb->ke)
-        pphot->x3p[ip] = pco->x3f(pphot->i3p[ip]);
-      else {
+      pphot->x3p[ip] = pco->x3f(pphot->i3p[ip]);
+      if(pphot->i3p[ip] > pmcb->ke)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::outer_x3](pmcb,pco,pphot,ip);
-      }
     } else {
       pphot->i3p[ip]--;
-      if(pphot->i3p[ip] >= pmcb->ks)
-        pphot->x3p[ip] = pco->x3f(pphot->i3p[ip]+1);
-      else {
+      pphot->x3p[ip] = pco->x3f(pphot->i3p[ip]+1);
+      if(pphot->i3p[ip] < pmcb->ks)
         pmcb->pbval->BoundaryFunction_[BoundaryFace::inner_x3](pmcb,pco,pphot,ip);
-      }
     }
   }
 
@@ -775,9 +763,10 @@ bool PhotonMover::UpdateZone(Photon *pphot, int ip) {
 
 void PhotonMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
 
+  // SWD broken by vectorization
   // Default corresponds to Cartesian so just copy
-  for (int i=0; i<4; ++i)
-    kcart[i] = pphot->k[i];
+  //for (int i=0; i<4; ++i)
+  //  kcart[i] = pphot->k[i];
 }
 
 //----------------------------------------------------------------------------------------

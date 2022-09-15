@@ -396,6 +396,8 @@ void Hydro::AddDiffusionFluxes() {
         hdif.AddDiffusionEnergyFlux(hdif.cndflx,flux);
     }
   }
+  // NOTE(ccyang): u cannot been modified before this in the same stage
+  md_.AddFluxes(u, flux);
   if (MAGNETIC_FIELDS_ENABLED && NON_BAROTROPIC_EOS) {
     if (pf->fdif.field_diffusion_defined)
       pf->fdif.AddPoyntingFlux(pf->fdif.pflux);

@@ -33,6 +33,7 @@
 #include "../hydro/hydro.hpp"
 #include "../orbital_advection/orbital_advection.hpp"
 #include "../parameter_input.hpp"
+#include "../particles/dust_particles.hpp"
 #include "../reconstruct/reconstruction.hpp"
 #include "../scalars/scalars.hpp"
 #include "../utils/buffer_utils.hpp"
@@ -51,7 +52,7 @@ MeshBlock::MeshBlock(int igid, int ilid, LogicalLocation iloc, RegionSize input_
     pmy_mesh(pm), loc(iloc), block_size(input_block),
     gid(igid), lid(ilid), gflag(igflag), nuser_out_var(),
     new_block_dt_{}, new_block_dt_hyperbolic_{}, new_block_dt_parabolic_{},
-    new_block_dt_user_{},
+    new_block_dt_particles_{}, new_block_dt_user_{},
     nreal_user_meshblock_data_(), nint_user_meshblock_data_(), cost_(1.0) {
   // initialize grid indices
   is = NGHOST;
@@ -176,6 +177,7 @@ MeshBlock::MeshBlock(int igid, int ilid, LogicalLocation iloc, RegionSize input_
   //! * Compare both private member variables via BoundaryValues::CheckCounterPhysID
 
   peos = new EquationOfState(this, pin);
+  if (PARTICLES) ppar = new DustParticles(this, pin);
 
   // OrbitalAdvection: constructor depends on Coordinates, Hydro, Field, PassiveScalars.
   porb = new OrbitalAdvection(this, pin);
@@ -196,7 +198,7 @@ MeshBlock::MeshBlock(int igid, int ilid, Mesh *pm, ParameterInput *pin,
     pmy_mesh(pm), loc(iloc), block_size(input_block),
     gid(igid), lid(ilid), gflag(igflag), nuser_out_var(),
     new_block_dt_{}, new_block_dt_hyperbolic_{}, new_block_dt_parabolic_{},
-    new_block_dt_user_{},
+    new_block_dt_particles_{}, new_block_dt_user_{},
     nreal_user_meshblock_data_(), nint_user_meshblock_data_(), cost_(icost) {
   // initialize grid indices
   is = NGHOST;
@@ -297,6 +299,7 @@ MeshBlock::MeshBlock(int igid, int ilid, Mesh *pm, ParameterInput *pin,
   }
 
   peos = new EquationOfState(this, pin);
+  if (PARTICLES) ppar = new DustParticles(this, pin);
 
   // OrbitalAdvection: constructor depends on Coordinates, Hydro, Field, PassiveScalars.
   porb = new OrbitalAdvection(this, pin);
@@ -323,6 +326,8 @@ MeshBlock::MeshBlock(int igid, int ilid, Mesh *pm, ParameterInput *pin,
     std::memcpy(pfield->b.x3f.data(), &(mbdata[os]), pfield->b.x3f.GetSizeInBytes());
     os += pfield->b.x3f.GetSizeInBytes();
   }
+
+  if (PARTICLES) ppar->UnpackParticlesForRestart(mbdata, os);
 
   // (conserved variable) Passive scalars:
   if (NSCALARS > 0) {
@@ -357,6 +362,7 @@ MeshBlock::~MeshBlock() {
   if (MAGNETIC_FIELDS_ENABLED) delete pfield;
   delete peos;
   delete porb;
+  if (PARTICLES) delete ppar;
   if (SELF_GRAVITY_ENABLED) delete pgrav;
   if (NSCALARS > 0) delete pscalars;
 
@@ -455,6 +461,7 @@ std::size_t MeshBlock::GetBlockSizeInBytes() {
   if (MAGNETIC_FIELDS_ENABLED)
     size += (pfield->b.x1f.GetSizeInBytes() + pfield->b.x2f.GetSizeInBytes()
              + pfield->b.x3f.GetSizeInBytes());
+  if (PARTICLES) size += ppar->GetSizeInBytes();
   if (NSCALARS > 0)
     size += pscalars->s.GetSizeInBytes();
 

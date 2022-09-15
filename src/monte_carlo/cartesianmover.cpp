@@ -50,10 +50,12 @@ void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
     Real& kz = pphot->k3p[ip];
 
     int iter = 0;
-
+    Real c_cgs = 2.99792458e10;
     // checkmove is needed to account for (near) infinite trajectories that can occur
     // in optically thin, periodic domains.
-    while( (tauremaining > 0.) && (pphot->statp[ip] == EVOLVING) && (iter < checkmove)) {
+
+    while( (tauremaining > 0.) && (pphot->statp[ip] == EVOLVING) && (iter < checkmove) &&
+           (pphot->dtp[ip] > 0.) ) {
       iter++;
 
       // Compute distance to all faces
@@ -121,8 +123,10 @@ void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
             break;
           // compute distance remaining in zone
           dl = tauremaining/chi;
+          pphot->dtp[ip] -= dl/c_cgs; // set with k0p instead
           // Account for absorption (if needed) and update moments
           Real etaua = ExpTauAbsorption(pphot->acp[ip],dl);
+
           if (pmcb->moments_flag) {
             pmcb->UpdateMoments(pphot,dl,etaua,ip);
           }
@@ -140,6 +144,7 @@ void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
       } else { // Photon moves to next zone and reduce tauremaining
         // Account for absorption (if needed) and update moments
         Real etaua = ExpTauAbsorption(pphot->acp[ip],dl);
+
         if (pmcb->moments_flag) {
           pmcb->UpdateMoments(pphot,dl,etaua,ip);
         }
@@ -151,6 +156,7 @@ void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
         pphot->x3p[ip] += pphot->k3p[ip] * dl;
 
         tauremaining -= chi * dl;
+        pphot->dtp[ip] -= dl/c_cgs;
 
         // Perform any user work
         if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this,ip);

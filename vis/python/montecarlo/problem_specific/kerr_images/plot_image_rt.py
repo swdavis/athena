@@ -11,8 +11,8 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 
 # athena++ modules
-import athena_mc_list as mclist
-from athena_mc_list import photons
+import athena_mc as athenamc
+from athena_mc import photons
 
 class AthenaError(RuntimeError):
   """General exception class for Athena++ read functions."""
@@ -35,8 +35,8 @@ def blackbody(teff, nu):
 
 def DiskFlux(mass,mdot,radius,abh):
     """
-    Returns the flux as a function of radius, mass, accretion rate but without relativistic
-    and no-torque correction, which is provided by grcor
+    Returns the flux as a function of radius, mass, accretion rate but without
+    relativistic and no-torque correction, which is provided by grcor
     """
     G = 6.67430e-8
     msun = 1.99e33
@@ -97,7 +97,7 @@ def grcor(abh,r):
   x2 =  2.*np.cos(ca3+np.pi/3.)
   x3 = -2.*np.cos(ca3)
 
-  # FB = '[]' term in eq. (35) of Page&Thorne '73                            
+  # FB = '[]' term in eq. (35) of Page&Thorne '73
   x = np.sqrt(r)
   c1 = 3*(x1-abh)*(x1-abh)/(x1*(x1-x2)*(x1-x3))
   c2 = 3*(x2-abh)*(x2-abh)/(x2*(x2-x1)*(x2-x3))
@@ -124,14 +124,14 @@ def grcor(abh,r):
 
 def intensityblackholedisk(phots,nx,ny,mbh,abh,mdot,nuobs):
     """
-    Generate pixels corresponding to intensity in Novikov-Thorne 
+    Generate pixels corresponding to intensity in Novikov-Thorne
     black hole accretion disk
     """
-    
+
     # set up radius and intensity corrections as nx * ny arrays
- 
-    nufac = phots.user[:,2].reshape((nx,ny))
-    radius = phots.user[:,3].reshape((nx,ny))
+    # switch so that x is fastest running index
+    nufac = np.transpose(phots.user[:,2].reshape((nx,ny)))
+    radius = np.transpose(phots.user[:,3].reshape((nx,ny)))
 
     tcor = grcor(abh, radius)[1]
     sigma = 5.67e-5 # stefan-boltzmann constant [cgs]
@@ -146,13 +146,25 @@ def intensityblackholedisk(phots,nx,ny,mbh,abh,mdot,nuobs):
 
     return intens_obs
 
-def make_image(phots,nx,ny,polarization=False):
+def make_image(phots,nx,ny,abh,thcam,polarization=False):
     """
     Makes image (dict) from photon object
     """
 
     # Store image as a dictionary
     image = {}
+
+    # Store integration time
+    image['dt'] = 0.
+
+    # Ray traced images have only one inclination value
+    image['ninc'] = ninc = 1
+    cthc = np.cos(thcam/180.*np.pi)
+    image['ifaces'] = np.array([cthc,cthc])
+
+    # Currently assume single frequency/energy for simplicity
+    image['nen'] = nen = 1
+    image['efaces'] = np.array([0.,1.])
 
     # Store total number of photons for refernce
     image['ntot'] = phots.ntot
@@ -170,8 +182,8 @@ def make_image(phots,nx,ny,polarization=False):
     image['yfaces'][0] = 0.5*(3.*y[0] - y[1])
     image['yfaces'][ny] = 0.5*(3.*y[-1] - y[-2])
     image['yfaces'][1:ny] = 0.5*(y[1:]+y[:-1])
-    image['y'] = y
-    
+    #image['y'] = y
+
     # Set up horizontal image coordinates
     image['nx'] = nx
     x = phots.user[0:nx,1]
@@ -179,110 +191,61 @@ def make_image(phots,nx,ny,polarization=False):
     image['xfaces'][0] = 0.5*(3.*x[0] - x[1])
     image['xfaces'][nx] = 0.5*(3.*x[-1] - x[-2])
     image['xfaces'][1:nx] = 0.5*(x[1:]+x[:-1])
-    image['x'] = x
-  
+    #image['x'] = x
+
+    nintens = 1
+    if (polarization):
+        image['polarized'] = 'true'
+        nintens += 2
+    else:
+        image['polarized'] = 'false'
+    print("spin:",abh)
     mbh = 1.e9
-    abh = 0.99
     mdot = 0.1
     nuobs = 5.e15
-    image['intens'] = intensityblackholedisk(phots,nx,ny,mbh,abh,mdot,nuobs) 
+    intensity = np.zeros([nintens,ninc,nen,ny,nx])
+    intensity[0,0,0,:,:] = intensityblackholedisk(phots,nx,ny,mbh,abh,mdot,nuobs)
     if (polarization):
-        image['q'] = phots.q.reshape((nx,ny))
-        image['u'] = phots.u.reshape((nx,ny)) 
+        image['polarized'] = 'true'
+        intensity[1,0,0,:,:] = np.transpose(phots.q.reshape((nx,ny)))
+        intensity[2,0,0,:,:] = np.transpose(phots.u.reshape((nx,ny)))
+        for i in range(ny):
+          inds = np.where(intensity[0,0,0,i,:] <= 1.e-50)
+          print(intensity[0,0,0,inds])
+          intensity[1,0,0,i,inds] = 0.
+          intensity[2,0,0,i,inds] = 0.
 
+    image['intensity'] = intensity
     return image
 
-def subsample_polarization(q,u,x,y,step,average):
-
-    nx = len(x)
-    ny = len(y)
-
-    if (not average):
-        x = x[step/2:nx:step]
-        y = y[step/2:ny:step]
-        q = q[step/2:nx:step,step/2:ny:step]
-        u = u[step/2:nx:step,step/2:ny:step]
-        return q,u,x,y
-    else:
-        # too lazy to work out pythony way of doing this
-        xp = np.zeros(nx/step)
-        yp = np.zeros(ny/step)
-        qp = np.zeros((nx/step,ny/step))
-        up = np.zeros((nx/step,ny/step))
-        for i in range(nx/step):
-            xp[i] = np.average(x[i*step:(i+1)*step])
-        for i in range(ny/step):
-            yp[i] = np.average(y[i*step:(i+1)*step])
-        for i in range(nx/step):
-            for j in range(ny/step):
-                qp[i,j] = np.average(q[i*step:(i+1)*step,j*step:(j+1)*step])
-                up[i,j] = np.average(u[i*step:(i+1)*step,j*step:(j+1)*step])
-
-        return qp,up,xp,yp
-
-
-
-def plot_image(image,polarization=False,average=False,step=4,**kwargs):
+def sort_list(phlist):
     """
-    Plot an image
+    Sort list by value of iuser (last user variable)
     """
-    
-    vmin = kwargs['vmin']
-    vmax = kwargs['vmax']
-    cmap = plt.get_cmap(kwargs['colormap'])
-    plt.figure()
-    if (kwargs['logc']):
-        norm = colors.LogNorm()
-    else:
-        norm = colors.Normalize()
-    if kwargs['vnorm']:
-        vals = image['intens'] / np.max(image['intens'])
-        vmax = 1.
-        if vmin is None:
-            vmin = 1.e-5
-    else:
-        vals = image['intens']
-        if vmin is None:
-            vmin = 1.e-5*np.max(vals)
 
-    x_2d, y_2d = np.meshgrid(image['xfaces'],image['yfaces'],indexing='ij')
-
-    im = plt.pcolormesh(x_2d, y_2d, vals, cmap=cmap, vmin=vmin, vmax=vmax, norm=norm)
-    plt.xlim(image['xfaces'][0],image['xfaces'][image['nx']-1])
-    plt.ylim(image['yfaces'][0],image['yfaces'][image['ny']-1])
-    plt.xlabel('$x$')
-    plt.ylabel('$y$')
-    plt.colorbar(im)
-    plt.gca().set_aspect('equal')
-    if (polarization):
-        x = image['x']
-        y = image['y']
-        q = image['q']
-        u = image['u']
-        q, u, x, y = subsample_polarization(q,u,x,y,step,average)
-    
-        x_pol, y_pol = np.meshgrid(x,y,indexing='ij')
-        pol_angle = 0.5 * np.arctan2(u,q)
-        pol_frac = np.sqrt(q*q+u*u)
-
-        vx = pol_frac*np.cos(pol_angle)
-        vy = pol_frac*np.sin(pol_angle)
-        plt.quiver(x_pol, y_pol, vx, vy, color='k',headwidth=0, headlength=0, headaxislength=0, scale = None,pivot='middle')
+    # need to sort phlist['list'] which is a numpy array
+    phlist['list'] = phlist['list'][np.argsort(phlist['list'][:, -1]),:]
 
 # Main function
 def main(**kwargs):
- 
+
     # Filenames for io
     infile = kwargs.pop('infile')
     if kwargs['outfile'] is None:
-        kwargs['outfile'] = infile+".png"
+        kwargs['outfile'] = infile.replace(".list",".png")
 
+    sort = kwargs.pop('sort')
     # Read photon list
-    phlist = mclist.read_list(infile+'.list')
+    phlist = athenamc.read_list(infile)
+    if (sort):
+      sort_list(phlist)
+
     phots = photons(phlist)
-    
-    image = make_image(phots,kwargs['nx'],kwargs['ny'],kwargs['polarization'])
-    plot_image(image,**kwargs)
+    thcam = kwargs.pop('thcam')
+    image = make_image(phots,kwargs['nx'],kwargs['ny'],kwargs['spin'],
+                       thcam,kwargs['polarization'])
+    #plot_image(image,**kwargs)
+    athenamc.plot_image(image,0,**kwargs)
     plt.savefig(kwargs['outfile'], bbox_inches='tight')
 
 
@@ -297,6 +260,12 @@ if __name__ == '__main__':
     parser.add_argument('ny',
         type=int,
         help='number of vertical pixels')
+    parser.add_argument('spin',
+        type=float,
+        help='black hole spin parameter')
+    parser.add_argument('thcam',
+        type=float,
+        help='camera inclination in degrees')
     parser.add_argument('--outfile',
         default=None,
         help='output filename')
@@ -325,6 +294,9 @@ if __name__ == '__main__':
     parser.add_argument('--vnorm',
         action='store_true',
         help='flag indicating that polarization should be normalized to maximum')
+    parser.add_argument('--sort',
+        action='store_true',
+        help='sort list by last user variable (should be iphot)')
     parser.add_argument('--step',
         type=int,
         default=4,

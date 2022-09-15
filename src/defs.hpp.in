@@ -51,12 +51,19 @@
 // enable monte carlo? default=0 (false)
 #define MONTE_CARLO_ENABLED @MONTE_CARLO_ENABLED@
 #define MONTE_CARLO_STATIC @MONTE_CARLO_STATIC@
+#define MONTE_CARLO_DYNAMIC @MONTE_CARLO_DYNAMIC@
+
+// usre ran3 for random numbers? default=0 (false)
+#define RAN3 @RAN3@
 
 // enable special or general relativity? default=0 (false)
 #define RELATIVISTIC_DYNAMICS @RELATIVISTIC_DYNAMICS@
 
 // enable general relativity? default=0 (false)
 #define GENERAL_RELATIVITY @GENERAL_RELATIVITY@
+
+// include particles? default=0 (false)
+#define PARTICLES @PARTICLES@
 
 // enable GR frame transformations? default=0 (false)
 #define FRAME_TRANSFORMATIONS @FRAME_TRANSFORMATIONS@

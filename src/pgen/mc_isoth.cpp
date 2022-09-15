@@ -23,7 +23,7 @@
 #include "../monte_carlo/photon.hpp"
 #include "../monte_carlo/photonmover.hpp"
 
-#if !MONTE_CARLO_STATIC
+#if !MONTE_CARLO_ENABLED
 #error "This problem requires monte carlo"
 #endif
 
@@ -31,6 +31,7 @@ namespace {
   // Global variables
   bool tnorm;
   Real logemin, logemax;
+  Real DensityProfile(Real x, Real xl, Real xh, Real taul, Real tauh, Real kap);
 }
 
 
@@ -52,7 +53,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     taumax = pin->GetReal("problem","taumax");
   }
 
-  Real heabund = 0.09; //hardcode for now (should be parameter)
+  Real heabund = 0.09; //hardcode for now
   Real mp = 1.6726e-24;
   Real sigmat = 6.65248e-25;
   Real kappaes = sigmat * (1. + 2.*heabund) / (mp * (1.+4.*heabund) );
@@ -68,33 +69,17 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     rho = tau / (kappaes * length);
   }
 
-  AthenaArray<Real> tau1d,dens1d;
+  Real xlow, xhigh;
   if (!constdens) {
-    Real xlow, xhigh;
-    int nx;
     if (COORDINATE_SYSTEM == "cartesian") {
       xlow = pin->GetReal("mesh","x3min");
       xhigh = pin->GetReal("mesh","x3max");
-      nx = pin->GetInteger("mesh","nx3");
     } else {
       bool radial = pin->GetOrAddBoolean("problem","radial","true");
       if (radial) {
         xlow = pin->GetReal("mesh","x1min");
         xhigh = pin->GetReal("mesh","x1max");
-        nx = pin->GetInteger("mesh","nx1");
       }
-    }
-    tau1d.NewAthenaArray(nx);
-    dens1d.NewAthenaArray(nx);
-    Real dx = (xhigh-xlow) / static_cast<Real>(nx);
-    Real step = log10(taumax/taumin) / static_cast<Real>(nx-1);
-    for (int i=0; i<nx; ++i) {
-      tau1d(i) = log10(taumin) + step * static_cast<Real>(i);
-      tau1d(i) = pow(10.,tau1d(i));
-    }
-    dens1d(0) = tau1d(0) / dx / kappaes;
-    for (int i=1; i<nx; ++i) {
-      dens1d(i) = (tau1d(i)-tau1d(i-1) ) / (dx * kappaes);
     }
   }
 
@@ -110,8 +95,10 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   // Set initial conditions
   if (COORDINATE_SYSTEM == "cartesian") {
     // density varies in the z direction
+
     for (int k=ks; k<=ke; k++) {
-      if (!constdens) rho = dens1d(ke-k);
+      Real x1 = pcoord->x3v(k);
+      if (!constdens) rho = DensityProfile(x1,xlow,xhigh,taumin,taumax,kappaes);
       for (int j=js; j<=je; j++) {
         for (int i=is; i<=ie; i++) {
           phydro->u(IDN,k,j,i) = rho;
@@ -130,7 +117,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
       for (int k=ks; k<=ke; k++) {
         for (int j=js; j<=je; j++) {
           for (int i=is; i<=ie; i++) {
-            if (!constdens) rho = dens1d(ie-i);
+            Real x1 = pcoord->x1v(k);
+            if (!constdens) rho = DensityProfile(x1,xlow,xhigh,taumin,taumax,kappaes);
             phydro->u(IDN,k,j,i) = rho;
             phydro->u(IM1,k,j,i) = rho*vel;
             phydro->u(IM2,k,j,i) = 0.0;
@@ -175,8 +163,11 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     GetZonePosition(pphot,pran,pcoord,ip);
 
     // Set weight according to the emission array, which is the relative number of photons
-    // per unit time emitted in each cell
+    // emitted in each cell
     pphot->wp[ip] = emission(i3,i2,i1);
+
+    // Set maximum integration time
+    pphot->dtp[ip] = pphot->pmy_mcb->pmy_mc->tmax;
 
     // Obtain intitial energy, polarization, direction and weight
     // Utilize free-free emission function in emission.cpp
@@ -188,7 +179,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     }
 
     // Convert k unit vector to k^\alpha
-    if (general_mover_flag) {
+    if (pmy_mc->general_mover_flag) {
       pphot->k0p[ip] = 1.;
       pphot->k2p[ip] /= pphot->x1p[ip];
       pphot->k3p[ip] /= (pphot->x1p[ip]*sin(pphot->x2p[ip]));
@@ -238,4 +229,12 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
     logemax = log(everg*pin->GetReal("problem", "emax"));
   }
 
+}
+
+namespace {
+Real DensityProfile(Real x, Real xl, Real xh, Real taul, Real tauh, Real kap) {
+
+  Real l0 = (xh-xl) / log(tauh/taul);
+  return taul/l0/kap*exp((xh-x)/l0);
+}
 }

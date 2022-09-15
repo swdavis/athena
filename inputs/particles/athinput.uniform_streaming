@@ -1,0 +1,88 @@
+<comment>
+problem   = Uniform Streaming
+reference = 
+configure = --prob=uniform_streaming -p
+
+<job>
+problem_id  = UniStream # problem ID: basename of output filenames
+
+<outputp>
+file_type   = bin       # binary data dump
+dt          = 0.1       # time increment between outputs
+
+<output1>
+file_type   = hdf5      # HDF5 data dump
+variable    = prim      # variables to be output
+dt          = 0.1       # time increment between outputs
+
+<time>
+cfl_number  = 0.3       # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim        = -1        # cycle limit
+tlim        = 1.0       # time limit
+integrator  = vl2       # time integration algorithm
+ncycle_out  = 50        # interval for writing summary info to stdout
+
+<mesh>
+nx1         = 16        # Number of zones in X1-direction
+x1min       = -0.25     # minimum value of X1
+x1max       = 0.25      # maximum value of X1
+ix1_bc      = periodic  # Inner-X1 boundary condition flag
+ox1_bc      = periodic  # Outer-X1 boundary condition flag
+
+nx2         = 32        # Number of zones in X2-direction
+x2min       = -0.5      # minimum value of X2
+x2max       = 0.5       # maximum value of X2
+ix2_bc      = periodic  # Inner-X2 boundary condition flag
+ox2_bc      = periodic  # Outer-X2 boundary condition flag
+
+nx3         = 16        # Number of zones in X3-direction
+x3min       = -0.25     # minimum value of X3
+x3max       = 0.25      # maximum value of X3
+ix3_bc      = periodic  # Inner-X3 boundary condition flag
+ox3_bc      = periodic  # Outer-X3 boundary condition flag
+
+num_threads = 1         # maximum number of OMP threads
+refinement = static
+
+<meshblock>
+nx1 = 8
+nx2 = 16
+nx3 = 4
+
+<refinement1>
+x1min =  0.124999
+x1max =  0.125001
+x2min = -0.125001
+x2max = -0.124999
+x3min =  0.124999
+x3max =  0.125001
+level =  1
+
+<refinement2>
+x1min = -0.125001
+x1max = -0.124999
+x2min =  0.124999
+x2max =  0.125001
+x3min = -0.125001
+x3max = -0.124999
+level =  1
+
+<hydro>
+gamma           = 1.4   # gamma = C_p/C_v
+iso_sound_speed = 1.0   # isothermal sound speed
+
+<particles>
+taus0 = 0.5          # drag stopping time
+backreaction = true  # turn on/off the back reaction of the gas drag
+
+<problem>
+npx1 = 32            # number of particles in the X1 direction
+npx2 = 64            # number of particles in the X2 direction
+npx3 = 32            # number of particles in the X3 direction
+dtog = 0.2           # solid-to-gas density ratio
+ux0 = -1             # x-component of the gas velocity
+vpx0 = 2             # x-component of the particle velocity
+uy0 = 1.5            # y-component of the gas velocity
+vpy0 = -2            # y-component of the particle velocity
+uz0 = -0.5           # z-component of the gas velocity
+vpz0 = -1.5          # z-component of the particle velocity

@@ -1,8 +1,7 @@
 #! /usr/bin/env python
 
 """
-Plot single athena++ spectrum.  Allows specification of multiple inclinations
-to be plotted simultaneously.
+Plot athena++ spectra as function of frequency, angle, photon energy, etc.
 """
 
 # python standard modules
@@ -11,7 +10,78 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Athena++ modules
-import athena_mc_spec as mcspec
+import athena_mc as athenamc
+
+
+def imu_handler(imu):
+    """
+    Parse imu to deterimine which angles to plot
+    """
+
+    if imu == None:
+        return [0]
+    if imu == 'sum':
+        return [imu]
+    if (len(imu) > 1):
+        # loop over all imu in the array
+        slist = imu.strip(('[]')).split(",")
+        ilist = [int(i) for i in slist]
+    else:
+        ilist = [imu]
+    return ilist
+
+def file_handler(infile):
+    """
+    Parse infile to deterimine file list
+    """
+    if (len(infile) > 1):
+        # loop over all imu in the array
+        flist = infile.strip(('[]')).split(",")
+    else:
+        flist = [infile]
+    return flist
+
+def plot_one(spectrum,ax,xunit,yunit,imu,iphi,plterr,**kwargs):
+    """
+    Plot curves corresponding to single spectrum
+    """
+
+    #Convert xaxis, if needed
+    if (xunit != spectrum['units']):
+        athenamc.convert_xaxis(xunit,spectrum)
+
+    # plot spectrum as function mu
+    ilist = imu_handler(imu)
+    for imu in ilist:
+        x,y,yerr,xlabel,ylabel = athenamc.plot_frequency(spectrum,imu,iphi=iphi,
+                                 plterr=plterr,xunit=xunit,yunit=yunit)
+        athenamc.make_plot(x,y,yerr=yerr,xlabel=xlabel,ylabel=ylabel,ax=ax,**kwargs)
+
+def plot_blackbody(spectrum,ax,xunit,yunit,bbtemp,bbnorm):
+    """
+    Plot blackbody for comparison
+    """
+
+    # Convert xaxis, if needed
+    if (xunit != spectrum['units']):
+        athenamc.convert_xaxis(xunit,spectrum)
+
+    # Compute frequency and x
+    xfaces = spectrum['xfaces']
+    x = 0.5*(xfaces[1:]+xfaces[:-1])
+    nu = athenamc.get_frequency(spectrum['units'],xfaces)
+
+    # Plot blackbody spectrum
+    c = 2.99792458e10
+    kb = 1.380649e-16
+    h = 6.62607015e-27
+    ybb = bbnorm*2*h/c**2*nu**3/(np.exp(h*nu/(kb*bbtemp)) - 1.0)
+    if yunit == 'nulnu':
+        plt.plot(x,ybb*nu,linestyle='-')
+    elif yunit == 'lnu':
+        plt.plot(x,ybb,linestyle='-')
+    elif yunit == 'counts':
+        plt.plot(x,ybb/(h*nu),linestyle='-')
 
 # Main function
 def main(**kwargs):
@@ -19,6 +89,12 @@ def main(**kwargs):
     # Get blackbody parameters
     bbtemp = kwargs.pop('bbtemp')
     bbnorm = kwargs.pop('bbnorm')
+    if bbtemp is not None:
+        bbtemp = float(bbtemp)
+        if bbnorm is None:
+            bbnorm = 1.
+        else:
+            bbnorm = float(bbnorm)
 
     # Use latex labels
     #plt.rc('text',usetex=True)
@@ -26,56 +102,36 @@ def main(**kwargs):
 
     # filenames for io
     infile = kwargs.pop('infile')
+    files = file_handler(infile)
     outfile = kwargs.pop('outfile')
+    if outfile is None:
+        outfile = files[0].replace('.spec','.pdf')
 
-    # read spectrum as dict from infile
-    spectrum = mcspec.read_spectrum(infile)
+    # Set plot parameters
+    plterr = kwargs.pop("ploterr")
+    xunit = kwargs.pop("xunit")
+    yunit = kwargs.pop("yunit")
+    imu = kwargs.pop("imu")
+    iphi = kwargs.pop("iphi")
 
-    #Convert xaxis, if needed
-    if (kwargs['xunit'] != spectrum['units']):
-        mcspec.convert_xaxis(kwargs['xunit'],spectrum)
-
-    def imu_handler(imu):
-        if imu == None:
-            return [0]
-        if imu == 'sum':
-            return [imu]
-        if (len(imu) > 1):
-            # loop over all imu in the array
-            slist = imu.strip(('[]')).split(",")
-            ilist = [int(i) for i in slist]
-        else:
-            ilist = [imu]
-        return ilist
-
-    # plot spectrum
-    ilist = imu_handler(kwargs.pop('imu'))
+    # Set axis to be reused
     fig = plt.figure()
     ax = fig.add_subplot(1,1,1)
-    for imu in ilist:
-        x, nu, ax = mcspec.plot_spectrum(spectrum,imu,ax,**kwargs)
- 
-    print("lumin: ",mcspec.get_luminosity(spectrum))
-    if bbtemp is not None:
-        if bbnorm is None:
-            bbnorm = 1.
-        else:
-            bbtemp = float(bbtemp)
-            bbnorm = float(bbnorm)
-            c = 2.99792458e10
-            kb = 1.380649e-16
-            h = 6.62607015e-27
-            ybb = bbnorm*2*h/c**2*nu**3/(np.exp(h*nu/(kb*bbtemp)) - 1.0)
-            if kwargs['yunit'] == 'nulnu':
-                plt.plot(x,ybb*nu,linestyle=':')
-            if kwargs['yunit'] == 'lnu':
-                plt.plot(x,ybb,linestyle=':')
-            if kwargs['yunit'] == 'counts':
-                plt.plot(x,ybb/(h*nu),linestyle=':')
+
+    # plot spectra from all infiles
+    for file in files:
+        # read spectrum as dict from infile
+        spectrum = athenamc.read_spectrum(file)
+        print("lumin: ("+file+")",athenamc.get_luminosity(spectrum))
+
+        # plot curves corresponding to this spectrum
+        plot_one(spectrum,ax,xunit,yunit,imu,iphi,plterr,**kwargs)
+
+        if bbtemp is not None:
+            plot_blackbody(spectrum,ax,xunit,yunit,bbtemp,bbnorm)
+
 
     # save plot to outfile
-    if outfile is None:
-        outfile = infile.replace('.spec','.pdf')
     plt.savefig(outfile)
     plt.close()
 
@@ -83,7 +139,7 @@ def main(**kwargs):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('infile',
-        help='input photon list filename')
+        help='input photon spectrum filename(s)')
     parser.add_argument('--imu',
         default = None,
         help='index of angle bin to plot')
@@ -95,18 +151,22 @@ if __name__ == '__main__':
         help='x-axis scale')
     parser.add_argument('--xmin',
         default = None,
+        type = float,
         help='x-axis mimimum')
     parser.add_argument('--xmax',
         default = None,
+        type = float,
         help='x-axis maximum')
     parser.add_argument('--yscale',
         default = 'log',
         help='y-axis scale')
     parser.add_argument('--ymin',
         default = None,
+        type = float,
         help='y-axis mimimum')
     parser.add_argument('--ymax',
         default = None,
+        type = float,
         help='y-axis maximum')
     parser.add_argument('--xunit',
         default='kev',
@@ -120,10 +180,6 @@ if __name__ == '__main__':
     parser.add_argument('--outfile',
         default=None,
         help='output filename for spectrum')
-    parser.add_argument('--istokes',
-        type=int,
-        default=0,
-        help='component of stokes vector for plotting')
     parser.add_argument('--bbtemp',
         default = None,
         help='blackbody temperature')

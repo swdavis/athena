@@ -401,6 +401,30 @@ int main(int argc, char *argv[]) {
   }
 #endif // ENABLE_EXCEPTIONS
 
+#ifdef ENABLE_EXCEPTIONS
+  try {
+#endif
+    pmc->Initialize(pinput);
+#ifdef ENABLE_EXCEPTIONS
+  }
+  catch(std::bad_alloc& ba) {
+    std::cout << "### FATAL ERROR in main" << std::endl << "memory allocation failed "
+              << "in MonteCarlo problem generator " << ba.what() << std::endl;
+#ifdef MPI_PARALLEL
+    MPI_Finalize();
+#endif
+    return(0);
+  }
+  catch(std::exception const& ex) {
+    std::cout << ex.what() << std::endl;  // prints diagnostic message
+#ifdef MPI_PARALLEL
+    MPI_Finalize();
+#endif
+    return(0);
+  }
+#endif // ENABLE_EXCEPTIONS 
+
+
   //--- Step 7. --------------------------------------------------------------------------
   // Change to run directory, initialize outputs object, and make output of ICs
 
@@ -410,7 +434,7 @@ int main(int argc, char *argv[]) {
 #endif
     ChangeRunDir(prundir);
     pouts = new Outputs(pmesh, pinput);
-    if ((res_flag==0) && (!MONTE_CARLO_STATIC)) 
+    if ((res_flag==0) && (!MONTE_CARLO_STATIC))
       pouts->MakeOutputs(pmesh,pinput);
 #ifdef ENABLE_EXCEPTIONS
   }
@@ -443,10 +467,11 @@ int main(int argc, char *argv[]) {
 #ifdef OPENMP_PARALLEL
   double omp_start_time = omp_get_wtime();
 #endif
-
+  if (MONTE_CARLO_STATIC)
+    pmesh->time = pmesh->tlim;
   while ((pmesh->time < pmesh->tlim) &&
-         (pmesh->nlim < 0 || pmesh->ncycle < pmesh->nlim) && 
-         !(MONTE_CARLO_STATIC)) {
+         (pmesh->nlim < 0 || pmesh->ncycle < pmesh->nlim)) {
+
     if (Globals::my_rank == 0)
       pmesh->OutputCycleDiagnostics();
 
@@ -473,6 +498,9 @@ int main(int argc, char *argv[]) {
     }
 
     if (pmesh->turb_flag > 1) pmesh->ptrbd->Driving(); // driven turbulence
+
+    if (MONTE_CARLO_DYNAMIC)
+      pmc->RunDynamicMonteCarlo(pouts,pmesh,pinput);;
 
     for (int stage=1; stage<=ptlist->nstages; ++stage) {
       ptlist->DoTaskListOneStage(pmesh, stage);
@@ -541,8 +569,17 @@ int main(int argc, char *argv[]) {
   if (Globals::my_rank == 0 && wtlim > 0)
     SignalHandler::CancelWallTimeAlarm();
 
+
   //--- Step 9. --------------------------------------------------------------------------
-  // Make the final outputs
+  // Output the final cycle diagnostics and make the final outputs
+
+  if (Globals::my_rank == 0)
+    pmesh->OutputCycleDiagnostics();
+
+  pmesh->UserWorkAfterLoop(pinput);
+
+  if (MONTE_CARLO_STATIC)
+    pmc->MakeOutputs();
 #ifdef ENABLE_EXCEPTIONS
   try {
 #endif
@@ -566,13 +603,11 @@ int main(int argc, char *argv[]) {
   }
 #endif // ENABLE_EXCEPTIONS
 
-  pmesh->UserWorkAfterLoop(pinput);
-
   //--- Step 10. -------------------------------------------------------------------------
   // Print diagnostic messages related to the end of the simulation
+
   if (Globals::my_rank == 0) {
     if (!MONTE_CARLO_STATIC) {
-      pmesh->OutputCycleDiagnostics();
       if (SignalHandler::GetSignalFlag(SIGTERM) != 0) {
         std::cout << std::endl << "Terminating on Terminate signal" << std::endl;
       } else if (SignalHandler::GetSignalFlag(SIGINT) != 0) {
@@ -594,6 +629,7 @@ int main(int argc, char *argv[]) {
                   << " destroyed during this simulation." << std::endl;
       }
     }
+
     // Calculate and print the zone-cycles/cpu-second and wall-second
 #ifdef OPENMP_PARALLEL
     double omp_time = omp_get_wtime() - omp_start_time;

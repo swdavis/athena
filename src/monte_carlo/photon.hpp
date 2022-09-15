@@ -19,55 +19,39 @@
 class MonteCarloBlock;
 
 // photon status identifiers
-enum PhotonStatus {EVOLVING = 0, ESCAPED = 1, ABSORBED = 2, DESTROYED = 3};
+enum PhotonStatus {EVOLVING = 0, ESCAPED = 1, ABSORBED = 2, DESTROYED = 3, BUFFERED = 4};
 enum {IMC1 = 0, IMC2 = 1, IMC3 = 2, IMC0 = 3};
 
 //---------------------------------------------------------------------------------------
 //! \class Photon
 //! \brief photon data and functions
 
-class Photon {
+class Photon : public Particles {
 public:
-  Photon(MonteCarloBlock *pmcb, int nuser, int len_limit);
+  Photon(MonteCarloBlock *pmcb, ParameterInput *pin);
   ~Photon();
 
-  // data
+  // public functions
+  //void RemoveOneParticle(int k);
+  void PrintPhoton(int ip);
+  bool IsNanPhoton(int ip);
+  void PolarizationToTetrad(std::complex<Real> ttet[4][4], Real ecov[4][4], const int ip);
+  void PolarizationToCoord(std::complex<Real> ttet[4][4], Real econ[4][4], const int ip);
+  void AllocatePhotons(int nphot);
+  void SendToNeighbors();
+  void ApplyPeriodicBoundary(Real &x1, Real &x2, Real &x3);
+  bool ReceiveFromNeighbors();
+  void GetPositionIndices(int ibegin, int iend);
+  static void Initialize(MonteCarlo *pmc, ParameterInput *pin);
+
+  // public data
+  // SWD: should be reorganized with tighter access control for some variables
   MonteCarloBlock* pmy_mcb; // ptr to MonteCarlo containing this Photon
 
-  int i1,i2,i3; // zone indicies currently containing photon
-  int status; // photon status (escaped, absorbed, evolving)
-  int nuser_var; // number of user variables
-  int face;
-  // SWD: x can always include time, k could always include energy?
-
-  Real x[4];  // current photon position in spacetime
-  Real k[4];  // photon direction (momentum vector) curvalinear
-  Real dk[4]; // the change in photon direction used for general mover
-  Real stokes[4];  // stokes vectors
-  Real weight; // photon statistical weight
-  Real energy;  // photon energy
-  Real *user_var; // storage for user variables
-  Real sct_coef, abs_coef;  //scattering and absoprtion coefficients
-  //std::complex<Real> polten[4][4]; // the polarization tensor
-
-  // functions
-  void CopyPhoton(Photon *pphot);
-  void PrintPhoton();
-  bool IsNanPhoton();
-  void AllocateUserVariables(int n);
-
-  // ---------- New implementation -------------------------------------
-
-  int npar;
+  int nuser_var;
   int nphot_limit;
   int &nphot;
-  static int nint;
-  static int nreal;
-  static int naux;
-  static int nwork;
-  static int ncplx;
 
-  static int ipid;
   static int istatp, inscp, itrp;
   static int ii1p, ii2p, ii3p;
   static int ix0p, ix1p, ix2p, ix3p;
@@ -75,16 +59,10 @@ public:
   static int idk0p, idk1p, idk2p, idk3p;
   static int iep, iwp, iscp, iacp;
   static int isip, isqp, isup, isvp;
+  static int iuserp;
+  static int ipolp;
+  static int idtp;
 
-  std::vector<int> *intprop;   //!>   integer properties
-  std::vector<Real> *realprop; //!>   real properties
-  std::vector<Real> *aux;      //!>   auxiliary properties (communicated when
-                               //!>     particles moving to another meshblock)
-  std::vector<Real> *work;     //!>   working arrays (not communicated)
-  std::vector<Real> *user;     //!>   user variable arrays
-  std::vector<std::complex<Real>> *polten;
-
-  std::vector<int> &pid;                  //!>   particle ID
   std::vector<int> &statp, &nscp, &trp;
   std::vector<int> &i1p, &i2p, &i3p;
   std::vector<Real> &x0p, &x1p, &x2p, &x3p;
@@ -92,14 +70,22 @@ public:
   std::vector<Real> &dk0p, &dk1p, &dk2p, &dk3p;
   std::vector<Real> &ep, &wp, &scp, &acp;
   std::vector<Real> &sip, &sqp, &sup, &svp;
+  std::vector<Real> &dtp;
+  std::vector<Real> *user;     //!>   user variable arrays
+  std::vector<std::complex<Real>> *polten; //!> polarization tensor
 
-  void Resize(int new_npar);
-  void RemoveOneParticle(int k);
-  void PrintPhoton(int ip);
-  void VectorsToWorkingArrays(int n);
-  void WorkingArraysToVectors(int n);
-  bool IsNanPhoton(int ip);
-  void PolarizationToTetrad(std::complex<Real> ttet[4][4], Real ecov[4][4], const int ip);
-  void PolarizationToCoord(std::complex<Real> ttet[4][4], Real econ[4][4], const int ip);
+
+
+  static bool initialized;
+  static bool polarized;
+  static bool general_mover_flag;
+
+
+  //#ifdef MPI_PARALLEL
+  //static MPI_Comm my_comm;   //!> my MPI communicator
+  //ParticleBuffer send_[56];  //!> particle send buffers
+  //#endif
+
+
 };
 #endif // PHOTON_HPP

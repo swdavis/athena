@@ -196,6 +196,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     pphot->statp[ip] = EVOLVING;
     pphot->wp[ip] = 1.;
 
+    pphot->dtp[ip] = HUGE_NUMBER;
+
     // initialize cell coordinates
     pphot->i1p[ip] = i1start;
     pphot->i2p[ip] = i2start;
@@ -227,9 +229,12 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     x[IMC3] = pphot->x3p[ip] = phi;
 
     // Initialize Stokes vector as unpolarized
-    pphot->sip[ip] = 1.0;
-    pphot->sqp[ip] = 0.0;
-    pphot->sup[ip] = 0.0;
+    if (pphot->polarized) {
+      pphot->sip[ip] = 1.0;
+      pphot->sqp[ip] = 0.0;
+      pphot->sup[ip] = 0.0;
+      pphot->svp[ip] = 0.0;
+    }
 
     // Set the initial photon direction using alpha, beta and the position
 
@@ -495,8 +500,10 @@ void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
     pphot->statp[ip] = DESTROYED;
     pphot->user[2][ip] = 0.;
     pphot->user[3][ip] = rh;
-    pphot->sqp[ip] = 0.;
-    pphot->sup[ip] = 0.;
+    if (pphot->polarized) {
+      pphot->sqp[ip] = 0.;
+      pphot->sup[ip] = 0.;
+    }
     return;
   }
 
@@ -523,7 +530,7 @@ void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
   } else if (static_cast<int>(pphot->user[4][ip]) % 2 == 1) {
     // photon has crossed plane an odd number
     if (pphot->x2p[ip] <= (M_PI / 2.0)) { //new crossing
-      if (pphot->x[IMC1] <= rdisk) {
+      if (pphot->x1p[ip] <= rdisk) {
         if (forward_integration)
           reverse = true;
         else
@@ -536,7 +543,7 @@ void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
   } else if (static_cast<int>(pphot->user[4][ip]) % 2 == 0) {
     // photon has crossed plane an evern number
     if (pphot->x2p[ip] <= (M_PI / 2.0)) { // new crossing
-      if (pphot->x[IMC1] <= rdisk) {
+      if (pphot->x1p[ip] <= rdisk) {
         if (forward_integration)
           reverse = true;
         else

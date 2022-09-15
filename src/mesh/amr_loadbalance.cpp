@@ -12,6 +12,7 @@
 #include <algorithm>  // std::sort()
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <sstream>
 
 // Athena++ headers
@@ -20,6 +21,7 @@
 #include "../field/field.hpp"
 #include "../globals.hpp"
 #include "../hydro/hydro.hpp"
+#include "../particles/particles.hpp"
 #include "../utils/buffer_utils.hpp"
 #include "mesh.hpp"
 #include "mesh_refinement.hpp"
@@ -108,12 +110,12 @@ void Mesh::CalculateLoadBalance(double *clist, int *rlist, int *slist, int *nlis
   }
   nlist[j] = nb-slist[j];
 
-  if (MONTE_CARLO_STATIC) {
+  /*if (MONTE_CARLO_STATIC) {
     nlist[0] = 1;
     for(int i=1; i<Globals::nranks; i++)
       nlist[i] = 0;
     return;
-  }
+    }*/
 
   if (Globals::my_rank == 0) {
     for (int i=0; i<Globals::nranks; i++) {
@@ -579,12 +581,14 @@ void Mesh::RedistributeAndRefineMeshBlocks(ParameterInput *pin, int ntot) {
           // fine to coarse on the same MPI rank (different AMR level) - restriction
           MeshBlock* pob = FindMeshBlock(on+ll);
           FillSameRankFineToCoarseAMR(pob, newlist(n-nbs), loclist[on+ll]);
+          if (PARTICLES) Particles::AMRFineToCoarse(pob, newlist(n-nbs));
         }
       } else if ((loclist[on].level < newloc[n].level) && // coarse to fine (c2f)
                  (ranklist[on] == Globals::my_rank)) {
         // coarse to fine on the same MPI rank (different AMR level) - prolongation
         MeshBlock* pob = FindMeshBlock(on);
         FillSameRankCoarseToFineAMR(pob, newlist(n-nbs), newloc[n]);
+        if (PARTICLES) Particles::AMRCoarseToFine(pob, newlist(n-nbs));
       }
     }
   }
@@ -664,6 +668,13 @@ void Mesh::RedistributeAndRefineMeshBlocks(ParameterInput *pin, int ntot) {
   // re-initialize the MeshBlocks
   for (int i=0; i<nblocal; ++i)
     my_blocks(i)->pbval->SearchAndSetNeighbors(tree, ranklist, nslist);
+
+  if (PARTICLES) {
+    for (int i = 0; i < nblocal; ++i) {
+      my_blocks(i)->ppar->ClearNeighbors();
+      my_blocks(i)->ppar->LinkNeighbors(tree, nrbx1, nrbx2, nrbx3, root_level);
+    }
+  }
   Initialize(2, pin);
 
   ResetLoadBalanceVariables();

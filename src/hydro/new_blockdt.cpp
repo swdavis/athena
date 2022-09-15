@@ -141,6 +141,11 @@ void Hydro::NewBlockTimeStep() {
     min_dt_parabolic = std::min(min_dt_parabolic, min_dt_cnd);
   } // hydro diffusion
 
+  // mesh hyper-diffusion
+  const Real dt_md(md_.FindTimeStep());
+  if (dt_md > 0.0)
+    min_dt_hyperbolic = std::min(min_dt_hyperbolic, dt_md);
+
   if (MAGNETIC_FIELDS_ENABLED &&
       pmb->pfield->fdif.field_diffusion_defined) {
     Real min_dt_oa, min_dt_hall;

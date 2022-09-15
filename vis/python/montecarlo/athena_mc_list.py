@@ -77,25 +77,29 @@ def read_list(filename):
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
-    phlist['length'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
+    phlist['length'] = \
+      list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
     current_index = skip_string("npars=")
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
-    phlist['npars'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
+    phlist['npars'] = \
+      list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
     current_index = skip_string("ntot=")
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
-    phlist['ntot'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
+    phlist['ntot'] = \
+      list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
     current_index = skip_string("polarized=")
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
-    phlist['polarized'] = bool(list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0])
+    phlist['polarized'] = \
+      bool(list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0])
     current_index = end_of_line_index + 1
     current_index = skip_string("coord=")
     end_of_line_index = current_index + 1
@@ -111,7 +115,7 @@ def read_list(filename):
     end_index = begin_index + 8*nelements
     vals = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
     phlist['list'] = vals.reshape((phlist['length'],phlist['npars']))
-    
+
     return phlist
 
 def write_list(filename,phlist):
@@ -119,7 +123,7 @@ def write_list(filename,phlist):
     Write photon list (dictionary) to file
     """
     outfile = open(filename, 'w')
-    
+
     # Write header information
     outfile.write("length={:d}\n".format(phlist['length']))
     outfile.write("npars={:d}\n".format(phlist['npars']))

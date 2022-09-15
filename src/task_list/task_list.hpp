@@ -29,8 +29,14 @@ class TaskID;
 //! - these 4x declarations can be nested in TaskList if MGTaskList is derived
 
 // constants = return codes for functions working on individual Tasks and TaskList
-enum class TaskStatus {fail, success, next};
 enum class TaskListStatus {running, stuck, complete, nothing_to_do};
+enum class TaskStatus {fail, success, next};
+// success vs. next: They are different (only) when there are more than one MeshBlock per
+// node.  When a task returns “next”, then it processes the next Task in the same
+// MeshBlock; when it returns “success”, then the TaskList processes the next MeshBlock.
+// “next” should be used when you want to immediately start the next task, for example,
+// start sending the data just calculated in the previous task.  Otherwise, use “success”
+// to process MeshBlocks as evenly as possible.
 
 //----------------------------------------------------------------------------------------
 //! \class TaskID
@@ -166,6 +172,12 @@ class TimeIntegratorTaskList : public TaskList {
   TaskStatus SetBoundariesHydro(MeshBlock *pmb, int stage);
   TaskStatus SetBoundariesField(MeshBlock *pmb, int stage);
 
+  TaskStatus ParticlesIntegrate(MeshBlock *pmb, int step);
+  TaskStatus ParticlesSend(MeshBlock *pmb, int step);
+  TaskStatus ParticlesReceive(MeshBlock *pmb, int step);
+  TaskStatus ParticleMeshSend(MeshBlock *pmb, int step);
+  TaskStatus ParticleMeshReceive(MeshBlock *pmb, int step);
+
   TaskStatus SendHydroShear(MeshBlock *pmb, int stage);
   TaskStatus ReceiveHydroShear(MeshBlock *pmb, int stage);
   TaskStatus SendHydroFluxShear(MeshBlock *pmb, int stage);
@@ -200,6 +212,8 @@ class TimeIntegratorTaskList : public TaskList {
   TaskStatus SendFieldOrbital(MeshBlock *pmb, int stage);
   TaskStatus ReceiveFieldOrbital(MeshBlock *pmb, int stage);
   TaskStatus CalculateFieldOrbital(MeshBlock *pmb, int stage);
+
+  TaskStatus CoupleMonteCarlo(MeshBlock *pmb, int stage);
 
   bool CheckNextMainStage(int stage) const {return stage_wghts[stage%nstages].main_stage;}
 
@@ -343,5 +357,13 @@ const TaskID SEND_FLDORB(65);
 const TaskID RECV_FLDORB(66);
 const TaskID CALC_FLDORB(67);
 
+const TaskID INT_PAR(68);
+const TaskID SEND_PAR(69);
+const TaskID RECV_PAR(70);
+const TaskID SEND_PM(71);
+const TaskID RECV_PM(72);
+
+const TaskID TRANS_STAT(73);
+const TaskID COUPLE_MC(74);
 }  // namespace HydroIntegratorTaskNames
 #endif  // TASK_LIST_TASK_LIST_HPP_

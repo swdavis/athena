@@ -20,6 +20,8 @@
 #   -g                enable general relativity
 #   -t                enable interface frame transformations for GR
 #   -mc               enable a monte carlo radiation tranfer calculation
+#   -ran3             use ran3 (rather than default gsl) for random numbers
+#   -p                enable particles
 #   -debug            enable debug flags (-g -O0); override other compiler options
 #   -coverage         enable compiler-dependent code coverage flags
 #   -float            enable single precision (default is double)
@@ -99,7 +101,7 @@ parser.add_argument('--eos',
 # --flux=[name] argument
 parser.add_argument('--flux',
                     default='default',
-                    choices=['default', 'hlle', 'hllc', 'hlld', 'roe', 'llf'],
+                    choices=['default', 'hlle', 'hllc', 'lhllc', 'hlld', 'lhlld', 'roe', 'llf'], # noqa
                     help='select Riemann solver')
 
 # --nghost=[value] argument
@@ -141,6 +143,12 @@ parser.add_argument('-t',
                     action='store_true',
                     default=False,
                     help='enable interface frame transformations for GR')
+
+# -p argument
+parser.add_argument('-p',
+                    action='store_true',
+                    default=False,
+                    help='enable particles')
 
 # -debug argument
 parser.add_argument('-debug',
@@ -293,10 +301,26 @@ parser.add_argument(
     help='name of library to link against (-l<lib>); can be specified multiple times')
 
 # -mc argument
-parser.add_argument('-mc',
+parser.add_argument(
+    '-mc',
     action='store_true',
     default=False,
     help='enable monte carlo')
+
+# -mcev argument
+parser.add_argument(
+    '--mcev',
+    default='static',
+    choices=[
+        'static',
+        'dynamic'],
+    help='set time dependence of monte carlo')
+
+# -ran3 argument
+parser.add_argument('-ran3',
+    action='store_true',
+    default=False,
+    help='use ran3 for random number generation')
 
 # Parse command-line inputs
 args = vars(parser.parse_args())
@@ -319,8 +343,16 @@ if args['flux'] == 'hllc' and args['eos'] == 'isothermal':
     raise SystemExit('### CONFIGURE ERROR: HLLC flux cannot be used with isothermal EOS')
 if args['flux'] == 'hllc' and args['b']:
     raise SystemExit('### CONFIGURE ERROR: HLLC flux cannot be used with MHD')
+if args['flux'] == 'lhllc' and args['eos'] == 'isothermal':
+    raise SystemExit('### CONFIGURE ERROR: LHLLC flux cannot be used with isothermal EOS') # noqa
+if args['flux'] == 'lhllc' and args['b']:
+    raise SystemExit('### CONFIGURE ERROR: LHLLC flux cannot be used with MHD')
 if args['flux'] == 'hlld' and not args['b']:
     raise SystemExit('### CONFIGURE ERROR: HLLD flux can only be used with MHD')
+if args['flux'] == 'lhlld' and args['eos'] == 'isothermal':
+    raise SystemExit('### CONFIGURE ERROR: LHLLD flux cannot be used with isothermal EOS') # noqa
+if args['flux'] == 'lhlld' and not args['b']:
+    raise SystemExit('### CONFIGURE ERROR: LHLLD flux can only be used with MHD')
 
 # Check relativity
 if args['s'] and args['g']:
@@ -443,6 +475,9 @@ if args['g']:
     makefile_options['RSOLVER_FILE'] += '_rel'
     if not args['t']:
         makefile_options['RSOLVER_FILE'] += '_no_transform'
+
+# -p argument
+definitions['PARTICLES'] = '1' if args['p'] else '0'
 
 # --cxx=[name] argument
 if args['cxx'] == 'g++':
@@ -768,11 +803,22 @@ for library_name in args['lib']:
 # -mc argument
 if args['mc']:
   definitions['MONTE_CARLO_ENABLED'] = '1'
-  definitions['MONTE_CARLO_STATIC'] = '1'
   makefile_options['LIBRARY_FLAGS'] += ' -lgsl -lgslcblas'
+  if (args['mcev'] == 'static'):
+      definitions['MONTE_CARLO_STATIC'] = '1'
+      definitions['MONTE_CARLO_DYNAMIC'] = '0'
+  elif (args['mcev'] == 'dynamic'):
+      definitions['MONTE_CARLO_STATIC'] = '0'
+      definitions['MONTE_CARLO_DYNAMIC'] = '1'
+  else:
+      definitions['MONTE_CARLO_ENABLED'] = '0'
+      definitions['MONTE_CARLO_DYNAMIC'] = '0'
+
+# -ran3 argument
+if args['ran3']:
+    definitions['RAN3'] = '1'
 else:
-  definitions['MONTE_CARLO_ENABLED'] = '0'
-  definitions['MONTE_CARLO_STATIC'] = '0'
+    definitions['RAN3'] = '0'
 
 # Assemble all flags of any sort given to compiler
 definitions['COMPILER_FLAGS'] = ' '.join(
@@ -823,9 +869,12 @@ print('  Number of scalars:          ' + args['nscalars'])
 print('  Special relativity:         ' + ('ON' if args['s'] else 'OFF'))
 print('  General relativity:         ' + ('ON' if args['g'] else 'OFF'))
 print('  Frame transformations:      ' + ('ON' if args['t'] else 'OFF'))
+print('  Particles:                  ' + ('ON' if args['p'] else 'OFF'))
 print('  Self-Gravity:               ' + self_grav_string)
 print('  Super-Time-Stepping:        ' + ('ON' if args['sts'] else 'OFF'))
 print('  Monte Carlo:                ' + ('ON' if args['mc'] else 'OFF'))
+print('  Monte Carlo evolution:      ' + args['mcev'])
+print('  Using ran3:                 ' + ('ON' if args['ran3'] else 'OFF'))
 print('  Debug flags:                ' + ('ON' if args['debug'] else 'OFF'))
 print('  Code coverage flags:        ' + ('ON' if args['coverage'] else 'OFF'))
 print('  Linker flags:               ' + makefile_options['LINKER_FLAGS'] + ' '

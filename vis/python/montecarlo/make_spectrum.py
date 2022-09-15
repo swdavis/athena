@@ -9,9 +9,8 @@ import argparse
 import numpy as np
 
 # Athena++ modules
-import athena_mc_spec as mcspec
-import athena_mc_list as mclist
-from athena_mc_list import photons
+import athena_mc as athenamc
+from athena_mc import photons
 
 # Main function
 def main(**kwargs):
@@ -21,20 +20,20 @@ def main(**kwargs):
     outfile = kwargs.pop('outfile')
 
     # Read photon list
-    phlist = mclist.read_list(infile)
+    phlist = athenamc.read_list(infile)
     phots = photons(phlist)
-    
+
     # Generate spectrum from phots
     nx = kwargs.pop('nx')
     xmin = kwargs.pop('xmin')
     xmax = kwargs.pop('xmax')
     logx = not kwargs.pop('linearx')
-    spectrum = mcspec.make_spectrum(phots,nx,xmin,xmax,logx=logx,**kwargs)
+    spectrum = athenamc.make_spectrum(phots,nx,xmin,xmax,logx=logx,**kwargs)
 
     # Write spectrum to file
     if outfile is None:
         outfile = infile.replace('.list','.spec')
-    mcspec.write_spectrum(outfile,spectrum)
+    athenamc.write_spectrum(outfile,spectrum)
 
 # Execute main function
 if __name__ == '__main__':

@@ -51,6 +51,7 @@ namespace mcoutput {
 
 Spectrum::Spectrum(MomentumRange input_range, bool pol, bool xlog) {
 
+  // SWD some of this should be used to initialization outside constructor
   next = nullptr;
   face = BoundaryFace::undef;
   range = input_range;
@@ -85,7 +86,6 @@ Spectrum::Spectrum(Spectrum *pspec) {
   polarized = pspec->polarized;
   logarithmic = pspec->logarithmic;
   polar_axis = pspec->polar_axis;
-  legacy = pspec->legacy;
   coordinates = pspec->coordinates;
   face = pspec->face;
   id = pspec->id;
@@ -96,7 +96,7 @@ Spectrum::Spectrum(Spectrum *pspec) {
   x1max = pspec->x1max;
   x2max = pspec->x2max;
   x3max = pspec->x3max;
-
+  dt = pspec->dt;
   // Allocate and intialize energy bins
   energies.NewAthenaArray(range.ne+1);
   BuildEnergyGrid(range.emin,range.emax,range.ne,logarithmic);
@@ -429,6 +429,8 @@ bool Spectrum::ScreenCoordinates(Photon *pphot, int ip) {
 
 void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
 
+  MonteCarloBlock *pmcb = pphot->pmy_mcb;
+
   // if face is set, then determine if photon positions matches
   if (face != BoundaryFace::undef) {
     enum BoundaryFace photon_face = GetPhotonFace(pphot,ip);
@@ -448,7 +450,7 @@ void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
     }
 
     int ebin;
-    // SWD: covariant mover may require adjustment here
+    // SWD: general mover may require adjustment here
     ebin = EnergyBinUniform(pphot->ep[ip],logarithmic);
     if (ebin < 0) return;
 
@@ -466,7 +468,8 @@ void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
         Real cph = cos(pphot->x3p[ip]);
         Real sph = sin(pphot->x3p[ip]);
         Real kr, kth, kph;
-        if (pphot->pmy_mcb->general_mover_flag) {
+        // SWD: This should be adjusted
+        if (pphot->pmy_mcb->pmy_mc->general_mover_flag) {
           kr = pphot->k1p[ip];
           kth = pphot->k2p[ip]*pphot->x1p[ip];
           kph = pphot->k3p[ip]*pphot->x1p[ip]*sth;
@@ -486,7 +489,8 @@ void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
     } else {
       if (COORDINATE_SYSTEM == "spherical_polar") {
         Real ksph[4];
-        if (pphot->pmy_mcb->general_mover_flag) {
+        // SWD: This should be adjusted
+        if (pphot->pmy_mcb->pmy_mc->general_mover_flag) {
           ksph[IMC1] = pphot->k1p[ip];
           ksph[IMC2] = pphot->k2p[ip]*pphot->x1p[ip];
           ksph[IMC3] = pphot->k3p[ip]*pphot->x1p[ip]*sin(pphot->x2p[ip]);
@@ -628,6 +632,7 @@ void Spectrum::AddSpectrum(Spectrum *pspec) {
 enum BoundaryFace Spectrum::GetPhotonFace(Photon *pphot, int ip) {
 
   MonteCarloBlock *pmcb = pphot->pmy_mcb;
+
   if(pphot->i1p[ip] > pmcb->ie)
     return BoundaryFace::outer_x1;
   else if(pphot->i1p[ip] < pmcb->is)
@@ -720,6 +725,7 @@ void PhotonList::WriteList(std::string filename, int ntot) {
   }
 
   // write header information
+  fprintf(pfile,"dt=%.8e\n",dt);
   fprintf(pfile,"length=%d\nnpars=%d\n",length,nparams);
   fprintf(pfile,"ntot=%d\n",ntot);
   fprintf(pfile,"polarized=%d\n",polarized);
@@ -966,10 +972,16 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         range.cthmax = pin->GetOrAddReal(pib->block_name,"cthmax",1.);
         bool polarized = pin->GetOrAddBoolean(pib->block_name,"polarized",pmc->polarized);
         bool xlog = pin->GetOrAddBoolean(pib->block_name,"xlog",true);
+
         // Create spectrum
         pspec = new Spectrum(range,polarized,xlog);
         pspec->id = id++;
         pspec->output_number = 0;
+        if (MONTE_CARLO_STATIC) {
+          pspec->dt = pin->GetOrAddReal("montecarlo","dt",1.);
+        } else if (MONTE_CARLO_DYNAMIC) {
+          pspec->dt = pin->GetReal(pib->block_name,"dt");
+        }
         // Generate file name
         std::string outn = pib->block_name.substr(6); // 6 because counting starts at 0!
         int outid = atoi(outn.c_str());
@@ -980,8 +992,6 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         char define_id[10];
         sprintf(define_id,"out%d",outid);  // default id="outN"
         pspec->base_name.append(define_id);
-        // Select legacy output format if desired
-        pspec->legacy = pin->GetOrAddBoolean(pib->block_name,"legacy",false);
         // set output face if specified
         std::string face = pin->GetOrAddString(pib->block_name,"face","none");
         pspec->SetSurface(face);
@@ -1036,6 +1046,11 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         //bool rel = pin->GetOrAddBoolean(pib->block_name,"relativistic",false);
         pphlist = new PhotonList(pmc->max_list_size,pmc->polarized,nuser_out);
         // Initialize photon list
+        if (MONTE_CARLO_STATIC) {
+          pphlist->dt = pin->GetOrAddReal("montecarlo","dt",1.);
+        } else if (MONTE_CARLO_DYNAMIC) {
+          pphlist->dt = pin->GetReal(pib->block_name,"dt");
+        }
         pphlist->length = 0;
         pphlist->output_number = 0;
         // Generate file name
@@ -1111,45 +1126,6 @@ MCOutput::~MCOutput() {
 
 }
 
-// SWD: remove this now?
-//----------------------------------------------------------------------------------------
-//! \fn void Spectrum::WriteSpectrumLegacy(std::string fname, Real norm)
-//! \brief output intensity spectrum in original mcgrid format
-
-void Spectrum::WriteSpectrumLegacy(std::string filename, Real norm) {
-
-  // open file for output
-  FILE *pfile;
-  std::stringstream msg;
-  if ((pfile = fopen(filename.c_str(),"w")) == nullptr) {
-    msg << "### FATAL ERROR in function [MCOutput::OutputSpectrum]" << std::endl
-        << "Output file '" << filename << "' could not be opened";
-    throw std::runtime_error(msg.str().c_str());
-  }
-  // Write header information
-  Real everg = 1.602176634e-12;
-  Real emin = range.emin / everg; // output in eV
-  Real emax = range.emax / everg; // output in eV
-  fprintf(pfile,"%d %d %d %g\n",range.ne,range.ncth,range.nphi,norm);
-  fprintf(pfile,"%lG %lG %lG\n",everg,emin,emax);
-
-  // Output intensity data at top of domain
-  for(int k=0; k<range.ne; ++k) {
-    for(int j=0; j<range.ncth; ++j) {
-      for(int i=0; i<range.nphi; ++i) {
-        fprintf(pfile,"%G %G ",intensity(i,j,k),intensity_sq(i,j,k));
-        if (polarized) {
-          fprintf(pfile,"%G %G %G %G\n",stokesq(i,j,k),stokesq_sq(i,j,k),stokesu(i,j,k),
-                  stokesu_sq(i,j,k));
-        } else {
-          fprintf(pfile,"\n");
-        }
-      }
-    }
-  }
-  fclose(pfile);
-}
-
 //----------------------------------------------------------------------------------------
 //! \fn void Spectrum::WriteSpectrum(Real norm, std::string fname)
 //! \brief output intensity spectrum in original mcgrid format
@@ -1171,6 +1147,7 @@ void Spectrum::WriteSpectrum(std::string fname, int nphot) {
   int ne = range.ne;
   int nmu = range.ncth;
   int nphi = range.nphi;
+  fprintf(pfile,"dt=%.8e\n",dt);
   fprintf(pfile,"nx=%d\n",ne);
   fprintf(pfile,"nmu=%d\n",nmu);
   fprintf(pfile,"nphi=%d\n",nphi);
@@ -1223,7 +1200,7 @@ void Spectrum::WriteSpectrum(std::string fname, int nphot) {
     for(int j=0; j<nmu; ++j) {
       Real mumid = (static_cast<Real>(j)+0.5)/static_cast<Real>(nmu);
       for(int i=0; i<ne; ++i) {
-        Real fac2 = fac1*emid[i]/(mumid*dnu[i]);
+        Real fac2 = fac1*emid[i]/(mumid*dnu[i]*dt);
         intens(0,k,j,i) = static_cast<double>(intensity(k,j,i)*
                                               (fac2/norm));
         errors(0,k,j,i) = 0.675*sqrt((intensity_sq(k,j,i)*SQR(fac2)/norm-
@@ -1294,12 +1271,16 @@ void MCOutput::CollectSpectrum(MonteCarlo *pmc) {
     int id = poutspec->id;
     poutspec->ResetSpectrum();
     // loop over monte carlo blocks
-    MonteCarloBlock *pmcb = pmc->pblock;
-    pblockspec = pmcb->pspec;
-    while (pblockspec->id != id) {
-      pblockspec = pblockspec->next;
+    for (int i=0; i<pmc->nblocal; i++) {
+      MonteCarloBlock *pmcb = pmc->my_blocks(i);
+      pblockspec = pmcb->pspec;
+      while (pblockspec->id != id) {
+        pblockspec = pblockspec->next;
+      }
+      if (pblockspec->id == id) {
+        poutspec->AddSpectrum(pblockspec);
+      }
     }
-    poutspec->AddSpectrum(pblockspec);
     poutspec = poutspec->next;
   }
 
@@ -1333,11 +1314,7 @@ void MCOutput::OutputSpectrum(MonteCarlo *pmc) {
       file_number << std::setw(5) << std::setfill('0') << pspect->output_number;
       filename.append(file_number.str());
       filename.append(".spec");
-      if (pspect->legacy) {
-        pspect->WriteSpectrumLegacy(filename,static_cast<Real>(nphot));
-      } else {
-        pspect->WriteSpectrum(filename,nphot);
-      }
+      pspect->WriteSpectrum(filename,nphot);
       pspect->output_number++;
       pspect = pspect->next;
     }

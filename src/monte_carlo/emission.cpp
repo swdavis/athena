@@ -29,6 +29,8 @@ Real InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
   //eta0 *= 12.;  // Added to match the Athena++ prescription
 
   Real ncells = static_cast<Real>(pmcb->pmy_mc->ncells);
+  Real dt = pmcb->pmy_mc->dt;
+
   int il = pmcb->is; int iu = pmcb->ie;
   int jl = pmcb->js; int ju = pmcb->je;
   int kl = pmcb->ks; int ku = pmcb->ke;
@@ -44,10 +46,16 @@ Real InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
         Real nhe = nh*heabund;
         Real ne = nh + 2.*nhe;
         Real vol = pmcb->pcoord->vol(k,j,i);
-        pmcb->emission(k,j,i) = eta0/sqrt(temp)*ne*(nh+4.*nhe)*g*vol*ncells;
+        pmcb->emission(k,j,i) = eta0/sqrt(temp)*ne*(nh+4.*nhe)*g*vol*dt*ncells;
         if (pmcb->emission(k,j,i) > emm_max) emm_max = pmcb->emission(k,j,i);
         if (pmcb->emission(k,j,i) < emm_min) emm_min = pmcb->emission(k,j,i);
       }}}
+#ifdef MPI_PARALLEL
+    MPI_Allreduce(MPI_IN_PLACE,&emm_min,1,MPI_ATHENA_REAL,MPI_MIN,
+               MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE,&emm_max,1,MPI_ATHENA_REAL,MPI_MAX,
+               MPI_COMM_WORLD);
+#endif
   if (Globals::my_rank == 0) {
     std::cout << "Emission array range (min, max): " << emm_min << " " << emm_max
               << std::endl;
@@ -75,10 +83,13 @@ void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real l
   // Initialize weight
   pphot->wp[ip] *= exp(-x) * (lemax-lemin);
 
-  // Initialize Stokes vector
-  pphot->sip[ip] = 1.0;
-  pphot->sup[ip] = 0.0;
-  pphot->sqp[ip] = 0.0;
+  if (pmcb->pmy_mc->polarized) {
+    // Initialize Stokes vector
+    pphot->sip[ip] = 1.0;
+    pphot->sup[ip] = 0.0;
+    pphot->sqp[ip] = 0.0;
+    pphot->svp[ip] = 0.0;
+  }
 
   // Generate initial angle parameters
   Real phi = 2. * PI * pran->uniform();

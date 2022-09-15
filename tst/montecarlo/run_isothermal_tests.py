@@ -32,7 +32,7 @@ def main(**kwargs):
     rundir = curdir+'/rundir'
     system("mkdir -p "+rundir)
     chdir("rundir")
-    
+
     # Run convergence test towards blackbody spectrum
     print("Running blackbody spectral convergence test.")
     system("python "+tstpath+"/absorption_spectrum/convergence.py {:d} {:d} {:d} 10".format(iseed,nphot,nstep)+" --path "+path)
@@ -54,7 +54,7 @@ def main(**kwargs):
     system("python "+tstpath+"/boosts/convergence.py {:d} {:d} {:d} 10".format(iseed,nphot,nstep)+" --path "+path) 
     conv_boost_off = np.loadtxt("conv.out")
     system("rm conv.out")
-    
+
     # Run convergence test for estimate of radiation field in Eulerian frame
     # with boosts
     print("Running radiation moments test with boosts in Eulerian frame.")
