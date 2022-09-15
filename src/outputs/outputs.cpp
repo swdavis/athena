@@ -749,15 +749,25 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       AppendOutputDataNode(pod);
       num_vars_++;
     }
-    // monte carlo rad force vector
+    // monte carlo rad force vector calculated with flux
     if (output_params.variable.compare("mcmom") == 0 ||
-        output_params.variable.compare("Radforce") == 0) {
+        output_params.variable.compare("RadforceF") == 0) {
       pod = new OutputData;
       pod->type = "VECTORS";
-      pod->name = "Radforce";
-      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIRA1,6);
+      pod->name = "RadforceF";
+      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIRA1,3);
       AppendOutputDataNode(pod);
-      num_vars_+=6;
+      num_vars_+=3;
+    }
+    // monte carlo rad force vector calculated with scatterings
+    if (output_params.variable.compare("mcmom") == 0 ||
+        output_params.variable.compare("RadforceS") == 0) {
+      pod = new OutputData;
+      pod->type = "VECTORS";
+      pod->name = "RadforceS";
+      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIRA4,3);
+      AppendOutputDataNode(pod);
+      num_vars_+=3;
     }
     // monte carlo mean energy
     if (output_params.variable.compare("mcmom") == 0 ||

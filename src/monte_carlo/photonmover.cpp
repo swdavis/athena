@@ -123,7 +123,7 @@ Real PhotonMover::SampleEscapeTime(MCRandom *pran, Real decayRate, Real sphereRa
 //! \brief Accelerate photon diffusion with modified random walk method
 
 void PhotonMover::MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real tauacc,
-                                           Real &path_length, Real &k1, Real &k2, Real &k3, Real int ip) {
+                                           Real &path_length, Real &k1, Real &k2, Real &k3, int ip) {
   MonteCarloBlock *pmcb = pmy_mcb;
   Real r0 = dist;
 

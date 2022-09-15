@@ -311,7 +311,6 @@ public:
   // SWD some of these should be eliminated others moved to MonteCarlo?
   bool general_mover_flag; // use general integration (default for all but
                            // cartesian, spherical
-  bool sphpol_alt_flag; // use cartesian movement in spherical coordinates
   bool boyerlindquist_flag; // use Boyer-Lindquist coordinates
   bool orthotet_flag; // use orthonormal tetrad for TransferPhotons()
   bool varystep_flag; // use variable (true) or constant (false) step

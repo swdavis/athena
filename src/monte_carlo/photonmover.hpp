@@ -83,8 +83,9 @@ public:
                                 Real diffusionTime);
   virtual bool MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real tauacc,
                                int ip);
-  virtual Real MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real dist, 
-                               Real tauacc, int ip);
+  virtual void MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real dist, 
+                               Real tauacc, Real &path_length, Real &k1, Real &k2, 
+                               Real &k3, int ip);
   virtual Real MRWDist(MCRandom *pran);
   virtual void ReadComptonGreensFunction(void);
   virtual Real InterpComptonEnergy(Real x0, Real time, Real prob);

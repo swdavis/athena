@@ -52,6 +52,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
 
     Real step = StepSize(pphot,ip);
     Real path_length;
+    Real k1, k2, k3;
     int count = 0;
     int iter = 0;
     int zone_counter = 0;
@@ -80,8 +81,6 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
         dl = std::min(dmin0, dw3); // Distance to nearest face
 
         Real tauacc = 1000.; //BCM: make this an input parameter
-        Real path_length;
-        Real k1, k2, k3;
         // Try to perform MRW acceleration if optical depth is large enough
         if (dl*chi > tauacc) {
           MRWResonanceAcceleration(pphot,pran,dl,tauacc,path_length,k1,k2,k3,ip);
