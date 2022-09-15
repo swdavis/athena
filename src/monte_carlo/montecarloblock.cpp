@@ -305,6 +305,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   if (boosts) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
   // moments is 1 (Er) + 3 (Fr) + 9 (Pr) + 1 (Eave) + 1 (net cool)
   if (moments_flag) moments.NewAthenaArray(NMOM,ncells3,ncells2,ncells1);
+  //if (coupled) coupling.NewAthena
   if (emission_array_flag) emission.NewAthenaArray(ncells3,ncells2,ncells1);
   if (acceleration && !(coherent_scattering)) {
     planck_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
@@ -424,13 +425,11 @@ void MonteCarloBlock::RayTracePhotons(int nphot) {
 }
 
 
-// SWDNEW: Break TransferPhotonsStatic into multiple pieces?
-
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::TransferPhotonsStatic()
+//! \fn void MonteCarloBlock::TransferPhotonsOnBlock()
 //! \brief perform radiation transfer nphtot photons
 
-void MonteCarloBlock::TransferPhotonsStatic() {
+void MonteCarloBlock::TransferPhotonsOnBlock() {
 
   Real const to_comv = 1.0;
   Real const to_eulr = -1.0;
@@ -531,171 +530,6 @@ void MonteCarloBlock::TransferPhotonsStatic() {
     } // status == evolving
 
   } // End loop over ip
-
-    // SWDNEW: Will need to send particles to neighbors here.  Particles will be staged
-    // for sending during moves
-    // Send/receive particles to/from neighboring blocks
-    //pphot->SendToNeighbors();
-    //bool success = false;
-    //while (!success)
-    //success = pphot->ReceiveFromNeighbors();
-    //pphot->ReceiveFromNeighbors();
-
-  // Reversed because of way particles are popped
-  for (int ip=pphot->nphot-1; ip >= 0; ip--) {
-    if (pphot->statp[ip] != EVOLVING) {
-
-      if (pphot->statp[ip] == ESCAPED) {
-        if (ptraj != nullptr) {
-          ptraj->CompleteTrajectory(pphot->trp[ip]);
-        }
-        // User defined completion work
-        FinalizePhoton(pphot,ip);
-
-        // loop over spectra and update
-        Spectrum *pspect = pspec;
-        while (pspect != nullptr) {
-          pspect->UpdateSpectrum(pphot,ip);
-          pspect = pspect->next;
-        }
-        if (pphlist != nullptr) {
-          pphlist->AddPhoton(pphot,ip);
-        }
-        nesc++;
-        pphot->RemoveOneParticle(ip);
-      } else if (pphot->statp[ip] == ABSORBED) {
-        nabs++;
-        pphot->RemoveOneParticle(ip);
-      } else if (pphot->statp[ip] == DESTROYED) {
-        pphot->RemoveOneParticle(ip);
-        ndes++;
-      } else if (pphot->statp[ip] == BUFFERED) {
-        nbuf++;
-      }
-    }
-  } // End loop over ip
-
-  /*std::cout  << "rank, ntot, nnew, nesc, nabs, ndes, nbuf, nscat: " << Globals::my_rank
-             << ' ' << ntot << ' ' << ntodo << ' ' << nesc
-             << ' ' << nabs << ' ' << ndes << ' ' << nbuf
-             << ' ' << nscat << std::endl;*/
-
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::TransferPhotonsDynamic()
-//! \brief perform radiation transfer nphtot photons
-
-void MonteCarloBlock::TransferPhotonsDynamic() {
-
-  Real const to_comv = 1.0;
-  Real const to_eulr = -1.0;
-  int nbuf = 0;
-
-  // Emit photons to replace those that left meshblock or were terminated
-  // Limit ntodo to number of remaining photons on block
-  int ntodo = (nchunk > nphremain) ? nphremain : nchunk;
-  //ntodo = (ntodo > nphremain) ? nphremain : ntodo;
-
-  // if photons remain to transfer, make space for new photons
-  if (ntodo > 0) {
-    int nold = pphot->nphot;
-    pphot->AllocatePhotons(nold+ntodo);
-    nphremain -= ntodo;
-    nphdone += ntodo;
-
-    // user definied photon initialization
-    InitializePhoton(pphot,nold,pphot->nphot-1);
-    if (ptraj != nullptr) {
-      for (int ip=nold; ip < pphot->nphot; ip++)
-        ptraj->InitializeTrajectory(pphot->trp[ip]);
-    }
-    // Lorentz transform E, k to Eulerian frame and update opacities
-    // only for newly emitted photons
-    if (boosts) {
-      LorentzTransform(pphot,to_eulr,nold,pphot->nphot-1);
-    }
-    if (moments_flag) {
-      // Update cooling to relect newly emitted photons
-      for (int ip=nold; ip<pphot->nphot; ip++) {
-        UpdateCooling(pphot,0.,0.,ip);
-      }
-    }
-  }
-  int ntot = pphot->nphot;
-
-  // move all photons to next interaction or boundary
-  pmover->Move(pphot,0,pphot->nphot-1);
-
-  for (int ip=0; ip<pphot->nphot; ip++) {
-
-    if (pphot->statp[ip] == EVOLVING) {
-      // Account for absorption
-      Real weight0 = pphot->wp[ip];
-      if (absorption_meth == ABSWEIGHT) {
-        pphot->wp[ip] *= (pphot->scp[ip]/(pphot->scp[ip]+pphot->acp[ip]));
-        if(pphot->wp[ip] <= minweight) {
-          pphot->statp[ip] = ABSORBED;
-        }
-      } else if (absorption_meth == ABSPROB) {
-        if (pran->uniform() > (pphot->scp[ip]/(pphot->scp[ip]+pphot->acp[ip])) )
-          pphot->wp[ip] = 0.;
-        pphot->statp[ip] = ABSORBED;
-      } else if (absorption_meth == ABSTAU) {
-        if(pphot->wp[ip] <= minweight) {
-          pphot->statp[ip] = ABSORBED;
-        }
-      }
-      if (moments_flag) {
-        UpdateCooling(pphot,0.,weight0,ip);
-      }
-    } // status == evolving
-
-    if (pphot->statp[ip] == EVOLVING) {
-      // Scatter the photon
-      Real e_pre_scat = pphot->ep[ip];
-      // Lorentz transform to comoving frame for scattering
-      if (boosts) {
-        LorentzTransform(pphot,to_comv,ip,ip);
-      }
-      Scatter(this,pphot,ip,ip);
-      nscat++;
-      pphot->nscp[ip]++;
-      if (pphot->nscp[ip] %  pmy_mc->checkscat == 0) {
-        // Check for possible infinite loop due to NaN in photon
-        if (pphot->IsNanPhoton(ip)) {
-          pphot->statp[ip] = DESTROYED;
-          std::cout << "Warning: IsNanPhoton() returned true, photon destroyed"
-                    << std::endl;
-          pphot->PrintPhoton(ip);
-        }
-      }
-
-      // Update the absorption and scattering extinction coefficients
-      // with the new energy.
-      if (!coherent_scattering) {
-        pphot->acp[ip] = AbsorptionOpacity(this,pphot,ip);
-        pphot->scp[ip] = ScatteringOpacity(this,pphot,ip);
-      }
-      // Lorentz transform to Eulerian frame and shift opacities
-      if (boosts) {
-        LorentzTransform(pphot,to_eulr,ip,ip);
-      }
-      if (moments_flag) {
-        UpdateCooling(pphot,e_pre_scat,0.,ip);
-      }
-    } // status == evolving
-
-  } // End loop over ip
-
-    // SWDNEW: Will need to send particles to neighbors here.  Particles will be staged
-    // for sending during moves
-    // Send/receive particles to/from neighboring blocks
-    //pphot->SendToNeighbors();
-    //bool success = false;
-    //while (!success)
-    //success = pphot->ReceiveFromNeighbors();
-    //pphot->ReceiveFromNeighbors();
 
   // Reversed because of way particles are popped
   for (int ip=pphot->nphot-1; ip >= 0; ip--) {

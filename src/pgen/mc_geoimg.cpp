@@ -196,6 +196,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     pphot->statp[ip] = EVOLVING;
     pphot->wp[ip] = 1.;
 
+    pphot->dtp[ip] = HUGE_NUMBER;
+
     // initialize cell coordinates
     pphot->i1p[ip] = i1start;
     pphot->i2p[ip] = i2start;

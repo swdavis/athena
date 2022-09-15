@@ -359,7 +359,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
     // Set status flag
     pphot->statp[ip] = EVOLVING;
-  
+    pphot->dtp[ip] = HUGE_NUMBER;
+
     int i1 = pphot->i1p[ip] = static_cast<int>(pran->uniform()*static_cast<Real>(nrmax-nrmin))
                      + nrmin+is;
     int i2 = pphot->i2p[ip] = static_cast<int>(pran->uniform()*nx2)+js;

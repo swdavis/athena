@@ -23,7 +23,7 @@ def main(**kwargs):
     phlist = athenamc.read_list(infile)
     phots = photons(phlist)
 
-    # Generate spectrum from phots
+    # Set parameters
     rcam = kwargs.pop('rcam')
     ninc = kwargs.pop('ninc')
     imin = kwargs.pop('imin')
@@ -38,17 +38,21 @@ def main(**kwargs):
     ymin = kwargs.pop('ymin')
     if (ymin is None):
         ymin = -ymax
+    unit = kwargs.pop('unit')
     nen = 1
     emin = 0.1
     emax = 1.
 
     mask = None
+
+    # Create image
     image = athenamc.make_image_mc(phots,rcam,ninc,imin,imax,
                                    nen,emin,emax,
                                    nx,xmin,xmax,
-                                   ny,ymin,ymax,mask=mask,**kwargs)
+                                   ny,ymin,ymax,
+                                   unit=unit,mask=mask,**kwargs)
 
-    # Write spectrum to file
+    # Write image to file
     if outfile is None:
         outfile = infile.replace('.list','.img')
     athenamc.write_image(outfile,image)
@@ -84,6 +88,9 @@ if __name__ == '__main__':
         type=int,
         default=16,
         help='number of y pixels per column')
+    parser.add_argument('--unit',
+        default='cm',
+        help='unit for x, y arrays')
     parser.add_argument('--xmin',
         type=float,
         default=None,

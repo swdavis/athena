@@ -829,7 +829,7 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
   while(photons_remain) {
 
     for(int nb=0; nb<nblocal; ++nb){
-      my_blocks(nb)->TransferPhotonsStatic();
+      my_blocks(nb)->TransferPhotonsOnBlock();
     }
     photons_remain = CheckAndBroadCastPhotonsRemaining();
   }
@@ -960,7 +960,7 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
   while(photons_remain) {
 
     for(int nb=0; nb<nblocal; ++nb){
-      my_blocks(nb)->TransferPhotonsDynamic();
+      my_blocks(nb)->TransferPhotonsOnBlock();
     }
     photons_remain = CheckAndBroadCastPhotonsRemaining();
   }

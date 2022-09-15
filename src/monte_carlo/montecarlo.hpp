@@ -346,8 +346,7 @@ public:
   void InitUserMonteCarloBlockData(ParameterInput *pin);
   void MonteCarloProblemGenerator(ParameterInput *pin);
   void RayTracePhotons(int nphtot); // Ray trace photon on this block
-  void TransferPhotonsStatic(); // Transfer photons on this block
-  void TransferPhotonsDynamic(); // time dependent transfer on this block
+  void TransferPhotonsOnBlock(); // Transfer photons on this block
   void CoupleMonteCarloToFluid(Real dt);  // couple monte carlo to mesh
   void CoordinateToComoving(Photon *pphot, int ips, int ipe);
   void ComovingToCoordinate(Photon *pphot, int ips, int ipe);

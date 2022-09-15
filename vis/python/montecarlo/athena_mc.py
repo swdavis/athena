@@ -1283,7 +1283,7 @@ def get_image_bins(phots,rcam,ifaces,xfaces,yfaces):
     return ibins, xbins, ybins
 
 def make_image_mc(phots,rcam,ninc,imin,imax,nen,emin,emax,
-                  nx,xmin,xmax,ny,ymin,ymax,mask=None,**kwargs):
+                  nx,xmin,xmax,ny,ymin,ymax,unit,mask=None,**kwargs):
     """
     Create a binned image from photon list
     """
@@ -1314,6 +1314,9 @@ def make_image_mc(phots,rcam,ninc,imin,imax,nen,emin,emax,
     yfaces = build_bins(ymin,ymax,ny,False)
     image['xfaces'] = xfaces
     image['yfaces'] = yfaces
+
+    # set units
+    image['unit'] = unit
 
     ibins, xbins, ybins = get_image_bins(phots,rcam,ifaces,xfaces,yfaces)
     #set ebins temporarily to 0
@@ -1353,12 +1356,15 @@ def make_image_mc(phots,rcam,ninc,imin,imax,nen,emin,emax,
         everg = 1.6021772e-12
         dnu = (efaces[1:]-efaces[:-1])*1000.*everg/h
 
+    dx = xfaces[1:]-xfaces[:-1]
+    dy = yfaces[1:]-yfaces[:-1]
+    area = np.outer(dy,dx)
     for k in range(nintens):
         for j in range(ninc):
             for i in range(nen):
                 # not divided by dnu for now
-                fac = 1./(dnu[i]*dmu[j]*mumid[j]*2.*np.pi*phots.dt)
-                intensity[k,j,i,:,:] *= fac/phots.ntot
+                fac = phots.ntot*dnu[i]*dmu[j]*mumid[j]*2.*np.pi*phots.dt
+                intensity[k,j,i,:,:] /= fac*area
 
 
     image['intensity'] = intensity
@@ -1429,15 +1435,20 @@ def plot_image(image,iinc,polarization=False,average=False,step=4,ax=None,**kwar
 
     x = 0.5*(image['xfaces'][1:]+image['xfaces'][:-1])
     y = 0.5*(image['yfaces'][1:]+image['yfaces'][:-1])
-    #x_2d, y_2d = np.meshgrid(x,y,indexing='ij')
     x_2d, y_2d = np.meshgrid(x,y)
     im = plt.pcolormesh(x_2d, y_2d, vals, cmap=cmap, norm=norm)
 
     plt.xlim(image['xfaces'][0],image['xfaces'][-1])
     plt.ylim(image['yfaces'][0],image['yfaces'][-1])
-    plt.xlabel('$x$')
-    plt.ylabel('$y$')
-    plt.colorbar(im)
+    if (image['unit'] == 'cm'):
+        plt.xlabel(r"$x \; (\rm cm)$")
+        plt.ylabel(r"$y \; (\rm cm)$")
+        clabel=r"$F \; (\rm erg/s/cm^2)$"
+    else:
+        plt.xlabel(r"$x$")
+        plt.ylabel(r"$y$")
+        clabel=r"$F$"
+    plt.colorbar(im,label=clabel)
     plt.gca().set_aspect('equal')
     if (polarization):
         if (image['polarized']):
@@ -1474,6 +1485,7 @@ def write_image(filename,image):
     outfile.write("nen={:d}\n".format(nen))
     outfile.write("nx={:d}\n".format(nx))
     outfile.write("ny={:d}\n".format(ny))
+    outfile.write("unit="+image['unit']+"\n")
     outfile.write("ntot={:d}\n".format(image['ntot']))
     outfile.write("nintens={:d}\n".format(image['nintens']))
     if image['polarized']:
@@ -1540,36 +1552,49 @@ def read_image(filename):
         end_of_line_index += 1
     image['ninc'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
+
     current_index = skip_string("nen=")
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
     image['nen'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
+
     current_index = skip_string("nx=")
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
     image['nx'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
+
     current_index = skip_string("ny=")
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
     image['ny'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
+
+    current_index = skip_string("unit=")
+    end_of_line_index = current_index + 1
+    while raw_data_ascii[end_of_line_index] != '\n':
+        end_of_line_index += 1
+    image['unit'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
+    current_index = end_of_line_index + 1
+
     current_index = skip_string("ntot=")
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
     image['ntot'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
+
     current_index = skip_string("nintens=")
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
     image['nintens'] = list(map(int,raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
     current_index = end_of_line_index + 1
+
     current_index = skip_string("polarized=")
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
