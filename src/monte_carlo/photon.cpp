@@ -71,8 +71,6 @@ Photon::Photon(MonteCarloBlock *pmcb, ParameterInput *pin)
 
 Photon::~Photon() {
 
-  if (user_var != NULL) delete [] user_var;
-
 }
 
 //----------------------------------------------------------------------------------------
@@ -132,10 +130,11 @@ bool Photon::IsNanPhoton(int ip) {
   if (std::isnan(k1p[ip])) return true;
   if (std::isnan(k2p[ip])) return true;
   if (std::isnan(k3p[ip])) return true;
-  if (polarized) { 
+  if (polarized) {
     if (std::isnan(sip[ip])) return true;
     if (std::isnan(sqp[ip])) return true;
     if (std::isnan(sup[ip])) return true;
+  }
   if (std::isnan(scp[ip])) return true;
   if (std::isnan(acp[ip])) return true;
 

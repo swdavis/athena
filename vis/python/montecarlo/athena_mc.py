@@ -260,6 +260,7 @@ def read_spectrum(filename):
     def skip_string(expected_string):
         expected_string_len = len(expected_string)
         if raw_data_ascii[current_index:current_index+expected_string_len] != expected_string:
+            print(raw_data_ascii[current_index:current_index+expected_string_len])
             raise RuntimeError('File not formatted as expected')
         return current_index+expected_string_len
 

@@ -529,14 +529,14 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe
     Real &kz = pphot->k3p[ip];
 
     bool sphnorm = false;
-    if ((COORDINATE_SYSTEM == "spherical_polar") && (pmcb->general_mover_flag)) {
+    if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_mover_flag)) {
       sphnorm = true;
       ky *= pphot->x1p[ip];
       kz *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
 
       // BCM: Temporary fix for NaN photons
       Real norm = sqrt(SQR(kx) + SQR(ky) + SQR(kz));
-      if (norm > 1.) { 
+      if (norm > 1.) {
         kx /= norm;
         ky /= norm;
         kz /= norm;

@@ -198,7 +198,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 
   // Set up photon movement and initialization methods
   computedmin = false;
-  if ((acceleration)||(sphpol_alt_flag))
+  if (acceleration)
     computedmin = true;
   pmy_mc->computedmin = computedmin;
   if (COORDINATE_SYSTEM == "cartesian") {
@@ -794,16 +794,17 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
 //! \fn void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip)
 //! \brief add contribution to radiation moments in current zone
 
-void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Real k2, 
+void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Real k2,
                                     Real k3, Real etau, int ip) {
- 
+
+  Real c_cgs = 2.99792458e10;;
   Real k1p = pphot->k1p[ip];
   Real k2p = pphot->k2p[ip];
   Real k3p = pphot->k3p[ip];
 
   // Normalize k vector if using general mover in spherical polar coords
 
-  if ((COORDINATE_SYSTEM == "spherical_polar") && (general_mover_flag)) {
+  if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_mover_flag)) {
     k2p *= pphot->x1p[ip];
     k3p *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
   }
@@ -927,7 +928,6 @@ void MonteCarloBlock::NormalizeMoments(bool normalize, Real norm) {
     // Normalize remaining moments by volume and global norm (counts)
 
     for (int n=0; n<17; ++n) {
-      Real norm = normall;
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
@@ -945,7 +945,6 @@ void MonteCarloBlock::NormalizeMoments(bool normalize, Real norm) {
   } else {
     // Undo normalization for continuing evolution
     for (int n=0; n<17; ++n) {
-      Real norm = normall;
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
@@ -989,15 +988,15 @@ void MonteCarloBlock::ResetMoments() {
 
 void MonteCarloBlock::UpdateSourceTermsAfterScatter(Photon *pphot, Real energy0, Real weight0, 
                                                     int ip, Real k1p0, Real k2p0, Real k3p0) {
-  // Updates 
-  Real c = 2.99792458e10;
+  // Updates
+  Real c_cgs = 2.99792458e10;
 
   Real k1 = pphot->k1p[ip];
   Real k2 = pphot->k2p[ip];
   Real k3 = pphot->k3p[ip];
 
   // Normalize k vector if using general mover in spherical polar coords
-  if ((COORDINATE_SYSTEM == "spherical_polar") && (general_mover_flag)) {
+  if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_mover_flag)) {
     k2 *= pphot->x1p[ip];
     k3 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
     k2p0 *= pphot->x1p[ip];
@@ -1021,9 +1020,12 @@ void MonteCarloBlock::UpdateSourceTermsAfterScatter(Photon *pphot, Real energy0,
   //printf("norm: %f\n", norm);
 
   // Components of momentum change --- assumes orthonormal basis
-  Real dp1p = pphot->wp[ip] * k1 * pphot->ep[ip] / c - weight0 * k1p0 * energy0 / c;
-  Real dp2p = pphot->wp[ip] * k2 * pphot->ep[ip] / c - weight0 * k2p0 * energy0 / c;
-  Real dp3p = pphot->wp[ip] * k3 * pphot->ep[ip] / c - weight0 * k3p0 * energy0 / c;
+  Real dp1p = pphot->wp[ip] * k1 * pphot->ep[ip] / c_cgs
+              - weight0 * k1p0 * energy0 / c_cgs;
+  Real dp2p = pphot->wp[ip] * k2 * pphot->ep[ip] / c_cgs
+              - weight0 * k2p0 * energy0 / c_cgs;
+  Real dp3p = pphot->wp[ip] * k3 * pphot->ep[ip] / c_cgs
+              - weight0 * k3p0 * energy0 / c_cgs;
 
   Real cool = (pphot->wp[ip] * pphot->ep[ip]) - (weight0 * energy0);
   //if (energy0 == 0.0)
@@ -1033,13 +1035,16 @@ void MonteCarloBlock::UpdateSourceTermsAfterScatter(Photon *pphot, Real energy0,
     std::cout << "Warning: UpdateSourceTerms cooling is : " << cool << std::endl;
     pphot->PrintPhoton(ip);
   } else if ((std::isinf(dp1p)) || (std::isnan(dp1p))) {
-    std::cout << "Warning: UpdateSourceTerms momentum change (k1p) is : " << dp1p << std::endl;
+    std::cout << "Warning: UpdateSourceTerms momentum change (k1p) is : "
+              << dp1p << std::endl;
     pphot->PrintPhoton(ip);
   } else if ((std::isinf(dp2p)) || (std::isnan(dp2p))) {
-    std::cout << "Warning: UpdateSourceTerms momentum change (k2p) is : " << dp2p << std::endl;
+    std::cout << "Warning: UpdateSourceTerms momentum change (k2p) is : "
+              << dp2p << std::endl;
     pphot->PrintPhoton(ip);
   } else if ((std::isinf(dp3p)) || (std::isnan(dp3p))) {
-    std::cout << "Warning: UpdateSourceTerms momentum change (k3p) is : " << dp3p << std::endl;
+    std::cout << "Warning: UpdateSourceTerms momentum change (k3p) is : "
+              << dp3p << std::endl;
     pphot->PrintPhoton(ip);
     pphot->statp[ip] = DESTROYED;
     std::cout << "Warning: UpdateCooling cooling is : " << cool << std::endl;
