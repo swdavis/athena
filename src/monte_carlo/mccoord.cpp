@@ -59,43 +59,37 @@ MCCoord::MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb) {
       for (int i=pmcb->is; i<=pmcb->ie; ++i) {
         vol(k,j,i) = pcoord->GetCellVolume(k,j,i);
       }}}
-  if(pmcb->acceleration) {
+  computedmin = pmcb->computedmin;
+  if (computedmin) {
     dmin.NewAthenaArray(ncells3,ncells2,ncells1);
-    AthenaArray<Real> dw1,dw2,dw3;
-    dw1.NewAthenaArray(ncells1);
-    dw2.NewAthenaArray(ncells2);
-    dw3.NewAthenaArray(ncells3);
-    // Initialize dmin array
+    Real dw1,dw2,dw3;
     for (int k=pmcb->ks; k<=pmcb->ke; ++k) {
       for (int j=pmcb->js; j<=pmcb->je; ++j) {
-        pcoord->CenterWidth1(k,j,pmcb->is,pmcb->ie,dw1);
-        pcoord->CenterWidth2(k,j,pmcb->is,pmcb->ie,dw2);
-        pcoord->CenterWidth3(k,j,pmcb->is,pmcb->ie,dw3);
         for (int i=pmcb->is; i<=pmcb->ie; ++i) {
-          Real dmin0 = std::min(dw1(i),dw2(i));
-          dmin(k,j,i) = std::min(dmin0,dw3(i));
+          dw3 = pcoord->dx3f(k);
+          dw2 = pcoord->dx2f(j);
+          dw1 = pcoord->dx1f(i);
+          Real dmin0 = std::min(dw1,dw2);
+          dmin(k,j,i) = std::min(dmin0,dw3);
         }
-      }}
-    dw1.DeleteAthenaArray();
-    dw2.DeleteAthenaArray();
-    dw3.DeleteAthenaArray();
+      }
+    }
   }
 }
 
 //----------------------------------------------------------------------------------------
 //! MonteCarlo constructor for processes without own MeshBlock
 
-MCCoord::MCCoord(int ncells1, int ncells2, int ncells3, bool acc) {
+MCCoord::MCCoord(int ncells1, int ncells2, int ncells3, bool cdmin) {
 
   x1f.NewAthenaArray(ncells1+1);
   x2f.NewAthenaArray(ncells2+1);
   x3f.NewAthenaArray(ncells3+1);
 
   vol.NewAthenaArray(ncells3,ncells2,ncells1);
-  acceleration = acc;
-  if (acceleration) {
+  computedmin = cdmin;
+  if (cdmin)
     dmin.NewAthenaArray(ncells3,ncells2,ncells1);
-  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -107,7 +101,7 @@ MCCoord::~MCCoord() {
   x2f.DeleteAthenaArray();
   x3f.DeleteAthenaArray();
   vol.DeleteAthenaArray();
-  if (acceleration)
+  if (computedmin)
     dmin.DeleteAthenaArray();
 }
 

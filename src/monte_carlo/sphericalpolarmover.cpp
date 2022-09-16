@@ -332,7 +332,7 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
         pphot->x0p[ip] += pphot->k0p[ip] * dl;
 
         tauremaining -= chi * dl;
-        // move photon to next zone and pdate angular positions
+        // move photon to next zone and update angular positions
         MovePhotonToNextZone(pphot,pco,pmcb,face,ascend,ip);
         if ((face == 1) || (face == 3) || (face == 4) || (face == 6))
           thface = true;

@@ -62,6 +62,7 @@ public:
 
   bool acceleration;
   bool boosts;
+  bool resonance;
   bool compton;
   bool time_acc;
 
@@ -74,11 +75,17 @@ public:
   virtual void MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
                MonteCarloBlock *pmcb, int face, bool ascend[3], int ip);
   virtual bool UpdateZone(Photon *pphot, int ip);
+//  virtual bool UpdateSingleZone(Photon *pphot, int ip, bool *multizone);
   virtual void CurvalinearToCartesian(Photon *pphot, Real kcart[4]);
   virtual void InitializeMRWDist(void);
   // Acceleration methods
+  virtual Real SampleEscapeTime(MCRandom *pran, Real decayRate, Real sphereRadius,
+                                Real diffusionTime);
   virtual bool MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real tauacc,
                                int ip);
+  virtual void MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real dist, 
+                               Real tauacc, Real &path_length, Real &k1, Real &k2, 
+                               Real &k3, int ip);
   virtual Real MRWDist(MCRandom *pran);
   virtual void ReadComptonGreensFunction(void);
   virtual Real InterpComptonEnergy(Real x0, Real time, Real prob);

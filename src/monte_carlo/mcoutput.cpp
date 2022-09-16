@@ -439,7 +439,7 @@ void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
   }
 
   Real weight = pphot->wp[ip];
-  if ((isinf(weight)) || (isnan(weight))) {
+  if ((std::isinf(weight)) || (std::isnan(weight))) {
     std::cout << "Warning: weight is Nan or Inf: " << weight << std::endl;
   } else {
 

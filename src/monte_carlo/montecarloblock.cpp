@@ -131,106 +131,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   orthotet_flag = pin->GetOrAddBoolean("montecarlo", "orthotet", false);
   varystep_flag = pin->GetOrAddBoolean("montecarlo", "varystep", false);
 
-  // Set up photon movement and initialization methods
-  if (COORDINATE_SYSTEM == "cartesian") {
-    GetZonePosition = GetZonePositionCartesian;
-    if (pmy_mc->general_mover_flag) {
-      pmover = new GeneralMover(this);
-      if (pmb != nullptr)
-        pcoord = new MCCartesian(pmb->pcoord,this);
-      else
-        pcoord = new MCCartesian(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                                 acceleration);
-    } else {
-      pmover = new CartesianMover(this);
-      if (pmb != nullptr)
-        pcoord = new MCCoord(pmb->pcoord,this);
-      else
-        pcoord = new MCCoord(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                             acceleration);
-    }
-  } else if (COORDINATE_SYSTEM == "spherical_polar") {
-    GetZonePosition = GetZonePositionSphericalPolar;
-    if (pmy_mc->general_mover_flag) {
-      pmover = new GeneralMover(this);
-      if (pmb != nullptr)
-        pcoord = new MCSphericalPolar(pmb->pcoord,this);
-      else
-        pcoord = new MCSphericalPolar(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                                      acceleration);
-    } else {
-      pmover = new SphericalPolarMover(this);
-      if (pmb != nullptr)
-        pcoord = new MCCoord(pmb->pcoord,this);
-      else
-        pcoord = new MCCoord(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                             acceleration);
-    }
-  } else if (COORDINATE_SYSTEM == "cylindrical") {
-    GetZonePosition = GetZonePositionCylindrical;
-    pmover = new GeneralMover(this);
-    if (pmb != nullptr)
-      pcoord = new MCCylindrical(pmb->pcoord,this);
-    else
-      pcoord = new MCCylindrical(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                                 acceleration);
-  } else if (COORDINATE_SYSTEM == "kerr-schild") {
-    GetZonePosition = GetZonePositionSphericalPolar;//approximate
-    pmover = new GeneralMover(this);
-    if (boyerlindquist_flag) {
-     if (pmb != nullptr)
-       pcoord = new MCBoyerLindquist(pmb->pcoord,this);
-     else {
-       pcoord = new MCBoyerLindquist(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                                     acceleration);
-       pcoord->SetSpin(pin->GetReal("coord", "a"));
-       pcoord->SetMass(pin->GetReal("coord", "m"));
-     }
-    } else {
-      if (pmb != nullptr)
-        pcoord = new MCKerrSchild(pmb->pcoord,this);
-      else {
-        pcoord = new MCKerrSchild(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                                  acceleration);
-        pcoord->SetSpin(pin->GetReal("coord", "a"));
-        pcoord->SetMass(pin->GetReal("coord", "m"));
-      }
-    }
-  } else if (COORDINATE_SYSTEM == "minkowski") {
-    GetZonePosition = GetZonePositionCartesian;
-    pmover = new GeneralMover(this);
-    if (pmb != nullptr)
-      pcoord = new MCMinkowski(pmb->pcoord,this);
-    else
-      pcoord = new MCMinkowski(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                               acceleration);
-  } else {
-      std::stringstream msg;
-      msg << "### ERROR in MonteCarloBlock constructor" << std::endl
-          << COORDINATE_SYSTEM
-          << "coordinates not currently supported with Monte Carlo"
-          << std::endl;
-      throw std::runtime_error(msg.str().c_str());
-  }
-  // Set pcoord in pmover
-  pmover->pcoord = pcoord;
-
-  // Set absorption opacity and method
-  absorption_meth = GetAbsorptionMethodFlag(pin->GetOrAddString("montecarlo","abs_method",
-                                                                "weight"));
-  absorption_opac = GetAbsorptionOpacityFlag(pin->GetOrAddString("montecarlo",
-                                                                 "absorption","none"));
-  if (absorption_opac == ABSUSER) {
-    AbsorptionOpacity = pmy_mc->UserAbsorptionOpacity;
-  } else if (absorption_opac == ABSNONE) {
-    AbsorptionOpacity = NoOpacity;
-  } else if (absorption_opac == ABSFF) {
-    AbsorptionOpacity = FreeFreeAbsorptionOpacity;
-  } else if (absorption_opac == ABSDUST) {
-    AbsorptionOpacity = DustAbsorptionOpacity;
-  }
-
-  // Set scattering opacity and method
+  // Scattering
   scattering_meth = GetScatteringFlag(pin->GetOrAddString("montecarlo","scattering",
                                                           "none"));
   if (scattering_meth == SCATUSER) {
@@ -295,6 +196,109 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     }
   }
 
+  // Set up photon movement and initialization methods
+  computedmin = false;
+  if ((acceleration)||(sphpol_alt_flag))
+    computedmin = true;
+  pmy_mc->computedmin = computedmin;
+  if (COORDINATE_SYSTEM == "cartesian") {
+    GetZonePosition = GetZonePositionCartesian;
+    if (pmy_mc->general_mover_flag) {
+      pmover = new GeneralMover(this);
+      if (pmb != nullptr)
+        pcoord = new MCCartesian(pmb->pcoord,this);
+      else
+        pcoord = new MCCartesian(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
+                                 computedmin);
+    } else {
+      pmover = new CartesianMover(this);
+      if (pmb != nullptr)
+        pcoord = new MCCoord(pmb->pcoord,this);
+      else
+        pcoord = new MCCoord(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
+                             computedmin);
+    }
+  } else if (COORDINATE_SYSTEM == "spherical_polar") {
+    GetZonePosition = GetZonePositionSphericalPolar;
+    if (pmy_mc->general_mover_flag) {
+      pmover = new GeneralMover(this);
+      if (pmb != nullptr)
+        pcoord = new MCSphericalPolar(pmb->pcoord,this);
+      else
+        pcoord = new MCSphericalPolar(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
+                                      computedmin);
+    } else {
+      pmover = new SphericalPolarMover(this);
+      if (pmb != nullptr)
+        pcoord = new MCCoord(pmb->pcoord,this);
+      else
+        pcoord = new MCCoord(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
+                             computedmin);
+    }
+  } else if (COORDINATE_SYSTEM == "cylindrical") {
+    GetZonePosition = GetZonePositionCylindrical;
+    pmover = new GeneralMover(this);
+    if (pmb != nullptr)
+      pcoord = new MCCylindrical(pmb->pcoord,this);
+    else
+      pcoord = new MCCylindrical(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
+                                 computedmin);
+  } else if (COORDINATE_SYSTEM == "kerr-schild") {
+    GetZonePosition = GetZonePositionSphericalPolar;//approximate
+    pmover = new GeneralMover(this);
+    if (boyerlindquist_flag) {
+     if (pmb != nullptr)
+       pcoord = new MCBoyerLindquist(pmb->pcoord,this);
+     else {
+       pcoord = new MCBoyerLindquist(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
+                                     computedmin);
+       pcoord->SetSpin(pin->GetReal("coord", "a"));
+       pcoord->SetMass(pin->GetReal("coord", "m"));
+     }
+    } else {
+      if (pmb != nullptr)
+        pcoord = new MCKerrSchild(pmb->pcoord,this);
+      else {
+        pcoord = new MCKerrSchild(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
+                                  computedmin);
+        pcoord->SetSpin(pin->GetReal("coord", "a"));
+        pcoord->SetMass(pin->GetReal("coord", "m"));
+      }
+    }
+  } else if (COORDINATE_SYSTEM == "minkowski") {
+    GetZonePosition = GetZonePositionCartesian;
+    pmover = new GeneralMover(this);
+    if (pmb != nullptr)
+      pcoord = new MCMinkowski(pmb->pcoord,this);
+    else
+      pcoord = new MCMinkowski(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
+                               computedmin);
+  } else {
+      std::stringstream msg;
+      msg << "### ERROR in MonteCarloBlock constructor" << std::endl
+          << COORDINATE_SYSTEM
+          << "coordinates not currently supported with Monte Carlo"
+          << std::endl;
+      throw std::runtime_error(msg.str().c_str());
+  }
+  // Set pcoord in pmover
+  pmover->pcoord = pcoord;
+
+  // Set absorption opacity and method
+  absorption_meth = GetAbsorptionMethodFlag(pin->GetOrAddString("montecarlo","abs_method",
+                                                                "weight"));
+  absorption_opac = GetAbsorptionOpacityFlag(pin->GetOrAddString("montecarlo",
+                                                                 "absorption","none"));
+  if (absorption_opac == ABSUSER) {
+    AbsorptionOpacity = pmy_mc->UserAbsorptionOpacity;
+  } else if (absorption_opac == ABSNONE) {
+    AbsorptionOpacity = NoOpacity;
+  } else if (absorption_opac == ABSFF) {
+    AbsorptionOpacity = FreeFreeAbsorptionOpacity;
+  } else if (absorption_opac == ABSDUST) {
+    AbsorptionOpacity = DustAbsorptionOpacity;
+  }
+
   // Allocate (/initialize) variable arrays needed for evolution/output
   int ncells1 = nx1 + 2*(NGHOST);
   int ncells2 = 1, ncells3 = 1;
@@ -303,11 +307,12 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   rho.NewAthenaArray(ncells3,ncells2,ncells1);
   tgas.NewAthenaArray(ncells3,ncells2,ncells1);
   if (boosts) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
+  if (NSCALARS > 0) scalars.NewAthenaArray(ncells3,ncells2,ncells1);
   // moments is 1 (Er) + 3 (Fr) + 9 (Pr) + 1 (Eave) + 1 (net cool)
   if (moments_flag) moments.NewAthenaArray(NMOM,ncells3,ncells2,ncells1);
   //if (coupled) coupling.NewAthena
   if (emission_array_flag) emission.NewAthenaArray(ncells3,ncells2,ncells1);
-  if (acceleration && !(coherent_scattering)) {
+  if (acceleration && !(coherent_scattering) && !(scattering_meth == SCATRES)) {
     planck_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
     planck_inv_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
   }
@@ -332,9 +337,10 @@ MonteCarloBlock::~MonteCarloBlock() {
   rho.DeleteAthenaArray();
   tgas.DeleteAthenaArray();
   if (boosts) vel.DeleteAthenaArray();
+  if (NSCALARS > 0) scalars.DeleteAthenaArray();
   if (moments_flag) moments.DeleteAthenaArray();
   if (emission_array_flag) emission.DeleteAthenaArray();
-  if (acceleration && !(coherent_scattering)) {
+  if (acceleration && !(coherent_scattering) && !(scattering_meth == SCATRES)) {
     planck_opacity.DeleteAthenaArray();
     planck_inv_opacity.DeleteAthenaArray();
   }
@@ -461,7 +467,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
     if (moments_flag) {
       // Update cooling to relect newly emitted photons
       for (int ip=nold; ip<pphot->nphot; ip++) {
-        UpdateCooling(pphot,0.,0.,ip);
+        UpdateSourceTermsAfterScatter(pphot,0.,0.,ip,0.,0.,0.);
       }
     }
   }
@@ -490,7 +496,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
         }
       }
       if (moments_flag) {
-        UpdateCooling(pphot,0.,weight0,ip);
+        UpdateSourceTerms(pphot,0.,weight0,ip);
       }
     } // status == evolving
 
@@ -525,7 +531,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
         LorentzTransform(pphot,to_eulr,ip,ip);
       }
       if (moments_flag) {
-        UpdateCooling(pphot,e_pre_scat,0.,ip);
+        UpdateSourceTerms(pphot,e_pre_scat,0.,ip);
       }
     } // status == evolving
 
@@ -770,25 +776,40 @@ void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign, int ips, i
   } // loop over ip
 }
 
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip)
+//! \brief Overload for UpdateMoments with additional wait time argument
+
+void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
+
+  Real pl = dl; // If path length not given, set it equal to displacement
+  Real k1 = pphot->k1p[ip]; // If k not given, set it equal to photon k
+  Real k2 = pphot->k2p[ip];
+  Real k3 = pphot->k3p[ip];
+  UpdateMoments(pphot, dl, pl, k1, k2, k3, etau, ip);
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip)
 //! \brief add contribution to radiation moments in current zone
 
-void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
-  // SWD: needs to be modifed for non general mover kvectors
-
-  Real c_cgs = 2.99792458e10;
-  Real k1 = pphot->k1p[ip];
-  Real k2 = pphot->k2p[ip];
-  Real k3 = pphot->k3p[ip];
+void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Real k2, 
+                                    Real k3, Real etau, int ip) {
+ 
+  Real k1p = pphot->k1p[ip];
+  Real k2p = pphot->k2p[ip];
+  Real k3p = pphot->k3p[ip];
 
   // Normalize k vector if using general mover in spherical polar coords
-  if ((COORDINATE_SYSTEM == "spherical_polar") && (pmy_mc->general_mover_flag)) {
-    k2 *= pphot->x1p[ip];
-    k3 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
+
+  if ((COORDINATE_SYSTEM == "spherical_polar") && (general_mover_flag)) {
+    k2p *= pphot->x1p[ip];
+    k3p *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
   }
 
   Real energy, abs_coef, step;
+  // BCM: Comoving moments currently do not work with code acceleration
   if (moments_comoving) {
     // boost relevant quanitities to comoving frame
     energy = pphot->ep[ip];
@@ -801,14 +822,14 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
 
     if(beta2 > 0.) {
       Real gamma = 1. / sqrt(1. - beta2); // assumes v^2 < c^2 checked elsewhere
-      Real bdk = k1 * beta[0] + k2 * beta[1] + k3 * beta[2];
+      Real bdk = k1p * beta[0] + k2p * beta[1] + k3p * beta[2];
       Real gonembdk = gamma * (1. - bdk);
       Real aber = gamma*(1.-gamma*bdk/(gamma+1.));
 
       energy *= gonembdk;
-      k1 = (k1 - aber * beta[0]) / gonembdk;
-      k2 = (k2 - aber * beta[1]) / gonembdk;
-      k3 = (k3 - aber * beta[2]) / gonembdk;
+      k1p = (k1p - aber * beta[0]) / gonembdk;
+      k2p = (k2p - aber * beta[1]) / gonembdk;
+      k3p = (k3p - aber * beta[2]) / gonembdk;
       abs_coef = pphot->acp[ip] / gonembdk;
       step = dl * gonembdk;
     }
@@ -831,13 +852,15 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
     leff = step;
   }
   // Weight moments by time spent in domain
-  Real weight = pphot->wp[ip] * energy * leff / c_cgs;
- 
+
+  Real weight = pphot->wp[ip] * energy * leff / 2.99792458e10;
+  Real path_weight = weight * (pl / dl);
+
   if ((std::isinf(weight)) || (std::isnan(weight))) {
     pphot->statp[ip] = DESTROYED;
     std::cout << "Warning: UpdateMoments weight is : " << weight << std::endl;
   } else {
-    // Higher order moments are weighted by curvalinear coordinates k
+    // Higher order moments are weighted by displacement direction vector k
     Real weight1 = weight * k1;
     Real weight2 = weight * k2;
     Real weight3 = weight * k3;
@@ -846,31 +869,32 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
     int j = pphot->i2p[ip];
     int k = pphot->i3p[ip];
 
-    // SWD: Modify this appropriately
-    //if (pmy_mc->general_mover_flag)
-    //  weight *= pphot->k0p[ip]
-
     // Add contribution to corresponding moments
     // Energy density
-    moments(MCIER,k,j,i) += weight;
+    moments(MCIER,k,j,i) += path_weight;
 
     // Flux
-    moments(MCIFR1,k,j,i) += weight1 * c_cgs;
-    moments(MCIFR2,k,j,i) += weight2 * c_cgs;
-    moments(MCIFR3,k,j,i) += weight3 * c_cgs;
-    // Radiation Pressure
+    moments(MCIFR1,k,j,i) += weight1 * 2.99792458e10;
+    moments(MCIFR2,k,j,i) += weight2 * 2.99792458e10;
+    moments(MCIFR3,k,j,i) += weight3 * 2.99792458e10;
 
-    Real weightp = weight1 * c_cgs;
+    // Radiative Acceleration from flux
+    moments(MCIRA1,k,j,i) += (pphot->scp[ip]+abs_coef) * weight1;
+    moments(MCIRA2,k,j,i) += (pphot->scp[ip]+abs_coef) * weight2;
+    moments(MCIRA3,k,j,i) += (pphot->scp[ip]+abs_coef) * weight3;
+
+    // Radiation Pressure
+    Real weightp = weight1 * 2.99792458e10;
     moments(MCIPR11,k,j,i) += weightp;
-    weightp = weight2 * k2;
+    weightp = weight2 * k2p;
     moments(MCIPR22,k,j,i) += weightp;
-    weightp = weight3 * k3;
+    weightp = weight3 * k3p;
     moments(MCIPR33,k,j,i) += weightp;
-    weightp = weight1 * k2;
+    weightp = weight1 * k2p;
     moments(MCIPR12,k,j,i) += weightp;
-    weightp = weight1 * k3;
+    weightp = weight1 * k3p;
     moments(MCIPR13,k,j,i)  += weightp;
-    weightp = weight2 * k3;
+    weightp = weight2 * k3p;
     moments(MCIPR23,k,j,i) += weightp;
     // Photon mean energy
     moments(MCIEN,k,j,i) += weight * energy;
@@ -901,13 +925,13 @@ void MonteCarloBlock::NormalizeMoments(bool normalize, Real norm) {
           }
         }}}
     // Normalize remaining moments by volume and global norm (counts)
-    for (int n=0; n<11; ++n) {
+
+    for (int n=0; n<17; ++n) {
+      Real norm = normall;
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
             moments(n,k,j,i) /= (dt * pcoord->vol(k,j,i) * norm);
-            //if (n == 0)
-            //  printf("%d %d %d %d %g\n",Globals::my_rank,k,j,i,moments(n,k,j,i));
           }}}
     }
     // Copy normalized moments to symmetric elements
@@ -920,7 +944,8 @@ void MonteCarloBlock::NormalizeMoments(bool normalize, Real norm) {
         }}}
   } else {
     // Undo normalization for continuing evolution
-    for (int n=0; n<11; ++n) {
+    for (int n=0; n<17; ++n) {
+      Real norm = normall;
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
@@ -946,7 +971,7 @@ void MonteCarloBlock::NormalizeMoments(bool normalize, Real norm) {
 void MonteCarloBlock::ResetMoments() {
 
     // set moments to zero
-  for (int n=0; n<11; ++n) {
+  for (int n=0; n<17; ++n) {
     for (int k=ks; k<=ke; ++k) {
       for (int j=js; j<=je; ++j) {
         for (int i=is; i<=ie; ++i) {
@@ -957,16 +982,64 @@ void MonteCarloBlock::ResetMoments() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::UpdateCooling(Photon *pphot, Real energy0, Real weight0,
-//                                          int ip)
-//! \brief compute net photon cooling rate
+//! \fn void MonteCarloBlock::UpdateSourceTermsAfterScatter(Photon *pphot, Real energy0, Real weight0,
+//                                          int ip, Real k1p0, Real k2p0, Real k3p0)
+//! \brief compute net photon cooling rate and momentum change
+// BCM: DEPRECATED
 
-void MonteCarloBlock::UpdateCooling(Photon *pphot, Real energy0, Real weight0, int ip) {
+void MonteCarloBlock::UpdateSourceTermsAfterScatter(Photon *pphot, Real energy0, Real weight0, 
+                                                    int ip, Real k1p0, Real k2p0, Real k3p0) {
+  // Updates 
+  Real c = 2.99792458e10;
 
-  Real cool = (pphot->wp[ip] - weight0) * (pphot->ep[ip] - energy0);
+  Real k1 = pphot->k1p[ip];
+  Real k2 = pphot->k2p[ip];
+  Real k3 = pphot->k3p[ip];
+
+  // Normalize k vector if using general mover in spherical polar coords
+  if ((COORDINATE_SYSTEM == "spherical_polar") && (general_mover_flag)) {
+    k2 *= pphot->x1p[ip];
+    k3 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
+    k2p0 *= pphot->x1p[ip];
+    k3p0 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
+  }
+  Real norm0 = sqrt(SQR(k1p0) + SQR(k2p0) + SQR(k3p0));
+  if ((fabs(norm0-1.) > 1.0e-8) && (norm0 > 1.0e-8)) {
+    k1p0 /= norm0;
+    k2p0 /= norm0;
+    k3p0 /= norm0;
+  }
+  Real norm = sqrt(SQR(k1) + SQR(k2) + SQR(k3));
+  if ((fabs(norm-1.) > 1.0e-8) && (norm > 1.0e-8)) {
+    k1 /= norm;
+    k2 /= norm;
+    k3 /= norm;
+  }
+  //norm0 = sqrt(SQR(k1p0) + SQR(k2p0) + SQR(k3p0));
+  //printf("norm0: %f\n", norm0);
+  //norm = sqrt(SQR(k1) + SQR(k2) + SQR(k3));
+  //printf("norm: %f\n", norm);
+
+  // Components of momentum change --- assumes orthonormal basis
+  Real dp1p = pphot->wp[ip] * k1 * pphot->ep[ip] / c - weight0 * k1p0 * energy0 / c;
+  Real dp2p = pphot->wp[ip] * k2 * pphot->ep[ip] / c - weight0 * k2p0 * energy0 / c;
+  Real dp3p = pphot->wp[ip] * k3 * pphot->ep[ip] / c - weight0 * k3p0 * energy0 / c;
+
+  Real cool = (pphot->wp[ip] * pphot->ep[ip]) - (weight0 * energy0);
   //if (energy0 == 0.0)
   //  printf("weight, cool: %g %g\n",pphot->weight,cool);
-  if ((isinf(cool)) || (isnan(cool))) {
+
+  if ((std::isinf(cool)) || (std::isnan(cool))) {
+    std::cout << "Warning: UpdateSourceTerms cooling is : " << cool << std::endl;
+    pphot->PrintPhoton(ip);
+  } else if ((std::isinf(dp1p)) || (std::isnan(dp1p))) {
+    std::cout << "Warning: UpdateSourceTerms momentum change (k1p) is : " << dp1p << std::endl;
+    pphot->PrintPhoton(ip);
+  } else if ((std::isinf(dp2p)) || (std::isnan(dp2p))) {
+    std::cout << "Warning: UpdateSourceTerms momentum change (k2p) is : " << dp2p << std::endl;
+    pphot->PrintPhoton(ip);
+  } else if ((std::isinf(dp3p)) || (std::isnan(dp3p))) {
+    std::cout << "Warning: UpdateSourceTerms momentum change (k3p) is : " << dp3p << std::endl;
     pphot->PrintPhoton(ip);
     pphot->statp[ip] = DESTROYED;
     std::cout << "Warning: UpdateCooling cooling is : " << cool << std::endl;
@@ -975,9 +1048,33 @@ void MonteCarloBlock::UpdateCooling(Photon *pphot, Real energy0, Real weight0, i
     int &j = pphot->i2p[ip];
     int &k = pphot->i3p[ip];
     moments(MCINET,k,j,i) -= cool;
+    moments(MCIRA4,k,j,i) -= dp1p;
+    moments(MCIRA5,k,j,i) -= dp2p;
+    moments(MCIRA5,k,j,i) -= dp3p;
   }
 
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0,
+//                                          int ip, Real k1p0, Real k2p0, Real k3p0)
+//! \brief compute net photon cooling rate and momentum change
+
+void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0, int ip) {
+
+  Real cool = (pphot->wp[ip] * pphot->ep[ip]) - (weight0 * energy0);
+  if ((std::isinf(cool)) || (std::isnan(cool))) {
+    std::cout << "Warning: UpdateSourceTerms cooling is : " << cool << std::endl;
+    pphot->PrintPhoton(ip);
+  } else {
+    int &i = pphot->i1p[ip];
+    int &j = pphot->i2p[ip];
+    int &k = pphot->i3p[ip];
+
+    moments(MCINET,k,j,i) -= cool;
+  }
+}
+
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs)

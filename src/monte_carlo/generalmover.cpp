@@ -51,6 +51,8 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
     Real tauremaining = GetOpticalDepth(pran);
 
     Real step = StepSize(pphot,ip);
+    Real path_length;
+    Real k1, k2, k3;
     int count = 0;
     int iter = 0;
     Real c_cgs = 2.99792458e10;
@@ -64,18 +66,52 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
       iter++;
       count++;
 
-      if (tauremaining > chi * step) {
-        VerletStep(pphot,step,ip);
-        if (pmy_mcb->pmy_mc->polarized)
-          PropogatePolarization(pphot,step,ip);
-      } else {
-        step = tauremaining / chi;
-        VerletStep(pphot,step,ip);
-        if (pmy_mcb->pmy_mc->polarized)
-          PropogatePolarization(pphot,step,ip);
+      bool accel_success = false;
+      if ((acceleration) && (resonance)) {
+        // Get distance from photon to closest cell face
+        Real dl;
+        Real dw3, dw2, dw1;
+        Real dx3f = fabs(pcoord->x3f(pphot->i3p[ip]) - pcoord->x3f(pphot->i3p[ip] + 1));
+        Real dx2f = fabs(pcoord->x2f(pphot->i2p[ip]) - pcoord->x2f(pphot->i2p[ip] + 1));
+        Real dx1f = fabs(pcoord->x1f(pphot->i1p[ip]) - pcoord->x1f(pphot->i1p[ip] + 1));
+        Real x1v = (pcoord->x1f(pphot->i1p[ip]) + pcoord->x1f(pphot->i1p[ip] + 1))/2.;
+        Real x2v = (pcoord->x2f(pphot->i2p[ip]) + pcoord->x2f(pphot->i2p[ip] + 1))/2.;
+        dw3 = dx3f * x1v * sin(x2v);
+        dw2 = dx2f * x1v;
+        Real dmin0 = std::min(dx1f, dw2);
+        dl = std::min(dmin0, dw3); // Distance to nearest face
+
+        Real tauacc = 1000.; //BCM: make this an input parameter
+        // Try to perform MRW acceleration if optical depth is large enough
+        if (dl*chi > tauacc) {
+          MRWResonanceAcceleration(pphot,pran,dl,tauacc,path_length,k1,k2,k3,ip);
+          accel_success = true;
+        } else {
+          path_length = step;
+          k1 = pphot->k1p[ip];
+          k2 = pphot->k2p[ip];
+          k3 = pphot->k3p[ip];
+        }
       }
 
-      tauremaining -= chi * step;
+      if (!accel_success) {// Acceleration not triggered - take standard step
+        if (tauremaining > chi * step) { // Photon hasn't yet reached tauremaining
+          VerletStep(pphot,step,ip);
+          if (pmy_mcb->pmy_mc->polarized)
+            PropogatePolarization(pphot,step,ip); 
+        } else { // Photon has reached end of tauremaining - step to make it 0
+          step = tauremaining / chi;
+          VerletStep(pphot,step,ip);
+          if (pmy_mcb->pmy_mc->polarized)
+            PropogatePolarization(pphot,step,ip);
+        }
+        tauremaining -= chi * step;
+      } else {
+        // Photon has been given a new position on sphere of radius dl
+        // Set exit parameters and continue the loop over photons
+        step = dl;
+        tauremaining = 0.;
+      }
 
       // SWD: Clean up these checks
       // Check if photon changed zones
@@ -91,7 +127,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
       pphot->dtp[ip] -= step/c_cgs;
       // Update moments
       if (pmcb->moments_flag) {
-        pmcb->UpdateMoments(pphot,step,1.,ip);
+        pmcb->UpdateMoments(pphot,step,path_length,k1,k2,k3,1.,ip);
       }
 
       if (pphot->IsNanPhoton(ip)) {
@@ -104,6 +140,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
       if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this,ip);
       // SWD: put here for now, may need additional flag
       if (ptraj != NULL) ptraj->AddToTrajectory(pphot,ip);
+
 
     } // end of photon integration
 
@@ -120,7 +157,6 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
       pphot->statp[ip] = DESTROYED;
     }
   } // end loop over ip
-
 }
 
 // SWD: The conversion from Curvalinear  to Cartesian should be generalized or removed

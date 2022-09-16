@@ -40,7 +40,7 @@ class MCOutoupt;
 class MCCoord;
 
 // SWD: Make into a general MACRO set by configure?
-#define NMOM 16
+#define NMOM 22
 
 // Flags for controlling monte carlo emission, scattering, absorption, bcs
 enum EmissionFlag {EMISUSER = 0, EMISNONE = 1, EMISFF = 2};
@@ -53,8 +53,9 @@ enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY
                      MC_USER_BNDRY = 6, MC_BLOCK_BNDRY = 7};
 // Array indices for monte carlo radiation moments
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
-      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCINET = 10, MCIEN = 11, MCIKJ = 12, MCIPR21=13,
-      MCIPR31=14, MCIPR32=15};
+      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCINET = 10, MCIRA1=11, MCIRA2=12, MCIRA3=13, 
+      MCIRA4=14, MCIRA5=15, MCIRA6=16, MCIEN = 17, MCIKJ = 18, MCIPR21=19, MCIPR31=20, 
+      MCIPR32=21};
 //----------------------------------------------------------------------------------------
 // function pointer prototypes for user-defined modules set at runtime
 typedef Real (*EmisFunc_t)(MonteCarloBlock *pmcb);
@@ -212,15 +213,18 @@ public:
 
   enum EmissionFlag emission_meth;
   enum MCBoundaryFlag mc_bcs[6];
+  enum ScatteringFlag scattering_meth;
 
   bool boosts;  // Compute lorentz transformations
   bool coupled; // is monte carlo evolution coupled to hydro
   bool emission_array_flag;  // Compute and save zone emissivities
   bool polarized;// track photon polarization
   bool acceleration;  // use MRW acceleration
+  bool computedmin;
   bool time_acc;  // use MRW acceleration with time limit
   bool raytrace_flag; // Will trace photons rather than scatter
   bool general_mover_flag; // Use integration for photon movement
+
 
   // function pointers
   UserMoveFunc_t UserWorkInMove;
@@ -255,6 +259,7 @@ private:
   MCBValFunc_t BoundaryFunction_[6];
 
   void GetDensity(MonteCarloBlock *pmcb);
+  void GetScalars(MonteCarloBlock *pmcb);
   void GetVelocity(MonteCarloBlock *pmcb);
   //void SendMonteCarloBlocks(int dest);
   //void ReceiveMonteCarloBlocks(ParameterInput *pin, int source);
@@ -316,6 +321,7 @@ public:
   bool coupled; // Whether time dependent code is coupled to hydro
   bool coherent_scattering; // photon does notchange energy after scattering
   bool acceleration;  // use MRW acceleration
+  bool computedmin;
   bool time_acc;  // use MRW acceleration with time limit
 
   // Set flags
@@ -336,6 +342,7 @@ public:
 
   AthenaArray<Real> emission;
   AthenaArray<Real> moments;
+  AthenaArray<Real> scalars;
   AthenaArray<Real> rho;
   AthenaArray<Real> tgas;
   AthenaArray<Real> vel;
@@ -356,9 +363,11 @@ public:
   void InitializePhoton(Photon *pphot, int ips, int ipe);
   void FinalizePhoton(Photon *pphot, int ip);
   void UpdateMoments(Photon *pphot, Real dl, Real etau, int ip);
+  void UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Real k2, Real k3, Real etau, int ip);
   void NormalizeMoments(bool normalize, Real norm);
   void ResetMoments();
-  void UpdateCooling(Photon *pphot, Real energy0, Real weight0, int ip);
+  void UpdateSourceTermsAfterScatter(Photon *pphot, Real energy0, Real weight0, int ip, Real k1p0, Real k2p0, Real k3p0);
+  void UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0, int ip);
   //void GetPhotonsFromNeighbors();
   //void SendPhotonsToNeighbors();
 
