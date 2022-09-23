@@ -24,7 +24,7 @@ def main(**kwargs):
     infile = kwargs.pop('infile')
     outfile = kwargs.pop('outfile')
     if outfile is None:
-        outfile = infile.replace('.img','.pdf')
+        outfile = infile.replace('.img','.png')
 
     # read image
     image = athenamc.read_image(infile)
@@ -46,62 +46,69 @@ def main(**kwargs):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('infile',
-        help='input photon spectrum filename(s)')
+                        help='input photon spectrum filename(s)')
+    parser.add_argument('--type',
+                        default = 'intensity',
+                        help='variable to plot')
     parser.add_argument('--iinc',
-        default = 0,
-        type = int,
-        help='index of angle bin to plot')
+                        default = 0,
+                        type = int,
+                        help='index of angle bin to plot')
     parser.add_argument('--xmin',
-        default = None,
-        type = float,
-        help='x-axis mimimum')
+                        default = None,
+                        type = float,
+                        help='x-axis mimimum')
     parser.add_argument('--xmax',
-        default = None,
-        type = float,
-        help='x-axis maximum')
+                        default = None,
+                        type = float,
+                        help='x-axis maximum')
     parser.add_argument('--ymin',
-        default = None,
-        type = float,
-        help='y-axis mimimum')
+                        default = None,
+                        type = float,
+                        help='y-axis mimimum')
     parser.add_argument('--ymax',
-        default = None,
-        type = float,
-        help='y-axis maximum')
+                        default = None,
+                        type = float,
+                        help='y-axis maximum')
     parser.add_argument('-c', '--colormap',
-        default='hot',
-        help='name of Matplotlib colormap to use instead of default; highly recommended; \
-               try "RdBu_r" or "gist_heat" if looking for suggestions')
+                        default='hot',
+                        help='name of Matplotlib colormap to use instead of default; \
+                              hot is default, twilight is good for cyclic variables \
+                              like polarization angle')
     parser.add_argument('--vmin',
-        type=float,
-        default=None,
-        help='data value to correspond to colormap minimum; use --vmin=<val> if <val> has \
-          negative sign')
+                        type=float,
+                        default=None,
+                        help='data value to correspond to colormap minimum; use \
+                              --vmin=<val> if <val> has negative sign')
     parser.add_argument('--vmax',
-        type=float,
-        default=None,
-        help='data value to correspond to colormap maximum; use --vmax=<val> if <val> has \
-            negative sign')
+                        type=float,
+                        default=None,
+                        help='data value to correspond to colormap maximum; use \
+                              --vmax=<val> if <val> has negative sign')
     parser.add_argument('--vnorm',
-        action='store_true',
-        help='flag indicating that intensity should be normalized to maximum')
+                        action='store_true',
+                        help='flag indicating that intensity should be normalized \
+                              to maximum')
     parser.add_argument('--logc',
-        action='store_true',
-        help='flag indicating data should be colormapped logarithmically')
-    parser.add_argument('-p', '--polarization',
-        action='store_true',
-        default=False,
-        help='flag indicating that polarization should be plotted')
+                        action='store_true',
+                        help='flag indicating data should be colormapped logarithmically')
+    parser.add_argument('-p', '--pvec',
+                        action='store_true',
+                        default=False,
+                        help='flag indicating that polarization should be plotted')
     parser.add_argument('-a', '--average',
-        action='store_true',
-        default=False,
-        help='flag indicating that polarization should be averaged over steps')
+                        action='store_true',
+                        default=False,
+                        help='flag indicating that polarization should be averaged \
+                              over steps')
     parser.add_argument('--step',
-        type=int,
-        default=4,
-        help='flag indicating that polarization should be normalized to maximum')
+                        type=int,
+                        default=4,
+                        help='flag indicating that polarization should be normalized \
+                              to maximum')
     parser.add_argument('--outfile',
-        default=None,
-        help='output filename for spectrum')
+                        default=None,
+                        help='output filename for spectrum')
 
     args = parser.parse_args()
     main(**vars(args))

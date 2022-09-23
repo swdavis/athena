@@ -82,7 +82,7 @@ def grcor(abh,r):
   D = 1 - 2.*r1 + a2r2
   E = 1 + 4.*a2r2 - 4.*a2r3 + 3*a4r4
 
-  # gravity correction  (see Page & Thorne,'73, eq.35) 
+  # gravity correction  (see Page & Thorne,'73, eq.35)
   qcor = (1. - 4.*ar32 + 3.*a2r2)/C
 
   # Minimum radius for last stable circular orbit per unit mass, x0
@@ -146,7 +146,7 @@ def intensityblackholedisk(phots,nx,ny,mbh,abh,mdot,nuobs):
 
     return intens_obs
 
-def make_image(phots,nx,ny,abh,thcam,polarization=False):
+def make_image(phots,nx,ny,abh,thcam):
     """
     Makes image (dict) from photon object
     """
@@ -170,10 +170,12 @@ def make_image(phots,nx,ny,abh,thcam,polarization=False):
     image['ntot'] = phots.ntot
 
     if (nx*ny != phots.ntot):
-        raise AthenaError("Error: nx*ny: {:d} not equal to ntot: {:e}.".format(nx*ny,phots.ntot))
+        raise AthenaError("Error: nx*ny: {:d} not equal to ntot: {:e}."
+                          .format(nx*ny,phots.ntot))
 
     if (phots.user[ny,1] != phots.user[0,1]):
-        raise AthenaError("Error: y(ny): {:e} not equal to y(0): {:e}.".format(phots.user[ny,1],phots.user[0,1]))
+        raise AthenaError("Error: y(ny): {:e} not equal to y(0): {:e}."
+                          .format(phots.user[ny,1],phots.user[0,1]))
 
     # Set up vertical image coordinates
     image['ny'] = ny
@@ -191,27 +193,29 @@ def make_image(phots,nx,ny,abh,thcam,polarization=False):
     image['xfaces'][0] = 0.5*(3.*x[0] - x[1])
     image['xfaces'][nx] = 0.5*(3.*x[-1] - x[-2])
     image['xfaces'][1:nx] = 0.5*(x[1:]+x[:-1])
+    image['unit'] = 'rg'
     #image['x'] = x
 
     nintens = 1
-    if (polarization):
+    if (phots.polarized):
         image['polarized'] = 'true'
         nintens += 2
     else:
         image['polarized'] = 'false'
+    image['nintens'] = nintens
+
     print("spin:",abh)
     mbh = 1.e9
     mdot = 0.1
     nuobs = 5.e15
     intensity = np.zeros([nintens,ninc,nen,ny,nx])
     intensity[0,0,0,:,:] = intensityblackholedisk(phots,nx,ny,mbh,abh,mdot,nuobs)
-    if (polarization):
-        image['polarized'] = 'true'
+    if (phots.polarized):
+        image['polarized'] = True
         intensity[1,0,0,:,:] = np.transpose(phots.q.reshape((nx,ny)))
         intensity[2,0,0,:,:] = np.transpose(phots.u.reshape((nx,ny)))
         for i in range(ny):
           inds = np.where(intensity[0,0,0,i,:] <= 1.e-50)
-          print(intensity[0,0,0,inds])
           intensity[1,0,0,i,inds] = 0.
           intensity[2,0,0,i,inds] = 0.
 
@@ -231,80 +235,90 @@ def main(**kwargs):
 
     # Filenames for io
     infile = kwargs.pop('infile')
-    if kwargs['outfile'] is None:
-        kwargs['outfile'] = infile.replace(".list",".png")
+    outfile = kwargs.pop('outfile')
+    if outfile is None:
+        outfile = infile.replace(".list",".img")
 
     sort = kwargs.pop('sort')
     # Read photon list
     phlist = athenamc.read_list(infile)
     if (sort):
       sort_list(phlist)
-
     phots = photons(phlist)
+
+    # create image
     thcam = kwargs.pop('thcam')
     image = make_image(phots,kwargs['nx'],kwargs['ny'],kwargs['spin'],
-                       thcam,kwargs['polarization'])
-    #plot_image(image,**kwargs)
+                       thcam)
+
+    # write image to file
+    athenamc.write_image(outfile,image)
+
+    # plot image and write to file
     athenamc.plot_image(image,0,**kwargs)
-    plt.savefig(kwargs['outfile'], bbox_inches='tight')
+    outfile = outfile.replace(".img",".png")
+    plt.savefig(outfile, bbox_inches='tight')
 
 
 # Execute main function
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('infile',
-        help='base input filename')
+                        help='base input filename')
     parser.add_argument('nx',
-        type=int,
-        help='number of horizontal pixels')
+                        type=int,
+                        help='number of horizontal pixels')
     parser.add_argument('ny',
-        type=int,
-        help='number of vertical pixels')
+                        type=int,
+                        help='number of vertical pixels')
     parser.add_argument('spin',
-        type=float,
-        help='black hole spin parameter')
+                        type=float,
+                        help='black hole spin parameter')
     parser.add_argument('thcam',
-        type=float,
-        help='camera inclination in degrees')
+                        type=float,
+                        help='camera inclination in degrees')
     parser.add_argument('--outfile',
-        default=None,
-        help='output filename')
+                        default=None,
+                        help='output filename')
     parser.add_argument('-c', '--colormap',
-        default='hot',
-        help='name of Matplotlib colormap to use instead of default; highly recommended; \
-               try "RdBu_r" or "gist_heat" if looking for suggestions')
-    parser.add_argument('-p', '--polarization',
-        action='store_true',
-        default=False,
-        help='flag indicating that polarization should be plotted')
+                        default='hot',
+                        help='name of Matplotlib colormap to use instead of default; \
+                              hot is default, twilight is good for cyclic variables \
+                              like polarization angle')
+    parser.add_argument('-p', '--pvec',
+                        action='store_true',
+                        default=False,
+                        help='flag indicating that polarization should be plotted')
     parser.add_argument('-a', '--average',
-        action='store_true',
-        default=False,
-        help='flag indicating that polarization should be averaged over steps')
+                        action='store_true',
+                        default=False,
+                        help='flag indicating that polarization should be averaged \
+                              over steps')
     parser.add_argument('--vmin',
-        type=float,
-        default=None,
-        help='data value to correspond to colormap minimum; use --vmin=<val> if <val> has \
-          negative sign')
+                        type=float,
+                        default=None,
+                        help='data value to correspond to colormap minimum; use \
+                              --vmin=<val> if <val> has negative sign')
     parser.add_argument('--vmax',
-        type=float,
-        default=None,
-        help='data value to correspond to colormap maximum; use --vmax=<val> if <val> has \
-            negative sign')
+                        type=float,
+                        default=None,
+                        help='data value to correspond to colormap maximum; use \
+                              --vmax=<val> if <val> has negative sign')
     parser.add_argument('--vnorm',
-        action='store_true',
-        help='flag indicating that polarization should be normalized to maximum')
+                        action='store_true',
+                        help='flag indicating that intensity should be normalized \
+                              to maximum')
     parser.add_argument('--sort',
-        action='store_true',
-        help='sort list by last user variable (should be iphot)')
+                        action='store_true',
+                        help='sort list by last user variable (should be iphot)')
     parser.add_argument('--step',
-        type=int,
-        default=4,
-        help='flag indicating that polarization should be normalized to maximum')
+                        type=int,
+                        default=4,
+                        help='flag indicating that polarization should be normalized \
+                              to maximum')
     parser.add_argument('--logc',
-        action='store_true',
-        help='flag indicating data should be colormapped logarithmically')
+                        action='store_true',
+                        help='flag indicating data should be colormapped logarithmically')
 
     args = parser.parse_args()
     main(**vars(args))
-

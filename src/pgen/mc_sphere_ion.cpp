@@ -39,15 +39,19 @@ namespace {
   int i1,i2,i3;
 }
 
+void TrackIonization(MeshBlock *pmb, const Real time, const Real dt,
+              const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
+              const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
+              AthenaArray<Real> &cons_scalar);
+
 //========================================================================================
 //! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
 //! \brief Spherical atmosphere in hydrostatic balance
 //========================================================================================
 
-//void Mesh::InitUserMeshData(ParameterInput *pin) {
-  //EnrollUserExplicitSourceFunction(TrackIonization);
-  // Add user mesh data block
-//}
+void Mesh::InitUserMeshData(ParameterInput *pin) {
+  EnrollUserExplicitSourceFunction(TrackIonization);
+}
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
   nuser_var = 3;
@@ -134,12 +138,14 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
   rout = pin->GetReal("problem","rout");
   Real ncells = static_cast<Real>(pmy_mc->ncells);
 
+  Real dt = pmy_mc->dt;
+
   for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je; ++j) {
       for (int i=is; i<=ie; ++i) {
         Real np = scalars(k,j,i)/mp;
-        emission(k,j,i) = alpha * SQR(np) * pcoord->vol(k,j,i) * ncells;
-        //printf("%g %g\n", pcoord->vol(k, j, i), emission(k, j, i));
+        emission(k,j,i) = alpha * SQR(np) * pcoord->vol(k,j,i) * ncells * dt;
+        //printf("%d %d %d %g %g %g\n", k,j,i,np,pcoord->vol(k, j, i), emission(k, j, i));
   }}}
 }
 
@@ -163,6 +169,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     pphot->i2p[ip] = i2 = static_cast<int>(pran->uniform()*nx2)+js;
     pphot->i3p[ip] = i3 = static_cast<int>(pran->uniform()*nx3)+ks;
 
+    pphot->dtp[ip] = pphot->pmy_mcb->pmy_mc->tmax;
+
     // Obtain initial position within zone
     GetZonePosition(pphot,pran,pcoord,ip);
 
@@ -184,11 +192,6 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     pphot->wp[ip] = emission(i3,i2,i1);
     pphot->ep[ip] = energy0;
 
-    // Initialize Stokes vector
-    pphot->sip[ip] = 1.0;
-    pphot->sup[ip] = 0.0;
-    pphot->sqp[ip] = 0.0;
-
     // Set status flag
     if (pphot->wp[ip] < 0.0)
       pphot->statp[ip] = DESTROYED;
@@ -201,4 +204,34 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     pphot->scp[ip] = ScatteringOpacity(this,pphot,ip);
   } // loop over ip
 
+}
+
+void TrackIonization(MeshBlock *pmb, const Real time, const Real dt,
+              const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
+              const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
+              AthenaArray<Real> &cons_scalar) {
+  Real mp = 1.6726e-24;
+  Real sigma_pi = 6.3e-18;// cm2
+  Real Gamma0 = 1. / (6. * 60. * 60.); // s, photoionization rate coefficient
+  Real alpha = 4.18e-13; // cm3 s-1 for T=1e4 K, recombination rate coefficient
+  Real nR = 1. / alpha / dt;
+  for (int k=pmb->ks; k<=pmb->ke; ++k) {
+    for (int j=pmb->js; j<=pmb->je; ++j) {
+      Real column = 0.;
+      for (int i=pmb->ie+NGHOST; i>=pmb->is-NGHOST; --i) {
+        Real rho = prim(IDN,k,j,i);
+        Real n_p = cons_scalar(0,k,j,i)/mp;
+        Real n_H = rho/mp - n_p;
+        Real dr = pmb->pcoord->dx1f(i);
+        column += n_H * dr;
+        Real Gamma = Gamma0 / (1. + std::pow(sigma_pi * column, 1.5)); // Trammell et al 2011, Fig 9 powerlaw
+        Real nC = Gamma / alpha;
+        if (time <= 0.) {
+          printf("%g %g %g %g %g %g\n", pmb->pcoord->x1v(i), rho, nC, n_H, cons_scalar(0,k,j,i)/rho, column);
+        }
+        cons_scalar(0,k,j,i) = 0.5 * mp * (-(nC + nR) + std::sqrt((nC + nR)*(nC + nR) + 4. * (nC*rho/mp + nR*n_p)));
+      }
+    }
+  }
+  return;
 }

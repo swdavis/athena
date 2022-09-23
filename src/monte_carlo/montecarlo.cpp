@@ -814,7 +814,10 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
     dt = pin->GetOrAddReal("montecarlo","dt",1.);
     tmax = pin->GetOrAddReal("montecarlo","tmax",HUGE_NUMBER);
   } else if (MONTE_CARLO_DYNAMIC) {
-    dt = tmax = pmy_mesh->dt;
+    tmax = pin->GetOrAddReal("montecarlo","tmax",-1.);
+    if (tmax < 0.)
+      tmax = pmy_mesh->dt;
+    dt = pmy_mesh->dt;
   }
 
   // Set number of photons per montecarloblock
@@ -834,6 +837,7 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
     if (InitEmission != nullptr) {
       pmcb->minweight *= InitEmission(pmcb);
     }
+    if (NSCALARS > 0) GetScalars(pmcb); //scalars
     // set photons to be computed and counters
     pmcb->nphremain = nblock;
     pmcb->nphdone = 0;
@@ -854,7 +858,7 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
 
   // initialize counter
   int ntot = 0;
-
+ 
   bool photons_remain = true; // True if photons on any process
   while(photons_remain) {
 
@@ -955,14 +959,16 @@ bool MonteCarlo::CheckAndBroadCastPhotonsRemaining() {
 //! \brief Run one step in dynamic MC calculation
 
 void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
-                                     ParameterInput *pinput) {
+                                     ParameterInput *pin) {
 
   // initialize counter
   int ntot = 0;
+  tmax = pin->GetOrAddReal("montecarlo","tmax",-1.);
+  if (tmax < 0.)
+    tmax = pmy_mesh->dt;
+  dt = pmy_mesh->dt;
 
-  dt = tmax = pmy_mesh->dt;
-
-  // Rest monte carlo blocks
+  // Reset monte carlo blocks
   for (int i=0; i<nblocal; i++) {
     MonteCarloBlock *pmcb = my_blocks(i);
     // Initialize variables over all blocks
@@ -972,6 +978,7 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
     if (InitEmission != nullptr) {
       pmcb->minweight *= InitEmission(pmcb);
     }
+    if (NSCALARS > 0) GetScalars(pmcb); //scalars
     // set photons to be computed and counters
     pmcb->nphremain = nblock;
     pmcb->nphdone = 0;

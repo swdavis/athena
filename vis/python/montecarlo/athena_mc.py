@@ -27,7 +27,8 @@ class photons:
         ncol = phlist['npars']
         self.nphot = phlist['length']
         if (ncol < self.npars):
-            raise ValueError("Error creating photon: ncol {:d} < npars {:d}".format(ncol,self.npars))
+            raise ValueError("Error creating photon: ncol {:d} < npars {:d}"
+                             .format(ncol,self.npars))
         else:
             if (ncol > self.npars):
                 self.nuser = ncol - self.npars
@@ -1405,7 +1406,8 @@ def subsample_polarization(q,u,x,y,step,average):
 
 
 
-def plot_image(image,iinc,polarization=False,average=False,step=4,ax=None,**kwargs):
+def plot_image(image,iinc,type='intensity',pvec=False,average=False,step=4,
+               ax=None,**kwargs):
     """
     Plot an image
     """
@@ -1419,17 +1421,47 @@ def plot_image(image,iinc,polarization=False,average=False,step=4,ax=None,**kwar
     cmap = plt.get_cmap(kwargs['colormap'])
     plt.figure()
 
-    if kwargs['vnorm']:
-        vals = image['intensity'][0,iinc,0,:,:] / np.max(image['intensity'])
-        vmax = 1.
-        if vmin is None:
-            vmin = 1.e-5
-    else:
+    if (polarization_requested(type)):
+        if (not image['polarized']):
+            raise RuntimeError("Polarization type requested ("+type+
+                               ") but image is unpolarized")
+    if (type == 'intensity'):
         vals = image['intensity'][0,iinc,0,:,:]
+        clabel=r"$I$"
         if vmin is None:
             vmin = 1.e-5*np.max(vals)
+    elif (type == 'q'):
+        vals = image['intensity'][1,iinc,0,:,:]
+        clabel=r"$Q/I$"
+    elif (type == 'u'):
+        vals = image['intensity'][2,iinc,0,:,:]
+        clabel=r"$U/I$"
+    elif (type == 'polangle'):
+        q = image['intensity'][1,iinc,0,:,:]
+        u = image['intensity'][2,iinc,0,:,:]
+        vals = 90./np.pi*np.arctan2(u,q)
+        vals[vals < 0.] += 360.
+        if (vmin is None):
+            vmin = 0.
+        clabel = r"$\rm Pol.\; Angle$"
+    elif (type == 'polfrac'):
+        q = image['intensity'][1,iinc,0,:,:]
+        u = image['intensity'][2,iinc,0,:,:]
+        vals = np.sqrt(q**2+u**2)
+        if (vmin is None):
+            vmin = 0.
+        clabel = r"$\rm Pol.\; Fraction$"
+    else:
+        raise RuntimeError("Type:"+type+" is not defined.")
+
+    if kwargs['vnorm']:
+        vm = np.max(vals)
+        vals = vals / vm
+        vmax = 1.
+        vmin /= vm
+
     if (kwargs['logc']):
-        vals[vals <= 0.] = 1.e-12
+        vals[vals <= 0.] = 1.e-20 * np.max(vals)
         norm = colors.LogNorm(vmin=vmin,vmax=vmax)
     else:
         norm = colors.Normalize(vmin=vmin,vmax=vmax)
@@ -1444,14 +1476,15 @@ def plot_image(image,iinc,polarization=False,average=False,step=4,ax=None,**kwar
     if (image['unit'] == 'cm'):
         plt.xlabel(r"$x \; (\rm cm)$")
         plt.ylabel(r"$y \; (\rm cm)$")
-        clabel=r"$F \; (\rm erg/s/cm^2)$"
+        if (type == 'intensity'):
+            clabel=r"$I \; (\rm erg/s/cm^2)$"
     else:
         plt.xlabel(r"$x$")
         plt.ylabel(r"$y$")
-        clabel=r"$F$"
+
     plt.colorbar(im,label=clabel)
     plt.gca().set_aspect('equal')
-    if (polarization):
+    if (pvec):
         if (image['polarized']):
             q = image['intensity'][1,iinc,0,:,:]
             u = image['intensity'][2,iinc,0,:,:]
@@ -1465,7 +1498,7 @@ def plot_image(image,iinc,polarization=False,average=False,step=4,ax=None,**kwar
             plt.quiver(x_pol, y_pol, vx, vy, color='k',headwidth=0, headlength=0,
                        headaxislength=0, scale = None,pivot='middle')
         else:
-            raise RuntimeError('Polarization requested but image is unpolarized')
+            raise RuntimeError("Polarization vectors requested but image is unpolarized")
 
 def write_image(filename,image):
     """

@@ -467,7 +467,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
     if (moments_flag) {
       // Update cooling to relect newly emitted photons
       for (int ip=nold; ip<pphot->nphot; ip++) {
-        UpdateSourceTermsAfterScatter(pphot,0.,0.,ip,0.,0.,0.);
+        UpdateSourceTerms(pphot,0.,0.,0.,0.,0.,ip);
       }
     }
   }
@@ -478,9 +478,12 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
 
   for (int ip=0; ip<pphot->nphot; ip++) {
 
+    // Account for absorption
+    Real weight0 = pphot->wp[ip];
+    Real k1p0 = pphot->k1p[ip];
+    Real k2p0 = pphot->k2p[ip];
+    Real k3p0 = pphot->k3p[ip];
     if (pphot->statp[ip] == EVOLVING) {
-      // Account for absorption
-      Real weight0 = pphot->wp[ip];
       if (absorption_meth == ABSWEIGHT) {
         pphot->wp[ip] *= (pphot->scp[ip]/(pphot->scp[ip]+pphot->acp[ip]));
         if(pphot->wp[ip] <= minweight) {
@@ -494,9 +497,6 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
         if(pphot->wp[ip] <= minweight) {
           pphot->statp[ip] = ABSORBED;
         }
-      }
-      if (moments_flag) {
-        UpdateSourceTerms(pphot,0.,weight0,ip);
       }
     } // status == evolving
 
@@ -531,7 +531,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
         LorentzTransform(pphot,to_eulr,ip,ip);
       }
       if (moments_flag) {
-        UpdateSourceTerms(pphot,e_pre_scat,0.,ip);
+        UpdateSourceTerms(pphot,e_pre_scat,0.,k1p0,k2p0,k3p0,ip);
       }
     } // status == evolving
 
@@ -584,8 +584,9 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
 
 void MonteCarloBlock::CoupleMonteCarloToFluid(Real dt) {
 
-  MeshBlock *pmb = pmy_block;
+  if (!coupled) return;
 
+  MeshBlock *pmb = pmy_block;
   for (int k=pmb->ks; k<=pmb->ke; ++k) {
       for (int j=pmb->js; j<=pmb->je; ++j) {
 #pragma omp simd
@@ -796,7 +797,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
 
 void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Real k2,
                                     Real k3, Real etau, int ip) {
-
+  
   Real c_cgs = 2.99792458e10;;
   Real k1p = pphot->k1p[ip];
   Real k2p = pphot->k2p[ip];
@@ -981,13 +982,13 @@ void MonteCarloBlock::ResetMoments() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::UpdateSourceTermsAfterScatter(Photon *pphot, Real energy0, Real weight0,
-//                                          int ip, Real k1p0, Real k2p0, Real k3p0)
+//! \fn void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0,
+//                                  Real weight0, int ip, Real k1p0, Real k2p0, Real k3p0)
 //! \brief compute net photon cooling rate and momentum change
-// BCM: DEPRECATED
 
-void MonteCarloBlock::UpdateSourceTermsAfterScatter(Photon *pphot, Real energy0, Real weight0, 
-                                                    int ip, Real k1p0, Real k2p0, Real k3p0) {
+void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0,
+                                        Real weight0, Real k1p0,
+                                        Real k2p0, Real k3p0, int ip) {
   // Updates
   Real c_cgs = 2.99792458e10;
 
@@ -1064,7 +1065,7 @@ void MonteCarloBlock::UpdateSourceTermsAfterScatter(Photon *pphot, Real energy0,
 //! \fn void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0,
 //                                          int ip, Real k1p0, Real k2p0, Real k3p0)
 //! \brief compute net photon cooling rate and momentum change
-
+/*
 void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0, int ip) {
 
   Real cool = (pphot->wp[ip] * pphot->ep[ip]) - (weight0 * energy0);
@@ -1078,7 +1079,7 @@ void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0, Real weight
 
     moments(MCINET,k,j,i) -= cool;
   }
-}
+  }*/
 
 
 //----------------------------------------------------------------------------------------
