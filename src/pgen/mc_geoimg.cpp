@@ -94,6 +94,47 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
   nuser_var = 6;
   // Enroll function for determining plane crossing
   EnrollUserWorkInMove(MidplaneCrossing);
+
+  // Determine if camera is on the is block
+  /*rcam = pin->GetOrAddReal("problem", "rcam", 0.9999*pin->GetReal("mesh","x1max"));
+  thcam = pin->GetOrAddReal("problem", "thcam", 45.) * M_PI / 180.;
+  phcam = pin->GetOrAddReal("problem", "phcam", 90.) * M_PI / 180.;
+  printf("%g %g %g\n",rcam,thcam,phcam);
+  int cam = 0;
+  printf("nbl: %d\n",nblocal);
+  for (int i=0; i<nblocal; i++) {
+    MonteCarloBlock *pmcb = my_blocks(i);
+    MeshBlock *pmb = pmcb->pmy_block;
+    if ( (rcam > pmb->block_size.x1min) && (rcam <= pmb->block_size.x1max) &&
+         (thcam > pmb->block_size.x2min) && (thcam <= pmb->block_size.x2max) &&
+         (phcam > pmb->block_size.x3min) && (phcam <= pmb->block_size.x3max) ) {
+      cam = 1;
+      int nx = pin->GetInteger("problem", "nx");
+      int ny = pin->GetInteger("problem", "ny");
+      nphtot = nx * ny;
+      printf("y %d\n",Globals::my_rank);
+    } else {
+      printf("n %d\n",Globals::my_rank);
+      nphtot = 0;
+    }
+  }
+
+#ifdef MPI_PARALLEL
+  MPI_Allreduce(MPI_IN_PLACE,&cam,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+#endif
+
+  if (cam < 1) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in InitUserMonteCarloData" << std::endl
+        << "Camera not found on any block." << std::endl;
+    ATHENA_ERROR(msg);
+  } else if (cam > 1) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in InitUserMonteCarloData" << std::endl
+        << "Camera found on multiple blocks." << std::endl;
+    ATHENA_ERROR(msg);
+    }*/
+
 }
 
 //========================================================================================
@@ -103,17 +144,33 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 
 void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
+
   // Set rh
   Real abh = pcoord->GetSpin();
   Real mbh = pcoord->GetMass();
   rh = 1.0 + sqrt(1.0 - SQR(abh));
 
-  nrays = pin->GetInteger("montecarlo", "nphot");
-  nalpha = nbeta = static_cast<int>(sqrt(static_cast<Real>(nrays)));
   forward_integration = pin->GetOrAddBoolean("problem","forward",false);
 
   // set outer disk radius
   rdisk = pin->GetOrAddReal("problem", "rdisk", 1.e20);
+
+  // Determine if camera is on the is block
+  rcam = pin->GetOrAddReal("problem", "rcam", 0.9999*pin->GetReal("mesh","x1max"));
+  thcam = pin->GetOrAddReal("problem", "thcam", 45.) * M_PI / 180.;
+  phcam = pin->GetOrAddReal("problem", "phcam", 90.) * M_PI / 180.;
+  MeshBlock *pmb = pmy_block;
+  if ( (rcam > pmb->block_size.x1min) && (rcam <= pmb->block_size.x1max) &&
+       (thcam > pmb->block_size.x2min) && (thcam <= pmb->block_size.x2max) &&
+       (phcam > pmb->block_size.x3min) && (phcam <= pmb->block_size.x3max) ) {
+    nalpha = pin->GetInteger("problem", "nx");
+    nbeta = pin->GetInteger("problem", "ny");
+    // reset nphremain
+    nphremain = nalpha * nbeta;
+  } else {
+    nphremain = 0;
+    return;
+  }
 
   Real amin = pin->GetOrAddReal("problem", "alpha_min", -10.);
   Real amax = pin->GetOrAddReal("problem", "alpha_max", 10.);
@@ -128,30 +185,7 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
     bmax = bmin;
   BuildImageArrayUniform(nalpha,amin,amax,nbeta,bmin,bmax,alpha,beta);
 
-#ifdef MPI_PARALLEL
-  // Set iphot based on assumption that rays are distributed evenly
-  // accross active processes
-  int rank = Globals::my_rank;
-  int ntot = pin->GetInteger("montecarlo", "nphot");
-  if (rank > 0) {
-    int nranks = Globals::nranks;
-    int myn = ntot/(nranks-1);
-    int remain = ntot % (nranks-1);
-    if (rank <= remain) {
-      myn++;
-      iphot = (rank-1)*myn;
-    } else {
-      iphot = remain*(myn+1) + (rank-1-remain)*myn;
-    }
-    //printf("iphot: %d %d %d\n",rank,iphot,myn);
-  }
-#else
   iphot = 0;
-#endif
-
-  rcam = pin->GetOrAddReal("problem", "rcam", pin->GetReal("mesh","x1max"));
-  thcam = pin->GetOrAddReal("problem", "thcam", 45.) * M_PI / 180.;
-  phcam = pin->GetOrAddReal("problem", "phcam", 90.) * M_PI / 180.;
 
   // set the photon samples 's initial zone indices
   Real r = rcam * 0.999999;
@@ -296,7 +330,6 @@ void TransformPhotonAtDisk(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   // to intensity
 
   // Construct the orthonormal tetrad in comoving frame of circular orbit
-
   Real gcov[4][4];
   Real x[4];
   x[IMC0] = pphot->x0p[ip];

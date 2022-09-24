@@ -366,68 +366,81 @@ MonteCarloBlock::~MonteCarloBlock() {
       }*/
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::RayTracePhotons()
+//! \fn void MonteCarloBlock::RayTracePhotonsOnBlock()
 //! \brief Integrate photons to termination condtion without scattering
 
-void MonteCarloBlock::RayTracePhotons(int nphot) {
+void MonteCarloBlock::RayTracePhotonsOnBlock() {
 
-    Real const to_comv = 1.0;
-    Real const to_eulr = -1.0;
-    int nscat = 0, nesc = 0, nabs = 0, ndes = 0;
-    int ntodo = (nphot > nphremain) ? nphremain : nphot;
+  Real const to_comv = 1.0;
+  Real const to_eulr = -1.0;
+  int nbuf = 0;
 
-    int nloop = 100;
-    int nprop = ntodo;
 
-    while (nprop > 0) {
+  // Emit photons to replace those that left meshblock or were terminated
+  // Limit ntodo to number of remaining photons on block
+  int ntodo = (nchunk > nphremain) ? nphremain : nchunk;
 
-      // Emit photons to replace those that left meshblock or were terminated
-      nloop = (nloop > nprop) ? nprop : nloop;
-      int nold = pphot->nphot;
-      pphot->AllocatePhotons(nloop);
-      // user definied photon initialization
-      InitializePhoton(pphot,nold,pphot->nphot-1);
-      if (ptraj != nullptr) {
-        for (int ip=nold; ip < pphot->nphot; ip++)
-          ptraj->InitializeTrajectory(pphot->trp[ip]);
-      }
-      // Photon initialized in coordinate frame
-      // move photon until  stopping condition
-      pmover->Move(pphot,0,pphot->nphot-1);
-      if (ptraj != nullptr) {
-        for (int ip=nold; ip < pphot->nphot; ip++)
-          ptraj->CompleteTrajectory(pphot->trp[ip]);
-      }
+  // if photons remain to transfer, make space for new photons
+  if (ntodo > 0) {
+    int nold = pphot->nphot;
+    pphot->AllocatePhotons(nold+ntodo);
+    nphremain -= ntodo;
+    nphdone += ntodo;
 
-      for (int ip=0; ip<pphot->nphot; ip++) {
+    // user definied photon initialization
+    InitializePhoton(pphot,nold,pphot->nphot-1);
+    if (ptraj != nullptr) {
+      for (int ip=nold; ip < pphot->nphot; ip++)
+        ptraj->InitializeTrajectory(pphot->trp[ip]);
+    }
+  }
+  int ntot = pphot->nphot;
+
+  // Photon initialized in coordinate frame
+  // move photon until  stopping condition
+  pmover->Move(pphot,0,pphot->nphot-1);
+
+  for (int ip=pphot->nphot-1; ip >= 0; ip--) {
+    if (pphot->statp[ip] != EVOLVING) {
+
+      if (pphot->statp[ip] != BUFFERED) {
         // User defined completion work
         FinalizePhoton(pphot,ip);
-        if (pphot->statp[ip] == ESCAPED) {
-          // loop over spectra and update
-          Spectrum *pspect = pspec;
-          while (pspect != nullptr) {
-            pspect->UpdateSpectrum(pphot,ip);
-            pspect = pspect->next;
-          }
-          if (pphlist != nullptr) {
-            pphlist->AddPhoton(pphot,ip);
-          }
-          nesc++;
-        } else if (pphot->statp[ip] == ABSORBED) {
-          nabs++;
-        } else if (pphot->statp[ip] == DESTROYED) {
-          ndes++;
-        }
-        pphot->RemoveOneParticle(ip);
-        nprop--;
-      } // end loop over ip
-    } // while nprop > 0
 
-    std::cout  << "rank, nesc, nabs, ndes, nscat: " << Globals::my_rank << ' '
-               << nesc << ' ' << nabs << ' ' << ndes << ' '
-               << static_cast<Real>(nscat)/static_cast<Real>(ntodo)
-               << std::endl;
-    return;
+        if (ptraj != nullptr) {
+          ptraj->CompleteTrajectory(pphot->trp[ip]);
+        }
+      }
+      if (pphot->statp[ip] == ESCAPED) {
+        // loop over outputs for escaping photons and update
+        Spectrum *pspect = pspec;
+        while (pspect != nullptr) {
+          pspect->UpdateSpectrum(pphot,ip);
+          pspect = pspect->next;
+        }
+        if (pphlist != nullptr) {
+          pphlist->AddPhoton(pphot,ip);
+        }
+        nesc++;
+        pphot->RemoveOneParticle(ip);
+      } else if (pphot->statp[ip] == ABSORBED) {
+        nabs++;
+        pphot->RemoveOneParticle(ip);
+      } else if (pphot->statp[ip] == DESTROYED) {
+        ndes++;
+        printf("destroyed\n");
+        pphot->PrintPhoton(ip);
+        pphot->RemoveOneParticle(ip);
+      } else if (pphot->statp[ip] == BUFFERED) {
+        nbuf++;
+      }
+    }
+  } // end loop over ip
+
+   /*std::cout  << "rank, ntot, nnew, nesc, nabs, ndes, nbuf, nscat: " << Globals::my_rank
+             << ' ' << ntot << ' ' << ntodo << ' ' << nesc
+             << ' ' << nabs << ' ' << ndes << ' ' << nbuf
+             << ' ' << nscat << std::endl;*/
 }
 
 
@@ -444,7 +457,6 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
   // Emit photons to replace those that left meshblock or were terminated
   // Limit ntodo to number of remaining photons on block
   int ntodo = (nchunk > nphremain) ? nphremain : nchunk;
-  //ntodo = (ntodo > nphremain) ? nphremain : ntodo;
 
   // if photons remain to transfer, make space for new photons
   if (ntodo > 0) {
@@ -540,15 +552,16 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
   // Reversed because of way particles are popped
   for (int ip=pphot->nphot-1; ip >= 0; ip--) {
     if (pphot->statp[ip] != EVOLVING) {
-
-      if (pphot->statp[ip] == ESCAPED) {
+      if (pphot->statp[ip] != BUFFERED) {
+        // User defined completion work
+        FinalizePhoton(pphot,ip);
         if (ptraj != nullptr) {
           ptraj->CompleteTrajectory(pphot->trp[ip]);
         }
-        // User defined completion work
-        FinalizePhoton(pphot,ip);
+      }
 
-        // loop over spectra and update
+      if (pphot->statp[ip] == ESCAPED) {
+       // loop over outputs for escaping photons and update
         Spectrum *pspect = pspec;
         while (pspect != nullptr) {
           pspect->UpdateSpectrum(pphot,ip);
@@ -1060,26 +1073,6 @@ void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0,
   }
 
 }
-
-//----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0,
-//                                          int ip, Real k1p0, Real k2p0, Real k3p0)
-//! \brief compute net photon cooling rate and momentum change
-/*
-void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0, int ip) {
-
-  Real cool = (pphot->wp[ip] * pphot->ep[ip]) - (weight0 * energy0);
-  if ((std::isinf(cool)) || (std::isnan(cool))) {
-    std::cout << "Warning: UpdateSourceTerms cooling is : " << cool << std::endl;
-    pphot->PrintPhoton(ip);
-  } else {
-    int &i = pphot->i1p[ip];
-    int &j = pphot->i2p[ip];
-    int &k = pphot->i3p[ip];
-
-    moments(MCINET,k,j,i) -= cool;
-  }
-  }*/
 
 
 //----------------------------------------------------------------------------------------

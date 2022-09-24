@@ -90,13 +90,14 @@ Spectrum::Spectrum(Spectrum *pspec) {
   face = pspec->face;
   id = pspec->id;
   output_number = pspec->output_number;
-  x1min = pspec->x1min;
-  x2min = pspec->x2min;
-  x3min = pspec->x3min;
-  x1max = pspec->x1max;
-  x2max = pspec->x2max;
-  x3max = pspec->x3max;
-  dt = pspec->dt;
+  // x1min = pspec->x1min;
+  //x2min = pspec->x2min;
+  //x3min = pspec->x3min;
+  //x1max = pspec->x1max;
+  //x2max = pspec->x2max;
+  //x3max = pspec->x3max;
+  //dt = pspec->dt;
+  //nphtot = pspec->nphtot;
   // Allocate and intialize energy bins
   energies.NewAthenaArray(range.ne+1);
   BuildEnergyGrid(range.emin,range.emax,range.ne,logarithmic);
@@ -610,6 +611,7 @@ void Spectrum::AddSpectrum(Spectrum *pspec) {
         << id << std::endl;
     throw std::runtime_error(msg.str().c_str());
   } else {
+    nphtot += pspec->nphtot;
     for(int i=0; i<range.nphi; ++i) {
       for(int j=0; j<range.ncth; ++j) {
         for(int k=0; k<range.ne; ++k) {
@@ -707,10 +709,10 @@ void PhotonList::AddPhoton(Photon *pphot, int ip) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PhotonList::WriteList(std::string filename, Real ntot)
+//! \fn void PhotonList::WriteList(std::string filename)
 //! \brief write photon list to binary file
 
-void PhotonList::WriteList(std::string filename, int ntot) {
+void PhotonList::WriteList(std::string filename) {
   // Since list lengths are variable each process writes its own list
 
   // open file for output
@@ -727,7 +729,7 @@ void PhotonList::WriteList(std::string filename, int ntot) {
   // write header information
   fprintf(pfile,"dt=%.8e\n",dt);
   fprintf(pfile,"length=%d\nnpars=%d\n",length,nparams);
-  fprintf(pfile,"ntot=%d\n",ntot);
+  fprintf(pfile,"ntot=%d\n",nphtot);
   fprintf(pfile,"polarized=%d\n",polarized);
   fprintf(pfile,"coord=%s\n",COORDINATE_SYSTEM);
   // write data
@@ -848,7 +850,7 @@ void PhotonTrajectoryList::AddToTrajectory(Photon *pphot, int ip) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PhotonTrajectoryList::WriteList(std::string filename, Real ntot)
+//! \fn void PhotonTrajectoryList::WriteList(std::string filename)
 //! \brief write photon trajectory list to binary file with header
 
 void PhotonTrajectoryList::WriteList(std::string filename) {
@@ -936,7 +938,7 @@ void PhotonTrajectoryList::ResizeList(int new_len_limit, int new_step_limit) {
 
 //----------------------------------------------------------------------------------------
 //! MCOutput constructor from ParameterInput and MonteCarlo
-
+// SWD needs to be split into constructor + intializer
 MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
 
   pmy_mc = pmc;
@@ -1025,6 +1027,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
           pspec->polar_axis = true;
         else
           pspec->polar_axis = pin->GetOrAddBoolean(pib->block_name,"polar_axis",false);
+        pspec->nphtot = 0;
         // Check for coordinate range
         if (pfirst == nullptr)
           pfirst = pspec;
@@ -1051,6 +1054,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         } else if (MONTE_CARLO_DYNAMIC) {
           pphlist->dt = pin->GetReal(pib->block_name,"dt");
         }
+        pphlist->nphtot = 0;
         pphlist->length = 0;
         pphlist->output_number = 0;
         // Generate file name
@@ -1127,10 +1131,10 @@ MCOutput::~MCOutput() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void Spectrum::WriteSpectrum(Real norm, std::string fname)
+//! \fn void Spectrum::WriteSpectrum(std::string fname)
 //! \brief output intensity spectrum in original mcgrid format
 
-void Spectrum::WriteSpectrum(std::string fname, int nphot) {
+void Spectrum::WriteSpectrum(std::string fname) {
 
   // open file for output
   FILE *pfile;
@@ -1151,7 +1155,7 @@ void Spectrum::WriteSpectrum(std::string fname, int nphot) {
   fprintf(pfile,"nx=%d\n",ne);
   fprintf(pfile,"nmu=%d\n",nmu);
   fprintf(pfile,"nphi=%d\n",nphi);
-  fprintf(pfile,"ntot=%d\n",nphot);
+  fprintf(pfile,"ntot=%d\n",nphtot);
   int nintens = 1;
   if (polarized) nintens += 2;
   fprintf(pfile,"nintens=%d\n",nintens);
@@ -1191,7 +1195,7 @@ void Spectrum::WriteSpectrum(std::string fname, int nphot) {
     dnu[i] = (energies(i+1)-energies(i))/h;
   }
   // First compute normalized intensities, stokes vectors, and errors
-  Real norm = static_cast<Real>(nphot);
+  Real norm = static_cast<Real>(nphtot);
   AthenaArray<Real> intens, errors;
   intens.NewAthenaArray(nintens,nphi,nmu,ne);
   errors.NewAthenaArray(nintens,nphi,nmu,ne);
@@ -1287,25 +1291,25 @@ void MCOutput::CollectSpectrum(MonteCarlo *pmc) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCOutput::OutputSpectrum(MonteCarlo *pmc)
+//! \fn void MCOutput::OutputSpectrum()
 //! \brief output all intensity spectra
 
-void MCOutput::OutputSpectrum(MonteCarlo *pmc) {
+void MCOutput::OutputSpectrum() {
+
 
   if (pspec == nullptr)
     return;
-  CollectSpectrum(pmc);
+  CollectSpectrum(pmy_mc);
 #ifdef MPI_PARALLEL
   if (Globals::my_rank == 0) {
     for(int i=1; i<Globals::nranks; ++i) // temporary: assumes spectra on all processes
-      pmc->ReceiveMonteCarloSpectra(i);
+      pmy_mc->ReceiveMonteCarloSpectra(i);
   } else {
-    pmc->SendMonteCarloSpectra(0);
+    pmy_mc->SendMonteCarloSpectra(0);
   }
 #endif
   if (Globals::my_rank == 0) {
     Spectrum *pspect = pspec;
-    int nphot = pmc->nphrun;
     while (pspect != nullptr) {
       std::string filename;
       filename.assign(pspect->base_name);
@@ -1314,7 +1318,7 @@ void MCOutput::OutputSpectrum(MonteCarlo *pmc) {
       file_number << std::setw(5) << std::setfill('0') << pspect->output_number;
       filename.append(file_number.str());
       filename.append(".spec");
-      pspect->WriteSpectrum(filename,nphot);
+      pspect->WriteSpectrum(filename);
       pspect->output_number++;
       pspect = pspect->next;
     }
@@ -1323,10 +1327,10 @@ void MCOutput::OutputSpectrum(MonteCarlo *pmc) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCOutput::OutputPhotonList(MonteCarlo *pmc)
+//! \fn void MCOutput::OutputPhotonList()
 //! \brief output list of photon properties
 
-void MCOutput::OutputPhotonList(int nphtot) {
+void MCOutput::OutputPhotonList() {
 
   if (pphlist == nullptr)
     return;
@@ -1338,7 +1342,7 @@ void MCOutput::OutputPhotonList(int nphtot) {
   file_number << std::setw(5) << std::setfill('0') << pphlist->output_number;
   filename.append(file_number.str());
   filename.append(".list");
-  pphlist->WriteList(filename,nphtot);
+  pphlist->WriteList(filename);
   pphlist->output_number++;
   // Reset list length to 0
   pphlist->length = 0;
@@ -1365,5 +1369,35 @@ void MCOutput::OutputTrajectoryList() {
   ptraj->output_number++;
   // Reset list length to 0
   ptraj->length = 0;
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCOutput::UpdateOutputCount(int nph)
+//! \brief updates total numbers of photons run for output normalization
+
+// SWD Add Trajectory, image
+void MCOutput::UpdateOutputCount(int nph) {
+  if (pphlist != nullptr)
+    pphlist->nphtot += nph;
+
+  Spectrum *pspect = pspec;
+  while (pspect != nullptr) {
+    pspect->nphtot += nph;
+    pspect = pspect->next;
+  }
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCOutputs::MakeOutputs()
+//! \brief write MonteCarlo outputs
+// SWD: need to make these depend on time
+
+void MCOutput::MakeOutputs() {
+
+  OutputSpectrum();
+  OutputPhotonList();
+  OutputTrajectoryList();
 
 }

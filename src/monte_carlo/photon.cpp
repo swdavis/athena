@@ -112,6 +112,11 @@ void Photon::PrintPhoton(int ip) {
     std::cout << "BUFFERED" << std::endl;
   else
     std::cout << std::endl;
+  if (nuser_var > 0)
+    std::cout << nuser_var << " variables:";
+  for (int i=0; i<nuser_var; i++)
+    std::cout << " " << user[i][ip];
+  std::cout << std::endl;
 }
 
 //----------------------------------------------------------------------------------------

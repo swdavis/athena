@@ -190,8 +190,8 @@ public:
 
   Real dt;     // Monte Carlo timestep
   Real tmax;   // Maximum evolution time
-  int nphtot;  // total number of photons to integrate
-  int nphdone; // total photons completed accross all blocks on all processes
+  int nphtot;  // total number of photons to integrate per timestep
+  int nphrun;  // number of photons completed
   int nblock;  // number of photons per step per block
   int nblocal; // number of montecarloblocks on this process
   int nbtotal; // total number of montecarloblocks
@@ -205,7 +205,6 @@ public:
   int *derv; // pointer to array of derivative processes
   int origin; // process with origin mesh block
   int blocksize;
-  int nphrun; // number of photons run thus far
   int max_list_size; // maximum number of photons run per output on any process
   int max_phots_init; // maximum number of photon elements
   int nuser_var;
@@ -251,7 +250,6 @@ public:
   void ReceiveMonteCarloSpectra(int source);
   //void CollectMoments(void);
   void Initialize(ParameterInput *pinput);
-  void MakeOutputs();
 
 private:
 
@@ -352,7 +350,7 @@ public:
   // functions
   void InitUserMonteCarloBlockData(ParameterInput *pin);
   void MonteCarloProblemGenerator(ParameterInput *pin);
-  void RayTracePhotons(int nphtot); // Ray trace photon on this block
+  void RayTracePhotonsOnBlock(); // Ray trace photon on this block
   void TransferPhotonsOnBlock(); // Transfer photons on this block
   void CoupleMonteCarloToFluid(Real dt);  // couple monte carlo to mesh
   void CoordinateToComoving(Photon *pphot, int ips, int ipe);

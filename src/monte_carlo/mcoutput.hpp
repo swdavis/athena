@@ -36,6 +36,7 @@ public:
   Spectrum(Spectrum *pspec);
   ~Spectrum();
 
+  int nphtot;  // total number of photons run for this spectrum
   std::string base_name;
   MomentumRange range;
   bool polarized;
@@ -70,7 +71,7 @@ public:
   bool ScreenCoordinates(Photon *pphot, int ip);
   void ResetSpectrum();
   void AddSpectrum(Spectrum *pspec);
-  void WriteSpectrum(std::string filename, int ntot);
+  void WriteSpectrum(std::string filename);
 
 };
 
@@ -85,6 +86,7 @@ public:
 
   std::string base_name;
 
+  int nphtot;  // total number of photons run for this list
   int length; // number of occupied elements
   int nparams; // number of properties for each photon in list
   int output_number;// current output number
@@ -96,7 +98,7 @@ public:
 
   //functions
   void AddPhoton(Photon *pphot, int ip);
-  void WriteList(std::string filename, int ntot);
+  void WriteList(std::string filename);
 
 private:
   int len_limit;  // number of photons allowed with current allocated memory
@@ -188,10 +190,11 @@ public:
 
   //functions
   void CollectSpectrum(MonteCarlo *pmc);
-  void OutputSpectrum(MonteCarlo *pmc);
-  void OutputPhotonList(int nphtot);
+  void OutputSpectrum();
+  void OutputPhotonList();
   void OutputTrajectoryList();
-
+  void UpdateOutputCount(int nph);
+  void MakeOutputs();
 };
 
 #endif //MC_OUTPUT

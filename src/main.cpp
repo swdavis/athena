@@ -579,7 +579,7 @@ int main(int argc, char *argv[]) {
   pmesh->UserWorkAfterLoop(pinput);
 
   if (MONTE_CARLO_STATIC)
-    pmc->MakeOutputs();
+    pmc->pmcout->MakeOutputs();
 #ifdef ENABLE_EXCEPTIONS
   try {
 #endif

@@ -63,6 +63,7 @@ public:
   static int ipolp;
   static int idtp;
 
+  // SWD: turn trp into a user variable?
   std::vector<int> &statp, &nscp, &trp;
   std::vector<int> &i1p, &i2p, &i3p;
   std::vector<Real> &x0p, &x1p, &x2p, &x3p;

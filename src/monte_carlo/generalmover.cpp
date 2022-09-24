@@ -46,10 +46,10 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
   MCRandom *pran = pmy_mcb->pran;
   PhotonTrajectoryList *ptraj = pmy_mcb->ptraj;
 
+
   for (int ip=ips; ip<=ipe; ip++) {
     // get number of mean free paths photon will travel
     Real tauremaining = GetOpticalDepth(pran);
-
     Real step = StepSize(pphot,ip);
     Real path_length;
     Real k1, k2, k3;
@@ -61,8 +61,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
 
     while ( (pphot->statp[ip] == EVOLVING) && (tauremaining > TINY_NUMBER) &&
             (iter < checkmove) && (pphot->dtp[ip] > 0.) ) {
-      //printf("%d %g\n",iter,step);
-      //pphot->PrintPhoton(ip);
+
       iter++;
       count++;
 
@@ -98,7 +97,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
         if (tauremaining > chi * step) { // Photon hasn't yet reached tauremaining
           VerletStep(pphot,step,ip);
           if (pmy_mcb->pmy_mc->polarized)
-            PropogatePolarization(pphot,step,ip); 
+            PropogatePolarization(pphot,step,ip);
         } else { // Photon has reached end of tauremaining - step to make it 0
           step = tauremaining / chi;
           VerletStep(pphot,step,ip);
@@ -121,6 +120,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
         chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
       }
       if (pphot->statp[ip] == DESTROYED) {
+        printf("Photon destroyed in general mover.\n");
         pphot->PrintPhoton(ip);
       }
 
@@ -131,8 +131,9 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
       }
 
       if (pphot->IsNanPhoton(ip)) {
-        pphot->PrintPhoton(ip);
+        printf("Photon returned Nan in general mover.\n");
         pphot->statp[ip] = DESTROYED;
+        pphot->PrintPhoton(ip);
       }
       step = StepSize(pphot,ip);
 
