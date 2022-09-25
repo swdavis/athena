@@ -26,8 +26,8 @@
 
 BoundaryFlag GetBoundaryFlag(const std::string& input_string) {
 
-  if (MONTE_CARLO_STATIC)
-    return BoundaryFlag::periodic;
+  //if (MONTE_CARLO_STATIC)
+  //  return BoundaryFlag::periodic;
 
   if (input_string == "reflecting") {
     return BoundaryFlag::reflect;

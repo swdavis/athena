@@ -103,11 +103,8 @@ TimeIntegratorTaskList::TimeIntegratorTaskList(ParameterInput *pin, Mesh *pm) {
       ATHENA_ERROR(msg);
     }
   }
-  if (MONTE_CARLO_STATIC) {
-    //nstages = 1;
-    //{using namespace HydroIntegratorTaskNames;
-    //  AddTask(TRANS_STAT,NONE);
-    //}
+  if (MONTE_CARLO_ENABLED) {
+    if (!pin->GetOrAddBoolean("montecarlo","dynamic",false));
     return;
   }
 
@@ -894,10 +891,7 @@ TimeIntegratorTaskList::TimeIntegratorTaskList(ParameterInput *pin, Mesh *pm) {
 
   // Set cfl_number based on user input and time integrator CFL limit
   Real cfl_number;
-  //if (MONTE_CARLO_STATIC)
-  //  cfl_number = 0.1;
-  //else
-    cfl_number = pin->GetReal("time","cfl_number");
+  cfl_number = pin->GetReal("time","cfl_number");
   if (cfl_number > cfl_limit
       && pm->fluid_setup == FluidFormulation::evolve) {
     std::cout << "### Warning in TimeIntegratorTaskList constructor" << std::endl
@@ -1011,7 +1005,7 @@ TimeIntegratorTaskList::TimeIntegratorTaskList(ParameterInput *pin, Mesh *pm) {
     }
 
     // couple particles to gas
-    if (MONTE_CARLO_DYNAMIC) {
+    if (MONTE_CARLO_ENABLED) {
       AddTask(COUPLE_MC, INT_HYD);
     }
 

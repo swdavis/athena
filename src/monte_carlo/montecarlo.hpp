@@ -195,17 +195,11 @@ public:
   int nblock;  // number of photons per step per block
   int nblocal; // number of montecarloblocks on this process
   int nbtotal; // total number of montecarloblocks
-  int cadence; // number of photons per output
   int nout;  // number of outputs
-  int *nphlist; // number of photons per block
   int64_t ncells; // total number of cells in mesh
   int iseed;  // seed to initialized random number generator(s)
-  int mcranks; // number of monte carlo only ranks
-  int nderv; // number of derivative processes
-  int *derv; // pointer to array of derivative processes
-  int origin; // process with origin mesh block
-  int blocksize;
-  int max_list_size; // maximum number of photons run per output on any process
+
+  int list_size_init; // maximum number of photons run per output on any process
   int max_phots_init; // maximum number of photon elements
   int nuser_var;
   int checkmove,checkscat;
@@ -214,8 +208,9 @@ public:
   enum MCBoundaryFlag mc_bcs[6];
   enum ScatteringFlag scattering_meth;
 
-  bool boosts;  // Compute lorentz transformations
+  bool dynamic; // is monte carlo evolving with time
   bool coupled; // is monte carlo evolution coupled to hydro
+  bool boosts;  // Compute lorentz transformations
   bool emission_array_flag;  // Compute and save zone emissivities
   bool polarized;// track photon polarization
   bool acceleration;  // use MRW acceleration
@@ -246,9 +241,6 @@ public:
   void EnrollUserWorkInMove(UserMoveFunc_t userfunc);
   void EnrollUserOpacityFunction(OpacFunc_t opacfunc, bool abs);
   void EnrollUserScatteringFunction(ScatFunc_t scatfunc);
-  void SendMonteCarloSpectra(int dest);
-  void ReceiveMonteCarloSpectra(int source);
-  //void CollectMoments(void);
   void Initialize(ParameterInput *pinput);
 
 private:
@@ -259,12 +251,6 @@ private:
   void GetDensity(MonteCarloBlock *pmcb);
   void GetScalars(MonteCarloBlock *pmcb);
   void GetVelocity(MonteCarloBlock *pmcb);
-  //void SendMonteCarloBlocks(int dest);
-  //void ReceiveMonteCarloBlocks(ParameterInput *pin, int source);
-  //void SendMonteCarloData(int dest);
-  //void ReceiveMonteCarloData(int source);
-  //void SendMoments(int dest);
-  //void ReceiveMoments(int source, bool sum);
 
 };
 
@@ -289,9 +275,10 @@ public:
   MCRandom *pran; // ptr to random number generator
   MCBoundaryValues *pbval; // ptr to MC boundary values
 
+  // ouput pointers
   Spectrum *pspec; // ptr to spectrum
   PhotonList *pphlist; // ptr to photon list
-  PhotonTrajectoryList *ptraj;
+  PhotonTrajectoryList *ptraj; // ptr to traj list
 
   enum MCBoundaryFlag mcb_bcs[6];
 
@@ -304,12 +291,11 @@ public:
   int nphdone; // Photons integrated thus far
   int nphremain; // total number of photons to integrate
   int nabs, nesc, ndes, nscat;
-  int nchunk;
+  int loop_max_size;
   int lid;
   int nx1,nx2,nx3;
   int is,ie,js,je,ks,ke;
   int nfreq, nmu, nphi, nsurf;
-  int cadence;
 
   bool weighted_absorption; // flag controling how absorption is handled
   bool moments_flag; // Compute/output moments

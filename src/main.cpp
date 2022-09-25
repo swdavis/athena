@@ -422,7 +422,7 @@ int main(int argc, char *argv[]) {
 #endif
     return(0);
   }
-#endif // ENABLE_EXCEPTIONS 
+#endif // ENABLE_EXCEPTIONS
 
 
   //--- Step 7. --------------------------------------------------------------------------
@@ -434,8 +434,13 @@ int main(int argc, char *argv[]) {
 #endif
     ChangeRunDir(prundir);
     pouts = new Outputs(pmesh, pinput);
-    if ((res_flag==0) && (!MONTE_CARLO_STATIC))
+    bool write_initial_condition = true;
+    if (MONTE_CARLO_ENABLED)
+      if (!pmc->dynamic)
+        write_initial_condition = false;
+    if ( (res_flag==0) && (write_initial_condition) ) {
       pouts->MakeOutputs(pmesh,pinput);
+    }
 #ifdef ENABLE_EXCEPTIONS
   }
   catch(std::bad_alloc& ba) {
@@ -467,8 +472,10 @@ int main(int argc, char *argv[]) {
 #ifdef OPENMP_PARALLEL
   double omp_start_time = omp_get_wtime();
 #endif
-  if (MONTE_CARLO_STATIC)
-    pmesh->time = pmesh->tlim;
+  if (MONTE_CARLO_ENABLED) {
+    if (!pmc->dynamic)
+      pmesh->time = pmesh->tlim;
+  }
   while ((pmesh->time < pmesh->tlim) &&
          (pmesh->nlim < 0 || pmesh->ncycle < pmesh->nlim)) {
 
@@ -499,8 +506,9 @@ int main(int argc, char *argv[]) {
 
     if (pmesh->turb_flag > 1) pmesh->ptrbd->Driving(); // driven turbulence
 
-    if (MONTE_CARLO_DYNAMIC)
-      pmc->RunDynamicMonteCarlo(pouts,pmesh,pinput);;
+    if (MONTE_CARLO_ENABLED)
+      if (pmc->dynamic)
+        pmc->RunDynamicMonteCarlo(pouts,pmesh,pinput);;
 
     for (int stage=1; stage<=ptlist->nstages; ++stage) {
       ptlist->DoTaskListOneStage(pmesh, stage);
@@ -562,8 +570,9 @@ int main(int argc, char *argv[]) {
   // Make final outputs, print diagnostics, clean up and terminate
 
   // Perform Monte Carlo radiation tranfer
-  if (MONTE_CARLO_STATIC) {
-    pmc->RunStaticMonteCarlo(pouts,pmesh,pinput);
+  if (MONTE_CARLO_ENABLED) {
+    if (!pmc->dynamic)
+      pmc->RunStaticMonteCarlo(pouts,pmesh,pinput);
   }
 
   if (Globals::my_rank == 0 && wtlim > 0)
@@ -578,7 +587,7 @@ int main(int argc, char *argv[]) {
 
   pmesh->UserWorkAfterLoop(pinput);
 
-  if (MONTE_CARLO_STATIC)
+  if (MONTE_CARLO_ENABLED)
     pmc->pmcout->MakeOutputs();
 #ifdef ENABLE_EXCEPTIONS
   try {
@@ -606,8 +615,12 @@ int main(int argc, char *argv[]) {
   //--- Step 10. -------------------------------------------------------------------------
   // Print diagnostic messages related to the end of the simulation
 
+  bool write_fluid_diagnostics = true;
+  if (MONTE_CARLO_ENABLED)
+    if (!pmc->dynamic)
+      write_fluid_diagnostics = false;
   if (Globals::my_rank == 0) {
-    if (!MONTE_CARLO_STATIC) {
+    if (write_fluid_diagnostics) {
       if (SignalHandler::GetSignalFlag(SIGTERM) != 0) {
         std::cout << std::endl << "Terminating on Terminate signal" << std::endl;
       } else if (SignalHandler::GetSignalFlag(SIGINT) != 0) {
@@ -640,7 +653,7 @@ int main(int argc, char *argv[]) {
     std::uint64_t zonecycles = mbcnt
       *static_cast<std::uint64_t> (pmesh->my_blocks(0)->GetNumberOfMeshBlockCells());
     double zc_cpus = static_cast<double> (zonecycles) / cpu_time;
-    if (MONTE_CARLO_STATIC) {
+    if (!write_fluid_diagnostics) {
       float phot_cpus = static_cast<float> (pmc->nphtot)/cpu_time;
       std::cout << std::endl << "cpu time used  = " << cpu_time << std::endl;
       std::cout << "samples/cpu_second = " << phot_cpus << std::endl;

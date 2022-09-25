@@ -19,6 +19,7 @@
 #include "photonmover.hpp"
 #include "../globals.hpp"
 #include "../outputs/io_wrapper.hpp"
+#include "../utils/buffer_utils.hpp"
 
 namespace mcoutput {
 //----------------------------------------------------------------------------------------
@@ -583,6 +584,7 @@ int Spectrum::EnergyBin(Real energy)
 
 void Spectrum::ResetSpectrum() {
 
+  nphtot = 0;
   for(int i=0; i<range.nphi; ++i) {
     for(int j=0; j<range.ncth; ++j) {
       for(int k=0; k<range.ne; ++k) {
@@ -594,7 +596,9 @@ void Spectrum::ResetSpectrum() {
           stokesu(i,j,k) = 0.;
           stokesu_sq(i,j,k) = 0.;
         }
-      }}}
+      }
+    }
+  }
 
 }
 
@@ -612,6 +616,7 @@ void Spectrum::AddSpectrum(Spectrum *pspec) {
     throw std::runtime_error(msg.str().c_str());
   } else {
     nphtot += pspec->nphtot;
+
     for(int i=0; i<range.nphi; ++i) {
       for(int j=0; j<range.ncth; ++j) {
         for(int k=0; k<range.ne; ++k) {
@@ -654,10 +659,10 @@ enum BoundaryFace Spectrum::GetPhotonFace(Photon *pphot, int ip) {
 //----------------------------------------------------------------------------------------
 //! PhotonList constructor from input
 
-PhotonList::PhotonList(int list_mem_size, bool pol, int nuser) {
+PhotonList::PhotonList(int list_size_init, bool pol, int nuser) {
 
   // Allocate memory for photon list
-  len_limit = list_mem_size;
+  len_limit = list_size_init;
   nparams = 10;
   polarized = pol;
   if (polarized)
@@ -727,7 +732,14 @@ void PhotonList::WriteList(std::string filename) {
   }
 
   // write header information
-  fprintf(pfile,"dt=%.8e\n",dt);
+  Real time;
+  if (pmy_mc->dynamic)
+    time = pmy_mc->pmy_mesh->time;
+  else
+    // enforce monte carlo dt as integration time
+    time = last_time + pmy_mc->dt;
+
+  fprintf(pfile,"dt=%.8e\n",time-last_time);
   fprintf(pfile,"length=%d\nnpars=%d\n",length,nparams);
   fprintf(pfile,"ntot=%d\n",nphtot);
   fprintf(pfile,"polarized=%d\n",polarized);
@@ -919,8 +931,8 @@ void PhotonTrajectoryList::ResizeList(int new_len_limit, int new_step_limit) {
     itemp_array[i] = nsteps[i];
   delete [] nsteps;
   nsteps = new int[new_len_limit];
- for (int i=0; i<length; i++)
-   nsteps[i] = itemp_array[i];
+  for (int i=0; i<length; i++)
+    nsteps[i] = itemp_array[i];
   delete [] itemp_array;
   // Resize trajectories
   AthenaArray<Real> temp_array(trajectories); // create deep copy
@@ -977,13 +989,15 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
 
         // Create spectrum
         pspec = new Spectrum(range,polarized,xlog);
+        pspec->pmy_mc = pmc;
         pspec->id = id++;
         pspec->output_number = 0;
-        if (MONTE_CARLO_STATIC) {
-          pspec->dt = pin->GetOrAddReal("montecarlo","dt",1.);
-        } else if (MONTE_CARLO_DYNAMIC) {
+        if (pmc->dynamic) {
           pspec->dt = pin->GetReal(pib->block_name,"dt");
+        } else {
+          pspec->dt = pin->GetOrAddReal("montecarlo","dt",1.);
         }
+        pspec->last_time = pmy_mc->pmy_mesh->time;
         // Generate file name
         std::string outn = pib->block_name.substr(6); // 6 because counting starts at 0!
         int outid = atoi(outn.c_str());
@@ -1046,14 +1060,15 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
               << " greater than user variables: " << pmy_mc->nuser_var << std::endl;
           throw std::runtime_error(msg.str().c_str());
         }
-        //bool rel = pin->GetOrAddBoolean(pib->block_name,"relativistic",false);
-        pphlist = new PhotonList(pmc->max_list_size,pmc->polarized,nuser_out);
+        pphlist = new PhotonList(pmc->list_size_init,pmc->polarized,nuser_out);
+        pphlist->pmy_mc = pmc;
         // Initialize photon list
-        if (MONTE_CARLO_STATIC) {
-          pphlist->dt = pin->GetOrAddReal("montecarlo","dt",1.);
-        } else if (MONTE_CARLO_DYNAMIC) {
+        if (pmc->dynamic) {
           pphlist->dt = pin->GetReal(pib->block_name,"dt");
+        } else {
+          pphlist->dt = pin->GetOrAddReal("montecarlo","dt",1.);
         }
+        pphlist->last_time = pmy_mc->pmy_mesh->time;
         pphlist->nphtot = 0;
         pphlist->length = 0;
         pphlist->output_number = 0;
@@ -1084,8 +1099,8 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
           throw std::runtime_error(msg.str().c_str());
         }
         int step_limit = pin->GetOrAddInteger(pib->block_name,"steplimit",10000);
-        if (pmc->max_list_size <= 0) pmc->max_list_size = 1;
-        ptraj = new PhotonTrajectoryList(pmc->max_list_size+1,step_limit,nuser_out);
+        if (pmc->list_size_init <= 0) pmc->list_size_init = 1;
+        ptraj = new PhotonTrajectoryList(pmc->list_size_init+1,step_limit,nuser_out);
         // Initialize photon list
         ptraj->length = 0;
         ptraj->maxstep = 0;
@@ -1151,7 +1166,13 @@ void Spectrum::WriteSpectrum(std::string fname) {
   int ne = range.ne;
   int nmu = range.ncth;
   int nphi = range.nphi;
-  fprintf(pfile,"dt=%.8e\n",dt);
+  Real time;
+  if (pmy_mc->dynamic)
+    time = pmy_mc->pmy_mesh->time;
+  else
+    // enforce monte carlo dt as integration time
+    time = last_time + pmy_mc->dt;
+  fprintf(pfile,"dt=%.8e\n",time-last_time);
   fprintf(pfile,"nx=%d\n",ne);
   fprintf(pfile,"nmu=%d\n",nmu);
   fprintf(pfile,"nphi=%d\n",nphi);
@@ -1265,66 +1286,148 @@ void Spectrum::WriteSpectrum(std::string fname) {
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCOutput::CollectSpectrum(MonteCarlo *pmc)
-//! \brief collect all spectra on this process for output
-
-void MCOutput::CollectSpectrum(MonteCarlo *pmc) {
-
-  Spectrum *poutspec=pspec, *pblockspec;
-  while (poutspec != nullptr) {
-    int id = poutspec->id;
-    poutspec->ResetSpectrum();
-    // loop over monte carlo blocks
-    for (int i=0; i<pmc->nblocal; i++) {
-      MonteCarloBlock *pmcb = pmc->my_blocks(i);
-      pblockspec = pmcb->pspec;
-      while (pblockspec->id != id) {
-        pblockspec = pblockspec->next;
-      }
-      if (pblockspec->id == id) {
-        poutspec->AddSpectrum(pblockspec);
-      }
-    }
-    poutspec = poutspec->next;
-  }
-
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn void MCOutput::OutputSpectrum()
 //! \brief output all intensity spectra
 
 void MCOutput::OutputSpectrum() {
 
-
-  if (pspec == nullptr)
+  if (pspec == nullptr) //no spectra requested
     return;
-  CollectSpectrum(pmy_mc);
+
+  // Check if any spectra are ready to be output
+  Real time = pmy_mc->pmy_mesh->time;
+  Spectrum *pspect = pspec;
+  while (pspect != nullptr) {
+    if ( (time >= pspect->last_time+pspect->dt) || (!pmy_mc->dynamic) ) {
 #ifdef MPI_PARALLEL
-  if (Globals::my_rank == 0) {
-    for(int i=1; i<Globals::nranks; ++i) // temporary: assumes spectra on all processes
-      pmy_mc->ReceiveMonteCarloSpectra(i);
-  } else {
-    pmy_mc->SendMonteCarloSpectra(0);
-  }
+      if (Globals::my_rank == 0) {
+        for(int i=1; i<Globals::nranks; ++i)
+          ReceiveMonteCarloSpectrum(i,pspect->id);
+      } else {
+        SendMonteCarloSpectrum(0,pspect->id);
+      }
 #endif
-  if (Globals::my_rank == 0) {
-    Spectrum *pspect = pspec;
-    while (pspect != nullptr) {
-      std::string filename;
-      filename.assign(pspect->base_name);
-      filename.append(".");
-      std::stringstream file_number;
-      file_number << std::setw(5) << std::setfill('0') << pspect->output_number;
-      filename.append(file_number.str());
-      filename.append(".spec");
-      pspect->WriteSpectrum(filename);
-      pspect->output_number++;
-      pspect = pspect->next;
+      if (Globals::my_rank == 0) {
+        std::string filename;
+        filename.assign(pspect->base_name);
+        filename.append(".");
+        std::stringstream file_number;
+        file_number << std::setw(5) << std::setfill('0') << pspect->output_number;
+        filename.append(file_number.str());
+        filename.append(".spec");
+        pspect->WriteSpectrum(filename);
+        pspect->output_number++;
+        pspect->last_time = time;
+        pspect->ResetSpectrum();
+      }
     }
-  }
+    pspect = pspect->next;
+  } // end while loop
 
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCOutput::SendMonteCarloSpectrum(int dest, int id)
+//! \brief send one monte carlo spectrum to another process
+
+void MCOutput::SendMonteCarloSpectrum(int dest, int id) {
+#ifdef MPI_PARALLEL
+
+  // Select target spectrum
+  Spectrum *pspect = pspec;
+  while (pspect != nullptr) {
+    if (id == pspect->id)
+      break;
+    else
+      pspect = pspect->next;
+  }
+
+  int ne = pspect->range.ne;
+  int ncth = pspect->range.ncth;
+  int nphi = pspect->range.nphi;
+  int size = 2;
+  if (pspect->polarized) {
+    size += 4;
+  }
+  size *= (ne*ncth*nphi);
+
+  Real *send_buf;
+  send_buf = new Real[size];
+  MPI_Request send_rq;
+  unsigned int tag = 100; //temporary
+
+  int p=0;
+  ne--; ncth--; nphi--;
+  MPI_Isend(&pspec->nphtot,1,MPI_INT,dest,tag++,MPI_COMM_WORLD,&send_rq);
+  MPI_Wait(&send_rq, MPI_STATUS_IGNORE);
+  BufferUtility::PackData(pspec->intensity,send_buf,0,ne,0,ncth,0,nphi,p);
+  BufferUtility::PackData(pspec->intensity_sq,send_buf,0,ne,0,ncth,0,nphi,p);
+  if (pspec->polarized) {
+    BufferUtility::PackData(pspec->stokesq,send_buf,0,ne,0,ncth,0,nphi,p);
+    BufferUtility::PackData(pspec->stokesq_sq,send_buf,0,ne,0,ncth,0,nphi,p);
+    BufferUtility::PackData(pspec->stokesu,send_buf,0,ne,0,ncth,0,nphi,p);
+    BufferUtility::PackData(pspec->stokesu_sq,send_buf,0,ne,0,ncth,0,nphi,p);
+  }
+  MPI_Isend(send_buf,size,MPI_ATHENA_REAL,dest,tag++,MPI_COMM_WORLD,&send_rq);
+  MPI_Wait(&send_rq, MPI_STATUS_IGNORE);
+
+  delete send_buf;
+#endif
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCOutput::ReceiveMonteCarloSpectrum(int dest, int id)
+//! \brief receive one monte carlo spectrum from another process
+
+void MCOutput::ReceiveMonteCarloSpectrum(int source, int id) {
+#ifdef MPI_PARALLEL
+
+  // select targe spectrum
+  Spectrum *pspect = pspec;
+  while (pspect != nullptr) {
+    if (id == pspect->id)
+      break;
+    else
+      pspect = pspect->next;
+  }
+
+  int ne = pspect->range.ne;
+  int ncth = pspect->range.ncth;
+  int nphi = pspect->range.nphi;
+  int size = 2;
+  if (pspect->polarized)
+    size += 4;
+  size *= (ne*ncth*nphi);
+
+  Real *recv_buf;
+  recv_buf = new Real[size];
+  MPI_Request recv_rq;
+  unsigned int tag = 100; // temporary
+
+  ne--; ncth--; nphi--;
+  int nphtot;
+  MPI_Irecv(&nphtot,size,MPI_INT,MPI_ANY_SOURCE,tag++,MPI_COMM_WORLD,&recv_rq);
+  MPI_Wait(&recv_rq, MPI_STATUS_IGNORE);
+  MPI_Irecv(recv_buf,size,MPI_ATHENA_REAL,MPI_ANY_SOURCE,tag++,MPI_COMM_WORLD,&recv_rq);
+  MPI_Wait(&recv_rq, MPI_STATUS_IGNORE);
+  Spectrum *ptemp = new Spectrum(pspec);
+  ptemp->nphtot = nphtot;
+  int p=0;
+  BufferUtility::UnpackData(recv_buf,ptemp->intensity,0,ne,0,ncth,0,nphi,p);
+  BufferUtility::UnpackData(recv_buf,ptemp->intensity_sq,0,ne,0,ncth,0,nphi,p);
+  if (pspec->polarized) {
+    BufferUtility::UnpackData(recv_buf,ptemp->stokesq,0,ne,0,ncth,0,nphi,p);
+    BufferUtility::UnpackData(recv_buf,ptemp->stokesq_sq,0,ne,0,ncth,0,nphi,p);
+    BufferUtility::UnpackData(recv_buf,ptemp->stokesu,0,ne,0,ncth,0,nphi,p);
+    BufferUtility::UnpackData(recv_buf,ptemp->stokesu_sq,0,ne,0,ncth,0,nphi,p);
+  }
+  pspec->AddSpectrum(ptemp);
+
+  delete recv_buf;
+#endif
+}
+
 
 //----------------------------------------------------------------------------------------
 //! \fn void MCOutput::OutputPhotonList()
@@ -1335,17 +1438,23 @@ void MCOutput::OutputPhotonList() {
   if (pphlist == nullptr)
     return;
 
-  std::string filename;
-  filename.assign(pphlist->base_name);
-  filename.append(".");
-  std::stringstream file_number;
-  file_number << std::setw(5) << std::setfill('0') << pphlist->output_number;
-  filename.append(file_number.str());
-  filename.append(".list");
-  pphlist->WriteList(filename);
-  pphlist->output_number++;
-  // Reset list length to 0
-  pphlist->length = 0;
+  // Check if any spectra are ready to be output
+  Real time = pmy_mc->pmy_mesh->time;
+  if ( (time >= pphlist->last_time+pphlist->dt) || (!pmy_mc->dynamic) ) {
+    std::string filename;
+    filename.assign(pphlist->base_name);
+    filename.append(".");
+    std::stringstream file_number;
+    file_number << std::setw(5) << std::setfill('0') << pphlist->output_number;
+    filename.append(file_number.str());
+    filename.append(".list");
+    pphlist->WriteList(filename);
+    pphlist->output_number++;
+    // Reset list length to 0
+    pphlist->length = 0;
+    pphlist->nphtot = 0;
+    pphlist->last_time = time;
+  }
 
 }
 
@@ -1376,8 +1485,9 @@ void MCOutput::OutputTrajectoryList() {
 //! \fn void MCOutput::UpdateOutputCount(int nph)
 //! \brief updates total numbers of photons run for output normalization
 
-// SWD Add Trajectory, image
+// SWD Add Trajectory, image?
 void MCOutput::UpdateOutputCount(int nph) {
+
   if (pphlist != nullptr)
     pphlist->nphtot += nph;
 

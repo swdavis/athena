@@ -74,7 +74,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   pbval = new MCBoundaryValues(this,pin);
 
   // Setup output spectra
-  Spectrum *pfirst = nullptr, *plast;
+  /*Spectrum *pfirst = nullptr, *plast;
   Spectrum *psmcout = pmy_mc->pmcout->pspec;
   // Loop over output spectra and make local equivalent for each
   while (psmcout != nullptr) {
@@ -87,9 +87,10 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     plast = pspec;
     psmcout = psmcout->next;
   }
-  pspec = pfirst;
+  pspec = pfirst;*/
 
-  // Setup output photon list and trajectory list
+  // Setup outputs
+  pspec = pmy_mc->pmcout->pspec;
   pphlist = pmy_mc->pmcout->pphlist;
   ptraj = pmy_mc->pmcout->ptraj;
 
@@ -330,9 +331,9 @@ MonteCarloBlock::~MonteCarloBlock() {
   delete pphot;
   delete pmover;
   delete pran;
-  delete pspec;
-  delete pphlist;
-  delete ptraj;
+  //delete pspec;
+  //delete pphlist;
+  //delete ptraj;
 
   rho.DeleteAthenaArray();
   tgas.DeleteAthenaArray();
@@ -378,7 +379,7 @@ void MonteCarloBlock::RayTracePhotonsOnBlock() {
 
   // Emit photons to replace those that left meshblock or were terminated
   // Limit ntodo to number of remaining photons on block
-  int ntodo = (nchunk > nphremain) ? nphremain : nchunk;
+  int ntodo = (loop_max_size > nphremain) ? nphremain : loop_max_size;
 
   // if photons remain to transfer, make space for new photons
   if (ntodo > 0) {
@@ -456,7 +457,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
 
   // Emit photons to replace those that left meshblock or were terminated
   // Limit ntodo to number of remaining photons on block
-  int ntodo = (nchunk > nphremain) ? nphremain : nchunk;
+  int ntodo = (loop_max_size > nphremain) ? nphremain : loop_max_size;
 
   // if photons remain to transfer, make space for new photons
   if (ntodo > 0) {
@@ -979,7 +980,7 @@ void MonteCarloBlock::NormalizeMoments(bool normalize, Real norm) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::ResetMoments()
-//! \brief set moments to zero on origin blocks
+//! \brief set moments to zero on block
 
 void MonteCarloBlock::ResetMoments() {
 

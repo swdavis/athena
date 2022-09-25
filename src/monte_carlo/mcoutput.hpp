@@ -36,6 +36,7 @@ public:
   Spectrum(Spectrum *pspec);
   ~Spectrum();
 
+  MonteCarlo *pmy_mc;
   int nphtot;  // total number of photons run for this spectrum
   std::string base_name;
   MomentumRange range;
@@ -46,10 +47,11 @@ public:
 
   Spectrum *next;  // next spectrum
   enum BoundaryFace face;
-  int id;
+  int id; // spectrum id -- maybe multiple spectra requested
   int output_number;// current output number
   Real x1min,x1max,x2min,x2max,x3min,x3max;
-  Real dt; // integration time for this spectrum
+  Real dt; // targe integration time for this spectrum
+  Real last_time;
 
   AthenaArray<Real> energies;
   AthenaArray<Real> intensity;
@@ -81,9 +83,10 @@ public:
 
 class PhotonList {
 public:
-  PhotonList(int list_mem_size, bool pol, int nuser);
+  PhotonList(int list_size_init, bool pol, int nuser);
   ~PhotonList();
 
+  MonteCarlo *pmy_mc;
   std::string base_name;
 
   int nphtot;  // total number of photons run for this list
@@ -92,8 +95,8 @@ public:
   int output_number;// current output number
   int nuser_out;
   bool polarized;
-  Real dt;
-
+  Real dt; // targe integration time for this spectrum
+  Real last_time;
   AthenaArray<Real> photons;  // array of photon properies
 
   //functions
@@ -189,8 +192,9 @@ public:
   bool moments_comoving;
 
   //functions
-  void CollectSpectrum(MonteCarlo *pmc);
   void OutputSpectrum();
+  void SendMonteCarloSpectrum(int dest, int id);
+  void ReceiveMonteCarloSpectrum(int source, int id);
   void OutputPhotonList();
   void OutputTrajectoryList();
   void UpdateOutputCount(int nph);

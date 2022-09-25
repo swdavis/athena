@@ -23,7 +23,7 @@
 #include "../monte_carlo/photon.hpp"
 #include "../monte_carlo/photonmover.hpp"
 
-#if !MONTE_CARLO_STATIC
+#if !MONTE_CARLO_ENABLED
 #error "This problem requires monte carlo"
 #endif
 
@@ -158,7 +158,6 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot, int ip) {
     Real rf = pphot->user[1][ip];
     Real thf = pphot->user[2][ip];
     Real phf = pphot->user[3][ip];
- 
     Real xp = rf * sin(thf) * cos(phf);
     Real yp = rf * sin(thf) * sin(phf);
     Real zp = rf * cos(thf);
@@ -173,8 +172,7 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot, int ip) {
     nerror++;
     error_sum += error;
     pphot->user[0][ip] = error;
-    if (nerror == cadence)
-      printf("Mean relative error: %g\n",error_sum/static_cast<Real>(nerror));
+    //printf("Mean relative error: %g\n",error_sum/static_cast<Real>(nerror));
   }
 
 }

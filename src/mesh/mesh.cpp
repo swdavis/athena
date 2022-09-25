@@ -139,9 +139,19 @@ Mesh::Mesh(ParameterInput *pin, int mesh_test) :
         << num_mesh_threads_ << std::endl;
     ATHENA_ERROR(msg);
   }
-
+  bool min_mesh_dim = true;
+  if (MONTE_CARLO_ENABLED) {
+    if(!pin->GetOrAddBoolean("montecarlo","dynamic",false)) {
+      // Set all fluid boundaries to periodic to avoid later check
+      for (int i=0; i<6; i++)
+        mesh_bcs[i] = GetBoundaryFlag("periodic");
+      // Do not impose minimum mesh constraints if monte carlo used
+      // in post processing mode
+      min_mesh_dim = false;
+    }
+  }
   // check number of grid cells in root level of mesh from input file.
-  if ((mesh_size.nx1 < 4) && (!MONTE_CARLO_STATIC)) {
+  if ((mesh_size.nx1 < 4) && (min_mesh_dim)) {
     msg << "### FATAL ERROR in Mesh constructor" << std::endl
         << "In mesh block in input file nx1 must be >= 4, but nx1="
         << mesh_size.nx1 << std::endl;
@@ -259,7 +269,7 @@ Mesh::Mesh(ParameterInput *pin, int mesh_test) :
           << " and NGHOST = " << NGHOST << ". "<<std::endl;
       ATHENA_ERROR(msg);
     }
-  } else if (!MONTE_CARLO_STATIC) {
+  } else if (min_mesh_dim) {
     if ((block_size.nx1 < NGHOST) || (block_size.nx2 < NGHOST && f2)
         || (block_size.nx3 < NGHOST && f3)) {
       msg << "### FATAL ERROR in Mesh constructor" << std::endl

@@ -321,8 +321,6 @@ void BoundaryBase::SearchAndSetNeighbors(MeshBlockTree &tree, int *ranklist,
     }
   }
   nblevel[1][1][1] = loc.level;
-  //if (MONTE_CARLO_STATIC)
-  //  return;
   // x1 face
   for (int n=-1; n<=1; n+=2) {
     neibt = tree.FindNeighbor(loc, n, 0, 0);

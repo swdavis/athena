@@ -15,7 +15,6 @@
 #include "../parameter_input.hpp"
 #include "../mesh/mesh.hpp"
 #include "../hydro/hydro.hpp"
-#include "../utils/buffer_utils.hpp"
 #include "../scalars/scalars.hpp"
 
 // GSL library
@@ -28,7 +27,6 @@
 
 MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
 
-  MonteCarloBlock *pfirst;
   std::stringstream msg;
 
   pmy_mesh = pmesh;
@@ -62,8 +60,10 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   for (int dir=0; dir<6; dir++)
     BoundaryFunction_[dir]=nullptr;
 
-  boosts = pin->GetOrAddBoolean("montecarlo","boosts",false);
+  // SWD: replace dynamic/coupled with single method flag?
+  dynamic = pin->GetOrAddBoolean("montecarlo","dynamic",false);
   coupled = pin->GetOrAddBoolean("montecarlo","coupled",false);
+  boosts = pin->GetOrAddBoolean("montecarlo","boosts",false);
   polarized = pin->GetOrAddBoolean("montecarlo","polarized",false);
   acceleration = pin->GetOrAddBoolean("montecarlo","acceleration",false);
   time_acc = pin->GetOrAddBoolean("montecarlo","time_acc",false);
@@ -76,17 +76,13 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
                                                           "none"));
   nuser_var = 0; // Initialize photon user variables to zero
 
-  // Set photon numbers
+  // Set photon integration totals
   nphtot = pin->GetInteger("montecarlo","nphot");
-  cadence = pin->GetOrAddInteger("montecarlo","cadence",nphtot);
-  nout = nphtot/cadence;
-  max_phots_init = 10000;
-#ifdef MPI_PARALLEL
-  max_list_size = cadence/(Globals::nranks)+1;
-#else
-  max_list_size = cadence;
-#endif
+  nout = pin->GetOrAddInteger("montecarlo","nout",1);
 
+  // Set default size parameters
+  max_phots_init = pin->GetOrAddInteger("montecarlo","max_phots_init",10000);
+  list_size_init = pin->GetOrAddInteger("montecarlo","list_size_init",10000);
   checkscat = pin->GetOrAddInteger("montecarlo","checkscat",10000);
   checkmove = pin->GetOrAddInteger("montecarlo","checkmove",10000);
 
@@ -118,7 +114,6 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   int root_level = pmy_mesh->root_level;
   my_blocks.NewAthenaArray(nblocal);
 
-
   for (int i=0; i<nblocal; i++) {
     MeshBlock *pmb = pmy_mesh->my_blocks(i);
     my_blocks(i) = new MonteCarloBlock(pmb, NULL, this, pin);
@@ -138,7 +133,8 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
 MonteCarlo::~MonteCarlo() {
 
   delete pmcout;
-
+  for (int i=0; i<nblocal; i++)
+    delete my_blocks(i);
 }
 
 //----------------------------------------------------------------------------------------
@@ -418,142 +414,27 @@ void DefaultGetTemperature(MonteCarloBlock *pmcb) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarlo::SendMonteCarloSpectra(int dest)
-//! \brief send all monte carlo spectra to another process
-
-void MonteCarlo::SendMonteCarloSpectra(int dest) {
-#ifdef MPI_PARALLEL
-  Spectrum *pspec = pmcout->pspec;
-
-  int maxsize = 0;
-  while (pspec != nullptr) {
-    int ne = pspec->range.ne;
-    int ncth = pspec->range.ncth;
-    int nphi = pspec->range.nphi;
-    int size = 2;
-    if (pspec->polarized) {
-      size += 4;
-    }
-    size *= (ne*ncth*nphi);
-    maxsize = (size > maxsize) ? size : maxsize;
-    pspec = pspec->next;
-  }
-  Real *send_buf;
-  send_buf = new Real[maxsize];
-  MPI_Request send_rq;
-  unsigned int tag = 100;
-
-  pspec = pmcout->pspec;
-  while (pspec != nullptr) {
-    int p=0;
-    int ne = pspec->range.ne;
-    int ncth = pspec->range.ncth;
-    int nphi = pspec->range.nphi;
-    int size = 2;
-    if (pspec->polarized)
-      size += 4;
-    size *= (ne*ncth*nphi);
-    ne--; ncth--; nphi--;
-    MPI_Isend(&pspec->nphtot,1,MPI_INT,dest,tag++,MPI_COMM_WORLD,&send_rq);
-    MPI_Wait(&send_rq, MPI_STATUS_IGNORE);
-    BufferUtility::PackData(pspec->intensity,send_buf,0,ne,0,ncth,0,nphi,p);
-    BufferUtility::PackData(pspec->intensity_sq,send_buf,0,ne,0,ncth,0,nphi,p);
-    if (pspec->polarized) {
-      BufferUtility::PackData(pspec->stokesq,send_buf,0,ne,0,ncth,0,nphi,p);
-      BufferUtility::PackData(pspec->stokesq_sq,send_buf,0,ne,0,ncth,0,nphi,p);
-      BufferUtility::PackData(pspec->stokesu,send_buf,0,ne,0,ncth,0,nphi,p);
-      BufferUtility::PackData(pspec->stokesu_sq,send_buf,0,ne,0,ncth,0,nphi,p);
-    }
-    MPI_Isend(send_buf,size,MPI_ATHENA_REAL,dest,tag++,MPI_COMM_WORLD,&send_rq);
-    MPI_Wait(&send_rq, MPI_STATUS_IGNORE);
-    pspec = pspec->next;
-  }
-  delete send_buf;
-#endif
-}
-
-
-//----------------------------------------------------------------------------------------
-//! \fn void MonteCarlo::ReceiveMonteCarloSpectra(int dest)
-//! \brief receive monte carlo spectra from another process
-
-void MonteCarlo::ReceiveMonteCarloSpectra(int source) {
-#ifdef MPI_PARALLEL
-  Spectrum *pspec = pmcout->pspec;
-  int maxsize = 0;
-  while (pspec != nullptr) {
-    int ne = pspec->range.ne;
-    int ncth = pspec->range.ncth;
-    int nphi = pspec->range.nphi;
-    int size = 2;
-    if (pspec->polarized)
-      size += 4;
-    size *= (ne*ncth*nphi);
-    maxsize = (size > maxsize) ? size : maxsize;
-    pspec = pspec->next;
-  }
-  Real *recv_buf;
-  recv_buf = new Real[maxsize];
-  MPI_Request recv_rq;
-  unsigned int tag = 100; // temporary
-
-  pspec = pmcout->pspec;
-  while (pspec != nullptr) {
-    int ne = pspec->range.ne;
-    int ncth = pspec->range.ncth;
-    int nphi = pspec->range.nphi;
-    int size = 2;
-    if (pspec->polarized)
-      size += 4;
-    size *= (ne*ncth*nphi);
-    ne--; ncth--; nphi--;
-    int nphtot;
-    MPI_Irecv(&nphtot,size,MPI_INT,MPI_ANY_SOURCE,tag++,MPI_COMM_WORLD,&recv_rq);
-    MPI_Wait(&recv_rq, MPI_STATUS_IGNORE);
-    MPI_Irecv(recv_buf,size,MPI_ATHENA_REAL,MPI_ANY_SOURCE,tag++,MPI_COMM_WORLD,&recv_rq);
-    MPI_Wait(&recv_rq, MPI_STATUS_IGNORE);
-    Spectrum *ptemp = new Spectrum(pspec);
-    ptemp->nphtot = nphtot;
-    int p=0;
-    BufferUtility::UnpackData(recv_buf,ptemp->intensity,0,ne,0,ncth,0,nphi,p);
-    BufferUtility::UnpackData(recv_buf,ptemp->intensity_sq,0,ne,0,ncth,0,nphi,p);
-    if (pspec->polarized) {
-      BufferUtility::UnpackData(recv_buf,ptemp->stokesq,0,ne,0,ncth,0,nphi,p);
-      BufferUtility::UnpackData(recv_buf,ptemp->stokesq_sq,0,ne,0,ncth,0,nphi,p);
-      BufferUtility::UnpackData(recv_buf,ptemp->stokesu,0,ne,0,ncth,0,nphi,p);
-      BufferUtility::UnpackData(recv_buf,ptemp->stokesu_sq,0,ne,0,ncth,0,nphi,p);
-    }
-    pspec->AddSpectrum(ptemp);
-    pspec = pspec->next;
-    delete ptemp;
-  }
-  delete recv_buf;
-#endif
-}
-
-
-//----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::Initialize(ParameterInput *pinput)
 //! \brief initialize grid data in each monte carlo block
 
 void MonteCarlo::Initialize(ParameterInput *pin) {
 
-  if (MONTE_CARLO_STATIC) {
-    // initialize timing parameters if static calculation
-    dt = pin->GetOrAddReal("montecarlo","dt",1.);
-    tmax = pin->GetOrAddReal("montecarlo","tmax",HUGE_NUMBER);
-  } else if (MONTE_CARLO_DYNAMIC) {
+  if (dynamic) {
     tmax = pin->GetOrAddReal("montecarlo","tmax",-1.);
     if (tmax < 0.)
       tmax = pmy_mesh->dt;
     dt = pmy_mesh->dt;
+  } else {
+    // initialize timing parameters if static calculation
+    dt = pin->GetOrAddReal("montecarlo","dt",1.);
+    tmax = pin->GetOrAddReal("montecarlo","tmax",HUGE_NUMBER);
   }
 
   // Set number of photons per montecarloblock
   nblock = nphtot / nbtotal;
   nphtot = nblock * nbtotal; // reset nblock to be multiple of nbtotal
   nphrun = 0;
-  int nchunk = 1000;
+
   if (GetTemperature == nullptr)
     GetTemperature = DefaultGetTemperature;
 
@@ -571,7 +452,7 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
     // set photons to be computed and counters
     pmcb->nphremain = nblock;
     pmcb->nphdone = 0;
-    pmcb->nchunk = nchunk;
+    pmcb->loop_max_size = pin->GetOrAddInteger("montecarlo","loop_max_size",1000);
     pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
     // Call problem generators for Monte Carlo
     pmcb->MonteCarloProblemGenerator(pin);
@@ -589,55 +470,68 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
   // initialize counter
   nphrun = 0;
 
-  bool photons_remain = true; // True if photons on any process
-  while(photons_remain) {
+  for (int i=0; i<nout; i++) {
+    bool photons_remain = true; // True if photons on any process
+    while(photons_remain) {
 
-    for(int nb=0; nb<nblocal; ++nb){
-      if (raytrace_flag)
-        my_blocks(nb)->RayTracePhotonsOnBlock();
-      else
+      for(int nb=0; nb<nblocal; ++nb){
+        if (raytrace_flag)
+          my_blocks(nb)->RayTracePhotonsOnBlock();
+        else
         my_blocks(nb)->TransferPhotonsOnBlock();
+      }
+      photons_remain = CheckAndBroadCastPhotonsRemaining();
     }
-    photons_remain = CheckAndBroadCastPhotonsRemaining();
-  }
 
-  // Report diagnostic results from all blocks
-  int nesc = 0, nabs = 0, ndes = 0, nscat = 0;
-  for(int nb=0; nb<nblocal; ++nb){
-    MonteCarloBlock *pmcb = my_blocks(nb);
-    nesc += pmcb->nesc;
-    nabs += pmcb->nabs;
-    ndes += pmcb->ndes;
-    nscat += pmcb->nscat;
-    nphrun += pmcb->nphdone;
-  }
-  pmcout->UpdateOutputCount(nphrun);
-
-  int ntot = nphrun;
-#ifdef MPI_PARALLEL
-  MPI_Allreduce(MPI_IN_PLACE,&nesc,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE,&nabs,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE,&ndes,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE,&nscat,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE,&ntot,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-#endif
-  if (Globals::my_rank == 0) {
-    std::cout  << "ntot, nesc, nabs, ndes, nscat/ntot: "
-               << ' ' << ntot << ' ' << nesc
-               << ' ' << nabs << ' ' << ndes << ' ';
-    if (ntot > 0)
-      std::cout << static_cast<Real>(nscat)/static_cast<Real>(ntot) << std::endl;
-    else
-      std::cout << 0. << std::endl;
-  }
-
-  if (pmcout->moments) {
-    // normalize moments for output
+    // Report diagnostic results from all blocks
+    int nesc = 0, nabs = 0, ndes = 0, nscat = 0;
     for(int nb=0; nb<nblocal; ++nb){
       MonteCarloBlock *pmcb = my_blocks(nb);
-      pmcb->NormalizeMoments(true,static_cast<Real>(ntot));
+      nesc += pmcb->nesc;
+      nabs += pmcb->nabs;
+      ndes += pmcb->ndes;
+      nscat += pmcb->nscat;
+      nphrun += pmcb->nphdone;
     }
-  }
+    pmcout->UpdateOutputCount(nphrun);
+
+    int ntot = nphrun;
+#ifdef MPI_PARALLEL
+    MPI_Allreduce(MPI_IN_PLACE,&nesc,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE,&nabs,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE,&ndes,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE,&nscat,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE,&ntot,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+#endif
+    if (Globals::my_rank == 0) {
+      std::cout  << "ntot, nesc, nabs, ndes, nscat/ntot: "
+                 << ' ' << ntot << ' ' << nesc
+                 << ' ' << nabs << ' ' << ndes << ' ';
+      if (ntot > 0)
+        std::cout << static_cast<Real>(nscat)/static_cast<Real>(ntot) << std::endl;
+      else
+        std::cout << 0. << std::endl;
+    }
+
+    if (pmcout->moments) {
+      // normalize moments for output
+      for(int nb=0; nb<nblocal; ++nb){
+        MonteCarloBlock *pmcb = my_blocks(nb);
+        pmcb->NormalizeMoments(true,static_cast<Real>(ntot));
+      }
+      // Write outputs
+      pouts->MakeOutputs(pmesh,pinput,true);
+
+      // unnormalize moments after output
+      for(int nb=0; nb<nblocal; ++nb){
+        MonteCarloBlock *pmcb = my_blocks(nb);
+        pmcb->NormalizeMoments(false,static_cast<Real>(ntot));
+      }
+    }
+    // Make monte carlo outputs
+    pmcout->MakeOutputs();
+
+  } // end loop over nout
 
 }
 

@@ -23,7 +23,7 @@
 #include "../monte_carlo/photon.hpp"
 #include "../monte_carlo/photonmover.hpp"
 
-#if !MONTE_CARLO_STATIC
+#if !MONTE_CARLO_ENABLED
 #error "This problem requires monte carlo"
 #endif
 
