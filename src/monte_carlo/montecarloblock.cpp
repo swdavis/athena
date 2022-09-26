@@ -59,35 +59,23 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 
   // SWD: eliminate some or all of these?
   // set local flags based on monte_carlo
+  // set in monte carlo
   boosts = pmy_mc->boosts;
   coupled = pmy_mc->coupled;
   emission_array_flag = pmy_mc->emission_array_flag;
-  moments_flag = pmy_mc->pmcout->moments; // set in mcoutput
-  moments_comoving = pmy_mc->pmcout->moments_comoving;
   acceleration = pmy_mc->acceleration;
   time_acc = pmy_mc->time_acc;
+  // set in mcoutput
+  moments_flag = pmy_mc->pmcout->moments;
+  moments_comoving = pmy_mc->pmcout->moments_comoving;
+  moments_srcterms = pmy_mc->pmcout->moments_srcterms;
+  moments_user = pmy_mc->pmcout->moments_user;
 
   // *currently* assumes all block boundaries are physical
   SetBoundaryValues(pmy_mc->mc_bcs);
 
   // Initialize pbval after mcb_bcs is set
   pbval = new MCBoundaryValues(this,pin);
-
-  // Setup output spectra
-  /*Spectrum *pfirst = nullptr, *plast;
-  Spectrum *psmcout = pmy_mc->pmcout->pspec;
-  // Loop over output spectra and make local equivalent for each
-  while (psmcout != nullptr) {
-    pspec = new Spectrum(psmcout);
-    //pspec = new Spectrum(pmy_mc->pmcout->pspec);
-    if (pfirst == nullptr)
-      pfirst = pspec;
-    else
-      plast->next = pspec;
-    plast = pspec;
-    psmcout = psmcout->next;
-  }
-  pspec = pfirst;*/
 
   // Setup outputs
   pspec = pmy_mc->pmcout->pspec;
@@ -311,7 +299,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   if (NSCALARS > 0) scalars.NewAthenaArray(ncells3,ncells2,ncells1);
   // moments is 1 (Er) + 3 (Fr) + 9 (Pr) + 1 (Eave) + 1 (net cool)
   if (moments_flag) moments.NewAthenaArray(NMOM,ncells3,ncells2,ncells1);
-  //if (coupled) coupling.NewAthena
+  if (coupled || moments_srcterms) sourceterms.NewAthenaArray(8,ncells3,ncells2,ncells1);
   if (emission_array_flag) emission.NewAthenaArray(ncells3,ncells2,ncells1);
   if (acceleration && !(coherent_scattering) && !(scattering_meth == SCATRES)) {
     planck_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
@@ -340,6 +328,7 @@ MonteCarloBlock::~MonteCarloBlock() {
   if (boosts) vel.DeleteAthenaArray();
   if (NSCALARS > 0) scalars.DeleteAthenaArray();
   if (moments_flag) moments.DeleteAthenaArray();
+  if (coupled) sourceterms.DeleteAthenaArray();
   if (emission_array_flag) emission.DeleteAthenaArray();
   if (acceleration && !(coherent_scattering) && !(scattering_meth == SCATRES)) {
     planck_opacity.DeleteAthenaArray();
@@ -429,16 +418,16 @@ void MonteCarloBlock::RayTracePhotonsOnBlock() {
         pphot->RemoveOneParticle(ip);
       } else if (pphot->statp[ip] == DESTROYED) {
         ndes++;
-        printf("destroyed\n");
-        pphot->PrintPhoton(ip);
+        pphot->PrintPhoton("destroy in ray tracing",ip);
         pphot->RemoveOneParticle(ip);
       } else if (pphot->statp[ip] == BUFFERED) {
         nbuf++;
       }
     }
   } // end loop over ip
-
-   /*std::cout  << "rank, ntot, nnew, nesc, nabs, ndes, nbuf, nscat: " << Globals::my_rank
+  //if ((pphot->nphot > 0) && (Globals::my_rank == 0))
+  //  pphot->PrintPhoton(pphot->nphot-1);
+  /*std::cout  << "rank, ntot, nnew, nesc, nabs, ndes, nbuf, nscat: " << Globals::my_rank
              << ' ' << ntot << ' ' << ntodo << ' ' << nesc
              << ' ' << nabs << ' ' << ndes << ' ' << nbuf
              << ' ' << nscat << std::endl;*/
@@ -477,8 +466,8 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
     if (boosts) {
       LorentzTransform(pphot,to_eulr,nold,pphot->nphot-1);
     }
-    if (moments_flag) {
-      // Update cooling to relect newly emitted photons
+    if (coupled || moments_srcterms) {
+      // Update source terms to relect newly emitted photons
       for (int ip=nold; ip<pphot->nphot; ip++) {
         UpdateSourceTerms(pphot,0.,0.,0.,0.,0.,ip);
       }
@@ -543,7 +532,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
       if (boosts) {
         LorentzTransform(pphot,to_eulr,ip,ip);
       }
-      if (moments_flag) {
+      if (coupled || moments_srcterms) {
         UpdateSourceTerms(pphot,e_pre_scat,0.,k1p0,k2p0,k3p0,ip);
       }
     } // status == evolving
@@ -600,6 +589,7 @@ void MonteCarloBlock::CoupleMonteCarloToFluid(Real dt) {
 
   if (!coupled) return;
 
+  return;
   MeshBlock *pmb = pmy_block;
   for (int k=pmb->ks; k<=pmb->ke; ++k) {
       for (int j=pmb->js; j<=pmb->je; ++j) {
@@ -997,7 +987,8 @@ void MonteCarloBlock::ResetMoments() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0,
-//                                  Real weight0, int ip, Real k1p0, Real k2p0, Real k3p0)
+//                                              Real weight0, int ip, Real k1p0,
+//                                              Real k2p0, Real k3p0)
 //! \brief compute net photon cooling rate and momentum change
 
 void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0,
@@ -1067,10 +1058,10 @@ void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0,
     int &i = pphot->i1p[ip];
     int &j = pphot->i2p[ip];
     int &k = pphot->i3p[ip];
-    moments(MCINET,k,j,i) -= cool;
-    moments(MCIRA4,k,j,i) -= dp1p;
-    moments(MCIRA5,k,j,i) -= dp2p;
-    moments(MCIRA5,k,j,i) -= dp3p;
+    sourceterms(MCRS0,k,j,i) -= cool;
+    sourceterms(MCRS1,k,j,i) -= dp1p;
+    sourceterms(MCRS2,k,j,i) -= dp2p;
+    sourceterms(MCRS3,k,j,i) -= dp3p;
   }
 
 }

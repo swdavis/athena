@@ -33,6 +33,7 @@ public:
 
   // public functions
   //void RemoveOneParticle(int k);
+  void PrintPhoton(const std::string &msg, int ip);
   void PrintPhoton(int ip);
   bool IsNanPhoton(int ip);
   void PolarizationToTetrad(std::complex<Real> ttet[4][4], Real ecov[4][4], const int ip);

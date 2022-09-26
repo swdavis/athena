@@ -59,6 +59,7 @@ Photon::Photon(MonteCarloBlock *pmcb, ParameterInput *pin)
   pmy_mcb = pmcb;
   nphot_limit = pmcb->pmy_mc->max_phots_init;
   nuser_var = pmcb->pmy_mc->nuser_var;
+  // SWD: should these be set or controlled by flags?
   user = &(rp[iuserp]);
   polten = &(cplxprop[ipolp]);
   npar = 0;
@@ -74,11 +75,21 @@ Photon::~Photon() {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void Photon::PrintPhoton(std::stringstream msg, int ip)
+//! \brief print key photon properites with message
+
+void Photon::PrintPhoton(const std::string &msg, int ip) {
+  std::cout << "----------------------------" << std::endl;
+  std::cout << "** " << msg << " **" << std::endl;
+  PrintPhoton(ip);
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void Photon::PrintPhoton(int ip)
-//! \brief print key photon properites
+//! \brief print key photon properites, primarily for debugging
 
 void Photon::PrintPhoton(int ip) {
-  // Used primarily for debugging
+
   std::cout << "----------------------------" << std::endl
             << "Energy, weight: " << ep[ip] << " " << wp[ip] << std::endl
             << "i: " << i1p[ip] << " " << i2p[ip] << " " << i3p[ip] <<std::endl
@@ -92,6 +103,15 @@ void Photon::PrintPhoton(int ip) {
   }
   if (polarized) {
     std:: cout << "stokes: " << sip[ip] << " " << sqp[ip] << " " << sup[ip] << std::endl;
+    if (general_mover_flag) {
+      std:: cout << "pol tensor: ";
+        for (int k = 0; k < 4; k++) {
+          for (int l = 0; l < 4; l++) {
+            std:: cout << polten[k*4+l][ip] << " ";
+          }
+          std::cout << std::endl;
+        }
+    }
   }
   std::cout << "opacity: " << scp[ip] << " " << acp[ip] << std::endl;
   if (nuser_var > 0) {
@@ -113,10 +133,12 @@ void Photon::PrintPhoton(int ip) {
   else
     std::cout << std::endl;
   if (nuser_var > 0)
-    std::cout << nuser_var << " variables:";
+    std::cout << nuser_var << " user vars:";
   for (int i=0; i<nuser_var; i++)
     std::cout << " " << user[i][ip];
   std::cout << std::endl;
+  std::cout << "----------------------------" << std::endl;
+
 }
 
 //----------------------------------------------------------------------------------------
@@ -204,6 +226,8 @@ void Photon::PolarizationToCoord(std::complex<Real> ttet[4][4], Real econ[4][4],
 //! \fn Photon::Initialize(MonteCarloBlock *pmcb, ParameterInput *pin)
 //! \brief initializes the Photon class.
 // SWD: Change name to distinguish with InitializePhoton?
+// SWD: make trp a user variable
+
 void Photon::Initialize(MonteCarlo *pmc, ParameterInput *pin) {
 
   // Initialize first the parent class.
@@ -327,7 +351,7 @@ void Photon::SendToNeighbors() {
     Neighbor *pn = FindTargetNeighbor(ox1, ox2, ox3, i1p[k], i2p[k], i3p[k]);
     NeighborBlock *pnb = pn->pnb;
     if (pnb == nullptr) {
-      PrintPhoton(k);
+      PrintPhoton("pnb == nullptr",k);
       RemoveOneParticle(k);
       --k;
       std::cout << "[SendToNeighbors] Warning: pnb==nullptr." << std::endl;
@@ -370,9 +394,14 @@ void Photon::SendToNeighbors() {
     }
     for (int j = 0; j < naux; ++j)
       *pr++ = aux[j][k];
+    // copy complex properties
+    if (general_mover_flag && polarized) {
+      std::complex<Real> *pc(ppb->cbuf + ParticleBuffer::ncplx * ppb->npar);
+      for (int j = 0; j < ncplx; ++j) {
+        *pc++ = cplxprop[j][k];
+      }
+    }
     ++ppb->npar;
-    // SWDNEW: ADD complex
-
     // Pop the particle from the current MeshBlock.
     RemoveOneParticle(k);
     --k;
@@ -401,11 +430,19 @@ void Photon::SendToNeighbors() {
         MPI_Isend(send.rbuf, npsend * ParticleBuffer::nreal, MPI_ATHENA_REAL,
                   dst, send.tag + 2, my_comm, &req);
         MPI_Request_free(&req);
+        // Send complex properties
+        if (general_mover_flag && polarized) {
+          MPI_Isend(send.cbuf, npsend * ParticleBuffer::ncplx, MPI_ATHENA_COMPLEX,
+                    dst, send.tag + 3, my_comm, &req);
+          MPI_Request_free(&req);
+        }
       }
 #endif
     }
   }
-  //printf("send %d %d %d %d %d %d %d\n",Globals::my_rank,nbuf,nloc,nadj,nmpi,nper,nnper);
+  //if (nbuf > 0)
+  //   printf("send %d %d %d %d %d %d %d %d\n",Globals::my_rank,pmy_block->gid,nbuf,nloc,nadj,
+  //         nmpi,nper,nnper);
 }
 
 //--------------------------------------------------------------------------------------
@@ -475,8 +512,10 @@ bool Photon::ReceiveFromNeighbors() {
 #ifdef MPI_PARALLEL
     // Communicate with neighbor processes.
     int nb_rank = nb.snb.rank;
+
     //printf("%d %d %d %d\n",Globals::my_rank,i,nb_rank,bstatus);
     if (nb_rank != Globals::my_rank && bstatus == BoundaryStatus::waiting) {
+
       ParticleBuffer& recv = recv_[nb.bufid];
       if (!recv.mpi_active) {
         // Get the number of incoming particles.
@@ -499,6 +538,10 @@ bool Photon::ReceiveFromNeighbors() {
                       nb_rank, recv.tag + 1, my_comm, &recv.reqi);
             MPI_Irecv(recv.rbuf, recv.npar * ParticleBuffer::nreal, MPI_ATHENA_REAL,
                       nb_rank, recv.tag + 2, my_comm, &recv.reqr);
+            if (general_mover_flag && polarized) {
+              MPI_Irecv(recv.cbuf, recv.npar * ParticleBuffer::ncplx, MPI_ATHENA_COMPLEX,
+                        nb_rank, recv.tag + 3, my_comm, &recv.reqc);
+            }
           } else {
             // No incoming particles.
             bstatus = BoundaryStatus::completed;
@@ -510,8 +553,15 @@ bool Photon::ReceiveFromNeighbors() {
           MPI_Test(&recv.reqi, &recv.flagi, MPI_STATUS_IGNORE);
         if (!recv.flagr)
           MPI_Test(&recv.reqr, &recv.flagr, MPI_STATUS_IGNORE);
-        if (recv.flagi && recv.flagr)
-          bstatus = BoundaryStatus::arrived;
+        if (general_mover_flag && polarized) {
+          if (!recv.flagc)
+            MPI_Test(&recv.reqc, &recv.flagc, MPI_STATUS_IGNORE);
+          if (recv.flagi && recv.flagr && recv.flagc)
+            bstatus = BoundaryStatus::arrived;
+        } else {
+          if (recv.flagi && recv.flagr)
+            bstatus = BoundaryStatus::arrived;
+        }
       }
     }
 #endif

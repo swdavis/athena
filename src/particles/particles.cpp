@@ -347,7 +347,7 @@ Particles::Particles(MeshBlock *pmb, ParameterInput *pin)
     ppm = new ParticleMesh(this);
   }
   // Initiate ParticleBuffer class.
-  ParticleBuffer::SetNumberOfProperties(nint, 2 * nreal + naux);
+  ParticleBuffer::SetNumberOfProperties(nint, 2 * nreal + naux, ncplx);
 }
 
 //--------------------------------------------------------------------------------------
@@ -1063,6 +1063,7 @@ void Particles::FlushReceiveBuffer(ParticleBuffer& recv) {
   // Flush the receive buffers.
   int *pi = recv.ibuf;
   Real *pr = recv.rbuf;
+  std::complex<Real> *pc = recv.cbuf;
   for (int k = npar_old; k < npar; ++k) {
     for (int j = 0; j < nint; ++j)
       intprop[j][k] = *pi++;
@@ -1072,8 +1073,12 @@ void Particles::FlushReceiveBuffer(ParticleBuffer& recv) {
     }
     for (int j = 0; j < naux; ++j)
       aux[j][k] = *pr++;
+    if (ncplx > 0) {
+      for (int j = 0; j < ncplx; ++j) {
+        cplxprop[j][k] = *pc++;
+      }
+    }
   }
-
   // Find their position indices.
   if (!MONTE_CARLO_ENABLED)
     GetPositionIndices(npar_old, npar, xp, yp, zp, xi1, xi2, xi3);

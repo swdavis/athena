@@ -35,7 +35,8 @@ def main(**kwargs):
 
     # Run convergence test towards blackbody spectrum
     print("Running blackbody spectral convergence test.")
-    system("python "+tstpath+"/absorption_spectrum/convergence.py {:d} {:d} {:d} 10".format(iseed,nphot,nstep)+" --path "+path)
+    system("python "+tstpath+"/absorption_spectrum/convergence_dd.py {:d} {:d} {:d} 10"
+           .format(iseed,nphot,nstep)+" --path "+path)
     conv_abs = np.loadtxt("conv.out")
     system("rm conv.out")
 
@@ -44,48 +45,54 @@ def main(**kwargs):
     # slight mismatch between calculation methods
     print("Running polarized thomson scattering converence test.")
     system("cp "+tstpath+"/thomson_polarized_spectrum/feautrier.out .")
-    system("python "+tstpath+"/thomson_polarized_spectrum/convergence.py {:d} {:d} {:d} 10 --ffile=feautrier.out".format(iseed,nphot*10,nstep)+" --path "+path)
+    system("python "+tstpath+"/thomson_polarized_spectrum/convergence_dd.py {:d} {:d}"\
+           " {:d} 10 --ffile=feautrier.out".format(iseed,nphot*10,nstep)+" --path "+path)
     conv_scat = np.loadtxt("conv.out")
     system("rm conv.out feautrier.out")
 
     # Run convergence test for estimate of radiation field without boosts
     print("Running radiation moments test without boosts.")
     system("cp "+path+"/vis/python/athena_read.py .")
-    system("python "+tstpath+"/boosts/convergence.py {:d} {:d} {:d} 10".format(iseed,nphot,nstep)+" --path "+path) 
+    system("python "+tstpath+"/boosts/convergence_dd.py {:d} {:d} {:d} 10"
+           .format(iseed,nphot,nstep)+" --path "+path)
     conv_boost_off = np.loadtxt("conv.out")
     system("rm conv.out")
 
     # Run convergence test for estimate of radiation field in Eulerian frame
     # with boosts
     print("Running radiation moments test with boosts in Eulerian frame.")
-    system("python "+tstpath+"/boosts/convergence.py {:d} {:d} {:d} 10 --vel=0.9".format(iseed,nphot,nstep)+" --path "+path) 
+    system("python "+tstpath+"/boosts/convergence_dd.py {:d} {:d} {:d} 10 --vel=0.9"
+           .format(iseed,nphot,nstep)+" --path "+path)
     conv_boost_eul = np.loadtxt("conv.out")
     system("rm conv.out")
 
     # Run convergence test for estimate of radiation field in comoving frame
     # with boosts
     print("Running radiation moments test with boosts in comoving frame.")
-    system("python "+tstpath+"/boosts/convergence.py {:d} {:d} {:d} 10 --vel=0.9 --frame=comoving".format(iseed,nphot,nstep)) 
+    system("python "+tstpath+"/boosts/convergence_dd.py {:d} {:d} {:d} 10 --vel=0.9"\
+           " --frame=comoving".format(iseed,nphot,nstep))
     conv_boost_com = np.loadtxt("conv.out")
     system("rm conv.out")
 
     # Run convergence test for cooling functions without compton scattering
     print("Running cooling estimate test without Compton scattering.")
-    system("python "+tstpath+"/cartesian_cooling/convergence.py {:d} {:d} {:d} 10 --noscat".format(iseed,nphot,nstep+2)+" --path "+path) 
+    system("python "+tstpath+"/cartesian_cooling/convergence_dd.py {:d} {:d} {:d} 10"\
+           " --noscat".format(iseed,nphot,nstep+2)+" --path "+path)
     conv_cool_abs = np.loadtxt("conv.out")
     system("rm conv.out")
 
     # Run convergence test for cooling functions with compton scattering
     print("Running cooling estimate test with Compton scattering.")
     system("cp "+tstpath+"/cartesian_cooling/comptontable.out .")
-    system("python "+tstpath+"/cartesian_cooling/convergence.py {:d} {:d} {:d} 10".format(iseed,nphot,nstep)+" --path "+path) 
+    system("python "+tstpath+"/cartesian_cooling/convergence_dd.py {:d} {:d} {:d} 10"
+           .format(iseed,nphot,nstep)+" --path "+path)
     conv_cool_sct = np.loadtxt("conv.out")
     system("rm conv.out comptontable.out")
 
     chdir(curdir)
     system("rm -rf rundir")
 
-    np.set_printoptions(linewidth=100) 
+    np.set_printoptions(linewidth=100)
     print("Results from the absorption spectrum test: ")
     for i in range(nstep):
         print(conv_abs[i,:])
@@ -118,10 +125,6 @@ if __name__ == '__main__':
     parser.add_argument('path',
         default = None,
         help='path to Athena++ distribution')
-    parser.add_argument('--mcranks',
-        type = int,
-        default = 10,
-        help='mpi ranks to use')
 
     args = parser.parse_args()
     main(**vars(args))

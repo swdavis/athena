@@ -37,7 +37,7 @@ namespace {
   Real rcam,thcam,phcam;
   Real rh, rdisk;
   bool forward_integration;
-  Real spsi,cpsi,szet,czet;
+
   Real polch[21] = {0.11713,0.08979,0.07448,0.06311,0.05410,0.04667,0.04041,0.03502,
                     0.03033,0.02619,0.02252,0.01923,0.01627,0.01358,0.011123,0.008880,
                     0.006818,0.004919,0.003155,0.001522,0};
@@ -411,6 +411,7 @@ void TransformPhotonAtGridEdge(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   pphot->sip[ip] = stokes[0];
   pphot->sqp[ip] = stokes[1];
   pphot->sup[ip] = stokes[2];
+  //pphot->PrintPhoton("finalize photon",ip);
 
 }
 
@@ -550,11 +551,11 @@ void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
           pphot->x1p[ip] += pphot->k1p[ip] * step;
           pphot->x2p[ip] += pphot->k2p[ip] * step;
           pphot->x3p[ip] += pphot->k3p[ip] * step;
-
-          if (forward_integration)
+          if (forward_integration) {
             reverse = true;
-          else
+          } else {
             pphot->statp[ip] = ESCAPED;
+          }
         } else {
           // keep integrating
           pphot->user[4][ip] += 1.;
@@ -660,6 +661,7 @@ void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
     StokesToTensor(stokes,tcopy);
     pphot->PolarizationToCoord(tcopy,econ,ip);
 
+    //pphot->PrintPhoton("midlplane crossing",ip);
 
   } // if (reverse)
 }

@@ -16,19 +16,20 @@
 #include "particle_buffer.hpp"
 
 // Class variable initialization
-int ParticleBuffer::nint = 0, ParticleBuffer::nreal = 0;
+int ParticleBuffer::nint = 0, ParticleBuffer::nreal = 0, ParticleBuffer::ncplx = 0;
 
 //--------------------------------------------------------------------------------------
-//! \fn void ParticleBuffer::SetNumberOfProperties(int nint0, int nreal0)
+//! \fn void ParticleBuffer::SetNumberOfProperties(int nint0, int nreal0, int ncplx 0)
 //! \brief sets the number of integer and real propertes.
 
-void ParticleBuffer::SetNumberOfProperties(int nint0, int nreal0) {
+void ParticleBuffer::SetNumberOfProperties(int nint0, int nreal0, int ncplx0) {
   // Sanity check
-  if (nint0 < 0 || nreal0 < 0) {
+  if (nint0 < 0 || nreal0 < 0 || ncplx0 < 0) {
     std::stringstream msg;
     msg << "### FATAL ERROR in function [ParticleBuffer::SetNumberOfProperties]"
         << std::endl
-        << "Invalid nint0 = " << nint0 << " or nreal0 = " << nreal0 << std::endl;
+        << "Invalid nint0 = " << nint0 << " or nreal0 = " << nreal0
+        << " or ncmplx0 = " << ncplx0 << std::endl;
     ATHENA_ERROR(msg);
     return;
   }
@@ -36,6 +37,7 @@ void ParticleBuffer::SetNumberOfProperties(int nint0, int nreal0) {
   // Set the numbers.
   nint = nint0;
   nreal = nreal0;
+  ncplx = ncplx0;
 }
 
 //--------------------------------------------------------------------------------------
@@ -45,11 +47,12 @@ void ParticleBuffer::SetNumberOfProperties(int nint0, int nreal0) {
 ParticleBuffer::ParticleBuffer() {
   ibuf = NULL;
   rbuf = NULL;
+  cbuf = NULL;
   nparmax = npar = 0;
 #ifdef MPI_PARALLEL
-  reqi = reqr = MPI_REQUEST_NULL;
+  reqi = reqr = reqc = MPI_REQUEST_NULL;
   mpi_active = false;
-  flagn = flagi = flagr = 0;
+  flagn = flagi = flagr = flagc = 0;
   tag = -1;
 #endif
 }
@@ -68,6 +71,7 @@ ParticleBuffer::ParticleBuffer(int nparmax0) {
 
     ibuf = NULL;
     rbuf = NULL;
+    cbuf = NULL;
     nparmax = npar = 0;
     return;
   }
@@ -76,11 +80,13 @@ ParticleBuffer::ParticleBuffer(int nparmax0) {
   nparmax = nparmax0;
   ibuf = new int[nint * nparmax];
   rbuf = new Real[nreal * nparmax];
+  if (ncplx > 0)
+    cbuf = new std::complex<Real>[ncplx * nparmax];
   npar = 0;
 #ifdef MPI_PARALLEL
-  reqi = reqr = MPI_REQUEST_NULL;
+  reqi = reqr = reqc = MPI_REQUEST_NULL;
   mpi_active = false;
-  flagn = flagi = flagr = 0;
+  flagn = flagi = flagr = flagc = 0;
   tag = -1;
 #endif
 }
@@ -92,9 +98,11 @@ ParticleBuffer::ParticleBuffer(int nparmax0) {
 ParticleBuffer::~ParticleBuffer() {
   if (ibuf != NULL) delete [] ibuf;
   if (rbuf != NULL) delete [] rbuf;
+  if (cbuf != NULL) delete [] cbuf;
 #ifdef MPI_PARALLEL
   if (reqi != MPI_REQUEST_NULL) MPI_Request_free(&reqi);
   if (reqr != MPI_REQUEST_NULL) MPI_Request_free(&reqr);
+  if (reqc != MPI_REQUEST_NULL) MPI_Request_free(&reqc);
 #endif
 }
 
@@ -119,7 +127,7 @@ void ParticleBuffer::Reallocate(int new_nparmax) {
     return;
   }
 #ifdef MPI_PARALLEL
-  if (reqi != MPI_REQUEST_NULL || reqr != MPI_REQUEST_NULL) {
+  if (reqi != MPI_REQUEST_NULL || reqr != MPI_REQUEST_NULL || reqc != MPI_REQUEST_NULL) {
     std::stringstream msg;
     msg << "### FATAL ERROR in function [ParticleBuffer::Reallocate]" << std::endl
         << "MPI requests are active. " << std::endl;
@@ -132,16 +140,24 @@ void ParticleBuffer::Reallocate(int new_nparmax) {
   nparmax = new_nparmax;
   int *ibuf_new = new int[nint * nparmax];
   Real *rbuf_new = new Real[nreal * nparmax];
+  std::complex<Real> *cbuf_new;
+  if (ncplx > 0)
+    cbuf_new = new std::complex<Real>[ncplx * nparmax];
 
   // Move existing data.
   if (npar > 0) {
     std::memcpy(ibuf_new, ibuf, nint * npar * sizeof(int));
     std::memcpy(rbuf_new, rbuf, nreal * npar * sizeof(Real));
+    if (ncplx > 0)
+      std::memcpy(cbuf_new, cbuf, ncplx * npar * sizeof(std::complex<Real>));
   }
 
   // Delete old space.
   if (ibuf != NULL) delete [] ibuf;
   if (rbuf != NULL) delete [] rbuf;
+  if (cbuf != NULL) delete [] cbuf;
   ibuf = ibuf_new;
   rbuf = rbuf_new;
+  if (ncplx > 0)
+    cbuf = cbuf_new;
 }

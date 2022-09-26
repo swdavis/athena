@@ -190,6 +190,8 @@ public:
 
   bool moments;
   bool moments_comoving;
+  bool moments_srcterms;
+  bool moments_user;
 
   //functions
   void OutputSpectrum();

@@ -330,17 +330,20 @@ def read_spectrum(filename):
     format_string = '>' + 'd'*(nx+1)
     begin_index = current_index
     end_index = begin_index + 8*(nx+1)
-    spectrum['xfaces'] = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
+    spectrum['xfaces'] = np.array(struct.unpack(format_string,
+                                                raw_data[begin_index:end_index]))
     nmu = spectrum['nmu']
     format_string = '>' + 'd'*(nmu+1)
     begin_index = end_index
     end_index = begin_index + 8*(nmu+1)
-    spectrum['mufaces'] = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
+    spectrum['mufaces'] = np.array(struct.unpack(format_string,
+                                                 raw_data[begin_index:end_index]))
     nphi = spectrum['nphi']
     format_string = '>' + 'd'*(nphi+1)
     begin_index = end_index
     end_index = begin_index + 8*(nphi+1)
-    spectrum['phifaces'] = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
+    spectrum['phifaces'] = np.array(struct.unpack(format_string,
+                                                  raw_data[begin_index:end_index]))
 
     # Read intensities
     nintens = spectrum['nintens']
@@ -1495,6 +1498,7 @@ def plot_image(image,iinc,type='intensity',pvec=False,average=False,step=4,
             pol_frac = np.sqrt(q*q+u*u)
             vx = pol_frac*np.cos(pol_angle)
             vy = pol_frac*np.sin(pol_angle)
+
             plt.quiver(x_pol, y_pol, vx, vy, color='k',headwidth=0, headlength=0,
                        headaxislength=0, scale = None,pivot='middle')
         else:

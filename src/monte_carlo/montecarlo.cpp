@@ -519,18 +519,22 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
         MonteCarloBlock *pmcb = my_blocks(nb);
         pmcb->NormalizeMoments(true,static_cast<Real>(ntot));
       }
-      // Write outputs
-      pouts->MakeOutputs(pmesh,pinput,true);
-
-      // unnormalize moments after output
-      for(int nb=0; nb<nblocal; ++nb){
-        MonteCarloBlock *pmcb = my_blocks(nb);
-        pmcb->NormalizeMoments(false,static_cast<Real>(ntot));
-      }
     }
-    // Make monte carlo outputs
-    pmcout->MakeOutputs();
+    if (i < nout-1) {
+      // Write outputs
+      if(pmcout->moments) {
+        pouts->MakeOutputs(pmesh,pinput,true);
 
+        // unnormalize moments after output
+        for(int nb=0; nb<nblocal; ++nb){
+          MonteCarloBlock *pmcb = my_blocks(nb);
+          pmcb->NormalizeMoments(false,static_cast<Real>(ntot));
+        }
+      }
+
+      // Make monte carlo outputs
+      pmcout->MakeOutputs();
+    }
   } // end loop over nout
 
 }

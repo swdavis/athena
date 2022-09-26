@@ -53,9 +53,13 @@ enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY
                      MC_USER_BNDRY = 6, MC_BLOCK_BNDRY = 7};
 // Array indices for monte carlo radiation moments
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
-      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCINET = 10, MCIRA1=11, MCIRA2=12, MCIRA3=13, 
-      MCIRA4=14, MCIRA5=15, MCIRA6=16, MCIEN = 17, MCIKJ = 18, MCIPR21=19, MCIPR31=20, 
+      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCINET = 10, MCIRA1=11, MCIRA2=12, MCIRA3=13,
+      MCIRA4=14, MCIRA5=15, MCIRA6=16, MCIEN = 17, MCIKJ = 18, MCIPR21=19, MCIPR31=20,
       MCIPR32=21};
+//enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
+//      MCIPR12=7, MCIPR13=8, MCIPR23=9}
+enum SourceTermFlag {MCRS0 = 0, MCRS1=1, MCRS2=2, MCRS3=3, MCRSP0=4, MCRSP1=5,
+                     MCRSP2=6, MCRSP3=7};
 //----------------------------------------------------------------------------------------
 // function pointer prototypes for user-defined modules set at runtime
 typedef Real (*EmisFunc_t)(MonteCarloBlock *pmcb);
@@ -295,11 +299,13 @@ public:
   int lid;
   int nx1,nx2,nx3;
   int is,ie,js,je,ks,ke;
-  int nfreq, nmu, nphi, nsurf;
+  int nsrc, nmom; // # of elements in sourcterm, moments arrays
 
   bool weighted_absorption; // flag controling how absorption is handled
   bool moments_flag; // Compute/output moments
-  bool moments_comoving; // Compute in comoving frame
+  bool moments_comoving; // Compute moments in comoving frame
+  bool moments_srcterms; // Compute source terms for output
+  bool moments_user; // Compute user defined monte carlo moments
   bool emission_array_flag;  // Compute and save zone emissivities
   bool boosts;  // Compute lorentz transformations
   bool coupled; // Whether time dependent code is coupled to hydro
@@ -326,6 +332,7 @@ public:
 
   AthenaArray<Real> emission;
   AthenaArray<Real> moments;
+  AthenaArray<Real> sourceterms;
   AthenaArray<Real> scalars;
   AthenaArray<Real> rho;
   AthenaArray<Real> tgas;

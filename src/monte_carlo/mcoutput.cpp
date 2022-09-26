@@ -958,6 +958,8 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
   InputBlock *pib = pin->pfirst_block;
 
   moments = false;
+  moments_srcterms = false;
+  moments_user = false;
   pspec = nullptr;
   pphlist = nullptr;
   ptraj = nullptr;
@@ -1130,6 +1132,10 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
             moments_comoving = true;
           else
             moments_comoving = false;
+        } else if (var.compare("mcsrc") == 0) {
+            moments_srcterms = true;
+        } else if (var.compare("mcuser") == 0) {
+            moments_user = true;
         }
       }
     }
