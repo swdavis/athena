@@ -40,7 +40,8 @@ class MCOutoupt;
 class MCCoord;
 
 // SWD: Make into a general MACRO set by configure?
-#define NMOM 22
+// SWD: or make a paramter that is set
+#define NMOM 15
 
 // Flags for controlling monte carlo emission, scattering, absorption, bcs
 enum EmissionFlag {EMISUSER = 0, EMISNONE = 1, EMISFF = 2};
@@ -53,10 +54,9 @@ enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY
                      MC_USER_BNDRY = 6, MC_BLOCK_BNDRY = 7};
 // Array indices for monte carlo radiation moments
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
-      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCINET = 10, MCIRA1=11, MCIRA2=12, MCIRA3=13,
-      MCIRA4=14, MCIRA5=15, MCIRA6=16, MCIEN = 17, MCIKJ = 18, MCIPR21=19, MCIPR31=20,
-      MCIPR32=21};
-//enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
+      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCIEN = 10, MCIKJ = 11, MCIPR21=12, MCIPR31=13,
+      MCIPR32=14};
+//enum MomentsFlag{MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
 //      MCIPR12=7, MCIPR13=8, MCIPR23=9}
 enum SourceTermFlag {MCRS0 = 0, MCRS1=1, MCRS2=2, MCRS3=3, MCRSP0=4, MCRSP1=5,
                      MCRSP2=6, MCRSP3=7};
@@ -358,9 +358,9 @@ public:
   void ResetMoments();
   void UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0,
                          Real k1p0, Real k2p0, Real k3p0, int ip);
+  void NormalizeSourceTerms(bool normalize, Real norm);
+  void ResetSourceTerms();
   //void UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0, int ip);
-  //void GetPhotonsFromNeighbors();
-  //void SendPhotonsToNeighbors();
 
 private:
    void SetBoundaryValues(enum MCBoundaryFlag *input_bcs);

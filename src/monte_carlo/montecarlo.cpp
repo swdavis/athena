@@ -630,12 +630,13 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
     pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
   }
 
-  if (pmcout->moments) {
-    // reset moments at start of new timestep
-    for(int nb=0; nb<nblocal; ++nb){
-      MonteCarloBlock *pmcb = my_blocks(nb);
+  // reset moments/sourcterms for start of new timestep
+  for(int nb=0; nb<nblocal; ++nb) {
+    MonteCarloBlock *pmcb = my_blocks(nb);
+    if (pmcb->moments_flag)
       pmcb->ResetMoments();
-    }
+    if (coupled || pmcb->moments_srcterms)
+      pmcb->ResetSourceTerms();
   }
 
   bool photons_remain = true; // True if photons on any process
@@ -684,8 +685,6 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
       pmcb->NormalizeMoments(true,static_cast<Real>(ntot));
     }
   }
-  // Make monte carol outputs if time is correct
-  //pmcout->MakeOutputs(); //handled by pouts
 
 }
 

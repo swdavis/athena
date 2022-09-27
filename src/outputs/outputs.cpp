@@ -811,32 +811,32 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       num_vars_ += 9;
     }
     // monte carlo netcooling
-    if (output_params.variable.compare("mcmom") == 0 ||
+    if (output_params.variable.compare("mcsrc") == 0 ||
         output_params.variable.compare("Cooling") == 0) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "Cooling";
-      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments,4,MCINET,1);
+      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->sourceterms,4,MCRS0,1);
       AppendOutputDataNode(pod);
       num_vars_++;
     }
     // monte carlo rad force vector calculated with flux
-    if (output_params.variable.compare("mcmom") == 0 ||
+    if (output_params.variable.compare("mcsrc") == 0 ||
         output_params.variable.compare("RadforceF") == 0) {
       pod = new OutputData;
       pod->type = "VECTORS";
       pod->name = "RadforceF";
-      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIRA1,3);
+      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->sourceterms,4,MCRS1,3);
       AppendOutputDataNode(pod);
       num_vars_+=3;
     }
     // monte carlo rad force vector calculated with scatterings
-    if (output_params.variable.compare("mcmom") == 0 ||
+    if (output_params.variable.compare("mcsrc") == 0 ||
         output_params.variable.compare("RadforceS") == 0) {
       pod = new OutputData;
       pod->type = "VECTORS";
       pod->name = "RadforceS";
-      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIRA4,3);
+      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->sourceterms,4,MCRSP1,3);
       AppendOutputDataNode(pod);
       num_vars_+=3;
     }

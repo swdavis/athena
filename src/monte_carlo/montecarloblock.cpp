@@ -588,13 +588,18 @@ void MonteCarloBlock::CoupleMonteCarloToFluid(Real dt) {
 
   if (!coupled) return;
 
-  return;
   MeshBlock *pmb = pmy_block;
   for (int k=pmb->ks; k<=pmb->ke; ++k) {
       for (int j=pmb->js; j<=pmb->je; ++j) {
 #pragma omp simd
         for (int i=pmb->is; i<=pmb->ie; ++i) {
-          pmb->phydro->u(IEN,k,j,i) += dt * moments(MCINET,k,j,i);
+          pmb->phydro->u(IEN,k,j,i) += dt * sourceterms(MCRS0,k,j,i);
+          pmb->phydro->u(IM1,k,j,i) += dt * sourceterms(MCRSP1,k,j,i)
+                                          * pmb->phydro->u(IDN,k,j,i);
+          pmb->phydro->u(IM2,k,j,i) += dt * sourceterms(MCRSP2,k,j,i)
+                                          * pmb->phydro->u(IDN,k,j,i);
+          pmb->phydro->u(IM3,k,j,i) += dt * sourceterms(MCRSP3,k,j,i)
+                                          * pmb->phydro->u(IDN,k,j,i);
         }
       }
   }
@@ -884,9 +889,9 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Re
     moments(MCIFR3,k,j,i) += weight3 * 2.99792458e10;
 
     // Radiative Acceleration from flux
-    moments(MCIRA1,k,j,i) += (pphot->scp[ip]+abs_coef) * weight1;
-    moments(MCIRA2,k,j,i) += (pphot->scp[ip]+abs_coef) * weight2;
-    moments(MCIRA3,k,j,i) += (pphot->scp[ip]+abs_coef) * weight3;
+    sourceterms(MCRSP1,k,j,i) += (pphot->scp[ip]+abs_coef) * weight1;
+    sourceterms(MCRSP2,k,j,i) += (pphot->scp[ip]+abs_coef) * weight2;
+    sourceterms(MCRSP3,k,j,i) += (pphot->scp[ip]+abs_coef) * weight3;
 
     // Radiation Pressure
     Real weightp = weight1 * 2.99792458e10;
@@ -931,12 +936,14 @@ void MonteCarloBlock::NormalizeMoments(bool normalize, Real norm) {
         }}}
     // Normalize remaining moments by volume and global norm (counts)
 
-    for (int n=0; n<17; ++n) {
+    for (int n=0; n<NMOM-5; ++n) {
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
             moments(n,k,j,i) /= (dt * pcoord->vol(k,j,i) * norm);
-          }}}
+          }
+        }
+      }
     }
     // Copy normalized moments to symmetric elements
     for (int k=ks; k<=ke; ++k) {
@@ -948,12 +955,14 @@ void MonteCarloBlock::NormalizeMoments(bool normalize, Real norm) {
         }}}
   } else {
     // Undo normalization for continuing evolution
-    for (int n=0; n<17; ++n) {
+    for (int n=0; n<NMOM-5; ++n) {
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
             moments(n,k,j,i) *= (dt * pcoord->vol(k,j,i) * norm);
-          }}}
+          }
+        }
+      }
     }
     // Unnormalize energy density weighted averages after moments
     for (int k=ks; k<=ke; ++k) {
@@ -963,8 +972,10 @@ void MonteCarloBlock::NormalizeMoments(bool normalize, Real norm) {
             moments(MCIKJ,k,j,i) *= moments(MCIER,k,j,i);
             moments(MCIEN,k,j,i) *= moments(MCIER,k,j,i);
           }
-        }}}
- }
+        }
+      }
+    }
+  } // end else [if (normalize)]
 }
 
 //----------------------------------------------------------------------------------------
@@ -974,12 +985,14 @@ void MonteCarloBlock::NormalizeMoments(bool normalize, Real norm) {
 void MonteCarloBlock::ResetMoments() {
 
     // set moments to zero
-  for (int n=0; n<17; ++n) {
+  for (int n=0; n<NMOM-5; ++n) {
     for (int k=ks; k<=ke; ++k) {
       for (int j=js; j<=je; ++j) {
         for (int i=is; i<=ie; ++i) {
           moments(n,k,j,i) = 0.;
-        }}}
+        }
+      }
+    }
   }
 
 }
@@ -1065,6 +1078,51 @@ void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0,
 
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::NormalizeSourceTerms(bool normalize, Real norm)
+//! \brief (un)normalized moments for output and copy symmetric elements
+
+void MonteCarloBlock::NormalizeSourceTerms(bool normalize, Real norm) {
+
+  // Get integration time
+  Real dt = pmy_mc->dt;
+
+  if (coupled || moments_srcterms) {
+    // Normalize sourcterms
+    for (int n=0; n<8; ++n) {
+      for (int k=ks; k<=ke; ++k) {
+        for (int j=js; j<=je; ++j) {
+          for (int i=is; i<=ie; ++i) {
+            if (normalize)
+              sourceterms(n,k,j,i) /= (dt * pcoord->vol(k,j,i) * norm);
+            else
+              sourceterms(n,k,j,i) *= (dt * pcoord->vol(k,j,i) * norm);
+          }
+        }
+      }
+    }
+  }
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::ResetSourceTerms()
+//! \brief set sourceterms to zero on block
+
+void MonteCarloBlock::ResetSourceTerms() {
+
+  // set sourceterms to zero
+  for (int n=0; n<8; ++n) {
+    for (int k=ks; k<=ke; ++k) {
+      for (int j=js; j<=je; ++j) {
+        for (int i=is; i<=ie; ++i) {
+          sourceterms(n,k,j,i) = 0.;
+        }
+      }
+    }
+  }
+
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs)
