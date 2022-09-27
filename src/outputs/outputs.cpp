@@ -985,6 +985,17 @@ void Outputs::MakeOutputs(Mesh *pm, ParameterInput *pin, bool wtflag) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void Outputs::MakeOutputs(Mesh *pm, MonteCarlo *pmc, ParameterInput *pin,
+//!                               bool wtflag)
+//! \brief scans through singly linked list of OutputTypes and makes any outputs needed.
+//!        overloaded to includ MonteCarlo outputs
+void Outputs::MakeOutputs(Mesh *pm, MonteCarlo *pmc, ParameterInput *pin, bool wtflag) {
+
+  MakeOutputs(pm,pin,wtflag);
+  pmc->pmcout->MakeOutputs(false);
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void OutputType::TransformOutputData(MeshBlock *pmb)
 //! \brief Calls sum and slice functions on each direction in turn, in order to allow
 //! mulitple operations performed on the same data set

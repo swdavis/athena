@@ -102,6 +102,7 @@ public:
   //functions
   void AddPhoton(Photon *pphot, int ip);
   void WriteList(std::string filename);
+  void ResetList();
 
 private:
   int len_limit;  // number of photons allowed with current allocated memory
@@ -134,6 +135,7 @@ public:
   void CompleteTrajectory(int itraj);
   void AddToTrajectory(Photon *pphot, int ip);
   void WriteList(std::string filename);
+  //void ResetList();
 
 private:
   int len_limit;  // number of trajectories allowed with current allocated memory
@@ -194,13 +196,13 @@ public:
   bool moments_user;
 
   //functions
-  void OutputSpectrum();
-  void SendMonteCarloSpectrum(int dest, int id);
-  void ReceiveMonteCarloSpectrum(int source, int id);
-  void OutputPhotonList();
+  void OutputSpectrum(bool wtflag);
+  void SendMonteCarloSpectrum(Spectrum *spect, int dest);
+  void ReceiveMonteCarloSpectrum(Spectrum *spect, bool add);
+  void OutputPhotonList(bool wtflag);
   void OutputTrajectoryList();
   void UpdateOutputCount(int nph);
-  void MakeOutputs();
+  void MakeOutputs(bool wtflag);
 };
 
 #endif //MC_OUTPUT

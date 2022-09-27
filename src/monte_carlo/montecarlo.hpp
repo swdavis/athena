@@ -196,7 +196,6 @@ public:
   Real tmax;   // Maximum evolution time
   int nphtot;  // total number of photons to integrate per timestep
   int nphrun;  // number of photons completed
-  int nblock;  // number of photons per step per block
   int nblocal; // number of montecarloblocks on this process
   int nbtotal; // total number of montecarloblocks
   int nout;  // number of outputs
@@ -296,7 +295,6 @@ public:
   int nphremain; // total number of photons to integrate
   int nabs, nesc, ndes, nscat;
   int loop_max_size;
-  int lid;
   int nx1,nx2,nx3;
   int is,ie,js,je,ks,ke;
   int nsrc, nmom; // # of elements in sourcterm, moments arrays

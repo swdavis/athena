@@ -33,7 +33,6 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 
   pmy_mc = pmc;
 
-  lid = pmb->lid;
   // Set related meshblock, coordinate
   pmy_block = pmb;
 
@@ -52,7 +51,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 
   // get seed and intitialize randon number generator
   int rank = Globals::my_rank;
-  int iseed = pmy_mc->iseed+rank*1000+lid*100;  // temporary solution
+  int iseed = pmy_mc->iseed+rank*10000+pmy_block->lid*10;  // temporary solution
   pran = new MCRandom(iseed);
 
   next=nullptr;

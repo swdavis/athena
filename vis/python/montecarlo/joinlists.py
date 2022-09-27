@@ -71,10 +71,10 @@ def join(filelist,outfile,skip):
 def main(**kwargs):
 
     nproc = kwargs['nproc']
-    if kwargs['startzero']:
-        pstart = 0
-    else:
+    if kwargs['startone']:
         pstart = 1
+    else:
+        pstart = 0
 
     start = kwargs['start']
     end = kwargs['end']
@@ -118,10 +118,10 @@ if __name__ == '__main__':
         help='ending output number')
     parser.add_argument('--skip',
         action='store_true',
-        help='include lists from first process')
-    parser.add_argument('-s', '--startzero',
+        help='simply skip a list if not present')
+    parser.add_argument('-s', '--startone',
         action='store_true',
-        help='include lists from first process')
+        help='start join with process 1 instead of 0')
     parser.add_argument('-rm', '--removeold',
         action='store_true',
         help='delete origin files')

@@ -430,11 +430,6 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
     tmax = pin->GetOrAddReal("montecarlo","tmax",HUGE_NUMBER);
   }
 
-  // Set number of photons per montecarloblock
-  nblock = nphtot / nbtotal;
-  nphtot = nblock * nbtotal; // reset nblock to be multiple of nbtotal
-  nphrun = 0;
-
   if (GetTemperature == nullptr)
     GetTemperature = DefaultGetTemperature;
 
@@ -449,8 +444,8 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
       pmcb->minweight *= InitEmission(pmcb);
     }
     if (NSCALARS > 0) GetScalars(pmcb);
-    // set photons to be computed and counters
-    pmcb->nphremain = nblock;
+    // initialize counters to zero
+    pmcb->nphremain = 0;
     pmcb->nphdone = 0;
     pmcb->loop_max_size = pin->GetOrAddInteger("montecarlo","loop_max_size",1000);
     pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
@@ -467,10 +462,25 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
 void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
                                      ParameterInput *pinput) {
 
-  // initialize counter
-  nphrun = 0;
+  // Determine number of photons per block per step
+  // Assumes all blocks get the same amount of photons
+  int nblock = nphtot / nbtotal;
+  nphtot = nblock * nbtotal;  // adjust nphtot if needed
 
+  int *nstep = new int[nout];
   for (int i=0; i<nout; i++) {
+    nstep[i] = nblock / nout;
+  }
+  nstep[nout-1] += nblock % nout;
+  for (int i=0; i<nout; i++) {
+
+    for(int nb=0; nb<nblocal; ++nb){
+      my_blocks(nb)->nphremain = nstep[i];
+      my_blocks(nb)->nphdone = 0;
+    }
+
+    // initialize counter
+    nphrun = 0;
     bool photons_remain = true; // True if photons on any process
     while(photons_remain) {
 
@@ -478,7 +488,7 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
         if (raytrace_flag)
           my_blocks(nb)->RayTracePhotonsOnBlock();
         else
-        my_blocks(nb)->TransferPhotonsOnBlock();
+          my_blocks(nb)->TransferPhotonsOnBlock();
       }
       photons_remain = CheckAndBroadCastPhotonsRemaining();
     }
@@ -520,21 +530,18 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
         pmcb->NormalizeMoments(true,static_cast<Real>(ntot));
       }
     }
-    if (i < nout-1) {
-      // Write outputs
-      if(pmcout->moments) {
-        pouts->MakeOutputs(pmesh,pinput,true);
 
-        // unnormalize moments after output
-        for(int nb=0; nb<nblocal; ++nb){
-          MonteCarloBlock *pmcb = my_blocks(nb);
-          pmcb->NormalizeMoments(false,static_cast<Real>(ntot));
-        }
-      }
+    // Write outputs
+    pouts->MakeOutputs(pmesh,this,pinput,true);
 
-      // Make monte carlo outputs
-      pmcout->MakeOutputs();
+    // unnormalize moments after output
+    for(int nb=0; nb<nblocal; ++nb){
+      MonteCarloBlock *pmcb = my_blocks(nb);
+      pmcb->NormalizeMoments(false,static_cast<Real>(ntot));
     }
+
+    //pmcout->MakeOutputs(true);
+
   } // end loop over nout
 
 }
@@ -600,6 +607,11 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
   if (tmax < 0.)
     tmax = pmy_mesh->dt;
   dt = pmy_mesh->dt;
+
+  // Determine number of photons per block per step
+  // Assumes all blocks get the same amount of photons
+  int nblock = nphtot / nbtotal;
+  nphtot = nblock * nbtotal;  // adjust nphtot if needed
 
   // Reset monte carlo blocks
   for (int i=0; i<nblocal; i++) {
@@ -672,6 +684,8 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
       pmcb->NormalizeMoments(true,static_cast<Real>(ntot));
     }
   }
+  // Make monte carol outputs if time is correct
+  //pmcout->MakeOutputs(); //handled by pouts
 
 }
 

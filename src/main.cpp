@@ -404,7 +404,8 @@ int main(int argc, char *argv[]) {
 #ifdef ENABLE_EXCEPTIONS
   try {
 #endif
-    pmc->Initialize(pinput);
+    if (MONTE_CARLO_ENABLED)
+      pmc->Initialize(pinput);
 #ifdef ENABLE_EXCEPTIONS
   }
   catch(std::bad_alloc& ba) {
@@ -434,12 +435,13 @@ int main(int argc, char *argv[]) {
 #endif
     ChangeRunDir(prundir);
     pouts = new Outputs(pmesh, pinput);
-    bool write_initial_condition = true;
-    if (MONTE_CARLO_ENABLED)
-      if (!pmc->dynamic)
-        write_initial_condition = false;
-    if ( (res_flag==0) && (write_initial_condition) ) {
-      pouts->MakeOutputs(pmesh,pinput);
+    if (res_flag==0) {
+      if (MONTE_CARLO_ENABLED) {
+        if (pmc->dynamic)
+          pouts->MakeOutputs(pmesh,pmc,pinput);
+      } else {
+        pouts->MakeOutputs(pmesh,pinput);
+      }
     }
 #ifdef ENABLE_EXCEPTIONS
   }
@@ -473,6 +475,7 @@ int main(int argc, char *argv[]) {
   double omp_start_time = omp_get_wtime();
 #endif
   if (MONTE_CARLO_ENABLED) {
+    // Simple method for turning off main loop
     if (!pmc->dynamic)
       pmesh->time = pmesh->tlim;
   }
@@ -506,9 +509,8 @@ int main(int argc, char *argv[]) {
 
     if (pmesh->turb_flag > 1) pmesh->ptrbd->Driving(); // driven turbulence
 
-    if (MONTE_CARLO_ENABLED)
-      if (pmc->dynamic)
-        pmc->RunDynamicMonteCarlo(pouts,pmesh,pinput);;
+    if ( (MONTE_CARLO_ENABLED) && pmc->dynamic)
+      pmc->RunDynamicMonteCarlo(pouts,pmesh,pinput);
 
     for (int stage=1; stage<=ptlist->nstages; ++stage) {
       ptlist->DoTaskListOneStage(pmesh, stage);
@@ -542,7 +544,12 @@ int main(int argc, char *argv[]) {
     try {
 #endif
       if (pmesh->time < pmesh->tlim) // skip the final output as it happens later
-        pouts->MakeOutputs(pmesh,pinput);
+        if (MONTE_CARLO_ENABLED) {
+          if (pmc->dynamic )
+            pouts->MakeOutputs(pmesh,pmc,pinput);
+        } else {
+          pouts->MakeOutputs(pmesh,pinput);
+        }
 #ifdef ENABLE_EXCEPTIONS
     }
     catch(std::bad_alloc& ba) {
@@ -587,12 +594,15 @@ int main(int argc, char *argv[]) {
 
   pmesh->UserWorkAfterLoop(pinput);
 
-  if (MONTE_CARLO_ENABLED)
-    pmc->pmcout->MakeOutputs();
 #ifdef ENABLE_EXCEPTIONS
   try {
 #endif
-    pouts->MakeOutputs(pmesh,pinput,true);
+    if (MONTE_CARLO_ENABLED) {
+      if (pmc->dynamic)
+        pouts->MakeOutputs(pmesh,pmc,pinput,true);
+    } else {
+      pouts->MakeOutputs(pmesh,pinput,true);
+    }
 #ifdef ENABLE_EXCEPTIONS
   }
   catch(std::bad_alloc& ba) {

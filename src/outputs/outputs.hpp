@@ -168,7 +168,7 @@ class Outputs {
   ~Outputs();
 
   void MakeOutputs(Mesh *pm, ParameterInput *pin, bool wtflag=false);
-
+  void MakeOutputs(Mesh *pm, MonteCarlo *pmc, ParameterInput *pin, bool wtflag=false);
  private:
   OutputType *pfirst_type_; // ptr to head OutputType node in singly linked list
   // (not storing a reference to the tail node)
