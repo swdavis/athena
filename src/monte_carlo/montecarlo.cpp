@@ -685,7 +685,14 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
       pmcb->NormalizeMoments(true,static_cast<Real>(ntot));
     }
   }
+  for(int nb=0; nb<nblocal; ++nb) {
+    MonteCarloBlock *pmcb = my_blocks(nb);
+    if (pmcb->moments_flag)
+      pmcb->NormalizeMoments(true,static_cast<Real>(ntot));
+    if (coupled || pmcb->moments_srcterms)
+      pmcb->NormalizeSourceTerms(true,static_cast<Real>(ntot));
 
+  }
 }
 
 
