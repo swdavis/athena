@@ -523,24 +523,26 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
         std::cout << 0. << std::endl;
     }
 
-    if (pmcout->moments) {
-      // normalize moments for output
-      for(int nb=0; nb<nblocal; ++nb){
-        MonteCarloBlock *pmcb = my_blocks(nb);
+    // normalize moments for output
+    for(int nb=0; nb<nblocal; ++nb) {
+      MonteCarloBlock *pmcb = my_blocks(nb);
+      if (pmcb->moments_rad)
         pmcb->NormalizeMoments(true,static_cast<Real>(ntot));
-      }
+      if (pmcb->call_srcterms)
+        pmcb->NormalizeSourceTerms(true,static_cast<Real>(ntot));
     }
 
     // Write outputs
     pouts->MakeOutputs(pmesh,this,pinput,true);
 
     // unnormalize moments after output
-    for(int nb=0; nb<nblocal; ++nb){
+    for(int nb=0; nb<nblocal; ++nb) {
       MonteCarloBlock *pmcb = my_blocks(nb);
-      pmcb->NormalizeMoments(false,static_cast<Real>(ntot));
+      if (pmcb->moments_rad)
+        pmcb->NormalizeMoments(true,static_cast<Real>(ntot));
+      if (pmcb->call_srcterms)
+        pmcb->NormalizeSourceTerms(true,static_cast<Real>(ntot));
     }
-
-    //pmcout->MakeOutputs(true);
 
   } // end loop over nout
 
@@ -633,9 +635,9 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
   // reset moments/sourcterms for start of new timestep
   for(int nb=0; nb<nblocal; ++nb) {
     MonteCarloBlock *pmcb = my_blocks(nb);
-    if (pmcb->moments_flag)
+    if (pmcb->call_moments)
       pmcb->ResetMoments();
-    if (coupled || pmcb->moments_srcterms)
+    if (pmcb->call_srcterms)
       pmcb->ResetSourceTerms();
   }
 
@@ -678,18 +680,11 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
       std::cout << 0. << std::endl;
   }
 
-  if (pmcout->moments) {
-    // normalize moments for output
-    for(int nb=0; nb<nblocal; ++nb){
-      MonteCarloBlock *pmcb = my_blocks(nb);
-      pmcb->NormalizeMoments(true,static_cast<Real>(ntot));
-    }
-  }
   for(int nb=0; nb<nblocal; ++nb) {
     MonteCarloBlock *pmcb = my_blocks(nb);
-    if (pmcb->moments_flag)
+    if (pmcb->moments_rad)
       pmcb->NormalizeMoments(true,static_cast<Real>(ntot));
-    if (coupled || pmcb->moments_srcterms)
+    if (pmcb->call_srcterms)
       pmcb->NormalizeSourceTerms(true,static_cast<Real>(ntot));
 
   }

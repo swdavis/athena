@@ -65,10 +65,12 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   acceleration = pmy_mc->acceleration;
   time_acc = pmy_mc->time_acc;
   // set in mcoutput
-  moments_flag = pmy_mc->pmcout->moments;
+  moments_rad = pmy_mc->pmcout->moments_rad;
   moments_comoving = pmy_mc->pmcout->moments_comoving;
   moments_srcterms = pmy_mc->pmcout->moments_srcterms;
   moments_user = pmy_mc->pmcout->moments_user;
+  call_moments = moments_rad || moments_comoving || moments_srcterms;
+  call_srcterms = coupled || moments_srcterms;
 
   // *currently* assumes all block boundaries are physical
   SetBoundaryValues(pmy_mc->mc_bcs);
@@ -297,8 +299,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   if (boosts) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
   if (NSCALARS > 0) scalars.NewAthenaArray(ncells3,ncells2,ncells1);
   // moments is 1 (Er) + 3 (Fr) + 9 (Pr) + 1 (Eave) + 1 (net cool)
-  if (moments_flag) moments.NewAthenaArray(NMOM,ncells3,ncells2,ncells1);
-  if (coupled || moments_srcterms) sourceterms.NewAthenaArray(8,ncells3,ncells2,ncells1);
+  if (moments_rad) moments.NewAthenaArray(NMOM,ncells3,ncells2,ncells1);
+  if (call_srcterms) sourceterms.NewAthenaArray(8,ncells3,ncells2,ncells1);
   if (emission_array_flag) emission.NewAthenaArray(ncells3,ncells2,ncells1);
   if (acceleration && !(coherent_scattering) && !(scattering_meth == SCATRES)) {
     planck_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
@@ -326,8 +328,8 @@ MonteCarloBlock::~MonteCarloBlock() {
   tgas.DeleteAthenaArray();
   if (boosts) vel.DeleteAthenaArray();
   if (NSCALARS > 0) scalars.DeleteAthenaArray();
-  if (moments_flag) moments.DeleteAthenaArray();
-  if (coupled) sourceterms.DeleteAthenaArray();
+  if (moments_rad) moments.DeleteAthenaArray();
+  if (call_srcterms) sourceterms.DeleteAthenaArray();
   if (emission_array_flag) emission.DeleteAthenaArray();
   if (acceleration && !(coherent_scattering) && !(scattering_meth == SCATRES)) {
     planck_opacity.DeleteAthenaArray();
@@ -465,7 +467,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
     if (boosts) {
       LorentzTransform(pphot,to_eulr,nold,pphot->nphot-1);
     }
-    if (coupled || moments_srcterms) {
+    if (call_srcterms) {
       // Update source terms to relect newly emitted photons
       for (int ip=nold; ip<pphot->nphot; ip++) {
         UpdateSourceTerms(pphot,0.,0.,0.,0.,0.,ip);
@@ -805,7 +807,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
 
 void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Real k2,
                                     Real k3, Real etau, int ip) {
-  
+
   Real c_cgs = 2.99792458e10;;
   Real k1p = pphot->k1p[ip];
   Real k2p = pphot->k2p[ip];
@@ -879,37 +881,41 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Re
     int j = pphot->i2p[ip];
     int k = pphot->i3p[ip];
 
-    // Add contribution to corresponding moments
-    // Energy density
-    moments(MCIER,k,j,i) += path_weight;
+    if (moments_rad) {
+      // Add contribution to corresponding moments
+      // Energy density
+      moments(MCIER,k,j,i) += path_weight;
+      // Flux
+      moments(MCIFR1,k,j,i) += weight1 * 2.99792458e10;
+      moments(MCIFR2,k,j,i) += weight2 * 2.99792458e10;
+      moments(MCIFR3,k,j,i) += weight3 * 2.99792458e10;
 
-    // Flux
-    moments(MCIFR1,k,j,i) += weight1 * 2.99792458e10;
-    moments(MCIFR2,k,j,i) += weight2 * 2.99792458e10;
-    moments(MCIFR3,k,j,i) += weight3 * 2.99792458e10;
+      // Radiation Pressure
+      Real weightp = weight1 * 2.99792458e10;
+      moments(MCIPR11,k,j,i) += weightp;
+      weightp = weight2 * k2p;
+      moments(MCIPR22,k,j,i) += weightp;
+      weightp = weight3 * k3p;
+      moments(MCIPR33,k,j,i) += weightp;
+      weightp = weight1 * k2p;
+      moments(MCIPR12,k,j,i) += weightp;
+      weightp = weight1 * k3p;
+      moments(MCIPR13,k,j,i)  += weightp;
+      weightp = weight2 * k3p;
+      moments(MCIPR23,k,j,i) += weightp;
+      // SWD: move these to new function or add another flag
+      // Photon mean energy
+      moments(MCIEN,k,j,i) += weight * energy;
+      // Jmean opacity
+      moments(MCIKJ,k,j,i) += weight * abs_coef;
+    }
 
-    // Radiative Acceleration from flux
-    sourceterms(MCRSP1,k,j,i) += (pphot->scp[ip]+abs_coef) * weight1;
-    sourceterms(MCRSP2,k,j,i) += (pphot->scp[ip]+abs_coef) * weight2;
-    sourceterms(MCRSP3,k,j,i) += (pphot->scp[ip]+abs_coef) * weight3;
-
-    // Radiation Pressure
-    Real weightp = weight1 * 2.99792458e10;
-    moments(MCIPR11,k,j,i) += weightp;
-    weightp = weight2 * k2p;
-    moments(MCIPR22,k,j,i) += weightp;
-    weightp = weight3 * k3p;
-    moments(MCIPR33,k,j,i) += weightp;
-    weightp = weight1 * k2p;
-    moments(MCIPR12,k,j,i) += weightp;
-    weightp = weight1 * k3p;
-    moments(MCIPR13,k,j,i)  += weightp;
-    weightp = weight2 * k3p;
-    moments(MCIPR23,k,j,i) += weightp;
-    // Photon mean energy
-    moments(MCIEN,k,j,i) += weight * energy;
-    // Jmean opacity
-    moments(MCIKJ,k,j,i) += weight * abs_coef;
+    if (call_srcterms) {
+      // Radiative Acceleration from flux
+      sourceterms(MCRSP1,k,j,i) += (pphot->scp[ip]+abs_coef) * weight1;
+      sourceterms(MCRSP2,k,j,i) += (pphot->scp[ip]+abs_coef) * weight2;
+      sourceterms(MCRSP3,k,j,i) += (pphot->scp[ip]+abs_coef) * weight3;
+    }
   }
 
 }

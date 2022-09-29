@@ -127,7 +127,7 @@ void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
           // Account for absorption (if needed) and update moments
           Real etaua = ExpTauAbsorption(pphot->acp[ip],dl);
 
-          if (pmcb->moments_flag) {
+          if (pmcb->call_moments) {
             pmcb->UpdateMoments(pphot,dl,etaua,ip);
           }
           pphot->wp[ip] *= etaua;
@@ -145,7 +145,7 @@ void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
         // Account for absorption (if needed) and update moments
         Real etaua = ExpTauAbsorption(pphot->acp[ip],dl);
 
-        if (pmcb->moments_flag) {
+        if (pmcb->call_moments) {
           pmcb->UpdateMoments(pphot,dl,etaua,ip);
         }
         pphot->wp[ip] *= etaua;

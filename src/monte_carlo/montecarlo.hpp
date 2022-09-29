@@ -300,10 +300,12 @@ public:
   int nsrc, nmom; // # of elements in sourcterm, moments arrays
 
   bool weighted_absorption; // flag controling how absorption is handled
-  bool moments_flag; // Compute/output moments
+  bool moments_rad; // Compute/output moments
   bool moments_comoving; // Compute moments in comoving frame
   bool moments_srcterms; // Compute source terms for output
   bool moments_user; // Compute user defined monte carlo moments
+  bool call_moments;
+  bool call_srcterms;
   bool emission_array_flag;  // Compute and save zone emissivities
   bool boosts;  // Compute lorentz transformations
   bool coupled; // Whether time dependent code is coupled to hydro

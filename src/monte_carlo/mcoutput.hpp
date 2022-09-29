@@ -190,7 +190,7 @@ public:
   PhotonList *pphlist;
   PhotonTrajectoryList *ptraj;
 
-  bool moments;
+  bool moments_rad;
   bool moments_comoving;
   bool moments_srcterms;
   bool moments_user;

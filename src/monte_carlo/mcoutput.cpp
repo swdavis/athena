@@ -970,9 +970,10 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
   std::stringstream msg;
   InputBlock *pib = pin->pfirst_block;
 
-  moments = false;
+  moments_rad = false;
   moments_srcterms = false;
   moments_user = false;
+  moments_comoving = false;
   pspec = nullptr;
   pphlist = nullptr;
   ptraj = nullptr;
@@ -1101,7 +1102,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         char proc_id[11];
         sprintf(proc_id,"proc%d",Globals::my_rank);
         pphlist->base_name.append(proc_id);
- } else if (type.compare("traj") == 0) {
+      } else if (type.compare("traj") == 0) {
         // Create photon trajectory list
         // Get number of user output variables and confirm it is less than
         // the number of user variables
@@ -1139,12 +1140,10 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         std::string var = pin->GetOrAddString(pib->block_name,"variable","none");
         if (var.compare("mcmom") == 0 || var.compare("Ermc") == 0 ||
             var.compare("Frmc") == 0 || var.compare("Prmc") == 0) {
-          moments = true;
+          moments_rad = true;
           std::string var = pin->GetOrAddString(pib->block_name,"frame","eulerian");
           if (var.compare("comoving") == 0)
             moments_comoving = true;
-          else
-            moments_comoving = false;
         } else if (var.compare("mcsrc") == 0) {
             moments_srcterms = true;
         } else if (var.compare("mcuser") == 0) {

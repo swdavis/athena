@@ -126,7 +126,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
 
       pphot->dtp[ip] -= step/c_cgs;
       // Update moments
-      if (pmcb->moments_flag) {
+      if (pmcb->call_moments) {
         pmcb->UpdateMoments(pphot,step,path_length,k1,k2,k3,1.,ip);
       }
 
