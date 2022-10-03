@@ -74,70 +74,67 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
   printf("Is it big Endian? %d\n", big_end);
   VTK_Domain domain;
-  int grid_version; 
+  int grid_version;
   if((fp = fopen("grid.vtk","r")) == NULL)
     return;
-  
+
   /* get header */
   fgets(line,256,fp);
   strip_trail_white(line);
   //if(strcmp(line,"# vtk DataFile Version 3.0") != 0 /* mymhd  */ &&
   //   strcmp(line,"# vtk DataFile Version 2.0") != 0 /* athena */ )
-  
+
   /* get comment field */
   fgets(line,256,fp);
   strip_trail_white(line);
   printf("Comment Field: \"%s\"\n",line);
-  
+
 
   /* get BINARY or ASCII */
   fgets(line,256,fp);
   strip_trail_white(line);
   //if(strcmp(line,"BINARY") != 0)
   //  join_error("Unsupported file type: %s",line);
-  
+
   /* get DATASET STRUCTURED_POINTS */
   fgets(line,256,fp);
   strip_trail_white(line);
-  if(strcmp(line,"DATASET STRUCTURED_POINTS") == 0) 
+  if(strcmp(line,"DATASET STRUCTURED_POINTS") == 0)
     grid_version=1;
   else if
     (strcmp(line,"DATASET RECTILINEAR_GRID") == 0) grid_version=2;
-  
+
   /* I'm assuming from this point on that the header is in good shape */
-  
+
   /* Dimensions */
   fscanf(fp,"DIMENSIONS %d %d %d\n",
          &(domain.Nx), &(domain.Ny), &(domain.Nz));
   printf("DIMENSIONS %d %d %d\n",
          domain.Nx, domain.Ny, domain.Nz);
-  
+
   /* We want to store the number of grid cells, not the number of grid
      cell corners */
   if(domain.Nx > 1) domain.Nx--;
   if(domain.Ny > 1) domain.Ny--;
   if(domain.Nz > 1) domain.Nz--;
-  
+
   if(grid_version == 1){ // fixed linear grids in athena 4.2
-    
+
     /* Origin */
     fscanf(fp,"ORIGIN %le %le %le\n",
-  	   &(domain.ox), &(domain.oy), &(domain.oz));
+           &(domain.ox), &(domain.oy), &(domain.oz));
     printf("ORIGIN %e %e %e\n",
-  	   domain.ox, domain.oy, domain.oz);
-    
+           domain.ox, domain.oy, domain.oz);
+
     /* Spacing, dx, dy, dz */
-    fscanf(fp,"SPACING %le %le %le\n",
-  	   &(domain.dx), &(domain.dy), &(domain.dz));
-    printf("SPACING %e %e %e\n",
-  	   domain.dx, domain.dy, domain.dz);
+    fscanf(fp,"SPACING %le %le %le\n",&(domain.dx), &(domain.dy), &(domain.dz));
+    printf("SPACING %e %e %e\n",domain.dx, domain.dy, domain.dz);
   } else if(grid_version == 2) { // flexible grids in athena++
-    
     /* X_COORDINATES NX float */
     fscanf(fp,"X_COORDINATES %d float\n", &nx);
     printf("X_COORDINATES %d float\n", nx);
     domain.X = (float*)malloc(nx*sizeof(float));
-    for(j=0; j<nx; ++j){ 
+    for(j=0; j<nx; ++j){
       fread(&fcoord, sizeof(float), 1, fp);
       if(!big_end) Swap4Bytes2(&fcoord);
       domain.X[j] = fcoord;
@@ -152,7 +149,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
       if(!big_end) Swap4Bytes2(&fcoord);
       domain.Y[j] = fcoord;
     }
- 
+
     /* Z_COORDINATES NZ float */
     fscanf(fp,"\nZ_COORDINATES %d float\n", &nz);
     printf("Z_COORDINATES %d float\n", nz);
@@ -162,18 +159,18 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
       if(!big_end) Swap4Bytes2(&fcoord);
       domain.Z[j] = fcoord;
     }
-    
+
     domain.ox = domain.X[0];
     domain.oy = domain.Y[0];
     domain.oz = domain.Z[0];
     if(nx>1) domain.dx = 1.0; // just to make it nonzero
     else     domain.dx = 0.0;
     if(ny>1) domain.dy = 1.0;
-    else     domain.dy = 0.0; 
+    else     domain.dy = 0.0;
     if(nz>1) domain.dz = 1.0;
-    else     domain.dz = 0.0; 
+    else     domain.dz = 0.0;
   }
-  
+
   /* Cell Data = Nx*Ny*Nz */
   fscanf(fp,"\nCELL_DATA %d\n",&cell_dat);
   printf("CELL_DATA %d\n",cell_dat);
@@ -197,7 +194,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     for(int k=0; k<domain.Nz; k++){
       for(int j=0; j<domain.Ny; j++){
         for(int i=0; i<domain.Nx; i++){
-          fread(&fdat, sizeof(float), 1, fp); 
+          fread(&fdat, sizeof(float), 1, fp);
           if(!big_end) Swap4Bytes2(&fdat);
           phydro->u(IDN,k+ks,j+js,i+is) = static_cast<Real>(fdat);
         }}}
@@ -219,8 +216,11 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         for(int i=0; i<domain.Nx; i++){
           fread(&fdat, sizeof(float), 1, fp);
           if(!big_end) Swap4Bytes2(&fdat);
-          phydro->u(IM1,k+ks,j+js,i+is) = phydro->u(IDN,k+ks,j+js,i+is)*c*static_cast<Real>(fdat);
-        }}}
+          phydro->u(IM1,k+ks,j+js,i+is) = phydro->u(IDN,k+ks,j+js,i+is) *c *
+            static_cast<Real>(fdat);
+        }
+      }
+    }
   }
   fscanf(fp,"%s %s %s\n",type, variable, format);
   if(strcmp(type, "SCALARS") == 0){
@@ -239,8 +239,11 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         for(int i=0; i<domain.Nx; i++){
           fread(&fdat, sizeof(float), 1, fp);
           if(!big_end) Swap4Bytes2(&fdat);
-          phydro->u(IM2,k+ks,j+js,i+is) = phydro->u(IDN,k+is,j+js,i+is)*c*static_cast<Real>(fdat);
-        }}}
+          phydro->u(IM2,k+ks,j+js,i+is) = phydro->u(IDN,k+is,j+js,i+is) * c
+            * static_cast<Real>(fdat);
+        }
+      }
+    }
   }
   fscanf(fp,"%s %s %s\n",type, variable, format);
   if(strcmp(type, "SCALARS") == 0){
@@ -259,8 +262,11 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         for(int i=0; i<domain.Nx; i++){
           fread(&fdat, sizeof(float), 1, fp);
           if(!big_end) Swap4Bytes2(&fdat);
-          phydro->u(IM3,k+ks,j+js,i+is) = phydro->u(IDN,k+ks,j+js,i+is)*c*static_cast<Real>(fdat);
-        }}}
+          phydro->u(IM3,k+ks,j+js,i+is) = phydro->u(IDN,k+ks,j+js,i+is) * c
+            * static_cast<Real>(fdat);
+        }
+      }
+    }
   }
     fscanf(fp,"%s %s %s\n",type, variable, format);
   if(strcmp(type, "SCALARS") == 0){
@@ -361,10 +367,10 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     pphot->statp[ip] = EVOLVING;
     pphot->dtp[ip] = HUGE_NUMBER;
 
-    int i1 = pphot->i1p[ip] = static_cast<int>(pran->uniform()*static_cast<Real>(nrmax-nrmin))
-                     + nrmin+is;
-    int i2 = pphot->i2p[ip] = static_cast<int>(pran->uniform()*nx2)+js;
-    int i3 = pphot->i3p[ip] = static_cast<int>(pran->uniform()*nx3)+ks;
+    int i1 = pphot->i1p[ip] = static_cast<int>(pran->uniform() *
+                              static_cast<Real>(nrmax-nrmin)) + nrmin + is;
+    int i2 = pphot->i2p[ip] = static_cast<int>(pran->uniform() * nx2) + js;
+    int i3 = pphot->i3p[ip] = static_cast<int>(pran->uniform() * nx3) + ks;
 
     // Obtain initial position within zone
     GetZonePosition(pphot,pran,pcoord,ip);

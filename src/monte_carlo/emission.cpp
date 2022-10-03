@@ -15,10 +15,10 @@
 #include "../globals.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn Real InitializeEmissionFreefree(MonteCarloBlock *pmcb)
+//! \fn void GetEmissionFreefree(MonteCarloBlock *pmcb, Real &emm_min, Real &emm_max)
 //! \brief Initialize emission array and return minimum
 
-Real InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
+void GetEmissionFreeFree(MonteCarloBlock *pmcb, Real &emm_min, Real &emm_max) {
 
   Real heabund = 0.09; // Should have more general EOS functions
   Real kb = 1.380649e-16;
@@ -35,8 +35,8 @@ Real InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
   int jl = pmcb->js; int ju = pmcb->je;
   int kl = pmcb->ks; int ku = pmcb->ke;
 
-  Real emm_min = SQR(HUGE_NUMBER);
-  Real emm_max = -HUGE_NUMBER;
+  emm_min = SQR(HUGE_NUMBER);
+  emm_max = -HUGE_NUMBER;
 
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
@@ -49,18 +49,23 @@ Real InitializeEmissionFreeFree(MonteCarloBlock *pmcb) {
         pmcb->emission(k,j,i) = eta0/sqrt(temp)*ne*(nh+4.*nhe)*g*vol*dt*ncells;
         if (pmcb->emission(k,j,i) > emm_max) emm_max = pmcb->emission(k,j,i);
         if (pmcb->emission(k,j,i) < emm_min) emm_min = pmcb->emission(k,j,i);
-      }}}
+      }
+    }
+  }
+  /*
 #ifdef MPI_PARALLEL
     MPI_Allreduce(MPI_IN_PLACE,&emm_min,1,MPI_ATHENA_REAL,MPI_MIN,
                MPI_COMM_WORLD);
     MPI_Allreduce(MPI_IN_PLACE,&emm_max,1,MPI_ATHENA_REAL,MPI_MAX,
                MPI_COMM_WORLD);
 #endif
-  if (Globals::my_rank == 0) {
+  if (pmy_block == 0) {
     std::cout << "Emission array range (min, max): " << emm_min << " " << emm_max
               << std::endl;
   }
   return emm_min;
+  */
+
 }
 
 //----------------------------------------------------------------------------------------

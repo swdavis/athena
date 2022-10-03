@@ -342,7 +342,7 @@ void Photon::SendToNeighbors() {
     }
 
     // Apply periodic boundary conditions and find the mesh coordinates.
-    ApplyPeriodicBoundary(x1p[k], x2p[k], x3p[k]);
+    ApplyPeriodicBoundary(x1p[k], x2p[k], x3p[k], k);
     //printf("%d %d %g %g %g\n",Globals::my_rank,k,x1p[k],x2p[k],x3p[k]);
     // Find the neighbor block to send it to.
     if (!active1_) ox1 = 0;
@@ -446,47 +446,58 @@ void Photon::SendToNeighbors() {
 }
 
 //--------------------------------------------------------------------------------------
-//! \fn void Photons::ApplyPeriodicBoundary(Real &x1, Real &x2, Real &x3)
+//! \fn void Photons::ApplyPeriodicBoundary(Real &x1, Real &x2, Real &x3, int k)
 //! \brief applies periodic boundary conditions to photon k and returns its updated mesh
 //!        coordinates (x1,x2,x3).
 
-void Photon::ApplyPeriodicBoundary(Real &x1, Real &x2, Real &x3) {
+void Photon::ApplyPeriodicBoundary(Real &x1, Real &x2, Real &x3, int k) {
   bool flag = false;
   RegionSize& mesh_size = pmy_mesh->mesh_size;
-  Coordinates *pcoord = pmy_block->pcoord;
-
+  //MCCoord *pcoord = pmy_mcb->pcoord;
+  Real l1cgs, l2cgs = 1., l3cgs = 1.;
+  l1cgs = pmy_mcb->l_cgs;
+  if ( (COORDINATE_SYSTEM == "cartesian") || (COORDINATE_SYSTEM == "minkowski") ) {
+    l2cgs *= pmy_mcb->l_cgs;
+    l3cgs *= pmy_mcb->l_cgs;
+  }
   Real frac = 1.0e-8;
 
   // Apply periodic boundary conditions in X1.
-  if (x1 <= mesh_size.x1min) {
+  if (x1 <= mesh_size.x1min * l1cgs) {
+    PrintPhoton("x1 < x1min",k);
     // Inner x1
-    x1 = mesh_size.x1max*(1.-frac);
+    x1 = mesh_size.x1max * l1cgs * (1.-frac);
     flag = true;
-  } else if (x1 >= mesh_size.x1max) {
+  } else if (x1 >= mesh_size.x1max * l1cgs) {
+    PrintPhoton("x1 > x1max",k);
     // Outer x1
-    x1 = mesh_size.x1min*(1.+frac);
+    x1 = mesh_size.x1min * l1cgs * (1.+frac);
     flag = true;
   }
 
   // Apply periodic boundary conditions in X2.
-  if (x2 <= mesh_size.x2min) {
+  if (x2 <= mesh_size.x2min * l2cgs) {
+    PrintPhoton("x2 < x2min",k);
     // Inner x2
-    x2 = mesh_size.x2max*(1.-frac);
+    x2 = mesh_size.x2max * l2cgs * (1.-frac);
     flag = true;
-  } else if (x2 >= mesh_size.x2max) {
+  } else if (x2 >= mesh_size.x2max * l2cgs) {
+    PrintPhoton("x2 > x2max",k);
     // Outer x2
-    x2 = mesh_size.x2min*(1.+frac);
+    x2 = mesh_size.x2min * l2cgs * (1.+frac);
     flag = true;
   }
 
   // Apply periodic boundary conditions in X3.
-  if (x3 <= mesh_size.x3min) {
+  if (x3 <= mesh_size.x3min * l3cgs) {
+    PrintPhoton("x3 < x3min",k);
     // Inner x3
-    x3 = mesh_size.x3max*(1.-frac);
+    x3 = mesh_size.x3max * l3cgs * (1.-frac);
     flag = true;
-  } else if (x3 >= mesh_size.x3max) {
+  } else if (x3 >= mesh_size.x3max * l3cgs) {
+    PrintPhoton("x3 > x3max",k);
     // Outer x3
-    x3 = mesh_size.x3min*(1.+frac);
+    x3 = mesh_size.x3min * l3cgs * (1.+frac);
     flag = true;
   }
 
@@ -599,19 +610,82 @@ void Photon::GetPositionIndices(int ibegin, int iend) {
   int is = pmy_mcb->is, ie = pmy_mcb->ie;
   int js = pmy_mcb->js, je = pmy_mcb->je;
   int ks = pmy_mcb->ks, ke = pmy_mcb->ke;
+
+  Real l1cgs, l2cgs = 1., l3cgs = 1.;
+  l1cgs = pmy_mcb->l_cgs;
+  if ( (COORDINATE_SYSTEM == "cartesian") || (COORDINATE_SYSTEM == "minkowski") ) {
+    l2cgs *= pmy_mcb->l_cgs;
+    l3cgs *= pmy_mcb->l_cgs;
+  }
+
   for (int k = ibegin; k <= iend; ++k) {
     // Convert to the index space.
-    pmy_block->pcoord->MeshCoordsToIndices(x1p[k], x2p[k], x3p[k], xi1, xi2, xi3);
+    pmy_block->pcoord->MeshCoordsToIndices(x1p[k]/l1cgs, x2p[k]/l2cgs, x3p[k]/l3cgs,
+                                           xi1, xi2, xi3);
+
     i1p[k] = static_cast<int>(xi1);
-    if (i1p[k] < is) i1p[k] = is;
-    if (i1p[k] > ie) i1p[k] = ie;
+    if (i1p[k] < is) {i1p[k] = is;}
+    if (i1p[k] > ie) {i1p[k] = ie;}
     i2p[k] = static_cast<int>(xi2);
     if (i2p[k] < js) i2p[k] = js;
     if (i2p[k] > je) i2p[k] = je;
     i3p[k] = static_cast<int>(xi3);
     if (i3p[k] < ks) i3p[k] = ks;
     if (i3p[k] > ke) i3p[k] = ke;
-    statp[k] = EVOLVING;
+
+    // MeshCoordsToIndicies can fail for refined grids so check is needed
+    MCCoord *pco = pmy_mcb->pcoord;
+    bool on_block = true;
+    while (x1p[k] > pco->x1f(i1p[k]+1)) {
+      i1p[k]++;
+      if (i1p[k] > ie) {
+        on_block = false;
+        break;
+      }
+    }
+    while (x1p[k] < pco->x1f(i1p[k])) {
+      i1p[k]--;
+      if (i1p[k] < is) {
+        on_block = false;
+        break;
+      }
+    }
+    while (x2p[k] > pco->x2f(i2p[k]+1)) {
+      i2p[k]++;
+      if (i2p[k] > je) {
+        on_block = false;
+        break;
+      }
+    }
+    while (x2p[k] < pco->x2f(i2p[k])) {
+      i2p[k]--;
+      if (i1p[k] < js) {
+        on_block = false;
+        break;
+      }
+    }
+    while (x3p[k] > pco->x3f(i3p[k]+1)) {
+      i3p[k]++;
+      if (i3p[k] > ke) {
+        on_block = false;
+        break;
+      }
+    }
+    while (x3p[k] < pco->x3f(i3p[k])) {
+      i3p[k]--;
+      if (i3p[k] < ks) {
+        on_block = false;
+        break;
+      }
+    }
+    if (on_block)
+      statp[k] = EVOLVING;
+    else {
+      PrintPhoton("Warning: [GetPostionIndicies], Photon not on block, destroyed",k);
+      statp[k] = DESTROYED;
+      continue;
+    }
+
     MonteCarloBlock *pmcb = pmy_mcb;
     if (pmcb->boosts) {
       // Shift photon energy to comoving frame

@@ -62,7 +62,7 @@ enum SourceTermFlag {MCRS0 = 0, MCRS1=1, MCRS2=2, MCRS3=3, MCRSP0=4, MCRSP1=5,
                      MCRSP2=6, MCRSP3=7};
 //----------------------------------------------------------------------------------------
 // function pointer prototypes for user-defined modules set at runtime
-typedef Real (*EmisFunc_t)(MonteCarloBlock *pmcb);
+typedef void (*EmisFunc_t)(MonteCarloBlock *pmcb, Real &emm_min, Real &emm_max);
 typedef void (*TempFunc_t)(MonteCarloBlock *pmcb);
 typedef void (*MCBValFunc_t)(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
 typedef Real (*OpacFunc_t)(MonteCarloBlock *pmcb,  Photon *pphot, int ip);
@@ -107,7 +107,7 @@ void SampleDipole(Real theta_in, Real phi_in, Real &theta_out, Real &phi_out,
                   MCRandom *pran);
 Real SampleVelocityParallel(Real a, Real x_in, MCRandom *pran);
 //--------------------- prototypes for emission.cpp functions ----------------------------
-Real InitializeEmissionFreeFree(MonteCarloBlock *pmcb);
+void GetEmissionFreeFree(MonteCarloBlock *pmcb, Real &emm_min, Real &emm_mmax);
 void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real lemax,
                         int ip);
 Real PlanckDist(Real temp,MCRandom *pran);
@@ -225,7 +225,7 @@ public:
 
   // function pointers
   UserMoveFunc_t UserWorkInMove;
-  EmisFunc_t InitEmission;
+  EmisFunc_t GetEmission;
   TempFunc_t GetTemperature;
   ScatFunc_t UserScattering;
   OpacFunc_t UserScatteringOpacity;
@@ -239,7 +239,7 @@ public:
   void InitUserMonteCarloData(ParameterInput *pin);
   // Enroll User functions
   void EnrollUserMCBoundaryFunction(enum BoundaryFace dir, MCBValFunc_t my_bc);
-  void EnrollUserEmissionInitialization(EmisFunc_t emissfunc);
+  void EnrollUserEmissionFunction(EmisFunc_t emissfunc);
   void EnrollUserGetTemperature(TempFunc_t tempfunc);
   void EnrollUserWorkInMove(UserMoveFunc_t userfunc);
   void EnrollUserOpacityFunction(OpacFunc_t opacfunc, bool abs);
@@ -326,7 +326,7 @@ public:
   bool orthotet_flag; // use orthonormal tetrad for TransferPhotons()
   bool varystep_flag; // use variable (true) or constant (false) step
 
-  Real codetocgs_rho, codetocgs_vel, codetocgs_tgas;
+  Real rho_cgs, vel_cgs, tgas_cgs, tfloor_cgs, l_cgs;
   Real stepsize;
   Real minweight;
 

@@ -13,7 +13,7 @@
 
 //----------------------------------------------------------------------------------------
 //! MCBoundaryValues class constructor, built from ParameterInput and MonteCarloBlock
-
+// SWD: ParameterInput not needed
 MCBoundaryValues::MCBoundaryValues(MonteCarloBlock *pmcb, ParameterInput *pin) {
 
   pmy_mcb = pmcb;
@@ -431,6 +431,35 @@ void Periodic(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
 void Block(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
+  /* SWD: for debugging
+  RegionSize& mesh_size = pphot->pmy_mcb->pmy_mc->pmy_mesh->mesh_size;
+  Real x1 = pphot->x1p[ip];
+  Real x2 = pphot->x2p[ip];
+  Real x3 = pphot->x3p[ip];
+  Real l1cgs, l2cgs = 1., l3cgs = 1.;
+  l1cgs = pmcb->l_cgs;
+  if ( (COORDINATE_SYSTEM == "cartesian") || (COORDINATE_SYSTEM == "minkowski") ) {
+    l2cgs *= pmcb->l_cgs;
+    l3cgs *= pmcb->l_cgs;
+  }
+  if (x1 < mesh_size.x1min * l1cgs) {
+    pphot->PrintPhoton("bc x1 < x1min",ip);
+  } else if (x1 > mesh_size.x1max * l1cgs) {
+    pphot->PrintPhoton("bc x1 > x1max",ip);
+  }
+
+  if (x2 < mesh_size.x2min * l2cgs) {
+    pphot->PrintPhoton("bc x2 < x2min",ip);
+  } else if (x2 > mesh_size.x2max * l2cgs) {
+    pphot->PrintPhoton("bc x2 > x2max",ip);
+  }
+
+  if (x3 < mesh_size.x3min * l3cgs) {
+    pphot->PrintPhoton("bc x3 < x3min",ip);
+  } else if (x3 > mesh_size.x3max * l3cgs) {
+    pphot->PrintPhoton("bc x3 > x3max",ip);
+  }
+  */
   pphot->statp[ip] = BUFFERED;
 
 }

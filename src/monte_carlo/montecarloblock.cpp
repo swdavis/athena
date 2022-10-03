@@ -72,7 +72,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   call_moments = moments_rad || moments_comoving || moments_srcterms;
   call_srcterms = coupled || moments_srcterms;
 
-  // *currently* assumes all block boundaries are physical
+  // Set boundary values for this block
   SetBoundaryValues(pmy_mc->mc_bcs);
 
   // Initialize pbval after mcb_bcs is set
@@ -108,9 +108,11 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     }
   }
   // default cgs conversion from code units
-  codetocgs_rho = 1.;
-  codetocgs_vel = 1.;
-  codetocgs_tgas = 1.;
+  rho_cgs = pin->GetOrAddReal("problem","rho_cgs",1.);
+  vel_cgs = pin->GetOrAddReal("problem","vel_cgs",1.);
+  tgas_cgs = pin->GetOrAddReal("problem","tgas_cgs",-1.);
+  tfloor_cgs = pin->GetOrAddReal("problem","tfloor_cgs",0.);
+  l_cgs = pin->GetOrAddReal("problem","l_cgs",1.);
 
   // SWD:  stepsize control needs to be modified
   stepsize = pin->GetOrAddReal("montecarlo","stepsize",1.0e-3);
@@ -152,6 +154,12 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     coherent_scattering = true;
   } else if (scattering_meth == SCATCOMP) {
     int comptonio = pin->GetOrAddInteger("montecarlo","comptonio",1);
+    if (pmy_block->gid == 0) {
+      if (comptonio > 0)
+        std::cout << "Creating table for Compton cross section." << std::endl;
+      else
+        std::cout << "Reading in table for Compton cross section." << std::endl;
+    }
     GenerateComptonTable(comptonio);
     ScatteringOpacity = ComptonOpacity;
     if (pmy_mc->polarized) {
@@ -337,25 +345,6 @@ MonteCarloBlock::~MonteCarloBlock() {
   }
 }
 
-/*void MonteCarloBlock::DefaultGetTemperature() {
-
-  Real rideal = 8.314e7;
-  Hydro* phydro = pmy_block->phydro;
-
-   // MonteCarloBlock ranges should always match MeshBlock ranges
-  int il = is; int iu = ie;
-  int jl = js; int ju = je;
-  int kl = ks; int ku = ke;
-
-  for (int k=kl; k<=ku; ++k) {
-    for (int j=jl; j<=ju; ++j) {
-      for (int i=il; i<=iu; ++i) {
-        tgas(k,j,i) = phydro->w(IEN,k,j,i)/phydro->w(IDN,k,j,i)/rideal;
-
-      }}}
-
-      }*/
-
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::RayTracePhotonsOnBlock()
 //! \brief Integrate photons to termination condtion without scattering
@@ -517,9 +506,8 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
         // Check for possible infinite loop due to NaN in photon
         if (pphot->IsNanPhoton(ip)) {
           pphot->statp[ip] = DESTROYED;
-          std::cout << "Warning: IsNanPhoton() returned true, photon destroyed"
-                    << std::endl;
-          pphot->PrintPhoton(ip);
+          pphot->PrintPhoton("Warning: Nan encounterd in TransferPhotons(),"
+                             " photon destroyed",ip);
         }
       }
 
@@ -870,7 +858,8 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Re
 
   if ((std::isinf(weight)) || (std::isnan(weight))) {
     pphot->statp[ip] = DESTROYED;
-    std::cout << "Warning: UpdateMoments weight is : " << weight << std::endl;
+    pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
+                       " photon destroyed",ip);
   } else {
     // Higher order moments are weighted by displacement direction vector k
     Real weight1 = weight * k1;

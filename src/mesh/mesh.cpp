@@ -143,8 +143,10 @@ Mesh::Mesh(ParameterInput *pin, int mesh_test) :
   if (MONTE_CARLO_ENABLED) {
     if(!pin->GetOrAddBoolean("montecarlo","dynamic",false)) {
       // Set all fluid boundaries to periodic to avoid later check
-      for (int i=0; i<6; i++)
-        mesh_bcs[i] = GetBoundaryFlag("periodic");
+      for (int i=0; i<6; i++) {
+        if (mesh_bcs[i] == BoundaryFlag::undef)
+          mesh_bcs[i] = GetBoundaryFlag("outflow");
+      }
       // Do not impose minimum mesh constraints if monte carlo used
       // in post processing mode
       min_mesh_dim = false;

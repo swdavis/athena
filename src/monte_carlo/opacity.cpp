@@ -66,6 +66,7 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   Real ehnu = exp(-energy / (kb * tgas) );
 
   Real aff = ffnrm/sqrt(tgas)/pow(nu,3);
+
   return ne * (nh + 4. * nhe) * aff * (1. - ehnu);
 
 }
@@ -250,8 +251,8 @@ void GenerateComptonTable(int io) {
     // open file for output
     FILE *pfile;
     std::string fname;
-    if (Globals::my_rank == 0)
-      std::cout << "Reading in table for Compton cross section." << std::endl;
+    //if (Globals::my_rank == 0)
+    //  std::cout << "Reading in table for Compton cross section." << std::endl;
     fname.assign("comptontable.out");
     std::stringstream msg;
     if ((pfile = fopen(fname.c_str(),"r")) == NULL) {

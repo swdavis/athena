@@ -32,19 +32,19 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   pmy_mesh = pmesh;
 
   UserWorkInMove=nullptr;
-  InitEmission=nullptr;
+  GetEmission=nullptr;
   GetTemperature=nullptr;
 
   // Set flags that control emission, absorption and scattering
   emission_meth = GetEmissionFlag(pin->GetOrAddString("montecarlo","emission","none"));
   if (emission_meth == EMISNONE) {
-    InitEmission = nullptr; // left unset
+    GetEmission = nullptr; // left unset
     emission_array_flag = false; // do not allocate memory for array
   } else if (emission_meth ==  EMISUSER) {
-    InitEmission = nullptr; // must be set in InitUserMonteCarloData
+    GetEmission = nullptr; // must be set in InitUserMonteCarloData
     emission_array_flag = true; // allocate memory for array
   } else if (emission_meth ==  EMISFF) {
-    InitEmission = InitializeEmissionFreeFree;
+    GetEmission = GetEmissionFreeFree;
     emission_array_flag = true; // allocate memory for array
   }
 
@@ -251,12 +251,12 @@ void MonteCarlo::EnrollUserMCBoundaryFunction(enum BoundaryFace dir, MCBValFunc_
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarlo::EnrollUserEmissionInitialization(EmisFunc_t emissfunc)
-//! \brief Enroll a user-defined function for initializing emission methods
+//! \fn void MonteCarlo::EnrollUserEmissionFunction(EmisFunc_t emissfunc)
+//! \brief Enroll a user-defined function for computing emission array
 
-void MonteCarlo::EnrollUserEmissionInitialization(EmisFunc_t emissfunc) {
+void MonteCarlo::EnrollUserEmissionFunction(EmisFunc_t emissfunc) {
 
-  InitEmission = emissfunc;
+  GetEmission = emissfunc;
 }
 
 //----------------------------------------------------------------------------------------
@@ -342,7 +342,7 @@ void MonteCarlo::GetDensity(MonteCarloBlock *pmcb) {
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
       for (int i=il; i<=iu; ++i) {
-        pmcb->rho(k,j,i) = pmcb->codetocgs_rho * pmcb->pmy_block->phydro->u(IDN,k,j,i);
+        pmcb->rho(k,j,i) = pmcb->rho_cgs * pmcb->pmy_block->phydro->u(IDN,k,j,i);
       }}}
 }
 
@@ -380,11 +380,11 @@ void MonteCarlo::GetVelocity(MonteCarloBlock *pmcb) {
     for (int j=jl; j<=ju; ++j) {
       for (int i=il; i<=iu; ++i) {
         Real rho = pmcb->pmy_block->phydro->u(IDN,k,j,i);
-        pmcb->vel(0,k,j,i) = pmcb->codetocgs_vel *
+        pmcb->vel(0,k,j,i) = pmcb->vel_cgs *
           pmcb->pmy_block->phydro->u(IM1,k,j,i) / rho;
-        pmcb->vel(1,k,j,i) = pmcb->codetocgs_vel *
+        pmcb->vel(1,k,j,i) = pmcb->vel_cgs *
           pmcb->pmy_block->phydro->u(IM2,k,j,i) / rho;
-        pmcb->vel(2,k,j,i) = pmcb->codetocgs_vel *
+        pmcb->vel(2,k,j,i) = pmcb->vel_cgs *
           pmcb->pmy_block->phydro->u(IM3,k,j,i) / rho;
       }}}
 }
@@ -404,13 +404,22 @@ void DefaultGetTemperature(MonteCarloBlock *pmcb) {
   int jl = pmcb->js; int ju = pmcb->je;
   int kl = pmcb->ks; int ku = pmcb->ke;
 
-  // get pressure
+  Real tconv;
+  if (pmcb->tgas_cgs <= 0.)
+    tconv = 1. / rideal;
+  else
+    tconv = pmcb->tgas_cgs;
+
+  // compute temperature from pressure and density
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
       for (int i=il; i<=iu; ++i) {
-        pmcb->tgas(k,j,i) = pmcb->codetocgs_tgas * phydro->w(IEN,k,j,i) /
-                            phydro->w(IDN,k,j,i)/rideal;
-      }}}
+        Real tgas = tconv * phydro->w(IEN,k,j,i) / phydro->w(IDN,k,j,i);
+        // apply temperature floor
+        pmcb->tgas(k,j,i) = (tgas > pmcb->tfloor_cgs) ? tgas : pmcb->tfloor_cgs;
+      }
+    }
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -434,14 +443,18 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
     GetTemperature = DefaultGetTemperature;
 
   // Initialize monte carlo blocks
+  Real emm_min = SQR(HUGE_NUMBER), emm_max = -HUGE_NUMBER;
   for (int i=0; i<nblocal; i++) {
     MonteCarloBlock *pmcb = my_blocks(i);
     // Initialize variables over all blocks
     GetDensity(pmcb);
     GetTemperature(pmcb);
     if (boosts) GetVelocity(pmcb);
-    if (InitEmission != nullptr) {
-      pmcb->minweight *= InitEmission(pmcb);
+    if (GetEmission != nullptr) {
+      Real min_block, max_block;
+      GetEmission(pmcb,min_block,max_block);
+      emm_min = (emm_min < min_block) ? emm_min : min_block;
+      emm_max = (emm_max > max_block) ? emm_max : max_block;
     }
     if (NSCALARS > 0) GetScalars(pmcb);
     // initialize counters to zero
@@ -451,6 +464,23 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
     pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
     // Call problem generators for Monte Carlo
     pmcb->MonteCarloProblemGenerator(pin);
+  }
+  // update minimum weight if emissivity array is calculated
+  if (GetEmission != nullptr) {
+#ifdef MPI_PARALLEL
+    MPI_Allreduce(MPI_IN_PLACE,&emm_min,1,MPI_ATHENA_REAL,MPI_MIN,
+               MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE,&emm_max,1,MPI_ATHENA_REAL,MPI_MAX,
+               MPI_COMM_WORLD);
+#endif
+    if (Globals::my_rank == 0) {
+      std::cout << "Emission array range (min, max): " << emm_min << " " << emm_max
+                << std::endl;
+    }
+    for (int i=0; i<nblocal; i++) {
+      MonteCarloBlock *pmcb = my_blocks(i);
+      pmcb->minweight *= emm_min;
+    }
   }
 }
 
@@ -616,14 +646,18 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
   nphtot = nblock * nbtotal;  // adjust nphtot if needed
 
   // Reset monte carlo blocks
+  Real emm_min = SQR(HUGE_NUMBER), emm_max = -HUGE_NUMBER;
   for (int i=0; i<nblocal; i++) {
     MonteCarloBlock *pmcb = my_blocks(i);
     // Initialize variables over all blocks
     GetDensity(pmcb);
     GetTemperature(pmcb);
     if (boosts) GetVelocity(pmcb);
-    if (InitEmission != nullptr) {
-      pmcb->minweight *= InitEmission(pmcb);
+    if (GetEmission != nullptr) {
+      Real min_block, max_block;
+      GetEmission(pmcb,min_block,max_block);
+      emm_min = (emm_min < min_block) ? emm_min : min_block;
+      emm_max = (emm_max > max_block) ? emm_max : max_block;
     }
     if (NSCALARS > 0) GetScalars(pmcb); //scalars
     // set photons to be computed and counters
@@ -631,7 +665,23 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
     pmcb->nphdone = 0;
     pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
   }
-
+  // update minimum weight if emissivity array is calculated
+  if (GetEmission != nullptr) {
+#ifdef MPI_PARALLEL
+    MPI_Allreduce(MPI_IN_PLACE,&emm_min,1,MPI_ATHENA_REAL,MPI_MIN,
+               MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE,&emm_max,1,MPI_ATHENA_REAL,MPI_MAX,
+               MPI_COMM_WORLD);
+#endif
+    if (Globals::my_rank == 0) {
+      std::cout << "Emission array range (min, max): " << emm_min << " " << emm_max
+                << std::endl;
+    }
+    for (int i=0; i<nblocal; i++) {
+      MonteCarloBlock *pmcb = my_blocks(i);
+      pmcb->minweight *= emm_min;
+    }
+  }
   // reset moments/sourcterms for start of new timestep
   for(int nb=0; nb<nblocal; ++nb) {
     MonteCarloBlock *pmcb = my_blocks(nb);

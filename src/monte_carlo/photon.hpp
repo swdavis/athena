@@ -40,7 +40,7 @@ public:
   void PolarizationToCoord(std::complex<Real> ttet[4][4], Real econ[4][4], const int ip);
   void AllocatePhotons(int nphot);
   void SendToNeighbors();
-  void ApplyPeriodicBoundary(Real &x1, Real &x2, Real &x3);
+  void ApplyPeriodicBoundary(Real &x1, Real &x2, Real &x3, int k);
   bool ReceiveFromNeighbors();
   void GetPositionIndices(int ibegin, int iend);
   static void Initialize(MonteCarlo *pmc, ParameterInput *pin);

@@ -24,7 +24,6 @@
 
 MCCoord::MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb) {
 
-  // Very kludgey
   int nx1 = pcoord->x1f.GetDim1();
   int nx2 = pcoord->x2f.GetDim1();
   int nx3 = pcoord->x3f.GetDim1();
@@ -34,9 +33,16 @@ MCCoord::MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb) {
   x3f.NewAthenaArray(nx3);
 
   x1f = pcoord->x1f;
+  for (int i = 0; i < nx1; i++)
+    x1f(i) *= pmcb->l_cgs;
   x2f = pcoord->x2f;
   x3f = pcoord->x3f;
-
+  if ( (COORDINATE_SYSTEM == "cartesian") || (COORDINATE_SYSTEM == "minkowski") ) {
+    for (int i = 0; i < nx2; i++)
+      x2f(i) *= pmcb->l_cgs;
+    for (int i = 0; i < nx3; i++)
+      x3f(i) *= pmcb->l_cgs;
+  }
   // Needed for black hole coordinates
   if (GENERAL_RELATIVITY) {
     bh_mass_ = pcoord->GetMass();
@@ -57,7 +63,7 @@ MCCoord::MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb) {
   for (int k=pmcb->ks; k<=pmcb->ke; ++k) {
     for (int j=pmcb->js; j<=pmcb->je; ++j) {
       for (int i=pmcb->is; i<=pmcb->ie; ++i) {
-        vol(k,j,i) = pcoord->GetCellVolume(k,j,i);
+        vol(k,j,i) = pcoord->GetCellVolume(k,j,i) * pow(pmcb->l_cgs,3);
       }}}
   computedmin = pmcb->computedmin;
   if (computedmin) {
@@ -66,9 +72,14 @@ MCCoord::MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb) {
     for (int k=pmcb->ks; k<=pmcb->ke; ++k) {
       for (int j=pmcb->js; j<=pmcb->je; ++j) {
         for (int i=pmcb->is; i<=pmcb->ie; ++i) {
-          dw3 = pcoord->dx3f(k);
+          dw3 = pcoord->dx3f(k) * pmcb->l_cgs;
           dw2 = pcoord->dx2f(j);
           dw1 = pcoord->dx1f(i);
+          if ( (COORDINATE_SYSTEM == "cartesian") ||
+               (COORDINATE_SYSTEM == "minkowski") ) {
+            dw2 *= pmcb->l_cgs;
+            dw3 *= pmcb->l_cgs;
+          }
           Real dmin0 = std::min(dw1,dw2);
           dmin(k,j,i) = std::min(dmin0,dw3);
         }

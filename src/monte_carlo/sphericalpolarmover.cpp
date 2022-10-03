@@ -90,7 +90,6 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
       Real y0 = r0 * sth * sph;
       Real z0 = r0 * cth;
 
-
       // Compute distance to all faces
       Real dlr, dlt, dlp;
       bool ascend[3];
@@ -321,6 +320,7 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
       } else { // Photon moves to next zone and reduce tauremaining
         // Update moments
         pphot->dtp[ip] -= dl/c_cgs;
+
         if (pmcb->call_moments)
           pmcb->UpdateMoments(pphot,dl,1.,ip);
         // Update positions
