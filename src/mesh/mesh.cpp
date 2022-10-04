@@ -142,10 +142,44 @@ Mesh::Mesh(ParameterInput *pin, int mesh_test) :
   bool min_mesh_dim = true;
   if (MONTE_CARLO_ENABLED) {
     if(!pin->GetOrAddBoolean("montecarlo","dynamic",false)) {
-      // Set all fluid boundaries to periodic to avoid later check
-      for (int i=0; i<6; i++) {
-        if (mesh_bcs[i] == BoundaryFlag::undef)
-          mesh_bcs[i] = GetBoundaryFlag("outflow");
+      // If unset, set all fluid boundaries to periodic if monte carlo is periodic or
+      // outflow otherwise to enforce mesh refinement consistency. Best practice is to
+      // fluid boundaries even for static monte carlo with mesh refinement enabled
+      if (mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::undef) {
+        if (pin->GetString("mesh","ix1_mc_bc") == "periodic")
+          mesh_bcs[BoundaryFace::inner_x1] = GetBoundaryFlag("periodic");
+        else
+          mesh_bcs[BoundaryFace::inner_x1] = GetBoundaryFlag("outflow");
+      }
+      if (mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::undef) {
+        if (pin->GetString("mesh","ox1_mc_bc") == "periodic")
+          mesh_bcs[BoundaryFace::outer_x1] = GetBoundaryFlag("periodic");
+        else
+          mesh_bcs[BoundaryFace::outer_x1] = GetBoundaryFlag("outflow");
+      }
+      if (mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::undef) {
+        if (pin->GetString("mesh","ix2_mc_bc") == "periodic")
+          mesh_bcs[BoundaryFace::inner_x2] = GetBoundaryFlag("periodic");
+        else
+          mesh_bcs[BoundaryFace::inner_x2] = GetBoundaryFlag("outflow");
+      }
+      if (mesh_bcs[BoundaryFace::outer_x2] == BoundaryFlag::undef) {
+        if (pin->GetString("mesh","ox2_mc_bc") == "periodic")
+          mesh_bcs[BoundaryFace::outer_x2] = GetBoundaryFlag("periodic");
+        else
+          mesh_bcs[BoundaryFace::outer_x2] = GetBoundaryFlag("outflow");
+      }
+      if (mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::undef) {
+        if (pin->GetString("mesh","ix3_mc_bc") == "periodic")
+          mesh_bcs[BoundaryFace::inner_x3] = GetBoundaryFlag("periodic");
+        else
+          mesh_bcs[BoundaryFace::inner_x3] = GetBoundaryFlag("outflow");
+      }
+      if (mesh_bcs[BoundaryFace::outer_x3] == BoundaryFlag::undef) {
+        if (pin->GetString("mesh","ox3_mc_bc") == "periodic")
+          mesh_bcs[BoundaryFace::outer_x3] = GetBoundaryFlag("periodic");
+        else
+          mesh_bcs[BoundaryFace::outer_x3] = GetBoundaryFlag("outflow");
       }
       // Do not impose minimum mesh constraints if monte carlo used
       // in post processing mode

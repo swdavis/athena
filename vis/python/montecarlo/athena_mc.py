@@ -170,7 +170,7 @@ def read_list(filename,data=True,header=True):
         # SWD: temporary to read broken list
         #phlist['length'] = nloop*mxl_
         #phlist['list'] = phlist['list'].reshape((nloop*mxl_,npars))
-    return phlist
+    return phlist, current_index
 
 def write_list(filename,phlist,header=True,length=None):
     """
@@ -359,6 +359,89 @@ def read_spectrum(filename):
         vals = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
         spectrum['errors'] = vals.reshape((nintens,nphi,nmu,nx))
     return spectrum
+
+# Check if headers match
+def header_match(dict1,dict2,dict_type):
+
+    match = True
+    if (dict1 is None):
+        return False
+    if (dict2 is None):
+        return False
+    if (dict_type == 'list'):
+        if (dict1['npars'] != dict2['npars']):
+            match = False
+        elif (dict1['polarized'] != dict2['polarized']):
+            match = False
+    elif (dict_type == 'spec'):
+        if (dict1['nx'] != dict2['nx']):
+            match = False
+        elif (dict1['nmu'] != dict2['nmu']):
+            match = False
+        elif (dict1['nphi'] != dict2['nphi']):
+            match = False
+        elif (dict1['nintens'] != dict2['nintens']):
+            match = False
+        elif (dict1['units'] != dict2['units']):
+            match = False
+        elif (dict1['yerror'] != dict2['yerror']):
+            match = False
+    else:
+        print("file type: "+dict_type+" not supported. Returning false.")
+        match = False
+
+    return match
+
+def add_spectra(spec1,spec2,method='statistical'):
+    """
+    Add two spectra to create single spectrum
+    """
+    if (not header_match(spec1,spec2,'spec')):
+        raise RuntimeError('[add_specta]: headers do not match')
+
+    # copy spectra to new dictionaries to avoid modification of originals
+    spec1c = spec1.copy()
+    spec2c = spec2.copy()
+
+    if (method == 'statistical'):
+        if (spec1c['dt'] != spec2c['dt']):
+            raise RuntimeError('[add_specta]: statistical averaging requested' \
+                               'but spectra have different integration times')
+        # undo normalization by photon count
+        spec1c['intensity'] *= spec1c['ntot']
+        spec2c['intensity'] *= spec2c['ntot']
+        if (spec1c['yerror']):
+            spec1c['errors'] *= spec1c['ntot']
+            spec2c['errors'] *= spec2c['ntot']
+    #elif (method == 'temporal'):
+    #    if (spec1c['ntot'] != spec2c['ntot']):
+    #        raise RuntimeError('[add_specta]: temporal averaging requested' \
+    #                           'but spectra have different total counts')
+    #    # undo normalization by integration time
+    #    spec1c['intensity'] *= spec1c['dt']
+    #    spec2c['intensity'] *= spec2c['dt']
+    #    if (spec1c['yerror']):
+    #        spec1c['errors'] *= (spec1c['dt'])**2
+    #        spec1c['errors'] *= (spec2c['dt'])**2
+
+    # intialize spec_out as copy for simplicity
+    spec_out = spec1c.copy()
+
+    # sum unormalized intensity and error arrays
+    spec_out['intensity'] = np.add(spec1c['intensity'],spec2c['intensity'])
+    if (spec_out['yerror']):
+        spec_out['errors'] = np.add(spec1c['errors'],spec2c['errors'])
+
+    spec_out['ntot'] = spec1c['ntot']+ spec2['ntot']
+
+    if (method == 'statistical'):
+        # renormalization by photon number
+        spec_out['intensity'] /= spec_out['ntot']
+        if (spec_out['yerror']):
+            spec_out['errors'] /= spec_out['ntot']
+
+
+    return spec_out
 
 # Retrun x for desired units
 def convert_xaxis(newunit,spectrum):

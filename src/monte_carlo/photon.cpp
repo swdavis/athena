@@ -464,40 +464,46 @@ void Photon::ApplyPeriodicBoundary(Real &x1, Real &x2, Real &x3, int k) {
 
   // Apply periodic boundary conditions in X1.
   if (x1 <= mesh_size.x1min * l1cgs) {
-    PrintPhoton("x1 < x1min",k);
     // Inner x1
-    x1 = mesh_size.x1max * l1cgs * (1.-frac);
+    Real dx = l1cgs * mesh_size.x1min - x1;
+    x1 = mesh_size.x1max * l1cgs - dx;
+    //x1 = mesh_size.x1max * l1cgs * (1.-frac);
     flag = true;
   } else if (x1 >= mesh_size.x1max * l1cgs) {
-    PrintPhoton("x1 > x1max",k);
     // Outer x1
-    x1 = mesh_size.x1min * l1cgs * (1.+frac);
+    Real dx = x1 - l1cgs * mesh_size.x1max;
+    x1 = mesh_size.x1min * l1cgs + dx;
+    //x1 = mesh_size.x1min * l1cgs * (1.+frac);
     flag = true;
   }
 
   // Apply periodic boundary conditions in X2.
   if (x2 <= mesh_size.x2min * l2cgs) {
-    PrintPhoton("x2 < x2min",k);
     // Inner x2
-    x2 = mesh_size.x2max * l2cgs * (1.-frac);
+    Real dx = l2cgs * mesh_size.x2min - x2;
+    x2 = mesh_size.x2max * l2cgs - dx;
+    //x2 = mesh_size.x2max * l2cgs * (1.-frac);
     flag = true;
   } else if (x2 >= mesh_size.x2max * l2cgs) {
-    PrintPhoton("x2 > x2max",k);
     // Outer x2
-    x2 = mesh_size.x2min * l2cgs * (1.+frac);
+    Real dx = x2 - l2cgs * mesh_size.x2max;
+    x2 = mesh_size.x2min * l2cgs + dx;
+    //x2 = mesh_size.x2min * l2cgs * (1.+frac);
     flag = true;
   }
 
   // Apply periodic boundary conditions in X3.
   if (x3 <= mesh_size.x3min * l3cgs) {
-    PrintPhoton("x3 < x3min",k);
     // Inner x3
-    x3 = mesh_size.x3max * l3cgs * (1.-frac);
+    Real dx = l3cgs * mesh_size.x3min - x3;
+    x3 = mesh_size.x3max * l3cgs - dx;
+    //x3 = mesh_size.x3max * l3cgs * (1.-frac);
     flag = true;
   } else if (x3 >= mesh_size.x3max * l3cgs) {
-    PrintPhoton("x3 > x3max",k);
     // Outer x3
-    x3 = mesh_size.x3min * l3cgs * (1.+frac);
+    Real dx = x3 - l3cgs * mesh_size.x3max;
+    x3 = mesh_size.x3min * l3cgs + dx;
+    //x3 = mesh_size.x3min * l3cgs * (1.+frac);
     flag = true;
   }
 
@@ -623,15 +629,18 @@ void Photon::GetPositionIndices(int ibegin, int iend) {
     pmy_block->pcoord->MeshCoordsToIndices(x1p[k]/l1cgs, x2p[k]/l2cgs, x3p[k]/l3cgs,
                                            xi1, xi2, xi3);
 
-    i1p[k] = static_cast<int>(xi1);
-    if (i1p[k] < is) {i1p[k] = is;}
-    if (i1p[k] > ie) {i1p[k] = ie;}
-    i2p[k] = static_cast<int>(xi2);
-    if (i2p[k] < js) i2p[k] = js;
-    if (i2p[k] > je) i2p[k] = je;
-    i3p[k] = static_cast<int>(xi3);
-    if (i3p[k] < ks) i3p[k] = ks;
-    if (i3p[k] > ke) i3p[k] = ke;
+    int i1 = i1p[k] = static_cast<int>(xi1);
+    //if (i1p[k] < is) {i1p[k] = is;}
+    //if (i1p[k] > ie) {i1p[k] = ie;}
+    if (i1p[k] = ie+1) {i1p[k] = ie;}
+    int i2 = i2p[k] = static_cast<int>(xi2);
+    //if (i2p[k] < js) i2p[k] = js;
+    //if (i2p[k] > je) i2p[k] = je;
+    if (i2p[k] = je+1) i2p[k] = je;
+    int i3 =i3p[k] = static_cast<int>(xi3);
+    //if (i3p[k] < ks) i3p[k] = ks;
+    //if (i3p[k] > ke) i3p[k] = ke;
+    if (i3p[k] = ke+1) i3p[k] = ke;
 
     // MeshCoordsToIndicies can fail for refined grids so check is needed
     MCCoord *pco = pmy_mcb->pcoord;
@@ -659,7 +668,7 @@ void Photon::GetPositionIndices(int ibegin, int iend) {
     }
     while (x2p[k] < pco->x2f(i2p[k])) {
       i2p[k]--;
-      if (i1p[k] < js) {
+      if (i2p[k] < js) {
         on_block = false;
         break;
       }
@@ -681,6 +690,10 @@ void Photon::GetPositionIndices(int ibegin, int iend) {
     if (on_block)
       statp[k] = EVOLVING;
     else {
+      printf("%d %d %d\n",i1,i2,i3);
+      printf("min/max: %g %g %g %g %g %g\n",pco->x1f(is),pco->x1f(ie+1),pco->x2f(js),
+             pco->x2f(je+1),pco->x3f(ks),pco->x3f(ke+1));
+      printf("%d %d %d %d %d %d\n",is,ie,js,je,ks,ke);
       PrintPhoton("Warning: [GetPostionIndicies], Photon not on block, destroyed",k);
       statp[k] = DESTROYED;
       continue;

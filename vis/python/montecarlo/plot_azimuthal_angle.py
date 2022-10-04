@@ -66,7 +66,7 @@ def main(**kwargs):
     files = file_handler(infile)
     outfile = kwargs.pop('outfile')
     if outfile is None:
-        outfile = files[0].replace('.spec','.pdf')
+        outfile = files[0].replace('.spec','.png')
 
     #  Set plot parameters
     plterr = kwargs.pop("ploterr")
