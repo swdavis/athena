@@ -1080,8 +1080,9 @@ void Particles::FlushReceiveBuffer(ParticleBuffer& recv) {
     }
   }
   // Find their position indices.
-  if (!MONTE_CARLO_ENABLED)
+  if (!MONTE_CARLO_ENABLED) {
     GetPositionIndices(npar_old, npar, xp, yp, zp, xi1, xi2, xi3);
+  }
   // Clear the receive buffers.
   recv.npar = 0;
 }

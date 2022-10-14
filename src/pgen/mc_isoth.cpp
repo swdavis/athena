@@ -29,6 +29,8 @@
 
 namespace {
   // Global variables
+  int i1, i2, i3;
+  Real nemit;
   bool tnorm;
   Real logemin, logemax;
   Real DensityProfile(Real x, Real xl, Real xh, Real taul, Real tauh, Real kap);
@@ -151,20 +153,57 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
   Real nx2 = static_cast<Real>(je-js+1);
   Real nx3 = static_cast<Real>(ke-ks+1);
 
+
   for (int ip=ips; ip<=ipe; ip++) {
 
-    // Randomly assign emission zone
-    int i1,i2,i3;
-    pphot->i1p[ip] = i1 = static_cast<int>(pran->uniform()*nx1)+is;
-    pphot->i2p[ip] = i2 = static_cast<int>(pran->uniform()*nx2)+js;
-    pphot->i3p[ip] = i3 = static_cast<int>(pran->uniform()*nx3)+ks;
+    if (pmy_mc->emission_eqwt) {
+      bool this_zone = false;
+      while (!this_zone) {
+        if (nemit > 1.) {
+          pphot->i1p[ip] = i1+is;
+          pphot->i2p[ip] = i2+js;
+          pphot->i3p[ip] = i3+ks;
+          this_zone = true;
+          nemit -= 1.;
+        } else if (nemit > 0.) {
+          if (pran->uniform() < nemit) {
+            pphot->i1p[ip] = i1+is;
+            pphot->i2p[ip] = i2+js;
+            pphot->i3p[ip] = i3+ks;
+            this_zone = true;
+          }
+          nemit -= 1.;
+        } else {
+          this_zone = false;
+          i3++;
+          if (i3 >= nx3) {
+            i3 = 0;
+            i2++;
+            if (i2 >= nx2) {
+              i2 = 0;
+              i1++;
+              if (i1 >= nx1)
+                i1 = 0;
+            }
+          }
+          nemit = emission(i3+ks,i2+js,i1+is) / weight;
+          //printf("nemit: %g %d %d %d %g %g\n",nemit,i3,i2,i1,emission(i3,i2,i1),weight);
+        }
+      } // end while (!this_zone)
+      pphot->wp[ip] = weight;
+    } else {
+      // Randomly assign emission zone
+      pphot->i1p[ip] = i1 = static_cast<int>(pran->uniform()*nx1)+is;
+      pphot->i2p[ip] = i2 = static_cast<int>(pran->uniform()*nx2)+js;
+      pphot->i3p[ip] = i3 = static_cast<int>(pran->uniform()*nx3)+ks;
 
+      // Set weight according to the emission array, which is the relative number of
+      // photons emitted in each cell
+      pphot->wp[ip] = emission(i3,i2,i1);
+
+    }
     // Obtain initial position within zone
     GetZonePosition(pphot,pran,pcoord,ip);
-
-    // Set weight according to the emission array, which is the relative number of photons
-    // emitted in each cell
-    pphot->wp[ip] = emission(i3,i2,i1);
 
     // Set maximum integration time
     pphot->dtp[ip] = pphot->pmy_mcb->pmy_mc->tmax;
@@ -172,7 +211,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     // Obtain intitial energy, polarization, direction and weight
     // Utilize free-free emission function in emission.cpp
     if(tnorm) {
-      Real logtg = log(tgas(i3,i2,i1));
+      Real logtg = log(tgas(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]));
       PhotonEmitFreeFree(this,pphot,logemin+logtg,logemax+logtg,ip);
     } else{
       PhotonEmitFreeFree(this,pphot,logemin,logemax,ip);
@@ -188,7 +227,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
       pphot->dk2p[ip] = 0.;
       pphot->dk3p[ip] = 0.;
     }
-
+    //printf("%g %g \n",pphot->ep[ip],pphot->wp[ip]);
     // Set status flag
     if (pphot->wp[ip] < 0.0)
       pphot->statp[ip] = DESTROYED;
@@ -202,6 +241,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     // to the values appropriate in the emitted zone
     pphot->acp[ip] = AbsorptionOpacity(this,pphot,ip);
     pphot->scp[ip] = ScatteringOpacity(this,pphot,ip);
+
+    //printf("start: %d %g %g %d\n",pphot->i3p[ip],pphot->wp[ip],pphot->ep[ip],pphot->statp[ip]);
   }
   //pphot->nphot++;
 
@@ -219,15 +260,29 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
   tnorm = pin->GetOrAddBoolean("problem","tnorm",false);
   if (tnorm) {
     // interpret as xmin/xmax with x=E/(kb*T)
-    Real kb = 1.380649e-16;
+    const Real kb = 1.380649e-16;
     logemin = log(kb*pin->GetReal("problem", "emin"));
     logemax = log(kb*pin->GetReal("problem", "emax"));
   } else {
     // interpret as emin/emax in eV
-    Real everg = 1.6021772e-12;
+    const Real everg = 1.6021772e-12;
     logemin = log(everg*pin->GetReal("problem", "emin"));
     logemax = log(everg*pin->GetReal("problem", "emax"));
   }
+  if (pmy_mc->emission_eqwt) {
+    i1 = -1; i2 = -1; i3 = -1;
+    nemit = 0.;
+  }
+}
+
+//========================================================================================
+//! \fn void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin)
+//! \brief Initializes user data specific to MonteCarlo class
+//========================================================================================
+
+void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
+
+  nuser_var = 1;
 
 }
 
@@ -237,4 +292,5 @@ Real DensityProfile(Real x, Real xl, Real xh, Real taul, Real tauh, Real kap) {
   Real l0 = (xh-xl) / log(tauh/taul);
   return taul/l0/kap*exp((xh-x)/l0);
 }
+
 }

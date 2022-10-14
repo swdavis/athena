@@ -36,17 +36,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   GetTemperature=nullptr;
 
   // Set flags that control emission, absorption and scattering
-  emission_meth = GetEmissionFlag(pin->GetOrAddString("montecarlo","emission","none"));
-  if (emission_meth == EMISNONE) {
-    GetEmission = nullptr; // left unset
-    emission_array_flag = false; // do not allocate memory for array
-  } else if (emission_meth ==  EMISUSER) {
-    GetEmission = nullptr; // must be set in InitUserMonteCarloData
-    emission_array_flag = true; // allocate memory for array
-  } else if (emission_meth ==  EMISFF) {
-    GetEmission = GetEmissionFreeFree;
-    emission_array_flag = true; // allocate memory for array
-  }
+  InitializeEmissionFlags(pin);
 
   // read bc flags for each of the 6 physical boundaries.
   mc_bcs[BoundaryFace::inner_x1] = GetMCBoundaryFlag(pin->GetString("mesh","ix1_mc_bc"));
@@ -443,45 +433,155 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
     GetTemperature = DefaultGetTemperature;
 
   // Initialize monte carlo blocks
-  Real emm_min = SQR(HUGE_NUMBER), emm_max = -HUGE_NUMBER;
   for (int i=0; i<nblocal; i++) {
     MonteCarloBlock *pmcb = my_blocks(i);
     // Initialize variables over all blocks
     GetDensity(pmcb);
     GetTemperature(pmcb);
     if (boosts) GetVelocity(pmcb);
-    if (GetEmission != nullptr) {
-      Real min_block, max_block;
-      GetEmission(pmcb,min_block,max_block);
-      emm_min = (emm_min < min_block) ? emm_min : min_block;
-      emm_max = (emm_max > max_block) ? emm_max : max_block;
-    }
     if (NSCALARS > 0) GetScalars(pmcb);
+
     // initialize counters to zero
-    pmcb->nphremain = 0;
-    pmcb->nphdone = 0;
-    pmcb->loop_max_size = pin->GetOrAddInteger("montecarlo","loop_max_size",1000);
     pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
+    pmcb->loop_max_size = pin->GetOrAddInteger("montecarlo","loop_max_size",1000);
+
     // Call problem generators for Monte Carlo
     pmcb->MonteCarloProblemGenerator(pin);
   }
-  // update minimum weight if emissivity array is calculated
-  if (GetEmission != nullptr) {
-#ifdef MPI_PARALLEL
-    MPI_Allreduce(MPI_IN_PLACE,&emm_min,1,MPI_ATHENA_REAL,MPI_MIN,
-               MPI_COMM_WORLD);
-    MPI_Allreduce(MPI_IN_PLACE,&emm_max,1,MPI_ATHENA_REAL,MPI_MAX,
-               MPI_COMM_WORLD);
-#endif
-    if (Globals::my_rank == 0) {
-      std::cout << "Emission array range (min, max): " << emm_min << " " << emm_max
-                << std::endl;
-    }
-    for (int i=0; i<nblocal; i++) {
-      MonteCarloBlock *pmcb = my_blocks(i);
-      pmcb->minweight *= emm_min;
-    }
+
+  // Initialize emission arrays, if needed
+  //ComputeEmission();
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void void MonteCarlo::InitializeEmissionFlags(ParameterInput *pin)
+//! \brief initialize flags that control emission
+
+void MonteCarlo::InitializeEmissionFlags(ParameterInput *pin) {
+  // This function sets flags that determine how emission will be handled
+  // Options currently include none, user, and free-free
+  // "none" means that no arrays are set up to assist photon initialization
+  // "user" means that meshblock arrays will be set up but the user will provide the
+  //        emissivity function
+  // "freefree" mean that the default freefree emissivity function will be used for
+  //            the emission array
+  emission_flag = GetEmissionFlag(pin->GetOrAddString("montecarlo","emission","none"));
+
+  // Set emmisivity functions and flag for determining emission array
+  if (emission_flag == EMISNONE) {
+    GetEmission = nullptr; // left unset
+    emission_array = false; // do not allocate memory for array
+  } else if (emission_flag ==  EMISUSER) {
+    GetEmission = nullptr; // must be set in InitUserMonteCarloData
+    emission_array = true; // allocate memory for array
+  } else if (emission_flag ==  EMISFF) {
+    GetEmission = GetEmissionFreeFree;
+    emission_array = true; // allocate memory for array
   }
+
+  // In addition the user has a choice of how this emission array will be utilized
+  // either it will determine number of photon per zone with constant initial weights
+  // or it will be used to set the initial weight
+  emission_eqwt = pin->GetOrAddBoolean("montecarlo","equal_weight",false);
+
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::ComputeEmission()
+//! \brief compute the emission on all blocks
+
+void MonteCarlo::ComputeEmission() {
+
+  if (emission_flag == EMISNONE) {
+    // Don't compute emission array -- just set nphremain on meshblocks
+    // to all be the same value, resetting nphtot if needed
+    int nphblock = nphtot / nbtotal;
+    nphtot = nphblock * nbtotal; // adjust nphtot if needed
+
+    for (int nb=0; nb<nblocal; nb++) {
+      my_blocks(nb)->nphremain = nphblock;
+      my_blocks(nb)->nphrun = 0;
+    }
+    return;
+  } else if (GetEmission == nullptr) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in ComputeEmission" << std::endl
+        << "emission method is not none, but GetEmission is not set."
+        << std::endl;
+    ATHENA_ERROR(msg);
+  }
+
+  // compute emission on all blocks
+  Real emm_min = SQR(HUGE_NUMBER), emm_max = -HUGE_NUMBER, emm_tot = 0.;
+  Real *tot_block = new Real[nblocal];
+
+  for (int nb=0; nb<nblocal; nb++) {
+    Real min_block, max_block;
+    my_blocks(nb)->ComputeEmissionArray(min_block,max_block,tot_block[nb]);
+    emm_tot += tot_block[nb];
+    emm_min = (emm_min < min_block) ? emm_min : min_block;
+    emm_max = (emm_max > max_block) ? emm_max : max_block;
+  }
+
+  // Compute emmision properties overall processes
+#ifdef MPI_PARALLEL
+  MPI_Allreduce(MPI_IN_PLACE,&emm_min,1,MPI_ATHENA_REAL,MPI_MIN,
+                MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&emm_max,1,MPI_ATHENA_REAL,MPI_MAX,
+                MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&emm_tot,1,MPI_ATHENA_REAL,MPI_SUM,
+                MPI_COMM_WORLD);
+#endif
+
+  Real norme = 1.;
+  if (emission_eqwt) {
+    // emmision weights are all equal
+    Real ave_weight = emm_tot/static_cast<Real>(nphtot);
+    int nphtotnew = 0;
+    for (int nb=0; nb<nblocal; nb++) {
+      Real ntarget = tot_block[nb] / ave_weight;
+      int nphblock = static_cast<int>(ntarget);
+      Real diff = ntarget - static_cast<Real>(nphblock);
+      if (my_blocks(nb)->pran->uniform() < diff)
+        nphblock += 1;
+      if (nphblock > 0) {
+        my_blocks(nb)->weight = emm_tot;
+        my_blocks(nb)->minweight *= emm_tot;// / static_cast<Real>(nphblock);
+        //printf("myw %g\n",my_blocks(nb)->weight);
+      } else {
+        my_blocks(nb)->weight = 0;
+      }
+      my_blocks(nb)->nphremain = nphblock;
+      my_blocks(nb)->nphrun = 0;
+      nphtotnew += nphblock;
+    }
+#ifdef MPI_PARALLEL
+    MPI_Allreduce(MPI_IN_PLACE,&nphtotnew,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+#endif
+  } else {
+    norme = static_cast<Real>(ncells);
+    // emission weights will just be equal to emmisivity
+    // Determine number of photons per block per step assuming each block is equal
+    int nphblock = nphtot / nbtotal;
+    nphtot = nphblock * nbtotal; // adjust nphtot if needed
+
+    for (int nb=0; nb<nblocal; nb++) {
+      my_blocks(nb)->nphremain = nphblock;
+      my_blocks(nb)->nphrun = 0;
+      my_blocks(nb)->minweight *= emm_min;
+
+    }
+
+  }
+  // Report emissivity ranges
+  if (Globals::my_rank == 0) {
+    std::cout << "Emission array range (min, max), total: " << emm_min/norme << " "
+              << emm_max/norme << " " << emm_tot/norme << std::endl;
+  }
+
+
 }
 
 //----------------------------------------------------------------------------------------
@@ -492,24 +592,11 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
 void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
                                      ParameterInput *pinput) {
 
-  // Determine number of photons per block per step
-  // Assumes all blocks get the same amount of photons
-  int nblock = nphtot / nbtotal;
-  nphtot = nblock * nbtotal;  // adjust nphtot if needed
-
-  int *nstep = new int[nout];
-  for (int i=0; i<nout; i++) {
-    nstep[i] = nblock / nout;
-  }
-  nstep[nout-1] += nblock % nout;
   for (int i=0; i<nout; i++) {
 
-    for(int nb=0; nb<nblocal; ++nb){
-      my_blocks(nb)->nphremain = nstep[i];
-      my_blocks(nb)->nphdone = 0;
-    }
+    ComputeEmission();
 
-    // initialize counter
+    // initialize monte carlo counter
     nphrun = 0;
     bool photons_remain = true; // True if photons on any process
     while(photons_remain) {
@@ -524,14 +611,14 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
     }
 
     // Report diagnostic results from all blocks
-    int nesc = 0, nabs = 0, ndes = 0, nscat = 0;
+    int64_t nesc = 0, nabs = 0, ndes = 0, nscat = 0;
     for(int nb=0; nb<nblocal; ++nb){
       MonteCarloBlock *pmcb = my_blocks(nb);
       nesc += pmcb->nesc;
       nabs += pmcb->nabs;
       ndes += pmcb->ndes;
       nscat += pmcb->nscat;
-      nphrun += pmcb->nphdone;
+      nphrun += pmcb->nphrun;
     }
     pmcout->UpdateOutputCount(nphrun);
 
@@ -569,9 +656,9 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
     for(int nb=0; nb<nblocal; ++nb) {
       MonteCarloBlock *pmcb = my_blocks(nb);
       if (pmcb->moments_rad)
-        pmcb->NormalizeMoments(true,static_cast<Real>(ntot));
+        pmcb->NormalizeMoments(false,static_cast<Real>(ntot));
       if (pmcb->call_srcterms)
-        pmcb->NormalizeSourceTerms(true,static_cast<Real>(ntot));
+        pmcb->NormalizeSourceTerms(false,static_cast<Real>(ntot));
     }
 
   } // end loop over nout
@@ -640,48 +727,22 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
     tmax = pmy_mesh->dt;
   dt = pmy_mesh->dt;
 
-  // Determine number of photons per block per step
-  // Assumes all blocks get the same amount of photons
-  int nblock = nphtot / nbtotal;
-  nphtot = nblock * nbtotal;  // adjust nphtot if needed
 
   // Reset monte carlo blocks
-  Real emm_min = SQR(HUGE_NUMBER), emm_max = -HUGE_NUMBER;
   for (int i=0; i<nblocal; i++) {
     MonteCarloBlock *pmcb = my_blocks(i);
     // Initialize variables over all blocks
     GetDensity(pmcb);
     GetTemperature(pmcb);
     if (boosts) GetVelocity(pmcb);
-    if (GetEmission != nullptr) {
-      Real min_block, max_block;
-      GetEmission(pmcb,min_block,max_block);
-      emm_min = (emm_min < min_block) ? emm_min : min_block;
-      emm_max = (emm_max > max_block) ? emm_max : max_block;
-    }
     if (NSCALARS > 0) GetScalars(pmcb); //scalars
-    // set photons to be computed and counters
-    pmcb->nphremain = nblock;
-    pmcb->nphdone = 0;
+    // reset counters
     pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
   }
-  // update minimum weight if emissivity array is calculated
-  if (GetEmission != nullptr) {
-#ifdef MPI_PARALLEL
-    MPI_Allreduce(MPI_IN_PLACE,&emm_min,1,MPI_ATHENA_REAL,MPI_MIN,
-               MPI_COMM_WORLD);
-    MPI_Allreduce(MPI_IN_PLACE,&emm_max,1,MPI_ATHENA_REAL,MPI_MAX,
-               MPI_COMM_WORLD);
-#endif
-    if (Globals::my_rank == 0) {
-      std::cout << "Emission array range (min, max): " << emm_min << " " << emm_max
-                << std::endl;
-    }
-    for (int i=0; i<nblocal; i++) {
-      MonteCarloBlock *pmcb = my_blocks(i);
-      pmcb->minweight *= emm_min;
-    }
-  }
+
+  // update emission arrays, if needed
+  ComputeEmission();
+
   // reset moments/sourcterms for start of new timestep
   for(int nb=0; nb<nblocal; ++nb) {
     MonteCarloBlock *pmcb = my_blocks(nb);
@@ -701,14 +762,14 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
   }
 
   // Report diagnostic results from all blocks
-  int nesc = 0, nabs = 0, ndes = 0, nscat = 0;
+  int64_t nesc = 0, nabs = 0, ndes = 0, nscat = 0;
   for(int nb=0; nb<nblocal; ++nb){
     MonteCarloBlock *pmcb = my_blocks(nb);
     nesc += pmcb->nesc;
     nabs += pmcb->nabs;
     ndes += pmcb->ndes;
     nscat += pmcb->nscat;
-    nphrun += pmcb->nphdone;
+    nphrun += pmcb->nphrun;
   }
   pmcout->UpdateOutputCount(nphrun);
 

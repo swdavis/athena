@@ -21,6 +21,9 @@ def main(**kwargs):
 
     # Read photon list
     phlist = athenamc.read_list(infile)
+    get_lum = kwargs.pop('calclum')
+    if (get_lum):
+        print("List luminosity: {:e}".format(athenamc.get_luminosity_list(phlist)))
     phots = photons(phlist)
 
     # Generate spectrum from phots
@@ -79,6 +82,9 @@ if __name__ == '__main__':
     parser.add_argument('--linearx',
         action='store_true',
         help='bins energies distributed logarithmically')
+    parser.add_argument('--calclum',
+        action='store_true',
+        help='calculate luminosity directrly from list')
     parser.add_argument('--outfile',
         default=None,
         help='output filename for spectrum')

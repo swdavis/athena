@@ -62,7 +62,7 @@ enum SourceTermFlag {MCRS0 = 0, MCRS1=1, MCRS2=2, MCRS3=3, MCRSP0=4, MCRSP1=5,
                      MCRSP2=6, MCRSP3=7};
 //----------------------------------------------------------------------------------------
 // function pointer prototypes for user-defined modules set at runtime
-typedef void (*EmisFunc_t)(MonteCarloBlock *pmcb, Real &emm_min, Real &emm_max);
+typedef Real (*EmisFunc_t)(MonteCarloBlock *pmcb, int k, int j, int i);
 typedef void (*TempFunc_t)(MonteCarloBlock *pmcb);
 typedef void (*MCBValFunc_t)(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
 typedef Real (*OpacFunc_t)(MonteCarloBlock *pmcb,  Photon *pphot, int ip);
@@ -107,7 +107,7 @@ void SampleDipole(Real theta_in, Real phi_in, Real &theta_out, Real &phi_out,
                   MCRandom *pran);
 Real SampleVelocityParallel(Real a, Real x_in, MCRandom *pran);
 //--------------------- prototypes for emission.cpp functions ----------------------------
-void GetEmissionFreeFree(MonteCarloBlock *pmcb, Real &emm_min, Real &emm_mmax);
+Real GetEmissionFreeFree(MonteCarloBlock *pmcb, int k, int j, int i);
 void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real lemax,
                         int ip);
 Real PlanckDist(Real temp,MCRandom *pran);
@@ -194,8 +194,9 @@ public:
 
   Real dt;     // Monte Carlo timestep
   Real tmax;   // Maximum evolution time
-  int nphtot;  // total number of photons to integrate per timestep
-  int nphrun;  // number of photons completed
+
+  int64_t nphtot;  // total number of photons to integrate per timestep
+  int64_t nphrun;  // number of photons completed
   int nblocal; // number of montecarloblocks on this process
   int nbtotal; // total number of montecarloblocks
   int nout;  // number of outputs
@@ -207,21 +208,21 @@ public:
   int nuser_var;
   int checkmove,checkscat;
 
-  enum EmissionFlag emission_meth;
+  enum EmissionFlag emission_flag;
   enum MCBoundaryFlag mc_bcs[6];
   enum ScatteringFlag scattering_meth;
 
   bool dynamic; // is monte carlo evolving with time
   bool coupled; // is monte carlo evolution coupled to hydro
   bool boosts;  // Compute lorentz transformations
-  bool emission_array_flag;  // Compute and save zone emissivities
+  bool emission_array;  // Compute and save zone emissivities
+  bool emission_eqwt; // Set initial weights equal
   bool polarized;// track photon polarization
   bool acceleration;  // use MRW acceleration
   bool computedmin;
   bool time_acc;  // use MRW acceleration with time limit
   bool raytrace_flag; // Will trace photons rather than scatter
   bool general_mover_flag; // Use integration for photon movement
-
 
   // function pointers
   UserMoveFunc_t UserWorkInMove;
@@ -245,6 +246,8 @@ public:
   void EnrollUserOpacityFunction(OpacFunc_t opacfunc, bool abs);
   void EnrollUserScatteringFunction(ScatFunc_t scatfunc);
   void Initialize(ParameterInput *pinput);
+  void InitializeEmissionFlags(ParameterInput *pinput);
+  void ComputeEmission();
 
 private:
 
@@ -291,9 +294,9 @@ public:
   OpacFunc_t ScatteringOpacity;
   ScatFunc_t Scatter;
 
-  int nphdone; // Photons integrated thus far
+  int nphrun; // Photons initialized thus far
   int nphremain; // total number of photons to integrate
-  int nabs, nesc, ndes, nscat;
+  int64_t nabs, nesc, ndes, nscat;
   int loop_max_size;
   int nx1,nx2,nx3;
   int is,ie,js,je,ks,ke;
@@ -306,7 +309,7 @@ public:
   bool moments_user; // Compute user defined monte carlo moments
   bool call_moments;
   bool call_srcterms;
-  bool emission_array_flag;  // Compute and save zone emissivities
+
   bool boosts;  // Compute lorentz transformations
   bool coupled; // Whether time dependent code is coupled to hydro
   bool coherent_scattering; // photon does notchange energy after scattering
@@ -315,7 +318,6 @@ public:
   bool time_acc;  // use MRW acceleration with time limit
 
   // Set flags
-  //enum EmissionFlag emission_meth;
   enum AbsorptionMethodFlag absorption_meth;
   enum AbsorptionOpacityFlag absorption_opac;
   enum ScatteringFlag scattering_meth;
@@ -329,6 +331,7 @@ public:
   Real rho_cgs, vel_cgs, tgas_cgs, tfloor_cgs, l_cgs;
   Real stepsize;
   Real minweight;
+  Real weight;
 
   AthenaArray<Real> emission;
   AthenaArray<Real> moments;
@@ -362,6 +365,7 @@ public:
                          Real k1p0, Real k2p0, Real k3p0, int ip);
   void NormalizeSourceTerms(bool normalize, Real norm);
   void ResetSourceTerms();
+  void ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &emm_tot);
   //void UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0, int ip);
 
 private:

@@ -352,6 +352,8 @@ void Photon::SendToNeighbors() {
     NeighborBlock *pnb = pn->pnb;
     if (pnb == nullptr) {
       PrintPhoton("pnb == nullptr",k);
+      std::cout << ox1 << " " << ox2 << " " << ox3 << " " << i1p[k] << " "
+                << i2p[k] << " " << i3p[k] << std::endl;
       RemoveOneParticle(k);
       --k;
       std::cout << "[SendToNeighbors] Warning: pnb==nullptr." << std::endl;
@@ -719,6 +721,10 @@ void Photon::GetPositionIndices(int ibegin, int iend) {
       // No distinction between comovinng frame and eulerian frame
       acp[k] = pmcb->AbsorptionOpacity(pmcb,this,k);
       scp[k] = pmcb->ScatteringOpacity(pmcb,this,k);
+    }
+    if (IsNanPhoton(k)) {
+      PrintPhoton("Warning: Nan photon in GetPositionIndicies, destroying",k);
+      statp[k] = DESTROYED;
     }
   }
 }

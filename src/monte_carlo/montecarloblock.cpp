@@ -61,7 +61,6 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   // set in monte carlo
   boosts = pmy_mc->boosts;
   coupled = pmy_mc->coupled;
-  emission_array_flag = pmy_mc->emission_array_flag;
   acceleration = pmy_mc->acceleration;
   time_acc = pmy_mc->time_acc;
   // set in mcoutput
@@ -309,7 +308,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   // moments is 1 (Er) + 3 (Fr) + 9 (Pr) + 1 (Eave) + 1 (net cool)
   if (moments_rad) moments.NewAthenaArray(NMOM,ncells3,ncells2,ncells1);
   if (call_srcterms) sourceterms.NewAthenaArray(8,ncells3,ncells2,ncells1);
-  if (emission_array_flag) emission.NewAthenaArray(ncells3,ncells2,ncells1);
+  if (pmy_mc->emission_array) emission.NewAthenaArray(ncells3,ncells2,ncells1);
   if (acceleration && !(coherent_scattering) && !(scattering_meth == SCATRES)) {
     planck_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
     planck_inv_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
@@ -338,7 +337,7 @@ MonteCarloBlock::~MonteCarloBlock() {
   if (NSCALARS > 0) scalars.DeleteAthenaArray();
   if (moments_rad) moments.DeleteAthenaArray();
   if (call_srcterms) sourceterms.DeleteAthenaArray();
-  if (emission_array_flag) emission.DeleteAthenaArray();
+  if (pmy_mc->emission_array) emission.DeleteAthenaArray();
   if (acceleration && !(coherent_scattering) && !(scattering_meth == SCATRES)) {
     planck_opacity.DeleteAthenaArray();
     planck_inv_opacity.DeleteAthenaArray();
@@ -365,7 +364,7 @@ void MonteCarloBlock::RayTracePhotonsOnBlock() {
     int nold = pphot->nphot;
     pphot->AllocatePhotons(nold+ntodo);
     nphremain -= ntodo;
-    nphdone += ntodo;
+    nphrun += ntodo;
 
     // user definied photon initialization
     InitializePhoton(pphot,nold,pphot->nphot-1);
@@ -434,16 +433,18 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
   Real const to_eulr = -1.0;
   int nbuf = 0;
 
+  int nold = pphot->nphot;
+  int ntot = nold + nphremain;
   // Emit photons to replace those that left meshblock or were terminated
-  // Limit ntodo to number of remaining photons on block
-  int ntodo = (loop_max_size > nphremain) ? nphremain : loop_max_size;
-
+  // limit ntot < loop_max_size unless nold is large than loop_max_size
+  ntot = (loop_max_size > ntot) ? ntot : loop_max_size;
+  ntot = (nold > ntot) ? nold : ntot;
+  int nnew = ntot - nold;
   // if photons remain to transfer, make space for new photons
-  if (ntodo > 0) {
-    int nold = pphot->nphot;
-    pphot->AllocatePhotons(nold+ntodo);
-    nphremain -= ntodo;
-    nphdone += ntodo;
+  if (nnew > 0) {
+    pphot->AllocatePhotons(ntot);
+    nphremain -= nnew;
+    nphrun += nnew;
 
     // user definied photon initialization
     InitializePhoton(pphot,nold,pphot->nphot-1);
@@ -463,7 +464,6 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
       }
     }
   }
-  int ntot = pphot->nphot;
 
   // move all photons to next interaction or boundary
   pmover->Move(pphot,0,pphot->nphot-1);
@@ -522,7 +522,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
         LorentzTransform(pphot,to_eulr,ip,ip);
       }
       if (coupled || moments_srcterms) {
-        UpdateSourceTerms(pphot,e_pre_scat,0.,k1p0,k2p0,k3p0,ip);
+        UpdateSourceTerms(pphot,e_pre_scat,weight0,k1p0,k2p0,k3p0,ip);
       }
     } // status == evolving
 
@@ -564,7 +564,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
   } // End loop over ip
 
   /*std::cout  << "rank, ntot, nnew, nesc, nabs, ndes, nbuf, nscat: " << Globals::my_rank
-             << ' ' << ntot << ' ' << ntodo << ' ' << nesc
+             << ' ' << ntot << ' ' << nnew << ' ' << nesc
              << ' ' << nabs << ' ' << ndes << ' ' << nbuf
              << ' ' << nscat << std::endl;*/
 
@@ -869,7 +869,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Re
     int i = pphot->i1p[ip];
     int j = pphot->i2p[ip];
     int k = pphot->i3p[ip];
-
+    
     if (moments_rad) {
       // Add contribution to corresponding moments
       // Energy density
@@ -910,7 +910,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Re
 }
 
 
-//----------------------------------------------------------------------------------------
+//------------------------------------------------- --------------------------------------
 //! \fn void MonteCarloBlock::NormalizeMoments(bool normalize, Real norm)
 //! \brief (un)normalized moments for output and copy symmetric elements
 
@@ -1159,6 +1159,37 @@ void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
     mcb_bcs[BoundaryFace::outer_x3] = input_bcs[BoundaryFace::outer_x3];
 
   //printf("Bvals: %d %d %d %d %d %d\n",mcb_bcs[BoundaryFace::inner_x1],mcb_bcs[BoundaryFace::outer_x1],mcb_bcs[BoundaryFace::inner_x2],mcb_bcs[BoundaryFace::outer_x2],mcb_bcs[BoundaryFace::inner_x3],mcb_bcs[BoundaryFace::outer_x3]);
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::ComputeEmissionArray(Real &emm_min, Real &emm_max, Real
+//!                                                &emm_tot)
+//! \brief compute emission array
+
+void MonteCarloBlock::ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &emm_tot) {
+
+  Real norm = 1.;
+  if (!pmy_mc->emission_eqwt)
+    norm = static_cast<Real>(pmy_mc->ncells);
+  Real dt = pmy_mc->dt;
+
+  emm_min = SQR(HUGE_NUMBER);
+  emm_max = -HUGE_NUMBER;
+  emm_tot = 0.;
+
+  for (int k=ks; k<=ke; ++k) {
+    for (int j=js; j<=je; ++j) {
+      for (int i=is; i<=ie; ++i) {
+        Real vol = pcoord->vol(k,j,i);
+        // SWD remove ncells
+        emission(k,j,i) = pmy_mc->GetEmission(this,k,j,i) * dt * vol * norm;
+        emm_tot += emission(k,j,i);
+        if (emission(k,j,i) > emm_max) emm_max = emission(k,j,i);
+        if (emission(k,j,i) < emm_min) emm_min = emission(k,j,i);
+      }
+    }
+  }
 
 }
 

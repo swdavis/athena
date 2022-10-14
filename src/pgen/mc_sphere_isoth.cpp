@@ -122,7 +122,7 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
   rad0 = pin->GetReal("problem","radius");
   time0 = pin->GetOrAddReal("problem","time",-1.);
 
-  if (pmy_mc->emission_meth == EMISNONE) {
+  if (pmy_mc->emission_flag == EMISNONE) {
     planckdist = pin->GetOrAddBoolean("problem","planckdist",false);
     if (planckdist) {
       tsource = pin->GetReal("problem","tsource");
@@ -132,7 +132,7 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
       Real kb = 1.380649e-16;
       energy0 = kb*temp*x0;
     }
-  } else if (pmy_mc->emission_meth == EMISFF) {
+  } else if (pmy_mc->emission_flag == EMISFF) {
     // Set the energy boundaries for free-free emission
     tnorm = pin->GetOrAddBoolean("problem","tnorm",false);
     if (tnorm) {
@@ -172,7 +172,7 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
     throw std::runtime_error(msg.str().c_str());
   }
 
-  if (pmy_mc->emission_meth == EMISFF) {
+  if (pmy_mc->emission_flag == EMISFF) {
     // Adjust for smaller emission volume
     Real cellvol = pcoord->vol(i3start,i2start,i1start);
     Real spherevol = 4./3.*PI*pow(rad0,3);
@@ -206,7 +206,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     pphot->i3p[ip] = i3 = i3start;
 
     // Initialize Photon weights, energy, direction, polarization
-    if (pmy_mc->emission_meth == EMISNONE) {
+    if (pmy_mc->emission_flag == EMISNONE) {
       pphot->wp[ip] = 1.0;
       if (planckdist)
         pphot->ep[ip] = PlanckDist(tsource,pran);
@@ -270,7 +270,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
         pphot->x0p[ip] = 0.; //time
       }
 
-    } else if (pmy_mc->emission_meth == EMISFF) {
+    } else if (pmy_mc->emission_flag == EMISFF) {
       // Set weight according to the emission array, which is the relative number
       // of photons per unit time emitted in each cell
       pphot->wp[ip] = emission(i3,i2,i1);

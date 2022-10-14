@@ -308,9 +308,10 @@ void PeriodicOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip)
 
 void ReflectMCInnerX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
+  const Real frac = 1.e-8;
   pphot->k1p[ip] *= -1.;
-  pphot->i1p[ip]++;
-  pphot->x1p[ip] = pco->x1f(pphot->i1p[ip]);
+  pphot->i1p[ip] = pmcb->is;
+  pphot->x1p[ip] = pco->x1f(pphot->i1p[ip])*(1.-frac) + pco->x1f(pphot->i1p[ip]+1)*frac;
 
 }
 
@@ -320,9 +321,10 @@ void ReflectMCInnerX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip
 
 void ReflectMCOuterX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
+  const Real frac = 1.e-8;
   pphot->k1p[ip] *= -1.;
-  pphot->i1p[ip]--;
-  pphot->x1p[ip] = pco->x1f(pphot->i1p[ip]+1);
+  pphot->i1p[ip] = pmcb->ie;
+  pphot->x1p[ip] = pco->x2f(pphot->i1p[ip]+1)*(1.-frac) + pco->x1f(pphot->i1p[ip])*frac;
 
 }
 
@@ -332,9 +334,10 @@ void ReflectMCOuterX1(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip
 
 void ReflectMCInnerX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
+  const Real frac = 1.e-8;
   pphot->k2p[ip] *= -1.;
-  pphot->i2p[ip]++;
-  pphot->x2p[ip] = pco->x1f(pphot->i2p[ip]);
+  pphot->i2p[ip] = pmcb->js;
+  pphot->x2p[ip] = pco->x2f(pphot->i2p[ip])*(1.-frac) + pco->x2f(pphot->i2p[ip]+1)*frac;
 
 }
 
@@ -344,9 +347,10 @@ void ReflectMCInnerX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip
 
 void ReflectMCOuterX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
+  const Real frac = 1.e-8;
   pphot->k2p[ip] *= -1.;
-  pphot->i2p[ip]--;
-  pphot->x2p[ip] = pco->x1f(pphot->i2p[ip]+1);
+  pphot->i2p[ip] = pmcb->je;
+  pphot->x2p[ip] = pco->x1f(pphot->i2p[ip]+1)*(1.-frac) + pco->x2f(pphot->i2p[ip])*frac;
 
 }
 
@@ -356,9 +360,10 @@ void ReflectMCOuterX2(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip
 
 void ReflectMCInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
-  pphot->k3p[ip] = -1.;
-  pphot->i3p[ip]++;
-  pphot->x3p[ip] = pco->x1f(pphot->i3p[ip]);
+  const Real frac = 1.e-8;
+  pphot->k3p[ip] *= -1.;
+  pphot->i3p[ip] = pmcb->ks;
+  pphot->x3p[ip] = pco->x3f(pphot->i3p[ip])*(1.-frac) + pco->x3f(pphot->i3p[ip]+1)*frac;
 
 }
 
@@ -368,9 +373,10 @@ void ReflectMCInnerX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip
 
 void ReflectMCOuterX3(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
+  const Real frac = 1.e-8;
   pphot->k3p[ip] *= -1.;
-  pphot->i3p[ip]--;
-  pphot->x3p[ip] = pco->x1f(pphot->i3p[ip]+1);
+  pphot->i3p[ip] = pmcb->ke;
+  pphot->x3p[ip] = pco->x3f(pphot->i3p[ip]+1)*(1.-frac) + pco->x3f(pphot->i3p[ip])*frac;
 
 }
 

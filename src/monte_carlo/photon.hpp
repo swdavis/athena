@@ -47,7 +47,7 @@ public:
 
   // public data
   // SWD: should be reorganized with tighter access control for some variables
-  MonteCarloBlock* pmy_mcb; // ptr to MonteCarlo containing this Photon
+  MonteCarloBlock* pmy_mcb; // ptr to MonteCarlo currently containing this Photon
 
   int nuser_var;
   int nphot_limit;

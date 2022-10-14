@@ -38,6 +38,7 @@ def join(filelist,outfile,skip):
         if (firstlist):
             phlist = athenamc.read_list(infile,data=False)
             firstlist = False
+            print(phlist['ntot'])
             ntot += phlist['ntot']
             length += phlist['length']
         else:

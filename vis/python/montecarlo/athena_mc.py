@@ -170,7 +170,8 @@ def read_list(filename,data=True,header=True):
         # SWD: temporary to read broken list
         #phlist['length'] = nloop*mxl_
         #phlist['list'] = phlist['list'].reshape((nloop*mxl_,npars))
-    return phlist, current_index
+    #return phlist, current_index
+    return phlist
 
 def write_list(filename,phlist,header=True,length=None):
     """
@@ -198,6 +199,16 @@ def write_list(filename,phlist,header=True,length=None):
     bin=struct.pack(myfmt,*(phlist['list']))
     outfile.write(bin)
     outfile.close()
+
+def get_luminosity_list(phlist):
+    """
+    Read in list file and compute luminoisty
+    """
+    phots = photons(phlist)
+    lumin = np.sum(phots.weight*phots.energy)
+    lumin /= float(phots.ntot)
+
+    return lumin
 
 def write_spectrum(filename,spectrum):
     """

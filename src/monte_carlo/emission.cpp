@@ -15,56 +15,25 @@
 #include "../globals.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn void GetEmissionFreefree(MonteCarloBlock *pmcb, Real &emm_min, Real &emm_max)
-//! \brief Initialize emission array and return minimum
+//! \fn Real GetEmissionFreefree(MonteCarloBlock *pmcb, int k, int j, int i)
+//! \brief compute free-free emissivity
 
-void GetEmissionFreeFree(MonteCarloBlock *pmcb, Real &emm_min, Real &emm_max) {
+Real GetEmissionFreeFree(MonteCarloBlock *pmcb, int k, int j, int i) {
 
-  Real heabund = 0.09; // Should have more general EOS functions
-  Real kb = 1.380649e-16;
-  Real mp = 1.67262192369e-24;
-  Real eta0 = 1.032521e-11;
-  Real g = 1.0; // Gaunt factor
+  const Real heabund = 0.09; // Should have more general EOS functions
+  const Real kb = 1.380649e-16;
+  const Real mp = 1.67262192369e-24;
+  const Real eta0 = 1.032521e-11;
+  const Real gaunt = 1.0; // Gaunt factor
 
   //eta0 *= 12.;  // Added to match the Athena++ prescription
 
-  Real ncells = static_cast<Real>(pmcb->pmy_mc->ncells);
-  Real dt = pmcb->pmy_mc->dt;
+  Real temp = pmcb->tgas(k,j,i);
+  Real nh = pmcb->rho(k,j,i)/mp/(1.+4.*heabund);
+  Real nhe = nh*heabund;
+  Real ne = nh + 2.*nhe;
 
-  int il = pmcb->is; int iu = pmcb->ie;
-  int jl = pmcb->js; int ju = pmcb->je;
-  int kl = pmcb->ks; int ku = pmcb->ke;
-
-  emm_min = SQR(HUGE_NUMBER);
-  emm_max = -HUGE_NUMBER;
-
-  for (int k=kl; k<=ku; ++k) {
-    for (int j=jl; j<=ju; ++j) {
-      for (int i=il; i<=iu; ++i) {
-        Real temp = pmcb->tgas(k,j,i);
-        Real nh = pmcb->rho(k,j,i)/mp/(1.+4.*heabund);
-        Real nhe = nh*heabund;
-        Real ne = nh + 2.*nhe;
-        Real vol = pmcb->pcoord->vol(k,j,i);
-        pmcb->emission(k,j,i) = eta0/sqrt(temp)*ne*(nh+4.*nhe)*g*vol*dt*ncells;
-        if (pmcb->emission(k,j,i) > emm_max) emm_max = pmcb->emission(k,j,i);
-        if (pmcb->emission(k,j,i) < emm_min) emm_min = pmcb->emission(k,j,i);
-      }
-    }
-  }
-  /*
-#ifdef MPI_PARALLEL
-    MPI_Allreduce(MPI_IN_PLACE,&emm_min,1,MPI_ATHENA_REAL,MPI_MIN,
-               MPI_COMM_WORLD);
-    MPI_Allreduce(MPI_IN_PLACE,&emm_max,1,MPI_ATHENA_REAL,MPI_MAX,
-               MPI_COMM_WORLD);
-#endif
-  if (pmy_block == 0) {
-    std::cout << "Emission array range (min, max): " << emm_min << " " << emm_max
-              << std::endl;
-  }
-  return emm_min;
-  */
+  return eta0 / sqrt(temp) * ne * (nh + 4. * nhe) * gaunt;
 
 }
 
