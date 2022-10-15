@@ -425,7 +425,7 @@ void MonteCarloBlock::RayTracePhotonsOnBlock() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::TransferPhotonsOnBlock()
-//! \brief perform radiation transfer nphtot photons
+//! \brief perform radiation transfer
 
 void MonteCarloBlock::TransferPhotonsOnBlock() {
 
@@ -572,7 +572,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::CoupleMonteCarloToFluid(Real dt)
-//! \brief perform radiation transfer nphtot photons
+//! \brief update hydro momentum and energy based on radiative cooling and forces from MC
 
 void MonteCarloBlock::CoupleMonteCarloToFluid(Real dt) {
 
@@ -869,7 +869,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Re
     int i = pphot->i1p[ip];
     int j = pphot->i2p[ip];
     int k = pphot->i3p[ip];
-    
+
     if (moments_rad) {
       // Add contribution to corresponding moments
       // Energy density
@@ -1169,9 +1169,9 @@ void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
 
 void MonteCarloBlock::ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &emm_tot) {
 
-  Real norm = 1.;
-  if (!pmy_mc->emission_eqwt)
-    norm = static_cast<Real>(pmy_mc->ncells);
+  //Real norm = 1.;
+  //if (!pmy_mc->emission_eqwt)
+  //  norm = static_cast<Real>(pmy_mc->ncells)/static_cast<Real>(pmy_mc->nsamp);
   Real dt = pmy_mc->dt;
 
   emm_min = SQR(HUGE_NUMBER);
@@ -1183,14 +1183,81 @@ void MonteCarloBlock::ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &e
       for (int i=is; i<=ie; ++i) {
         Real vol = pcoord->vol(k,j,i);
         // SWD remove ncells
-        emission(k,j,i) = pmy_mc->GetEmission(this,k,j,i) * dt * vol * norm;
+        emission(k,j,i) = pmy_mc->GetEmission(this,k,j,i) * dt * vol;
         emm_tot += emission(k,j,i);
         if (emission(k,j,i) > emm_max) emm_max = emission(k,j,i);
         if (emission(k,j,i) < emm_min) emm_min = emission(k,j,i);
       }
     }
   }
+  // if using equal weight scheme, intialize variables for SetEmissionCellWeight
+  i1_ = -1; i2_= -1; i3_ = -1;
+  nemit_ = 0;
+}
 
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe)
+//! \brief set emission cell and weight for photon via emission array
+void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe) {
+
+  if (pmy_mc->emission_eqwt) {
+    // Set intial zone based on probability within zone
+    for (int ip=ips; ip<=ipe; ip++) {
+      bool this_zone = false;
+      while (!this_zone) {
+        if (nemit_ > 1.) {
+          // always set this zone for emission
+          pphot->i1p[ip] = i1_ + is;
+          pphot->i2p[ip] = i2_ + js;
+          pphot->i3p[ip] = i3_ + ks;
+          this_zone = true;
+          nemit_ -= 1.;
+        } else if (nemit_ > 0.) {
+          // set this zone based on remaining probability
+          if (pran->uniform() < nemit_) {
+            pphot->i1p[ip] = i1_ + is;
+            pphot->i2p[ip] = i2_ + js;
+            pphot->i3p[ip] = i3_ + ks;
+            this_zone = true;
+          }
+          nemit_ -= 1.;
+        } else {
+          // Update zone
+          this_zone = false;
+          i3_++;
+          if (i3_ >= nx3) {
+            i3_ = 0;
+            i2_++;
+            if (i2_ >= nx2) {
+              i2_ = 0;
+              i1_++;
+              if (i1_ >= nx1)
+                i1_ = 0;
+            }
+          }
+          // set nemit_ for this zone
+          nemit_ = emission(i3_+ks,i2_+js,i1_+is) / emiss_to_weight;
+          //printf("nemit: %g %d %d %d %g\n",nemit_,i3_,i2_,i1_,emission(i3_,i2_,i1_));
+        }
+      } // end while (!this_zone)
+
+      // Set weight to constant value for all photons
+      pphot->wp[ip] = emiss_to_weight;
+    } // end loop over ip
+  } else {
+    for (int ip=ips; ip<=ipe; ip++) {
+      // Randomly assign emission zone
+      pphot->i1p[ip] = static_cast<int>(pran->uniform()*nx1)+is;
+      pphot->i2p[ip] = static_cast<int>(pran->uniform()*nx2)+js;
+      pphot->i3p[ip] = static_cast<int>(pran->uniform()*nx3)+ks;
+
+      // Set weight according to the emission array, which is the relative number of
+      // photons emitted in each cell
+      pphot->wp[ip] = emission(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip])
+        * emiss_to_weight;
+
+    } // end loop over ip
+  }
 }
 
 //----------------------------------------------------------------------------------------

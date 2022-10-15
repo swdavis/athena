@@ -111,11 +111,11 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
       cam = 1;
       int nx = pin->GetInteger("problem", "nx");
       int ny = pin->GetInteger("problem", "ny");
-      nphtot = nx * ny;
+      nsamp = nx * ny;
       printf("y %d\n",Globals::my_rank);
     } else {
       printf("n %d\n",Globals::my_rank);
-      nphtot = 0;
+      nsamp = 0;
     }
   }
 

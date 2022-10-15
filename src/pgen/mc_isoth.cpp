@@ -29,8 +29,6 @@
 
 namespace {
   // Global variables
-  int i1, i2, i3;
-  Real nemit;
   bool tnorm;
   Real logemin, logemax;
   Real DensityProfile(Real x, Real xl, Real xh, Real taul, Real tauh, Real kap);
@@ -148,60 +146,11 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
-  // Get meshblock dimensions
-  Real nx1 = static_cast<Real>(ie-is+1);
-  Real nx2 = static_cast<Real>(je-js+1);
-  Real nx3 = static_cast<Real>(ke-ks+1);
-
+  // Set initial cells and emission weights for all photon samples
+  SetEmissionCellWeight(pphot,ips,ipe);
 
   for (int ip=ips; ip<=ipe; ip++) {
 
-    if (pmy_mc->emission_eqwt) {
-      bool this_zone = false;
-      while (!this_zone) {
-        if (nemit > 1.) {
-          pphot->i1p[ip] = i1+is;
-          pphot->i2p[ip] = i2+js;
-          pphot->i3p[ip] = i3+ks;
-          this_zone = true;
-          nemit -= 1.;
-        } else if (nemit > 0.) {
-          if (pran->uniform() < nemit) {
-            pphot->i1p[ip] = i1+is;
-            pphot->i2p[ip] = i2+js;
-            pphot->i3p[ip] = i3+ks;
-            this_zone = true;
-          }
-          nemit -= 1.;
-        } else {
-          this_zone = false;
-          i3++;
-          if (i3 >= nx3) {
-            i3 = 0;
-            i2++;
-            if (i2 >= nx2) {
-              i2 = 0;
-              i1++;
-              if (i1 >= nx1)
-                i1 = 0;
-            }
-          }
-          nemit = emission(i3+ks,i2+js,i1+is) / weight;
-          //printf("nemit: %g %d %d %d %g %g\n",nemit,i3,i2,i1,emission(i3,i2,i1),weight);
-        }
-      } // end while (!this_zone)
-      pphot->wp[ip] = weight;
-    } else {
-      // Randomly assign emission zone
-      pphot->i1p[ip] = i1 = static_cast<int>(pran->uniform()*nx1)+is;
-      pphot->i2p[ip] = i2 = static_cast<int>(pran->uniform()*nx2)+js;
-      pphot->i3p[ip] = i3 = static_cast<int>(pran->uniform()*nx3)+ks;
-
-      // Set weight according to the emission array, which is the relative number of
-      // photons emitted in each cell
-      pphot->wp[ip] = emission(i3,i2,i1);
-
-    }
     // Obtain initial position within zone
     GetZonePosition(pphot,pran,pcoord,ip);
 
@@ -269,10 +218,7 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
     logemin = log(everg*pin->GetReal("problem", "emin"));
     logemax = log(everg*pin->GetReal("problem", "emax"));
   }
-  if (pmy_mc->emission_eqwt) {
-    i1 = -1; i2 = -1; i3 = -1;
-    nemit = 0.;
-  }
+
 }
 
 //========================================================================================

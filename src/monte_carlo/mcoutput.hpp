@@ -37,7 +37,7 @@ public:
   ~Spectrum();
 
   MonteCarlo *pmy_mc;
-  int nphtot;  // total number of photons run for this spectrum
+  int nsrun;  // total number of photons samples run for this spectrum
   std::string base_name;
   MomentumRange range;
   bool polarized;
@@ -89,7 +89,7 @@ public:
   MonteCarlo *pmy_mc;
   std::string base_name;
 
-  int nphtot;  // total number of photons run for this list
+  int nsrun;  // total number of photons samples run for this list
   int length; // number of occupied elements
   int nparams; // number of properties for each photon in list
   int output_number;// current output number

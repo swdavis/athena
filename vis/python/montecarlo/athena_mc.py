@@ -206,7 +206,7 @@ def get_luminosity_list(phlist):
     """
     phots = photons(phlist)
     lumin = np.sum(phots.weight*phots.energy)
-    lumin /= float(phots.ntot)
+    #lumin /= float(phots.ntot)
 
     return lumin
 
@@ -1304,9 +1304,9 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
         for j in range(nphi):
             for i in range(nmu):
                 fac = nphi*nmu*emid/(mumid[i]*dnu*2.*np.pi*phots.dt)
-                intensity[k,j,i,:] *= fac/phots.ntot
+                intensity[k,j,i,:] *= fac
                 if yerror:
-                    errors[k,j,i,:] *= fac**2/phots.ntot
+                    errors[k,j,i,:] *= fac**2*phots.ntot
     spectrum['intensity'] = intensity
 
     # Finish computing errors on intensities
@@ -1462,7 +1462,7 @@ def make_image_mc(phots,rcam,ninc,imin,imax,nen,emin,emax,
         for j in range(ninc):
             for i in range(nen):
                 # not divided by dnu for now
-                fac = phots.ntot*dnu[i]*dmu[j]*mumid[j]*2.*np.pi*phots.dt
+                fac = dnu[i]*dmu[j]*mumid[j]*2.*np.pi*phots.dt
                 intensity[k,j,i,:,:] /= fac*area
 
 

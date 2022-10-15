@@ -104,7 +104,7 @@ Spectrum::Spectrum(Spectrum *pspec) {
   last_time = pspec->last_time;
   dt = pspec->dt;
 
-  nphtot = 0; // arrays are uninitialized
+  nsrun = 0; // arrays are uninitialized
   // Allocate and intialize energy bins
   energies.NewAthenaArray(range.ne+1);
   BuildEnergyGrid(range.emin,range.emax,range.ne,logarithmic);
@@ -590,7 +590,7 @@ int Spectrum::EnergyBin(Real energy)
 
 void Spectrum::ResetSpectrum() {
 
-  nphtot = 0;
+  nsrun = 0;
   for(int i=0; i<range.nphi; ++i) {
     for(int j=0; j<range.ncth; ++j) {
       for(int k=0; k<range.ne; ++k) {
@@ -621,7 +621,7 @@ void Spectrum::AddSpectrum(Spectrum *pspec) {
         << id << std::endl;
     throw std::runtime_error(msg.str().c_str());
   } else {
-    nphtot += pspec->nphtot;
+    nsrun += pspec->nsrun;
     for(int i=0; i<range.nphi; ++i) {
       for(int j=0; j<range.ncth; ++j) {
         for(int k=0; k<range.ne; ++k) {
@@ -745,7 +745,7 @@ void PhotonList::WriteList(std::string filename) {
 
   fprintf(pfile,"dt=%.8e\n",time-last_time);
   fprintf(pfile,"length=%d\nnpars=%d\n",length,nparams);
-  fprintf(pfile,"ntot=%d\n",nphtot);
+  fprintf(pfile,"ntot=%d\n",nsrun);
   fprintf(pfile,"polarized=%d\n",polarized);
   fprintf(pfile,"coord=%s\n",COORDINATE_SYSTEM);
   // write data
@@ -773,7 +773,7 @@ void PhotonList::WriteList(std::string filename) {
 
 void PhotonList::ResetList() {
   length = 0;
-  nphtot = 0;
+  nsrun = 0;
 }
 
 
@@ -1057,7 +1057,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
           pspec->polar_axis = true;
         else
           pspec->polar_axis = pin->GetOrAddBoolean(pib->block_name,"polar_axis",false);
-        pspec->nphtot = 0;
+        pspec->nsrun = 0;
         // Check for coordinate range
         if (pfirst == nullptr)
           pfirst = pspec;
@@ -1085,7 +1085,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
           pphlist->dt = pin->GetOrAddReal("montecarlo","dt",1.);
         }
         pphlist->last_time = pmy_mc->pmy_mesh->time;
-        pphlist->nphtot = 0;
+        pphlist->nsrun = 0;
         pphlist->length = 0;
         pphlist->output_number = 0;
         // Generate file name
@@ -1193,7 +1193,7 @@ void Spectrum::WriteSpectrum(std::string fname) {
   fprintf(pfile,"nx=%d\n",ne);
   fprintf(pfile,"nmu=%d\n",nmu);
   fprintf(pfile,"nphi=%d\n",nphi);
-  fprintf(pfile,"ntot=%d\n",nphtot);
+  fprintf(pfile,"ntot=%d\n",nsrun);
   int nintens = 1;
   if (polarized) nintens += 2;
   fprintf(pfile,"nintens=%d\n",nintens);
@@ -1233,7 +1233,7 @@ void Spectrum::WriteSpectrum(std::string fname) {
     dnu[i] = (energies(i+1)-energies(i))/h;
   }
   // First compute normalized intensities, stokes vectors, and errors
-  Real norm = static_cast<Real>(nphtot);
+  Real norms = static_cast<Real>(nsrun);
   AthenaArray<Real> intens, errors;
   intens.NewAthenaArray(nintens,nphi,nmu,ne);
   errors.NewAthenaArray(nintens,nphi,nmu,ne);
@@ -1243,10 +1243,9 @@ void Spectrum::WriteSpectrum(std::string fname) {
       Real mumid = (static_cast<Real>(j)+0.5)/static_cast<Real>(nmu);
       for(int i=0; i<ne; ++i) {
         Real fac2 = fac1*emid[i]/(mumid*dnu[i]*dt);
-        intens(0,k,j,i) = static_cast<double>(intensity(k,j,i)*
-                                              (fac2/norm));
-        errors(0,k,j,i) = 0.675*sqrt((intensity_sq(k,j,i)*SQR(fac2)/norm-
-                                      SQR(intens(0,k,j,i)))/norm);
+        intens(0,k,j,i) = static_cast<double>(intensity(k,j,i)*fac2);
+        errors(0,k,j,i) = 0.675*sqrt((intensity_sq(k,j,i)*SQR(fac2)*norms-
+                                      SQR(intens(0,k,j,i)))/norms);
       }}}
   if (polarized) {
     for(int k=0; k<nphi; ++k) {
@@ -1254,20 +1253,18 @@ void Spectrum::WriteSpectrum(std::string fname) {
         Real mumid = (static_cast<Real>(j)+0.5)/static_cast<Real>(nmu);
         for(int i=0; i<ne; ++i) {
           Real fac2 = fac1*emid[i]/(mumid*dnu[i]);
-          intens(1,k,j,i) = static_cast<double>(stokesq(k,j,i)*
-                                                (fac2/norm));
-          errors(1,k,j,i) = 0.675*sqrt((stokesq_sq(k,j,i)*SQR(fac2)/norm-
-                                        SQR(intens(1,k,j,i)))/norm);
+          intens(1,k,j,i) = static_cast<double>(stokesq(k,j,i)*fac2);
+          errors(1,k,j,i) = 0.675*sqrt((stokesq_sq(k,j,i)*SQR(fac2)*norms-
+                                        SQR(intens(1,k,j,i)))/norms);
         }}}
     for(int k=0; k<nphi; ++k) {
       for(int j=0; j<nmu; ++j) {
         Real mumid = (static_cast<Real>(j)+0.5)/static_cast<Real>(nmu);
         for(int i=0; i<ne; ++i) {
           Real fac2 = fac1*emid[i]/(mumid*dnu[i]);
-          intens(2,k,j,i) = static_cast<double>(stokesu(k,j,i)*
-                                                (fac2/norm));
-          errors(2,k,j,i) = 0.675*sqrt((stokesu_sq(k,j,i)*SQR(fac2)/norm-
-                                        SQR(intens(2,k,j,i)))/norm);
+          intens(2,k,j,i) = static_cast<double>(stokesu(k,j,i)*fac2);
+          errors(2,k,j,i) = 0.675*sqrt((stokesu_sq(k,j,i)*SQR(fac2)*norms-
+                                        SQR(intens(2,k,j,i)))/norms);
         }}}
   }
   delete [] emid;
@@ -1383,7 +1380,7 @@ void MCOutput::SendMonteCarloSpectrum(Spectrum *pspect, int dest) {
 
   int p=0;
   ne--; ncth--; nphi--;
-  MPI_Isend(&pspect->nphtot,1,MPI_INT,dest,tag++,MPI_COMM_WORLD,&send_rq);
+  MPI_Isend(&pspect->nsrun,1,MPI_INT,dest,tag++,MPI_COMM_WORLD,&send_rq);
   MPI_Wait(&send_rq, MPI_STATUS_IGNORE);
   BufferUtility::PackData(pspect->intensity,send_buf,0,ne,0,ncth,0,nphi,p);
   BufferUtility::PackData(pspect->intensity_sq,send_buf,0,ne,0,ncth,0,nphi,p);
@@ -1422,8 +1419,8 @@ void MCOutput::ReceiveMonteCarloSpectrum(Spectrum *pspect, bool add) {
   unsigned int tag = 100; // temporary
 
   ne--; ncth--; nphi--;
-  int nphtot;
-  MPI_Irecv(&nphtot,size,MPI_INT,MPI_ANY_SOURCE,tag++,MPI_COMM_WORLD,&recv_rq);
+  int nsrun;
+  MPI_Irecv(&nsrun,size,MPI_INT,MPI_ANY_SOURCE,tag++,MPI_COMM_WORLD,&recv_rq);
   MPI_Wait(&recv_rq, MPI_STATUS_IGNORE);
   MPI_Irecv(recv_buf,size,MPI_ATHENA_REAL,MPI_ANY_SOURCE,tag++,MPI_COMM_WORLD,&recv_rq);
   MPI_Wait(&recv_rq, MPI_STATUS_IGNORE);
@@ -1435,7 +1432,7 @@ void MCOutput::ReceiveMonteCarloSpectrum(Spectrum *pspect, bool add) {
     // Copy buffer directly into destination spectrum
     ptemp = pspect;
   }
-  ptemp->nphtot += nphtot;
+  ptemp->nsrun += nsrun;
 
   int p=0;
   BufferUtility::UnpackData(recv_buf,ptemp->intensity,0,ne,0,ncth,0,nphi,p);
@@ -1519,11 +1516,11 @@ void MCOutput::OutputTrajectoryList() {
 void MCOutput::UpdateOutputCount(int nph) {
 
   if (pphlist != nullptr)
-    pphlist->nphtot += nph;
+    pphlist->nsrun += nph;
 
   Spectrum *pspect = pspec;
   while (pspect != nullptr) {
-    pspect->nphtot += nph;
+    pspect->nsrun += nph;
     pspect = pspect->next;
   }
 

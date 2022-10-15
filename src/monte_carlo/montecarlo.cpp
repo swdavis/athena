@@ -67,7 +67,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   nuser_var = 0; // Initialize photon user variables to zero
 
   // Set photon integration totals
-  nphtot = pin->GetInteger("montecarlo","nphot");
+  nsamp = pin->GetInteger("montecarlo","nphot");
   nout = pin->GetOrAddInteger("montecarlo","nout",1);
 
   // Set default size parameters
@@ -496,9 +496,9 @@ void MonteCarlo::ComputeEmission() {
 
   if (emission_flag == EMISNONE) {
     // Don't compute emission array -- just set nphremain on meshblocks
-    // to all be the same value, resetting nphtot if needed
-    int nphblock = nphtot / nbtotal;
-    nphtot = nphblock * nbtotal; // adjust nphtot if needed
+    // to all be the same value, resetting nsamp if needed
+    int nphblock = nsamp / nbtotal;
+    nsamp = nphblock * nbtotal; // adjust nsamp if needed
 
     for (int nb=0; nb<nblocal; nb++) {
       my_blocks(nb)->nphremain = nphblock;
@@ -527,58 +527,59 @@ void MonteCarlo::ComputeEmission() {
 
   // Compute emmision properties overall processes
 #ifdef MPI_PARALLEL
-  MPI_Allreduce(MPI_IN_PLACE,&emm_min,1,MPI_ATHENA_REAL,MPI_MIN,
-                MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE,&emm_max,1,MPI_ATHENA_REAL,MPI_MAX,
-                MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE,&emm_tot,1,MPI_ATHENA_REAL,MPI_SUM,
-                MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&emm_min,1,MPI_ATHENA_REAL,MPI_MIN,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&emm_max,1,MPI_ATHENA_REAL,MPI_MAX,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&emm_tot,1,MPI_ATHENA_REAL,MPI_SUM,MPI_COMM_WORLD);
 #endif
 
-  Real norme = 1.;
   if (emission_eqwt) {
     // emmision weights are all equal
-    Real ave_weight = emm_tot/static_cast<Real>(nphtot);
-    int nphtotnew = 0;
+    Real ave_weight = emm_tot/static_cast<Real>(nsamp);
+    int nsampnew = 0;
     for (int nb=0; nb<nblocal; nb++) {
       Real ntarget = tot_block[nb] / ave_weight;
-      int nphblock = static_cast<int>(ntarget);
-      Real diff = ntarget - static_cast<Real>(nphblock);
+      int nsblock = static_cast<int>(ntarget);
+      Real diff = ntarget - static_cast<Real>(nsblock);
       if (my_blocks(nb)->pran->uniform() < diff)
-        nphblock += 1;
-      if (nphblock > 0) {
-        my_blocks(nb)->weight = emm_tot;
-        my_blocks(nb)->minweight *= emm_tot;// / static_cast<Real>(nphblock);
-        //printf("myw %g\n",my_blocks(nb)->weight);
+        nsblock += 1;
+      if (nsblock > 0) {
+        my_blocks(nb)->emiss_to_weight = tot_block[nb] / static_cast<Real>(nsblock);
       } else {
-        my_blocks(nb)->weight = 0;
+        my_blocks(nb)->emiss_to_weight = 0.;
       }
-      my_blocks(nb)->nphremain = nphblock;
+      my_blocks(nb)->minweight *= ave_weight;
+      my_blocks(nb)->nphremain = nsblock;
       my_blocks(nb)->nphrun = 0;
-      nphtotnew += nphblock;
+      nsampnew += nsblock;
     }
 #ifdef MPI_PARALLEL
-    MPI_Allreduce(MPI_IN_PLACE,&nphtotnew,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE,&nsampnew,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
 #endif
+    if (nsamp != nsampnew) {
+      if (Globals::my_rank == 0)
+        std::cout << "Updating nsample to " << nsampnew << std::endl;
+      nsamp = nsampnew;
+    }
   } else {
-    norme = static_cast<Real>(ncells);
     // emission weights will just be equal to emmisivity
     // Determine number of photons per block per step assuming each block is equal
-    int nphblock = nphtot / nbtotal;
-    nphtot = nphblock * nbtotal; // adjust nphtot if needed
+    int nphblock = nsamp / nbtotal;
+    if ((nphblock * nbtotal != nsamp) && (Globals::my_rank == 0))
+      std::cout << "Updating nsample to " << nphblock * nbtotal << std::endl;
+    nsamp = nphblock * nbtotal; // adjust nsamp if needed
 
     for (int nb=0; nb<nblocal; nb++) {
       my_blocks(nb)->nphremain = nphblock;
       my_blocks(nb)->nphrun = 0;
       my_blocks(nb)->minweight *= emm_min;
-
+      my_blocks(nb)->emiss_to_weight = static_cast<Real>(ncells)/static_cast<Real>(nsamp);
     }
 
   }
   // Report emissivity ranges
   if (Globals::my_rank == 0) {
-    std::cout << "Emission array range (min, max), total: " << emm_min/norme << " "
-              << emm_max/norme << " " << emm_tot/norme << std::endl;
+    std::cout << "Emission array range (min, max), total: " << emm_min << " "
+              << emm_max << " " << emm_tot << std::endl;
   }
 
 
@@ -644,9 +645,9 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
     for(int nb=0; nb<nblocal; ++nb) {
       MonteCarloBlock *pmcb = my_blocks(nb);
       if (pmcb->moments_rad)
-        pmcb->NormalizeMoments(true,static_cast<Real>(ntot));
+        pmcb->NormalizeMoments(true,1.);
       if (pmcb->call_srcterms)
-        pmcb->NormalizeSourceTerms(true,static_cast<Real>(ntot));
+        pmcb->NormalizeSourceTerms(true,1.);
     }
 
     // Write outputs
@@ -656,9 +657,9 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
     for(int nb=0; nb<nblocal; ++nb) {
       MonteCarloBlock *pmcb = my_blocks(nb);
       if (pmcb->moments_rad)
-        pmcb->NormalizeMoments(false,static_cast<Real>(ntot));
+        pmcb->NormalizeMoments(false,1.);
       if (pmcb->call_srcterms)
-        pmcb->NormalizeSourceTerms(false,static_cast<Real>(ntot));
+        pmcb->NormalizeSourceTerms(false,1.);
     }
 
   } // end loop over nout
@@ -794,9 +795,9 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
   for(int nb=0; nb<nblocal; ++nb) {
     MonteCarloBlock *pmcb = my_blocks(nb);
     if (pmcb->moments_rad)
-      pmcb->NormalizeMoments(true,static_cast<Real>(ntot));
+      pmcb->NormalizeMoments(true,1.);
     if (pmcb->call_srcterms)
-      pmcb->NormalizeSourceTerms(true,static_cast<Real>(ntot));
+      pmcb->NormalizeSourceTerms(true,1.);
 
   }
 }

@@ -664,7 +664,7 @@ int main(int argc, char *argv[]) {
       *static_cast<std::uint64_t> (pmesh->my_blocks(0)->GetNumberOfMeshBlockCells());
     double zc_cpus = static_cast<double> (zonecycles) / cpu_time;
     if (!write_fluid_diagnostics) {
-      float phot_cpus = static_cast<float> (pmc->nphtot)/cpu_time;
+      float phot_cpus = static_cast<float> (pmc->nsamp)/cpu_time;
       std::cout << std::endl << "cpu time used  = " << cpu_time << std::endl;
       std::cout << "samples/cpu_second = " << phot_cpus << std::endl;
     } else {

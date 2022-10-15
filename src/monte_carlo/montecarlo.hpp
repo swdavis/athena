@@ -195,7 +195,7 @@ public:
   Real dt;     // Monte Carlo timestep
   Real tmax;   // Maximum evolution time
 
-  int64_t nphtot;  // total number of photons to integrate per timestep
+  int64_t nsamp;  // total number of photons to integrate per timestep
   int64_t nphrun;  // number of photons completed
   int nblocal; // number of montecarloblocks on this process
   int nbtotal; // total number of montecarloblocks
@@ -331,7 +331,7 @@ public:
   Real rho_cgs, vel_cgs, tgas_cgs, tfloor_cgs, l_cgs;
   Real stepsize;
   Real minweight;
-  Real weight;
+  Real emiss_to_weight; // used relate weight to emission array
 
   AthenaArray<Real> emission;
   AthenaArray<Real> moments;
@@ -365,11 +365,15 @@ public:
                          Real k1p0, Real k2p0, Real k3p0, int ip);
   void NormalizeSourceTerms(bool normalize, Real norm);
   void ResetSourceTerms();
+  // Functions for handling distributed emission over cells
   void ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &emm_tot);
-  //void UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0, int ip);
+  void SetEmissionCellWeight(Photon *pphot, int ips, int ipe);
+
 
 private:
-   void SetBoundaryValues(enum MCBoundaryFlag *input_bcs);
+  int i1_, i2_, i3_; // used for emission
+  Real nemit_; // used for emission
+  void SetBoundaryValues(enum MCBoundaryFlag *input_bcs);
 };
 
 #endif // MONTECARLO_HPP
