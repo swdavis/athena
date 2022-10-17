@@ -796,7 +796,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
 void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Real k2,
                                     Real k3, Real etau, int ip) {
 
-  Real c_cgs = 2.99792458e10;;
+  const Real c_cgs = 2.99792458e10;;
   Real k1p = pphot->k1p[ip];
   Real k2p = pphot->k2p[ip];
   Real k3p = pphot->k3p[ip];
@@ -808,7 +808,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Re
     k3p *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
   }
 
-  Real energy, abs_coef, step;
+  Real energy, abs_coef, sct_coef, step;
   // BCM: Comoving moments currently do not work with code acceleration
   if (moments_comoving) {
     // boost relevant quanitities to comoving frame
@@ -831,12 +831,14 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Re
       k2p = (k2p - aber * beta[1]) / gonembdk;
       k3p = (k3p - aber * beta[2]) / gonembdk;
       abs_coef = pphot->acp[ip] / gonembdk;
+      sct_coef = pphot->scp[ip] / gonembdk;
       step = dl * gonembdk;
     }
   } else {
     // Use eulerian values
     energy = pphot->ep[ip];
     abs_coef = pphot->acp[ip];
+    sct_coef = pphot->scp[ip];
     step = dl;
   }
   // Account for attenuation along ray
@@ -846,14 +848,13 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Re
       leff = step;
     } else {
       leff = (1.-etau)/abs_coef;
-      //printf("%g %g %g %g\n",etau,leff/step,abs_coef,step);
     }
   } else {
     leff = step;
   }
   // Weight moments by time spent in domain
 
-  Real weight = pphot->wp[ip] * energy * leff / 2.99792458e10;
+  Real weight = pphot->wp[ip] * energy * leff / c_cgs;
   Real path_weight = weight * (pl / dl);
 
   if ((std::isinf(weight)) || (std::isnan(weight))) {
@@ -875,12 +876,12 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Re
       // Energy density
       moments(MCIER,k,j,i) += path_weight;
       // Flux
-      moments(MCIFR1,k,j,i) += weight1 * 2.99792458e10;
-      moments(MCIFR2,k,j,i) += weight2 * 2.99792458e10;
-      moments(MCIFR3,k,j,i) += weight3 * 2.99792458e10;
+      moments(MCIFR1,k,j,i) += weight1 * c_cgs;
+      moments(MCIFR2,k,j,i) += weight2 * c_cgs;
+      moments(MCIFR3,k,j,i) += weight3 * c_cgs;
 
       // Radiation Pressure
-      Real weightp = weight1 * 2.99792458e10;
+      Real weightp = weight1 * k1p;
       moments(MCIPR11,k,j,i) += weightp;
       weightp = weight2 * k2p;
       moments(MCIPR22,k,j,i) += weightp;
@@ -901,9 +902,9 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Re
 
     if (call_srcterms) {
       // Radiative Acceleration from flux
-      sourceterms(MCRSP1,k,j,i) += (pphot->scp[ip]+abs_coef) * weight1;
-      sourceterms(MCRSP2,k,j,i) += (pphot->scp[ip]+abs_coef) * weight2;
-      sourceterms(MCRSP3,k,j,i) += (pphot->scp[ip]+abs_coef) * weight3;
+      sourceterms(MCRSP1,k,j,i) += (sct_coef+abs_coef) * weight1;
+      sourceterms(MCRSP2,k,j,i) += (sct_coef+abs_coef) * weight2;
+      sourceterms(MCRSP3,k,j,i) += (sct_coef+abs_coef) * weight3;
     }
   }
 
@@ -1001,9 +1002,11 @@ void MonteCarloBlock::ResetMoments() {
 void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0,
                                         Real weight0, Real k1p0,
                                         Real k2p0, Real k3p0, int ip) {
+ 
   // Updates
   Real c_cgs = 2.99792458e10;
-
+  //printf("%d %d %d %g %g %g %g\n",pphot->i1p[ip],pphot->i2p[ip],pphot->i3p[ip],
+  //       energy0,weight0,pphot->wp[ip],pphot->ep[ip]);
   Real k1 = pphot->k1p[ip];
   Real k2 = pphot->k2p[ip];
   Real k3 = pphot->k3p[ip];
@@ -1169,9 +1172,7 @@ void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
 
 void MonteCarloBlock::ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &emm_tot) {
 
-  //Real norm = 1.;
-  //if (!pmy_mc->emission_eqwt)
-  //  norm = static_cast<Real>(pmy_mc->ncells)/static_cast<Real>(pmy_mc->nsamp);
+
   Real dt = pmy_mc->dt;
 
   emm_min = SQR(HUGE_NUMBER);
@@ -1198,6 +1199,7 @@ void MonteCarloBlock::ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &e
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe)
 //! \brief set emission cell and weight for photon via emission array
+
 void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe) {
 
   if (pmy_mc->emission_eqwt) {

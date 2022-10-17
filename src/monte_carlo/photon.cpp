@@ -354,6 +354,12 @@ void Photon::SendToNeighbors() {
       PrintPhoton("pnb == nullptr",k);
       std::cout << ox1 << " " << ox2 << " " << ox3 << " " << i1p[k] << " "
                 << i2p[k] << " " << i3p[k] << std::endl;
+      MCCoord *pco = pmy_mcb->pcoord;
+      printf("%d %d %g %g %g %g %g %g\n",Globals::my_rank,k,
+             pco->x1f(i1p[k]),pco->x1f(i1p[k]+1),
+             pco->x2f(i2p[k]),pco->x2f(i2p[k]+1),
+             pco->x3f(i3p[k]),pco->x3f(i3p[k]+1));
+
       RemoveOneParticle(k);
       --k;
       std::cout << "[SendToNeighbors] Warning: pnb==nullptr." << std::endl;

@@ -350,8 +350,9 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
 
     // -------------------------- Debugging ----------------------------------------------
     if (iter >= checkmove) {
-      std::cout << "Warning: iter exceeded " << checkmove << " in photon mover."
-                << std::endl;
+      std::stringstream msg;
+      msg << "Warning: iter exceeded " << checkmove << " in photon mover.";
+      pphot->PrintPhoton(msg.str(),ip);
 #ifdef DEBUG_SM
       int nmax = (NBUFFER > iter) ? iter : NBUFFER;
       for (int i=0; i < nmax; ++i) {

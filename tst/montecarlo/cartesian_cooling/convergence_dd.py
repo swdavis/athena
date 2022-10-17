@@ -111,6 +111,11 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,length,periodic,
     outfile.write("dt         = 1.0e-11\n")
     outfile.write("variable   = mcmom\n")
     outfile.write("frame      = "+frame+"\n")
+    outfile.write("<output2>\n")
+    outfile.write("file_type  = hdf5\n")
+    outfile.write("dt         = 1.0e-11\n")
+    outfile.write("variable   = mcsrc\n")
+    #outfile.write("frame      = "+frame+"\n")
     outfile.write("\n")
     outfile.write("\n")
     outfile.write("<mesh>\n")
@@ -247,13 +252,15 @@ def main(**kwargs):
         system(com)
         # read hdf5 output
         data = athena_read.athdf("mciso.out1.00000.athdf",quantities=['Ermc','Frmc1',
-                                 'Frmc2','Frmc3','Eavemc','Cooling','kapjmc','tgas',
+                                 'Frmc2','Frmc3','Eavemc','kapjmc','tgas',
                                  'rho'])
+        datac = athena_read.athdf("mciso.out2.00000.athdf",quantities=['Cooling'])
+
         output[i,0] = float(nphot)
         ermc = np.average(data['Ermc'])
         kapj = data['kapjmc']/dens
         kapj_ave = np.average(kapj)
-        cool = np.average(data['Cooling'])
+        cool = np.average(datac['Cooling'])
         cdot, cdot_tgas = cooling(data['tgas'],data['rho'],data['Ermc'],data['Eavemc'],
                                   kapj,emin,emax,scatflag=scatflag)
         cdot_ave = np.average(cdot)

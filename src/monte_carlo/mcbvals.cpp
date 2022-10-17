@@ -415,9 +415,7 @@ void Destroy(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
 void Polar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
-  std::cout << "Warning: photon moving through polar boundary: " << std::endl
-            << "Destroying photon." << std::endl;
-  pphot->PrintPhoton(ip);
+  pphot->PrintPhoton("Warning: photon moving through polar boundary, destroyed",ip);
   pphot->statp[ip] = DESTROYED;
 
 }
@@ -428,7 +426,9 @@ void Polar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
 void Periodic(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
 
-  pphot->statp[ip] = BUFFERED;
+  // Do not send photon to another block if escaped, etc.
+  if (pphot->statp[ip] == EVOLVING)
+    pphot->statp[ip] = BUFFERED;
 
 }
 //----------------------------------------------------------------------------------------
@@ -466,6 +466,7 @@ void Block(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip) {
     pphot->PrintPhoton("bc x3 > x3max",ip);
   }
   */
-  pphot->statp[ip] = BUFFERED;
+  if (pphot->statp[ip] == EVOLVING)
+    pphot->statp[ip] = BUFFERED;
 
 }

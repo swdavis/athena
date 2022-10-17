@@ -688,6 +688,7 @@ bool PhotonMover::UpdateZone(Photon *pphot, int ip) {
   MonteCarloBlock *pmcb = pmy_mcb;
   bool update = false;
 
+  // Check x1 direction
   if (pphot->x1p[ip] >= pcoord->x1f(pphot->i1p[ip]+1)) {
     update = true;
     while (pphot->x1p[ip] >= pcoord->x1f(pphot->i1p[ip]+1)) {
@@ -709,6 +710,7 @@ bool PhotonMover::UpdateZone(Photon *pphot, int ip) {
       }
     }
   }
+  // Check x2 direction
   if (pphot->x2p[ip] >= pcoord->x2f(pphot->i2p[ip]+1)) {
     update = true;
     while (pphot->x2p[ip] >= pcoord->x2f(pphot->i2p[ip]+1)) {
@@ -730,6 +732,8 @@ bool PhotonMover::UpdateZone(Photon *pphot, int ip) {
       }
     }
   }
+
+  // Check x3 direction
   if (pphot->x3p[ip] >= pcoord->x3f(pphot->i3p[ip]+1)) {
     update = true;
     while (pphot->x3p[ip] >= pcoord->x3f(pphot->i3p[ip]+1)) {

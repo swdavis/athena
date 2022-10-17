@@ -1188,8 +1188,9 @@ void Spectrum::WriteSpectrum(std::string fname) {
   if (pmy_mc->dynamic)
     time = pmy_mc->pmy_mesh->time;
   else
-    time = last_time + dt; // enforce monte carlo dt as integration time
-  fprintf(pfile,"dt=%.8e\n",time-last_time);
+    time = last_time + pmy_mc->dt; // enforce monte carlo dt as integration time
+  Real tint = time - last_time;
+  fprintf(pfile,"dt=%.8e\n",tint);
   fprintf(pfile,"nx=%d\n",ne);
   fprintf(pfile,"nmu=%d\n",nmu);
   fprintf(pfile,"nphi=%d\n",nphi);
@@ -1242,7 +1243,7 @@ void Spectrum::WriteSpectrum(std::string fname) {
     for(int j=0; j<nmu; ++j) {
       Real mumid = (static_cast<Real>(j)+0.5)/static_cast<Real>(nmu);
       for(int i=0; i<ne; ++i) {
-        Real fac2 = fac1*emid[i]/(mumid*dnu[i]*dt);
+        Real fac2 = fac1*emid[i]/(mumid*dnu[i]*tint);
         intens(0,k,j,i) = static_cast<double>(intensity(k,j,i)*fac2);
         errors(0,k,j,i) = 0.675*sqrt((intensity_sq(k,j,i)*SQR(fac2)*norms-
                                       SQR(intens(0,k,j,i)))/norms);
@@ -1344,11 +1345,8 @@ void MCOutput::OutputSpectrum(bool wtflag) {
       }
       // Update spectra on all blocks
       pspect->output_number++;
-
+      pspect->ResetSpectrum();
       if (pmy_mc->dynamic) {
-        // only reset for dynamic calculations.  Spectra are cumulative
-        // for static monte carlo
-        pspect->ResetSpectrum();
         pspect->last_time = time;
       }
     }

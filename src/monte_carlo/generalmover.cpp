@@ -85,12 +85,13 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
         if (dl*chi > tauacc) {
           MRWResonanceAcceleration(pphot,pran,dl,tauacc,path_length,k1,k2,k3,ip);
           accel_success = true;
-        } else {
-          path_length = step;
-          k1 = pphot->k1p[ip];
-          k2 = pphot->k2p[ip];
-          k3 = pphot->k3p[ip];
         }
+      }
+      if (!accel_success) {
+        path_length = step;
+        k1 = pphot->k1p[ip];
+        k2 = pphot->k2p[ip];
+        k3 = pphot->k3p[ip];
       }
 
       if (!accel_success) {// Acceleration not triggered - take standard step
@@ -119,10 +120,6 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
         zone_counter++;
         chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
       }
-      if (pphot->statp[ip] == DESTROYED) {
-        printf("Photon destroyed in general mover.\n");
-        pphot->PrintPhoton(ip);
-      }
 
       pphot->dtp[ip] -= step/c_cgs;
       // Update moments
@@ -131,9 +128,8 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
       }
 
       if (pphot->IsNanPhoton(ip)) {
-        printf("Photon returned Nan in general mover.\n");
         pphot->statp[ip] = DESTROYED;
-        pphot->PrintPhoton(ip);
+        pphot->PrintPhoton("Photon returned Nan in general mover",ip);
       }
       step = StepSize(pphot,ip);
 

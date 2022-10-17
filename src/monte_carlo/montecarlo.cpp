@@ -593,6 +593,7 @@ void MonteCarlo::ComputeEmission() {
 void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
                                      ParameterInput *pinput) {
 
+  dt /= static_cast<Real>(nout);
   for (int i=0; i<nout; i++) {
 
     ComputeEmission();
@@ -641,13 +642,14 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
         std::cout << 0. << std::endl;
     }
 
+    Real norm_mom = static_cast<Real>(i+1);
     // normalize moments for output
     for(int nb=0; nb<nblocal; ++nb) {
       MonteCarloBlock *pmcb = my_blocks(nb);
       if (pmcb->moments_rad)
-        pmcb->NormalizeMoments(true,1.);
+        pmcb->NormalizeMoments(true,norm_mom);
       if (pmcb->call_srcterms)
-        pmcb->NormalizeSourceTerms(true,1.);
+        pmcb->NormalizeSourceTerms(true,norm_mom);
     }
 
     // Write outputs
@@ -657,9 +659,9 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
     for(int nb=0; nb<nblocal; ++nb) {
       MonteCarloBlock *pmcb = my_blocks(nb);
       if (pmcb->moments_rad)
-        pmcb->NormalizeMoments(false,1.);
+        pmcb->NormalizeMoments(false,norm_mom);
       if (pmcb->call_srcterms)
-        pmcb->NormalizeSourceTerms(false,1.);
+        pmcb->NormalizeSourceTerms(false,norm_mom);
     }
 
   } // end loop over nout
