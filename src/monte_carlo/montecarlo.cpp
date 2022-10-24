@@ -422,12 +422,18 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
     tmax = pin->GetOrAddReal("montecarlo","tmax",-1.);
     if (tmax < 0.)
       tmax = pmy_mesh->dt;
-    dt = pmy_mesh->dt;
+    tint = pmy_mesh->dt;
   } else {
     // initialize timing parameters if static calculation
-    dt = pin->GetOrAddReal("montecarlo","dt",1.);
+    tint = pin->GetOrAddReal("montecarlo","tint",1.);
     tmax = pin->GetOrAddReal("montecarlo","tmax",HUGE_NUMBER);
   }
+  // convert to cgs units
+  Real vel_cgs = pin->GetOrAddReal("problem","vel_cgs",1.);
+  Real l_cgs = pin->GetOrAddReal("problem","l_cgs",1.);
+  time_cgs = pin->GetOrAddReal("problem","time_cgs",l_cgs/vel_cgs);
+  tint *= time_cgs;
+  tmax *= time_cgs;
 
   if (GetTemperature == nullptr)
     GetTemperature = DefaultGetTemperature;
@@ -593,7 +599,7 @@ void MonteCarlo::ComputeEmission() {
 void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
                                      ParameterInput *pinput) {
 
-  dt /= static_cast<Real>(nout);
+  tint /= static_cast<Real>(nout);
   for (int i=0; i<nout; i++) {
 
     ComputeEmission();
@@ -728,7 +734,7 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
   tmax = pin->GetOrAddReal("montecarlo","tmax",-1.);
   if (tmax < 0.)
     tmax = pmy_mesh->dt;
-  dt = pmy_mesh->dt;
+  tint = pmy_mesh->dt;
 
 
   // Reset monte carlo blocks

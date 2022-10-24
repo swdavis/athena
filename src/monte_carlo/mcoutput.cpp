@@ -737,13 +737,16 @@ void PhotonList::WriteList(std::string filename) {
   }
 
   // write header information
-  Real time;
-  if (pmy_mc->dynamic)
-    time = pmy_mc->pmy_mesh->time;
-  else
-    time = last_time + pmy_mc->dt; // enforce monte carlo dt as integration time
+  Real tint;
+  if (pmy_mc->dynamic) {
+    Real time = pmy_mc->pmy_mesh->time;
+    tint = (time - last_time) * pmy_mc->time_cgs;
+  } else {
+    // enforce monte carlo tint as integration time
+    tint - pmy_mc->tint;
+  }
 
-  fprintf(pfile,"dt=%.8e\n",time-last_time);
+  fprintf(pfile,"dt=%.8e\n",tint);
   fprintf(pfile,"length=%d\nnpars=%d\n",length,nparams);
   fprintf(pfile,"ntot=%d\n",nsrun);
   fprintf(pfile,"polarized=%d\n",polarized);
@@ -1011,7 +1014,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         if (pmc->dynamic) {
           pspec->dt = pin->GetReal(pib->block_name,"dt");
         } else {
-          pspec->dt = pin->GetOrAddReal("montecarlo","dt",1.);
+          pspec->dt = pin->GetOrAddReal("montecarlo","tint",1.);
         }
         pspec->last_time = pmy_mc->pmy_mesh->time;
         // Generate file name
@@ -1184,12 +1187,15 @@ void Spectrum::WriteSpectrum(std::string fname) {
   int ne = range.ne;
   int nmu = range.ncth;
   int nphi = range.nphi;
-  Real time;
-  if (pmy_mc->dynamic)
-    time = pmy_mc->pmy_mesh->time;
-  else
-    time = last_time + pmy_mc->dt; // enforce monte carlo dt as integration time
-  Real tint = time - last_time;
+
+  Real tint;
+  if (pmy_mc->dynamic) {
+    Real time = pmy_mc->pmy_mesh->time;
+    tint = (time - last_time) * pmy_mc->time_cgs;
+  } else {
+    // enforce monte carlo tint as integration time
+    tint - pmy_mc->tint;
+  }
   fprintf(pfile,"dt=%.8e\n",tint);
   fprintf(pfile,"nx=%d\n",ne);
   fprintf(pfile,"nmu=%d\n",nmu);

@@ -192,8 +192,9 @@ public:
   MCOutput *pmcout;
   AthenaArray<MonteCarloBlock*> my_blocks;
 
-  Real dt;     // Monte Carlo timestep
+  Real tint;     // Monte Carlo timestep
   Real tmax;   // Maximum evolution time
+  Real time_cgs; // conversion of time to cgs units
 
   int64_t nsamp;  // total number of photons to integrate per timestep
   int64_t nphrun;  // number of photons completed

@@ -578,17 +578,20 @@ void MonteCarloBlock::CoupleMonteCarloToFluid(Real dt) {
 
   if (!coupled) return;
 
+  Real edot_cgs = pmy_mc->time_cgs / (rho_cgs * SQR(vel_cgs));
+  Real pdot_cgs = pmy_mc->time_cgs / (rho_cgs * vel_cgs);
+
   MeshBlock *pmb = pmy_block;
   for (int k=pmb->ks; k<=pmb->ke; ++k) {
       for (int j=pmb->js; j<=pmb->je; ++j) {
 #pragma omp simd
         for (int i=pmb->is; i<=pmb->ie; ++i) {
-          pmb->phydro->u(IEN,k,j,i) += dt * sourceterms(MCRS0,k,j,i);
-          pmb->phydro->u(IM1,k,j,i) += dt * sourceterms(MCRSP1,k,j,i)
+          pmb->phydro->u(IEN,k,j,i) += dt * edot_cgs * sourceterms(MCRS0,k,j,i);
+          pmb->phydro->u(IM1,k,j,i) += dt * pdot_cgs * sourceterms(MCRSP1,k,j,i)
                                           * pmb->phydro->u(IDN,k,j,i);
-          pmb->phydro->u(IM2,k,j,i) += dt * sourceterms(MCRSP2,k,j,i)
+          pmb->phydro->u(IM2,k,j,i) += dt * pdot_cgs * sourceterms(MCRSP2,k,j,i)
                                           * pmb->phydro->u(IDN,k,j,i);
-          pmb->phydro->u(IM3,k,j,i) += dt * sourceterms(MCRSP3,k,j,i)
+          pmb->phydro->u(IM3,k,j,i) += dt * pdot_cgs * sourceterms(MCRSP3,k,j,i)
                                           * pmb->phydro->u(IDN,k,j,i);
         }
       }
@@ -918,7 +921,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Re
 void MonteCarloBlock::NormalizeMoments(bool normalize, Real norm) {
 
   // Get integration time
-  Real dt = pmy_mc->dt;
+  Real dt = pmy_mc->tint;
 
   if (normalize) {
    // Normalize energy density weighted averages first
@@ -929,7 +932,9 @@ void MonteCarloBlock::NormalizeMoments(bool normalize, Real norm) {
             moments(MCIKJ,k,j,i) /= moments(MCIER,k,j,i);
             moments(MCIEN,k,j,i) /= moments(MCIER,k,j,i);
           }
-        }}}
+        }
+      }
+    }
     // Normalize remaining moments by volume and global norm (counts)
 
     for (int n=0; n<NMOM-5; ++n) {
@@ -948,7 +953,9 @@ void MonteCarloBlock::NormalizeMoments(bool normalize, Real norm) {
           moments(MCIPR21,k,j,i) = moments(MCIPR12,k,j,i);
           moments(MCIPR31,k,j,i) = moments(MCIPR13,k,j,i);
           moments(MCIPR32,k,j,i) = moments(MCIPR23,k,j,i);
-        }}}
+        }
+      }
+    }
   } else {
     // Undo normalization for continuing evolution
     for (int n=0; n<NMOM-5; ++n) {
@@ -1002,7 +1009,7 @@ void MonteCarloBlock::ResetMoments() {
 void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0,
                                         Real weight0, Real k1p0,
                                         Real k2p0, Real k3p0, int ip) {
- 
+
   // Updates
   Real c_cgs = 2.99792458e10;
   //printf("%d %d %d %g %g %g %g\n",pphot->i1p[ip],pphot->i2p[ip],pphot->i3p[ip],
@@ -1083,7 +1090,7 @@ void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0,
 void MonteCarloBlock::NormalizeSourceTerms(bool normalize, Real norm) {
 
   // Get integration time
-  Real dt = pmy_mc->dt;
+  Real dt = pmy_mc->tint;
 
   if (coupled || moments_srcterms) {
     // Normalize sourcterms
@@ -1173,7 +1180,7 @@ void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
 void MonteCarloBlock::ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &emm_tot) {
 
 
-  Real dt = pmy_mc->dt;
+  Real dt = pmy_mc->tint;
 
   emm_min = SQR(HUGE_NUMBER);
   emm_max = -HUGE_NUMBER;

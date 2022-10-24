@@ -171,7 +171,7 @@ void ATHDF5Output::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
     num_datasets = 1;
     num_variables = new int[num_datasets];
     int n_dataset = 0;
-    num_variables[n_dataset] = 8;
+    num_variables[n_dataset] = 7;
   } else {
     num_datasets = 1;
     num_variables = new int[num_datasets];
@@ -190,7 +190,9 @@ void ATHDF5Output::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
     if (MAGNETIC_FIELDS_ENABLED)
       std::strncpy(dataset_names[n_dataset_names++], "B", max_name_length+1);
   } else if (variable.compare("mcmom") == 0) {
-    std::strncpy(dataset_names[n_dataset_names++], "mc", max_name_length+1);
+    std::strncpy(dataset_names[n_dataset_names++], "mcmom", max_name_length+1);
+  } else if (variable.compare("mcsrc") == 0) {
+    std::strncpy(dataset_names[n_dataset_names++], "mcsrc", max_name_length+1);
   } else { // single data
     if (variable.compare(0,1,"B") == 0 && MAGNETIC_FIELDS_ENABLED)
       std::strncpy(dataset_names[n_dataset_names++], "B", max_name_length+1);
