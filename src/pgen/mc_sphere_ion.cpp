@@ -33,15 +33,15 @@
 #include "../parameter_input.hpp"
 #include "../scalars/scalars.hpp"
 
+void TrackIonization(MeshBlock *pmb, const Real time, const Real dt,
+              const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
+              const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
+              AthenaArray<Real> &cons_scalar);
 namespace {
   Real rin,rout;
   Real energy0;
   int i1,i2,i3;
   Real rhobase;
-  void TrackIonization(MeshBlock *pmb, const Real time, const Real dt,
-              const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
-              const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
-              AthenaArray<Real> &cons_scalar);
   Real IonizedEmission(MonteCarloBlock *pmcb, int k, int j, int i);
 
 }
@@ -51,7 +51,8 @@ namespace {
 //========================================================================================
 
 void Mesh::InitUserMeshData(ParameterInput *pin) {
-  //EnrollUserExplicitSourceFunction(TrackIonization);
+
+  EnrollUserExplicitSourceFunction(TrackIonization);
 }
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
@@ -189,12 +190,11 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     // to the values appropriate in the emitted zone
     pphot->acp[ip] = AbsorptionOpacity(this,pphot,ip);
     pphot->scp[ip] = ScatteringOpacity(this,pphot,ip);
-
+    //pphot->PrintPhoton(ip);
   } // loop over ip
 
 }
 
-namespace {
 
 void TrackIonization(MeshBlock *pmb, const Real time, const Real dt,
               const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
@@ -205,6 +205,7 @@ void TrackIonization(MeshBlock *pmb, const Real time, const Real dt,
   Real Gamma0 = 1. / (6. * 60. * 60.); // s, photoionization rate coefficient
   Real alpha = 4.18e-13; // cm3 s-1 for T=1e4 K, recombination rate coefficient
   Real nR = 1. / alpha / dt;
+
   for (int k=pmb->ks; k<=pmb->ke; ++k) {
     for (int j=pmb->js; j<=pmb->je; ++j) {
       Real column = 0.;
@@ -217,10 +218,10 @@ void TrackIonization(MeshBlock *pmb, const Real time, const Real dt,
         // Trammell et al 2011, Fig 9 powerlaw
         Real Gamma = Gamma0 / (1. + std::pow(sigma_pi * column, 1.5));
         Real nC = Gamma / alpha;
-        if (time <= 0.) {
-          printf("%g %g %g %g %g %g\n", pmb->pcoord->x1v(i), rho, nC, n_H,
-                 cons_scalar(0,k,j,i)/rho, column);
-        }
+        //if (time <= 0.) {
+        //  printf("%g %g %g %g %g %g\n", pmb->pcoord->x1v(i), rho, nC, n_H,
+        //         cons_scalar(0,k,j,i)/rho, column);
+        //}
         cons_scalar(0,k,j,i) = 0.5 * mp * (-(nC + nR) + std::sqrt((nC + nR)*(nC + nR)
                                + 4. * (nC*rho/mp + nR*n_p)));
       }
@@ -229,7 +230,7 @@ void TrackIonization(MeshBlock *pmb, const Real time, const Real dt,
   return;
 }
 
-
+namespace {
 Real IonizedEmission(MonteCarloBlock *pmcb, int k, int j, int i) {
 
   const Real mp = 1.6726e-24;

@@ -104,8 +104,8 @@ TimeIntegratorTaskList::TimeIntegratorTaskList(ParameterInput *pin, Mesh *pm) {
     }
   }
   if (MONTE_CARLO_ENABLED) {
-    if (!pin->GetOrAddBoolean("montecarlo","dynamic",false));
-    return;
+    if (!pin->GetOrAddBoolean("montecarlo","dynamic",false))
+      return;
   }
 
   if (integrator == "vl2") {
