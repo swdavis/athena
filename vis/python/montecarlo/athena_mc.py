@@ -1256,6 +1256,7 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
         spectrum['polarized'] = 'false'
 
     spectrum['nintens'] = nintens
+    count = np.zeros((nphi,nmu,nx))
     intensity = np.zeros((nintens,nphi,nmu,nx))
     if yerror:
         errors = np.zeros((nintens,nphi,nmu,nx))
@@ -1267,6 +1268,7 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
         if ((xbins[i] >= 0) and (mubins[i] >= 0) and (phibins[i] >= 0)):
             wght = phots.weight[i]
             #print phibins[i],mubins[i],xbins[i]
+            count[phibins[i],mubins[i],xbins[i]] += 1.
             intensity[0,phibins[i],mubins[i],xbins[i]] += wght
             if phots.polarized:
                 intensity[1,phibins[i],mubins[i],xbins[i]] += wght*phots.q[i]
@@ -1306,14 +1308,17 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
                 fac = nphi*nmu*emid/(mumid[i]*dnu*2.*np.pi*phots.dt)
                 intensity[k,j,i,:] *= fac
                 if yerror:
-                    errors[k,j,i,:] *= fac**2*phots.ntot
+                    errors[k,j,i,:] *= fac**2
     spectrum['intensity'] = intensity
 
     # Finish computing errors on intensities
     if yerror:
         for k in range(nintens):
-            errors[k,:,:,:] = 0.675*np.sqrt((errors[k,:,:,:] - (intensity[k,:,:,:])**2)/
-                                            phots.ntot)
+            inds = np.where(count > 1.)
+            errors[k,inds[0],inds[1],inds[2]] = np.sqrt(errors[k,inds[0],inds[1],inds[2]]
+              - intensity[k,inds[0],inds[1],inds[2]]**2 / count[inds[0],inds[1],inds[2]])
+            inds = np.where(count <= 1.)
+            errors[k,inds[0],inds[1],inds[2]] = 0.
         spectrum['errors'] = errors
 
     if yerror:

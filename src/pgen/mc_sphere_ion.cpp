@@ -52,7 +52,7 @@ namespace {
 
 void Mesh::InitUserMeshData(ParameterInput *pin) {
 
-  EnrollUserExplicitSourceFunction(TrackIonization);
+  //EnrollUserExplicitSourceFunction(TrackIonization);
 }
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){

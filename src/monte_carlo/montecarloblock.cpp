@@ -580,7 +580,7 @@ void MonteCarloBlock::CoupleMonteCarloToFluid(Real dt) {
 
   Real edot_cgs = pmy_mc->time_cgs / (rho_cgs * SQR(vel_cgs));
   Real pdot_cgs = pmy_mc->time_cgs / (rho_cgs * vel_cgs);
-
+  
   MeshBlock *pmb = pmy_block;
   for (int k=pmb->ks; k<=pmb->ke; ++k) {
       for (int j=pmb->js; j<=pmb->je; ++j) {
