@@ -52,7 +52,7 @@ namespace {
 
 void Mesh::InitUserMeshData(ParameterInput *pin) {
 
-  //EnrollUserExplicitSourceFunction(TrackIonization);
+  EnrollUserExplicitSourceFunction(TrackIonization);
 }
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
@@ -76,7 +76,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   rhobase = pbase * mmw * mp / kb / temp;
   Real gamma = peos->GetGamma();
   Real gm1   = gamma - 1.0;
-  pmy_mcb->tgas_cgs = mmw * mp / (rhobase * kb);
+  pmy_mcb->tgas_cgs = mmw * mp / kb;
   pmy_mcb->rho_cgs = rhobase;
   // Calculate density where n_H = n_p in optically thin limit
   Real Gamma0 = 1. / (6. * 60. * 60.); // s, photoionization rate coefficient
@@ -111,7 +111,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         phydro->u(IM2,k,j,i) = 0.0;
         phydro->u(IM3,k,j,i) = 0.0;
         // Fluid internal energy density
-        phydro->u(IEN,k,j,i) = rhobase * phydro->u(IDN,k,j,i) * kb * temp
+        phydro->u(IEN,k,j,i) = phydro->u(IDN,k,j,i) * kb * temp
           / mmw / mp / gm1;
         phydro->u(IEN,k,j,i) += 0.5 * SQR(phydro->u(IM1,k,j,i)) / phydro->u(IDN,k,j,i);
         phydro->u(IEN,k,j,i) += 0.5 * SQR(phydro->u(IM2,k,j,i)) / phydro->u(IDN,k,j,i);

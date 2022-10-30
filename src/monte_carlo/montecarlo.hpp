@@ -195,7 +195,7 @@ public:
   Real tint;     // Monte Carlo timestep
   Real tmax;   // Maximum evolution time
   Real time_cgs; // conversion of time to cgs units
-
+  Real weightratio; // used for setting minimum weight for absorption
   int64_t nsamp;  // total number of photons to integrate per timestep
   int64_t nphrun;  // number of photons completed
   int nblocal; // number of montecarloblocks on this process

@@ -66,6 +66,9 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
                                                           "none"));
   nuser_var = 0; // Initialize photon user variables to zero
 
+  // Set mininmum weight if using weighting for absorption
+  weightratio = pin->GetOrAddReal("montecarlo","minweight",1.0e-20);
+
   // Set photon integration totals
   nsamp = pin->GetInteger("montecarlo","nphot");
   nout = pin->GetOrAddInteger("montecarlo","nout",1);
@@ -553,7 +556,7 @@ void MonteCarlo::ComputeEmission() {
       } else {
         my_blocks(nb)->emiss_to_weight = 0.;
       }
-      my_blocks(nb)->minweight *= ave_weight;
+      my_blocks(nb)->minweight = weightratio * ave_weight;
       my_blocks(nb)->nphremain = nsblock;
       my_blocks(nb)->nphrun = 0;
       nsampnew += nsblock;
@@ -577,7 +580,7 @@ void MonteCarlo::ComputeEmission() {
     for (int nb=0; nb<nblocal; nb++) {
       my_blocks(nb)->nphremain = nphblock;
       my_blocks(nb)->nphrun = 0;
-      my_blocks(nb)->minweight *= emm_min;
+      my_blocks(nb)->minweight = weightratio * emm_min;
       my_blocks(nb)->emiss_to_weight = static_cast<Real>(ncells)/static_cast<Real>(nsamp);
     }
 

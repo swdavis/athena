@@ -115,7 +115,6 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 
   // SWD:  stepsize control needs to be modified
   stepsize = pin->GetOrAddReal("montecarlo","stepsize",1.0e-3);
-  minweight = pin->GetOrAddReal("montecarlo","minweight",1.0e-20);
 
   // Flags for handling photon steps
   boyerlindquist_flag = pin->GetOrAddBoolean("montecarlo","boyerlindquist",false);
@@ -475,6 +474,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
     Real k1p0 = pphot->k1p[ip];
     Real k2p0 = pphot->k2p[ip];
     Real k3p0 = pphot->k3p[ip];
+
     if (pphot->statp[ip] == EVOLVING) {
       if (absorption_meth == ABSWEIGHT) {
         pphot->wp[ip] *= (pphot->scp[ip]/(pphot->scp[ip]+pphot->acp[ip]));
@@ -491,7 +491,13 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
         }
       }
     } // status == evolving
-
+    //if (pphot->wp[ip] < weight0) {
+    //  printf("weights: %g %g\n",weight0,pphot->wp[ip]);
+    //}
+    if (pphot->wp[ip] < minweight) {
+      pphot->PrintPhoton("wp < minweight",ip);
+      printf("minw: %g\n",minweight);
+    }
     if (pphot->statp[ip] == EVOLVING) {
       // Scatter the photon
       Real e_pre_scat = pphot->ep[ip];
