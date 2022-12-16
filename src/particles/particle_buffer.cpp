@@ -50,7 +50,7 @@ ParticleBuffer::ParticleBuffer() {
   cbuf = NULL;
   nparmax = npar = 0;
 #ifdef MPI_PARALLEL
-  reqi = reqr = reqc = MPI_REQUEST_NULL;
+  reqn = reqi = reqr = reqc = MPI_REQUEST_NULL;
   mpi_active = false;
   flagn = flagi = flagr = flagc = 0;
   tag = -1;
@@ -84,7 +84,7 @@ ParticleBuffer::ParticleBuffer(int nparmax0) {
     cbuf = new std::complex<Real>[ncplx * nparmax];
   npar = 0;
 #ifdef MPI_PARALLEL
-  reqi = reqr = reqc = MPI_REQUEST_NULL;
+  reqn = reqi = reqr = reqc = MPI_REQUEST_NULL;
   mpi_active = false;
   flagn = flagi = flagr = flagc = 0;
   tag = -1;
@@ -100,6 +100,7 @@ ParticleBuffer::~ParticleBuffer() {
   if (rbuf != NULL) delete [] rbuf;
   if (cbuf != NULL) delete [] cbuf;
 #ifdef MPI_PARALLEL
+  if (reqn != MPI_REQUEST_NULL) MPI_Request_free(&reqn);
   if (reqi != MPI_REQUEST_NULL) MPI_Request_free(&reqi);
   if (reqr != MPI_REQUEST_NULL) MPI_Request_free(&reqr);
   if (reqc != MPI_REQUEST_NULL) MPI_Request_free(&reqc);

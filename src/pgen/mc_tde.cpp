@@ -95,25 +95,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     start_cons_file[0] = start_cons_indices[n];
     start_cons_mem[0] = n;
     //std::cout << gid << " " << input_filename << std::endl;
-    if (gid >= 1360) {
-      printf("gid: %d\n",gid);
-      printf("start_cons_file ");
-      for (int i =0; i<5; i++)
-        printf("%d \n",start_cons_file[i]);
-      printf("\n");
-      printf("count_cons_file ");
-      for (int i =0; i<5; i++)
-        printf("%d \n",count_cons_file[i]);
-      printf("\n");
-      printf("start_cons_mem ");
-      for (int i =0; i<4; i++)
-        printf("%d \n",start_cons_mem[i]);
-      printf("\n");
-      printf("count_cons_mem ");
-      for (int i =0; i<4; i++)
-        printf("%d \n",count_cons_mem[i]);
-      printf("\n");
-    }
+  
     if (conserved)
       HDF5ReadRealArray(input_filename.c_str(), dataset.c_str(), 5, start_cons_file,
                         count_cons_file, 4, start_cons_mem,

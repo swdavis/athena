@@ -429,13 +429,22 @@ void Photon::SendToNeighbors() {
       ParticleBuffer& send = send_[nb.bufid];
       int npsend = send.npar;
       MPI_Send(&npsend, 1, MPI_INT, nb.snb.rank, send.tag, my_comm);
+      //if (npsend > 0)
+      //printf("send: %d %d %d %d %d %d %g %g\n",Globals::my_rank,nb.snb.rank,pmy_block->lid,nb.targetid,send.tag+2,npsend,send.rbuf[0],send.rbuf[npsend-1]);
       if (npsend > 0) {
-        //printf("send: %d %d %d\n",Globals::my_rank,nb.snb.rank,npsend);
         MPI_Request req = MPI_REQUEST_NULL;
+	/*
         MPI_Isend(send.ibuf, npsend * ParticleBuffer::nint, MPI_INT,
                   dst, send.tag + 1, my_comm, &req);
         MPI_Request_free(&req);
         MPI_Isend(send.rbuf, npsend * ParticleBuffer::nreal, MPI_ATHENA_REAL,
+                  dst, send.tag + 2, my_comm, &req);
+        MPI_Request_free(&req);
+	*/
+        MPI_Isend(send.rbuf, npsend * ParticleBuffer::nreal, MPI_ATHENA_REAL,
+                  dst, send.tag + 1, my_comm, &req);
+        MPI_Request_free(&req);
+        MPI_Isend(send.ibuf, npsend * ParticleBuffer::nint, MPI_INT,
                   dst, send.tag + 2, my_comm, &req);
         MPI_Request_free(&req);
         // Send complex properties
@@ -538,17 +547,17 @@ bool Photon::ReceiveFromNeighbors() {
     // Communicate with neighbor processes.
     int nb_rank = nb.snb.rank;
 
-    //printf("%d %d %d %d\n",Globals::my_rank,i,nb_rank,bstatus);
     if (nb_rank != Globals::my_rank && bstatus == BoundaryStatus::waiting) {
 
       ParticleBuffer& recv = recv_[nb.bufid];
       if (!recv.mpi_active) {
         // Get the number of incoming particles.
-        MPI_Irecv(&recv.npar, 1, MPI_INT, nb_rank, recv.tag, my_comm, &recv.reqi);
+        MPI_Irecv(&recv.npar, 1, MPI_INT, nb_rank, recv.tag, my_comm, &recv.reqn);
+	//printf("r: %d %d %d %d %d %d %d\n",Globals::my_rank,nb_rank,nb.snb.lid,nb.bufid,recv_[nb.bufid].tag,recv.npar,recv.flagn);
         recv.mpi_active = true;
       }
       if (!recv.flagn) {
-        MPI_Test(&recv.reqi, &recv.flagn, MPI_STATUS_IGNORE);
+        MPI_Test(&recv.reqn, &recv.flagn, MPI_STATUS_IGNORE);
         if (recv.flagn) {
           if (recv.npar > 0) {
             // Check the buffer size.
@@ -559,10 +568,26 @@ bool Photon::ReceiveFromNeighbors() {
               recv.npar = nprecv;
             }
             // Receive data from the neighbor.
+	    /*
             MPI_Irecv(recv.ibuf, recv.npar * ParticleBuffer::nint, MPI_INT,
                       nb_rank, recv.tag + 1, my_comm, &recv.reqi);
             MPI_Irecv(recv.rbuf, recv.npar * ParticleBuffer::nreal, MPI_ATHENA_REAL,
                       nb_rank, recv.tag + 2, my_comm, &recv.reqr);
+	    */
+	    int ierr;
+	    ierr = MPI_Irecv(recv.rbuf, recv.npar * ParticleBuffer::nreal, MPI_ATHENA_REAL,
+                      nb_rank, recv.tag + 1, my_comm, &recv.reqr);
+	    /*char err_buffer[MPI_MAX_ERROR_STRING];
+	    int resultlen;
+	    MPI_Error_string(ierr,err_buffer,&resultlen);
+	    printf(err_buffer);
+	    printf("\n");*/
+            MPI_Irecv(recv.ibuf, recv.npar * ParticleBuffer::nint, MPI_INT,
+                      nb_rank, recv.tag + 2, my_comm, &recv.reqi);
+	    //int test;
+	    //MPI_Status stat;
+	    //MPI_Request_get_status(recv.reqr,&test,&stat);
+	    //printf("t2: %d %d %d %d %d %d %d %d %d %d\n",Globals::my_rank,nb_rank,nb.snb.lid,nb.bufid,recv.tag+1,pmy_block->lid,test,stat.MPI_SOURCE,stat.MPI_TAG,stat.MPI_ERROR);
             if (general_mover_flag && polarized) {
               MPI_Irecv(recv.cbuf, recv.npar * ParticleBuffer::ncplx, MPI_ATHENA_COMPLEX,
                         nb_rank, recv.tag + 3, my_comm, &recv.reqc);
@@ -573,29 +598,39 @@ bool Photon::ReceiveFromNeighbors() {
           }
         }
       }
+
       if (recv.flagn && recv.npar > 0) {
         if (!recv.flagi)
-          MPI_Test(&recv.reqi, &recv.flagi, MPI_STATUS_IGNORE);
-        if (!recv.flagr)
+	  MPI_Test(&recv.reqi, &recv.flagi, MPI_STATUS_IGNORE);
+        if (!recv.flagr) {
           MPI_Test(&recv.reqr, &recv.flagr, MPI_STATUS_IGNORE);
+	}
         if (general_mover_flag && polarized) {
           if (!recv.flagc)
             MPI_Test(&recv.reqc, &recv.flagc, MPI_STATUS_IGNORE);
-          if (recv.flagi && recv.flagr && recv.flagc)
+          if (recv.flagi && recv.flagr && recv.flagc) {
             bstatus = BoundaryStatus::arrived;
+	  }
         } else {
-          if (recv.flagi && recv.flagr)
+          if (recv.flagi && recv.flagr) {
             bstatus = BoundaryStatus::arrived;
+	    // printf("g: %d %d %d %d %d\n",Globals::my_rank,nb_rank,nb.snb.lid,nb.bufid,recv_[nb.bufid].tag+1);
+	  } else {
+	    // SWD debug
+	    /*printf("bad: %d %d %d\n",recv.flagn,recv.flagi,recv.flagr);
+	    printf("%g %g\n",recv_[nb.bufid].rbuf[0],recv_[nb.bufid].rbuf[recv_[nb.bufid].npar-1]);
+	    printf("%d %d %d %d %d\n",Globals::my_rank,nb_rank,nb.snb.lid,nb.bufid,recv_[nb.bufid].tag+1);*/
+	  }
         }
       }
     }
 #endif
-
     switch (bstatus) {
       case BoundaryStatus::completed:
         break;
 
       case BoundaryStatus::waiting:
+	//printf("w: %d %d %d %d %d %d\n",Globals::my_rank,nb_rank,nb.snb.lid,nb.bufid,recv_[nb.bufid].tag+1,recv_[nb.bufid].npar);
         flag = false;
         break;
 

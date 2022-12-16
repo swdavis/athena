@@ -83,7 +83,7 @@ void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real l
 //----------------------------------------------------------------------------------------
 //! \fn void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pcoord,
 //!                                   int ip)
-//! \brief choose random position within cartesian gridzone ip
+//! \brief choose random position within cartesian cell
 
 void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pcoord, int ip) {
 
@@ -99,9 +99,29 @@ void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pcoord, in
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void GetZonePositionCylindrical(Photon *pphot, MCRandom *pran, MCCoord *pcoord,
+//!                                     int ip)
+//! \brief choose random position within cylindrical cell
+
+void GetZonePositionCylindrical(Photon *pphot, MCRandom *pran, MCCoord *pcoord,
+                                   int ip) {
+  Real rl = pcoord->x1f(pphot->i1p[ip]);
+  Real rh = pcoord->x1f(pphot->i1p[ip]+1);
+  pphot->x1p[ip] = pow(pran->uniform()*(rh*rh-rl*rl)+rl*rl,0.5);
+
+  Real pl = pcoord->x2f(pphot->i2p[ip]);
+  Real dp = pcoord->x2f(pphot->i2p[ip]+1)-pl;
+  pphot->x2p[ip] = pl+pran->uniform()*dp;
+
+  Real zl = pcoord->x3f(pphot->i3p[ip]);
+  Real dz = pcoord->x3f(pphot->i3p[ip]+1)-zl;
+  pphot->x3p[ip] = zl+pran->uniform()*dz;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pcoord,
 //!                                        int ip)
-//! \brief choose random position within spherical-polar gridzone ip
+//! \brief choose random position within spherical-polar cell
 
 void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pcoord,
                                    int ip) {

@@ -15,6 +15,14 @@ emax      = 1.000000e+02
 ncth      = 8
 nphi      = 8
 
+<output2>
+file_type = phlist
+
+<output3>
+file_type  = hdf5
+dt         = 1.e-11
+variable   = mcmom
+
 <mesh>
 nx1        = 64       # Number of zones in X1-direction
 x1min      = -5.0e10       # minimum value of X1
@@ -34,6 +42,11 @@ x3max      = 1.0e11       # maximum value of X3
 ix3_mc_bc  = absorb  # inner-X3 boundary flag
 ox3_mc_bc  = escape  # outer-X3 boundary flag
 
+<meshblock>
+nx1 = 32
+nx2 = 32
+nx3 = 64
+
 <hydro>
 gamma = 1.666666666666667 # gamma = C_p/C_v
 
@@ -49,5 +62,8 @@ polarized = false
 temp     = 1.0e5
 taumin   = 1.0e-3
 taumax   = 1.0e4
-emin      = 1.000000e+00
-emax      = 1.000000e+02
+#emin      = 1.000000e+00
+#emax      = 1.000000e+02
+tnorm    = true
+emin      = 1.000000e-02
+emax      = 3.000000e+01

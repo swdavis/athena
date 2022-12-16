@@ -382,7 +382,8 @@ void Particles::ClearBoundary() {
     if (nb.snb.rank != Globals::my_rank) {
       ParticleBuffer& recv = recv_[nb.bufid];
       recv.mpi_active = false;
-      recv.flagn = recv.flagi = recv.flagr = 0;
+      recv.flagn = recv.flagi = recv.flagr = recv.flagc = 0;
+      recv.reqn = recv.reqi = recv.reqr = recv.reqc = MPI_REQUEST_NULL;
       send_[nb.bufid].npar = 0;
     }
 #endif
@@ -469,7 +470,6 @@ void Particles::LinkNeighbors(MeshBlockTree &tree,
   pn->pnb->SetNeighbor(Globals::my_rank, pmy_block->loc.level,
       pmy_block->gid, pmy_block->lid, 0, 0, 0, NeighborConnect::none,
       -1, -1, false, false, 0, 0);
-
   // Save pointer to each neighbor.
   for (int i = 0; i < pbval_->nneighbor; ++i) {
     NeighborBlock& nb = pbval_->neighbor[i];
@@ -488,8 +488,14 @@ void Particles::LinkNeighbors(MeshBlockTree &tree,
       pn->pmb = pmy_mesh->FindMeshBlock(snb.gid);
     } else {
 #ifdef MPI_PARALLEL
-      send_[nb.bufid].tag = (snb.lid<<8) | (nb.targetid<<2),
+      send_[nb.bufid].tag = (snb.lid<<8) | (nb.targetid<<2);
       recv_[nb.bufid].tag = (pmy_block->lid<<8) | (nb.bufid<<2);
+      //int maxtag = 2147483647;
+      //int maxtag = 32767;
+      //if (send_[nb.bufid].tag > maxtag)
+      //printf("s tag: %d %d %d %d\n",send_[nb.bufid].tag,snb.lid,nb.targetid,i);
+      //if (recv_[nb.bufid].tag > maxtag)
+      //printf("r tag: %d %d %d %d\n",recv_[nb.bufid].tag,pmy_block->lid,nb.bufid,i);
 #endif
     }
   }

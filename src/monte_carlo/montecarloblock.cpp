@@ -353,7 +353,7 @@ void MonteCarloBlock::RayTracePhotonsOnBlock() {
   Real const to_eulr = -1.0;
   int nbuf = 0;
 
-
+  printf("remain: %d \n",nphremain);
   // Emit photons to replace those that left meshblock or were terminated
   // Limit ntodo to number of remaining photons on block
   int ntodo = (loop_max_size > nphremain) ? nphremain : loop_max_size;
@@ -440,6 +440,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
   ntot = (nold > ntot) ? nold : ntot;
   int nnew = ntot - nold;
   // if photons remain to transfer, make space for new photons
+
   if (nnew > 0) {
     pphot->AllocatePhotons(ntot);
     nphremain -= nnew;
@@ -465,8 +466,9 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
   }
 
   // move all photons to next interaction or boundary
+  //printf("here %d\n",Globals::my_rank);
   pmover->Move(pphot,0,pphot->nphot-1);
-
+  //printf("there %d\n",Globals::my_rank);
   for (int ip=0; ip<pphot->nphot; ip++) {
 
     // Account for absorption
@@ -491,13 +493,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
         }
       }
     } // status == evolving
-    //if (pphot->wp[ip] < weight0) {
-    //  printf("weights: %g %g\n",weight0,pphot->wp[ip]);
-    //}
-    if (pphot->wp[ip] < minweight) {
-      pphot->PrintPhoton("wp < minweight",ip);
-      printf("minw: %g\n",minweight);
-    }
+
     if (pphot->statp[ip] == EVOLVING) {
       // Scatter the photon
       Real e_pre_scat = pphot->ep[ip];

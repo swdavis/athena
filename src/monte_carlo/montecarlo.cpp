@@ -504,8 +504,11 @@ void MonteCarlo::InitializeEmissionFlags(ParameterInput *pin) {
 void MonteCarlo::ComputeEmission() {
 
   if (emission_flag == EMISNONE) {
+    // Do nothing.  nphremain needs to be set in the problem generator
+
     // Don't compute emission array -- just set nphremain on meshblocks
-    // to all be the same value, resetting nsamp if needed
+    // to all be the same value, resetting nsamp if needed    
+    /*
     int nphblock = nsamp / nbtotal;
     nsamp = nphblock * nbtotal; // adjust nsamp if needed
 
@@ -513,6 +516,8 @@ void MonteCarlo::ComputeEmission() {
       my_blocks(nb)->nphremain = nphblock;
       my_blocks(nb)->nphrun = 0;
     }
+    */
+
     return;
   } else if (GetEmission == nullptr) {
     std::stringstream msg;
@@ -607,6 +612,10 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
 
     ComputeEmission();
 
+    // Clear Boundary buffers for photons
+    for(int nb=0; nb<nblocal; ++nb)
+      my_blocks(nb)->pphot->ClearBoundary();
+
     // initialize monte carlo counter
     nphrun = 0;
     bool photons_remain = true; // True if photons on any process
@@ -699,6 +708,8 @@ bool MonteCarlo::CheckAndBroadCastPhotonsRemaining() {
         complete = false;
     }
   }
+  //if (Globals::my_rank == 0)
+  //  printf("here\n");
   // Clear Boundaries
   for(int nb=0; nb<nblocal; ++nb)
     my_blocks(nb)->pphot->ClearBoundary();

@@ -49,10 +49,11 @@ friend class Photon;
   int nparmax;  //!> maximum number of particles
   int npar;     //!> actual number of particles in the buffer
 #ifdef MPI_PARALLEL
-  MPI_Request reqi, reqr, reqc;  //!> MPI request handles
+  MPI_Request reqn, reqi, reqr, reqc;  //!> MPI request handles
   bool mpi_active;         //!> Whether or not receiving process is initiated
   int flagn;               //!> Flag indicating if the incoming number is known
   int flagi, flagr, flagc; //!> Flags indicating if the respective buffer is filled
+  // SWD: tag+3 required now
   int tag;                 //!> MPI tag (allowing for from tag to tag + 2)
 #endif
 };
