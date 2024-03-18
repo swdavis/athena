@@ -80,6 +80,7 @@ ParticleBuffer::ParticleBuffer(int nparmax0) {
   nparmax = nparmax0;
   ibuf = new int[nint * nparmax];
   rbuf = new Real[nreal * nparmax];
+
   if (ncplx > 0)
     cbuf = new std::complex<Real>[ncplx * nparmax];
   npar = 0;
@@ -152,7 +153,7 @@ void ParticleBuffer::Reallocate(int new_nparmax) {
     if (ncplx > 0)
       std::memcpy(cbuf_new, cbuf, ncplx * npar * sizeof(std::complex<Real>));
   }
-
+  
   // Delete old space.
   if (ibuf != NULL) delete [] ibuf;
   if (rbuf != NULL) delete [] rbuf;

@@ -46,7 +46,6 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
   MCRandom *pran = pmy_mcb->pran;
   PhotonTrajectoryList *ptraj = pmy_mcb->ptraj;
 
-
   for (int ip=ips; ip<=ipe; ip++) {
     // get number of mean free paths photon will travel
     Real tauremaining = GetOpticalDepth(pran);
@@ -58,10 +57,8 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
     Real c_cgs = 2.99792458e10;
     int zone_counter = 0;
     Real chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
-
     while ( (pphot->statp[ip] == EVOLVING) && (tauremaining > TINY_NUMBER) &&
             (iter < checkmove) && (pphot->dtp[ip] > 0.) ) {
-
       iter++;
       count++;
 

@@ -435,7 +435,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
   int nold = pphot->nphot;
   int ntot = nold + nphremain;
   // Emit photons to replace those that left meshblock or were terminated
-  // limit ntot < loop_max_size unless nold is large than loop_max_size
+  // limit ntot < loop_max_size unless nold is larger than loop_max_size
   ntot = (loop_max_size > ntot) ? ntot : loop_max_size;
   ntot = (nold > ntot) ? nold : ntot;
   int nnew = ntot - nold;
@@ -453,30 +453,31 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
         ptraj->InitializeTrajectory(pphot->trp[ip]);
     }
     // Lorentz transform E, k to Eulerian frame and update opacities
-    // only for newly emitted photons
+    // only for newly emitted samples
     if (boosts) {
       LorentzTransform(pphot,to_eulr,nold,pphot->nphot-1);
     }
     if (call_srcterms) {
-      // Update source terms to relect newly emitted photons
+      // Update source terms to relect newly emitted samples
       for (int ip=nold; ip<pphot->nphot; ip++) {
         UpdateSourceTerms(pphot,0.,0.,0.,0.,0.,ip);
       }
     }
   }
 
-  // move all photons to next interaction or boundary
-  //printf("here %d\n",Globals::my_rank);
+  // move all samples to next interaction or boundary
   pmover->Move(pphot,0,pphot->nphot-1);
-  //printf("there %d\n",Globals::my_rank);
+
+  // perform all absorption and scattering related tasks for all samples
   for (int ip=0; ip<pphot->nphot; ip++) {
 
-    // Account for absorption
+    // record initial weight and direction
     Real weight0 = pphot->wp[ip];
     Real k1p0 = pphot->k1p[ip];
     Real k2p0 = pphot->k2p[ip];
     Real k3p0 = pphot->k3p[ip];
 
+    // account for absorption
     if (pphot->statp[ip] == EVOLVING) {
       if (absorption_meth == ABSWEIGHT) {
         pphot->wp[ip] *= (pphot->scp[ip]/(pphot->scp[ip]+pphot->acp[ip]));
@@ -494,13 +495,14 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
       }
     } // status == evolving
 
+    // account for scattering
     if (pphot->statp[ip] == EVOLVING) {
-      // Scatter the photon
       Real e_pre_scat = pphot->ep[ip];
       // Lorentz transform to comoving frame for scattering
       if (boosts) {
         LorentzTransform(pphot,to_comv,ip,ip);
       }
+      // call scattering function and update counters
       Scatter(this,pphot,ip,ip);
       nscat++;
       pphot->nscp[ip]++;
@@ -514,7 +516,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
       }
 
       // Update the absorption and scattering extinction coefficients
-      // with the new energy.
+      // if scattering can change sample energy.
       if (!coherent_scattering) {
         pphot->acp[ip] = AbsorptionOpacity(this,pphot,ip);
         pphot->scp[ip] = ScatteringOpacity(this,pphot,ip);
@@ -523,6 +525,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
       if (boosts) {
         LorentzTransform(pphot,to_eulr,ip,ip);
       }
+      // Update moments that compute radiation force and net heating/cooling
       if (coupled || moments_srcterms) {
         UpdateSourceTerms(pphot,e_pre_scat,weight0,k1p0,k2p0,k3p0,ip);
       }
@@ -530,7 +533,9 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
 
   } // End loop over ip
 
-  // Reversed because of way particles are popped
+  // Perform tasks for samples that have left meshblock or otherwise terminated
+  // their evolution.  Loop is reversed because of way particles (photon samples)
+  // are popped
   for (int ip=pphot->nphot-1; ip >= 0; ip--) {
     if (pphot->statp[ip] != EVOLVING) {
       if (pphot->statp[ip] != BUFFERED) {

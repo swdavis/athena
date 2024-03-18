@@ -84,6 +84,7 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
     while( (tauremaining > 0.) && (pphot->statp[ip] == EVOLVING) && (iter < checkmove) &&
            (pphot->dtp[ip] > 0.) ) {
       iter++;
+
       // Compute cartesian positions
       Real r0 = pphot->x1p[ip];
       Real x0 = r0 * sth * cph;

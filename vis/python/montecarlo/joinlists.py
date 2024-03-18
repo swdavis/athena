@@ -38,7 +38,7 @@ def join(filelist,outfile,skip):
         if (firstlist):
             phlist = athenamc.read_list(infile,data=False)
             firstlist = False
-            print(phlist['ntot'])
+            print(phlist)
             ntot += phlist['ntot']
             length += phlist['length']
         else:
@@ -59,13 +59,14 @@ def join(filelist,outfile,skip):
     firstlist = True
     for infile in filelist:
         print("Reading: "+infile)
-        if (firstlist):
-            phlist = athenamc.read_list(infile,data=True)
+        phlist = athenamc.read_list(infile,data=True)
+        if phlist == None:
+            continue
+        elif (firstlist):
             phlist['ntot'] = ntot
             firstlist = False
             athenamc.write_list(outfile,phlist,header=True,length=length)
         else:
-            phlist = athenamc.read_list(infile,data=True)
             athenamc.write_list(outfile,phlist,header=False)
 
 # Main function

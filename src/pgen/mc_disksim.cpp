@@ -356,39 +356,30 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
-  // Choose a random cell for emission
-  Real nx1 = static_cast<Real>(ie-is+1);
-  Real nx2 = static_cast<Real>(je-js+1);
-  Real nx3 = static_cast<Real>(ke-ks+1);
+  // Set initial cells and emission weights for all photon samples
+  SetEmissionCellWeight(pphot,ips,ipe);
 
   for (int ip=ips; ip<=ipe; ip++) {
 
     // Set status flag
     pphot->statp[ip] = EVOLVING;
-    pphot->dtp[ip] = HUGE_NUMBER;
-
-    int i1 = pphot->i1p[ip] = static_cast<int>(pran->uniform() *
-                              static_cast<Real>(nrmax-nrmin)) + nrmin + is;
-    int i2 = pphot->i2p[ip] = static_cast<int>(pran->uniform() * nx2) + js;
-    int i3 = pphot->i3p[ip] = static_cast<int>(pran->uniform() * nx3) + ks;
+    pphot->dtp[ip] = pphot->pmy_mcb->pmy_mc->tmax;
 
     // Obtain initial position within zone
     GetZonePosition(pphot,pran,pcoord,ip);
 
-    // Set weight according to the emission array, which is the relative number of photons
-    // per unit time emitted in each cell
-    pphot->wp[ip] = emission(i3,i2,i1);
-    Real ratio = nx1/static_cast<Real>(nrmax-nrmin);
-    pphot->wp[ip] *= ratio;
 
     // Obtain intitial energy, polarization, direction and weight
     // Utilize free-free emission function in emission.cpp
     if(tnorm) {
-      Real logtg = log(tgas(i3,i2,i1));
+      Real logtg = log(tgas(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]));
       PhotonEmitFreeFree(this,pphot,logemin+logtg,logemax+logtg,ip);
     } else{
       PhotonEmitFreeFree(this,pphot,logemin,logemax,ip);
     }
+
+    // initialize scattering number
+    pphot->nscp[ip] = 0;
 
     // Initialize the absorption and scattering extinction coefficients
     // to the values appropriate in the emitted zone

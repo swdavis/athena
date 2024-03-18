@@ -708,8 +708,8 @@ bool MonteCarlo::CheckAndBroadCastPhotonsRemaining() {
         complete = false;
     }
   }
-  //if (Globals::my_rank == 0)
-  //  printf("here\n");
+  if (Globals::my_rank == 0)
+      printf("here\n");
   // Clear Boundaries
   for(int nb=0; nb<nblocal; ++nb)
     my_blocks(nb)->pphot->ClearBoundary();

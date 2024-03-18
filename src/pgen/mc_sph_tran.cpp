@@ -131,6 +131,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     // Initialize energy
     pphot->ep[ip] = 1.;
 
+    pphot->dtp[ip] = HUGE_NUMBER;
     // Set status flag
     if (pphot->wp[ip] < 0.0)
       pphot->statp[ip] = DESTROYED;

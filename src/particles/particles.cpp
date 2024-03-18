@@ -463,6 +463,14 @@ void Particles::Integrate(int stage, Real t, Real dt, Real gamma[]) {
 
 void Particles::LinkNeighbors(MeshBlockTree &tree,
     int64_t nrbx1, int64_t nrbx2, int64_t nrbx3, int root_level) {
+
+  // SWD: Get tag limit on this machine
+  void *max_tag;
+  int flag;
+  /* The address of a void pointer must be used! */
+  MPI_Comm_get_attr( MPI_COMM_WORLD, MPI_TAG_UB, &max_tag, &flag);
+  int maxtag = *static_cast<int*>(max_tag);
+  //printf("max tag: %d\n",maxtag);
   // Set myself as one of the neighbors.
   Neighbor *pn = &neighbor_[1][1][1];
   pn->pmb = pmy_block;
@@ -490,12 +498,10 @@ void Particles::LinkNeighbors(MeshBlockTree &tree,
 #ifdef MPI_PARALLEL
       send_[nb.bufid].tag = (snb.lid<<8) | (nb.targetid<<2);
       recv_[nb.bufid].tag = (pmy_block->lid<<8) | (nb.bufid<<2);
-      //int maxtag = 2147483647;
-      //int maxtag = 32767;
-      //if (send_[nb.bufid].tag > maxtag)
-      //printf("s tag: %d %d %d %d\n",send_[nb.bufid].tag,snb.lid,nb.targetid,i);
-      //if (recv_[nb.bufid].tag > maxtag)
-      //printf("r tag: %d %d %d %d\n",recv_[nb.bufid].tag,pmy_block->lid,nb.bufid,i);
+      if (send_[nb.bufid].tag > maxtag)
+	printf("warning: send tag %d %d\n",send_[nb.bufid].tag,max_tag);
+      if (recv_[nb.bufid].tag > maxtag)
+	printf("warning: send tag %d %d\n",recv_[nb.bufid].tag,max_tag);
 #endif
     }
   }

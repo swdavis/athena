@@ -1436,7 +1436,7 @@ void MCOutput::SendMonteCarloSpectrum(Spectrum *pspect, int dest) {
   MPI_Isend(send_buf,size,MPI_ATHENA_REAL,dest,tag++,MPI_COMM_WORLD,&send_rq);
   MPI_Wait(&send_rq, MPI_STATUS_IGNORE);
 
-  delete send_buf;
+  delete [] send_buf;
 #endif
 }
 
@@ -1491,7 +1491,7 @@ void MCOutput::ReceiveMonteCarloSpectrum(Spectrum *pspect, bool add) {
     pspect->AddSpectrum(ptemp);
     delete ptemp;
   }
-  delete recv_buf;
+  delete [] recv_buf;
 #endif
 }
 

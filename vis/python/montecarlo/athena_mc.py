@@ -8,6 +8,9 @@ import struct
 import gc
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
+import time
+import gc
+import math
 
 #SWD: Maybe photons be rewritten simply as dictionary
 #SWD: Add error control
@@ -149,6 +152,7 @@ def read_list(filename,data=True,header=True):
         sizelast = nelements % sizeloop
         # SWD: temporary to read broken list
         #for i in range(nloop):
+        ti = time.time()
         for i in range(nloop+1):
             vals = ()
             if (i == nloop):
@@ -159,13 +163,28 @@ def read_list(filename,data=True,header=True):
             format_string = '>' + 'd'*size
             if (i > 0):
                 print(i,"/",nloop)
+                tf = time.time()
+                print(tf-ti)
+                ti = tf
+            # Check if end_index is larger than size of raw_data
+            # if so, resize list
+            lrd = len(raw_data)
+            if lrd < end_index:
+                deficit = math.ceil((end_index - lrd) / (8*npars))
+                print("Warning raw_data is smaller than expected by at least"
+                      " {:d} samples.".format(deficit))
+                end_index -= deficit*npars*8
+                length -= deficit
+                phlist['length'] = length
+                format_string = '>' + 'd'*(size-deficit*npars)
             vals = struct.unpack(format_string, raw_data[begin_index:end_index])
             begin_index = end_index
             if (i == 0):
                 phlist['list'] = np.array(vals)
             else:
                 phlist['list'] = np.append(phlist['list'],np.array(vals))
-
+            del vals
+            gc.collect()
         phlist['list'] = phlist['list'].reshape((length,npars))
         # SWD: temporary to read broken list
         #phlist['length'] = nloop*mxl_
@@ -205,8 +224,7 @@ def get_luminosity_list(phlist):
     Read in list file and compute luminoisty
     """
     phots = photons(phlist)
-    lumin = np.sum(phots.weight*phots.energy)
-    #lumin /= float(phots.ntot)
+    lumin = np.sum(phots.weight*phots.energy)/phots.dt
 
     return lumin
 
@@ -1267,6 +1285,9 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     for i in range(phots.nphot):
         if ((xbins[i] >= 0) and (mubins[i] >= 0) and (phibins[i] >= 0)):
             wght = phots.weight[i]
+            if ((phots.q[i]**2+phots.u[i]**2) > 1.001):
+                wght = 0.
+                print("Warning: polarization too high: ",phots.q[i],phots.u[i],phots.weight[i],np.sqrt(phots.q[i]**2+phots.u[i]**2))
             #print phibins[i],mubins[i],xbins[i]
             count[phibins[i],mubins[i],xbins[i]] += 1.
             intensity[0,phibins[i],mubins[i],xbins[i]] += wght

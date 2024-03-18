@@ -429,8 +429,8 @@ void Photon::SendToNeighbors() {
       ParticleBuffer& send = send_[nb.bufid];
       int npsend = send.npar;
       MPI_Send(&npsend, 1, MPI_INT, nb.snb.rank, send.tag, my_comm);
-      //if (npsend > 0)
-      //printf("send: %d %d %d %d %d %d %g %g\n",Globals::my_rank,nb.snb.rank,pmy_block->lid,nb.targetid,send.tag+2,npsend,send.rbuf[0],send.rbuf[npsend-1]);
+      if (npsend > 0)
+	printf("send: %d %d %d %d %d %d %g %g\n",Globals::my_rank,nb.snb.rank,pmy_block->lid,nb.targetid,send.tag+1,npsend,send.rbuf[0],send.rbuf[(npsend-1)*ParticleBuffer::nreal]);
       if (npsend > 0) {
         MPI_Request req = MPI_REQUEST_NULL;
 	/*
@@ -563,7 +563,9 @@ bool Photon::ReceiveFromNeighbors() {
             // Check the buffer size.
             int nprecv = recv.npar;
             if (nprecv > recv.nparmax) {
+	      //printf("buf res: %d %d %d %d %d %d %d\n",Globals::my_rank,nb_rank,nb.snb.lid,nb.bufid,recv_[nb.bufid].tag+1,recv.npar,recv.nparmax);
               recv.npar = 0;
+	      //recv.Reallocate(2 * nprecv - recv.nparmax +50);
               recv.Reallocate(2 * nprecv - recv.nparmax);
               recv.npar = nprecv;
             }
@@ -577,6 +579,7 @@ bool Photon::ReceiveFromNeighbors() {
 	    int ierr;
 	    ierr = MPI_Irecv(recv.rbuf, recv.npar * ParticleBuffer::nreal, MPI_ATHENA_REAL,
                       nb_rank, recv.tag + 1, my_comm, &recv.reqr);
+
 	    /*char err_buffer[MPI_MAX_ERROR_STRING];
 	    int resultlen;
 	    MPI_Error_string(ierr,err_buffer,&resultlen);
@@ -614,12 +617,15 @@ bool Photon::ReceiveFromNeighbors() {
         } else {
           if (recv.flagi && recv.flagr) {
             bstatus = BoundaryStatus::arrived;
-	    // printf("g: %d %d %d %d %d\n",Globals::my_rank,nb_rank,nb.snb.lid,nb.bufid,recv_[nb.bufid].tag+1);
+	    printf("g: %d %d %d %d %d\n",Globals::my_rank,nb_rank,nb.snb.lid,nb.bufid,recv_[nb.bufid].tag+1);
 	  } else {
 	    // SWD debug
-	    /*printf("bad: %d %d %d\n",recv.flagn,recv.flagi,recv.flagr);
-	    printf("%g %g\n",recv_[nb.bufid].rbuf[0],recv_[nb.bufid].rbuf[recv_[nb.bufid].npar-1]);
-	    printf("%d %d %d %d %d\n",Globals::my_rank,nb_rank,nb.snb.lid,nb.bufid,recv_[nb.bufid].tag+1);*/
+	    printf("bad: %d %d %d\n",recv.flagn,recv.flagi,recv.flagr);
+	    printf("%g %g %d %d\n",recv_[nb.bufid].rbuf[0],recv_[nb.bufid].rbuf[(recv_[nb.bufid].npar-1)*ParticleBuffer::nreal],recv_[nb.bufid].npar,recv_[nb.bufid].nparmax);
+	    printf("b: %d %d %d %d %d\n",Globals::my_rank,nb_rank,nb.snb.lid,nb.bufid,recv_[nb.bufid].tag+1);
+	    printf("n: %d\n",recv.flagn);
+	    MPI_Wait(&recv.reqr, MPI_STATUS_IGNORE);
+	    printf("wait %d\n",Globals::my_rank);	    
 	  }
         }
       }

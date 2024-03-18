@@ -276,45 +276,42 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
-  // Choose a random cell for emission
-  Real nx1 = static_cast<Real>(ie-is+1);
-  Real nx2 = static_cast<Real>(je-js+1);
-  Real nx3 = static_cast<Real>(ke-ks+1);
 
-  MCCoord *pco = pcoord;
+  // Set initial cells and emission weights for all photon samples
+  SetEmissionCellWeight(pphot,ips,ipe);
 
   for (int ip=ips; ip<=ipe; ip++) {
 
     // Set status flag
     pphot->statp[ip] = EVOLVING;
 
-    int i1 = pphot->i1p[ip] = static_cast<int>(pran->uniform() * nx1) + is;
-    int i2 = pphot->i2p[ip] = static_cast<int>(pran->uniform() * nx2) + js;
-    int i3 = pphot->i3p[ip] = static_cast<int>(pran->uniform() * nx3) + ks;
-
     // Obtain initial position within zone
     GetZonePosition(pphot,pran,pcoord,ip);
 
-    // Set weight according to the emission array, which is the relative number of photons
-    // per unit time emitted in each cell
-    pphot->wp[ip] = emission(i3,i2,i1);
+    // Set maximum integration time
+    pphot->dtp[ip] = pphot->pmy_mcb->pmy_mc->tmax;
 
     // Obtain intitial energy, polarization, direction and weight
     // Utilize free-free emission function in emission.cpp
     if(tnorm) {
-      Real logtg = log(tgas(i3,i2,i1));
+      Real logtg = log(tgas(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]));
       PhotonEmitFreeFree(this,pphot,logemin+logtg,logemax+logtg,ip);
     } else{
       PhotonEmitFreeFree(this,pphot,logemin,logemax,ip);
     }
 
+    if (pphot->wp[ip] < 0.0)
+      pphot->statp[ip] = DESTROYED;
+    else
+      pphot->statp[ip] = EVOLVING;
+
+    // initialize scattering number
+    pphot->nscp[ip] = 0;
+
     // Initialize the absorption and scattering extinction coefficients
     // to the values appropriate in the emitted zone
     pphot->acp[ip] = AbsorptionOpacity(this,pphot,ip);
     pphot->scp[ip] = ScatteringOpacity(this,pphot,ip);
-
-    // Set maximum integration time
-    pphot->dtp[ip] = pmy_mc->tmax;
 
   } // loop over ip
 
