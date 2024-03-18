@@ -355,10 +355,10 @@ void Photon::SendToNeighbors() {
       std::cout << ox1 << " " << ox2 << " " << ox3 << " " << i1p[k] << " "
                 << i2p[k] << " " << i3p[k] << std::endl;
       MCCoord *pco = pmy_mcb->pcoord;
-      printf("%d %d %g %g %g %g %g %g\n",Globals::my_rank,k,
-             pco->x1f(i1p[k]),pco->x1f(i1p[k]+1),
-             pco->x2f(i2p[k]),pco->x2f(i2p[k]+1),
-             pco->x3f(i3p[k]),pco->x3f(i3p[k]+1));
+      //printf("%d %d %g %g %g %g %g %g\n",Globals::my_rank,k,
+      //       pco->x1f(i1p[k]),pco->x1f(i1p[k]+1),
+      //       pco->x2f(i2p[k]),pco->x2f(i2p[k]+1),
+      //       pco->x3f(i3p[k]),pco->x3f(i3p[k]+1));
 
       RemoveOneParticle(k);
       --k;
@@ -429,8 +429,8 @@ void Photon::SendToNeighbors() {
       ParticleBuffer& send = send_[nb.bufid];
       int npsend = send.npar;
       MPI_Send(&npsend, 1, MPI_INT, nb.snb.rank, send.tag, my_comm);
-      if (npsend > 0)
-	printf("send: %d %d %d %d %d %d %g %g\n",Globals::my_rank,nb.snb.rank,pmy_block->lid,nb.targetid,send.tag+1,npsend,send.rbuf[0],send.rbuf[(npsend-1)*ParticleBuffer::nreal]);
+      //if (npsend > 0)
+      //printf("send: %d %d %d %d %d %d %g %g\n",Globals::my_rank,nb.snb.rank,pmy_block->lid,nb.targetid,send.tag+1,npsend,send.rbuf[0],send.rbuf[(npsend-1)*ParticleBuffer::nreal]);
       if (npsend > 0) {
         MPI_Request req = MPI_REQUEST_NULL;
 	/*
@@ -617,15 +617,15 @@ bool Photon::ReceiveFromNeighbors() {
         } else {
           if (recv.flagi && recv.flagr) {
             bstatus = BoundaryStatus::arrived;
-	    printf("g: %d %d %d %d %d\n",Globals::my_rank,nb_rank,nb.snb.lid,nb.bufid,recv_[nb.bufid].tag+1);
+	    //printf("g: %d %d %d %d %d\n",Globals::my_rank,nb_rank,nb.snb.lid,nb.bufid,recv_[nb.bufid].tag+1);
 	  } else {
 	    // SWD debug
-	    printf("bad: %d %d %d\n",recv.flagn,recv.flagi,recv.flagr);
-	    printf("%g %g %d %d\n",recv_[nb.bufid].rbuf[0],recv_[nb.bufid].rbuf[(recv_[nb.bufid].npar-1)*ParticleBuffer::nreal],recv_[nb.bufid].npar,recv_[nb.bufid].nparmax);
-	    printf("b: %d %d %d %d %d\n",Globals::my_rank,nb_rank,nb.snb.lid,nb.bufid,recv_[nb.bufid].tag+1);
-	    printf("n: %d\n",recv.flagn);
+	    //printf("bad: %d %d %d\n",recv.flagn,recv.flagi,recv.flagr);
+	    //printf("%g %g %d %d\n",recv_[nb.bufid].rbuf[0],recv_[nb.bufid].rbuf[(recv_[nb.bufid].npar-1)*ParticleBuffer::nreal],recv_[nb.bufid].npar,recv_[nb.bufid].nparmax);
+	    //printf("b: %d %d %d %d %d\n",Globals::my_rank,nb_rank,nb.snb.lid,nb.bufid,recv_[nb.bufid].tag+1);
+	    //printf("n: %d\n",recv.flagn);
 	    MPI_Wait(&recv.reqr, MPI_STATUS_IGNORE);
-	    printf("wait %d\n",Globals::my_rank);	    
+	    //printf("wait %d\n",Globals::my_rank);	    
 	  }
         }
       }
@@ -739,10 +739,10 @@ void Photon::GetPositionIndices(int ibegin, int iend) {
     if (on_block)
       statp[k] = EVOLVING;
     else {
-      printf("%d %d %d\n",i1,i2,i3);
-      printf("min/max: %g %g %g %g %g %g\n",pco->x1f(is),pco->x1f(ie+1),pco->x2f(js),
-             pco->x2f(je+1),pco->x3f(ks),pco->x3f(ke+1));
-      printf("%d %d %d %d %d %d\n",is,ie,js,je,ks,ke);
+      //printf("%d %d %d\n",i1,i2,i3);
+      //printf("min/max: %g %g %g %g %g %g\n",pco->x1f(is),pco->x1f(ie+1),pco->x2f(js),
+      //         pco->x2f(je+1),pco->x3f(ks),pco->x3f(ke+1));
+    //printf("%d %d %d %d %d %d\n",is,ie,js,je,ks,ke);
       PrintPhoton("Warning: [GetPostionIndicies], Photon not on block, destroyed",k);
       statp[k] = DESTROYED;
       continue;
