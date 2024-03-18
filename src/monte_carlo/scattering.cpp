@@ -881,6 +881,10 @@ Real ElectronDistPozdnyakov(Real tgas, MCRandom *pran) {
 
 Real ElectronDist(Real tgas, MCRandom *pran) {
 
+#if RAN3
+   return ElectronDistPozdnyakov(tgas,pran);
+#endif
+
   Real kmec2 = 1.68638e-10;
   Real ktgmec2 = kmec2 * tgas;
 

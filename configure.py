@@ -795,7 +795,6 @@ for library_name in args['lib']:
 # -mc argument
 if args['mc']:
     definitions['MONTE_CARLO_ENABLED'] = '1'
-    makefile_options['LIBRARY_FLAGS'] += ' -lgsl -lgslcblas'
 else:
     definitions['MONTE_CARLO_ENABLED'] = '0'
 
@@ -804,6 +803,7 @@ if args['ran3']:
     definitions['RAN3'] = '1'
 else:
     definitions['RAN3'] = '0'
+    makefile_options['LIBRARY_FLAGS'] += ' -lgsl -lgslcblas'
 
 # Assemble all flags of any sort given to compiler
 definitions['COMPILER_FLAGS'] = ' '.join(
