@@ -1337,10 +1337,11 @@ void Spectrum::WriteSpectrum(std::string fname) {
         }}}}
   if (!bigend) {for (int i=0; i<ndata; ++i) mcoutput::Swap8Bytes(&data[i]);}
   fwrite(data,sizeof(double),static_cast<size_t>(ndata),pfile);
+  fclose(pfile);
   delete [] data;
   intens.DeleteAthenaArray();
   errors.DeleteAthenaArray();
-  fclose(pfile);
+
 }
 
 
