@@ -367,7 +367,9 @@ Particles::~Particles() {
   ClearNeighbors();
 
   // Delete mesh auxiliaries.
-  delete ppm;
+  if (!MONTE_CARLO_ENABLED) {
+    delete ppm;
+  }
 }
 
 //--------------------------------------------------------------------------------------
