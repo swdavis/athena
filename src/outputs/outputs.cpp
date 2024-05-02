@@ -131,7 +131,7 @@ Outputs::Outputs(Mesh *pm, ParameterInput *pin) {
   while (pib != nullptr) {
     if (pib->block_name.compare(0, 6, "output") == 0) {
       if (MONTE_CARLO_ENABLED) {
-        // Skip spectrum outputs which are handled by MCOutput class
+        // Skip monte carlo outputs which are handled by MCOutput class
         std::string type = pin->GetString(pib->block_name,"file_type");
         if ((type.compare("spec") == 0) || (type.compare("phlist") == 0) ||
             (type.compare("traj") == 0)) {

@@ -1285,9 +1285,9 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     for i in range(phots.nphot):
         if ((xbins[i] >= 0) and (mubins[i] >= 0) and (phibins[i] >= 0)):
             wght = phots.weight[i]
-            if ((phots.q[i]**2+phots.u[i]**2) > 1.001):
-                wght = 0.
-                print("Warning: polarization too high: ",phots.q[i],phots.u[i],phots.weight[i],np.sqrt(phots.q[i]**2+phots.u[i]**2))
+            #if ((phots.q[i]**2+phots.u[i]**2) > 1.001):
+            #    wght = 0.
+            #    print("Warning: polarization too high: ",phots.q[i],phots.u[i],phots.weight[i],np.sqrt(phots.q[i]**2+phots.u[i]**2))
             #print phibins[i],mubins[i],xbins[i]
             count[phibins[i],mubins[i],xbins[i]] += 1.
             intensity[0,phibins[i],mubins[i],xbins[i]] += wght
