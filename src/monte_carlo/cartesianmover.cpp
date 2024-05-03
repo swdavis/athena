@@ -123,14 +123,16 @@ void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
             break;
           // compute distance remaining in zone
           dl = tauremaining/chi;
-          pphot->dtp[ip] -= dl/c_cgs; // set with k0p instead
+          pphot->dtp[ip] -= dl/c_cgs; // SWD: set with k0p instead
+
+          //SWD Not implemented now
           // Account for absorption (if needed) and update moments
-          Real etaua = ExpTauAbsorption(pphot->acp[ip],dl);
+          //Real etaua = ExpTauAbsorption(pphot->acp[ip],dl);
 
           if (pmcb->call_moments) {
-            pmcb->UpdateMoments(pphot,dl,etaua,ip);
+            pmcb->UpdateMoments(pphot,dl,ip);
           }
-          pphot->wp[ip] *= etaua;
+          //pphot->wp[ip] *= etaua;
           // update position
           pphot->x0p[ip] += pphot->k0p[ip] * dl;
           pphot->x1p[ip] += pphot->k1p[ip] * dl;
@@ -143,12 +145,12 @@ void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
 
       } else { // Photon moves to next zone and reduce tauremaining
         // Account for absorption (if needed) and update moments
-        Real etaua = ExpTauAbsorption(pphot->acp[ip],dl);
+        //Real etaua = ExpTauAbsorption(pphot->acp[ip],dl);
 
         if (pmcb->call_moments) {
-          pmcb->UpdateMoments(pphot,dl,etaua,ip);
+          pmcb->UpdateMoments(pphot,dl,ip);
         }
-        pphot->wp[ip] *= etaua;
+        //pphot->wp[ip] *= etaua;
         // update position
         pphot->x0p[ip] += pphot->k0p[ip] * dl;
         pphot->x1p[ip] += pphot->k1p[ip] * dl;

@@ -191,10 +191,10 @@ public:
   PhotonList *pphlist;
   PhotonTrajectoryList *ptraj;
 
-  bool moments_rad;
-  bool moments_comoving;
-  bool moments_srcterms;
-  bool moments_user;
+  bool mom_flag_lab;
+  bool mom_flag_com;
+  bool mom_flag_src;
+  bool mom_flag_usr;
 
   //functions
   void OutputSpectrum(bool wtflag);

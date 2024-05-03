@@ -507,7 +507,7 @@ void MonteCarlo::ComputeEmission() {
     // Do nothing.  nphremain needs to be set in the problem generator
 
     // Don't compute emission array -- just set nphremain on meshblocks
-    // to all be the same value, resetting nsamp if needed    
+    // to all be the same value, resetting nsamp if needed
     /*
     int nphblock = nsamp / nbtotal;
     nsamp = nphblock * nbtotal; // adjust nsamp if needed
@@ -664,8 +664,9 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
     // normalize moments for output
     for(int nb=0; nb<nblocal; ++nb) {
       MonteCarloBlock *pmcb = my_blocks(nb);
-      if (pmcb->moments_rad)
+      if (pmcb->mom_flag_lab)
         pmcb->NormalizeMoments(true,norm_mom);
+      // SWD: Not sure this is needed
       if (pmcb->call_srcterms)
         pmcb->NormalizeSourceTerms(true,norm_mom);
     }
@@ -676,7 +677,7 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
     // unnormalize moments after output
     for(int nb=0; nb<nblocal; ++nb) {
       MonteCarloBlock *pmcb = my_blocks(nb);
-      if (pmcb->moments_rad)
+      if (pmcb->mom_flag_lab)
         pmcb->NormalizeMoments(false,norm_mom);
       if (pmcb->call_srcterms)
         pmcb->NormalizeSourceTerms(false,norm_mom);
@@ -816,7 +817,7 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
 
   for(int nb=0; nb<nblocal; ++nb) {
     MonteCarloBlock *pmcb = my_blocks(nb);
-    if (pmcb->moments_rad)
+    if (pmcb->mom_flag_lab)
       pmcb->NormalizeMoments(true,1.);
     if (pmcb->call_srcterms)
       pmcb->NormalizeSourceTerms(true,1.);

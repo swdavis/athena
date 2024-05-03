@@ -981,10 +981,10 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
   std::stringstream msg;
   InputBlock *pib = pin->pfirst_block;
 
-  moments_rad = false;
-  moments_srcterms = false;
-  moments_user = false;
-  moments_comoving = false;
+  mom_flag_lab = false;
+  mom_flag_src = false;
+  mom_flag_usr = false;
+  mom_flag_com = false;
   pspec = nullptr;
   pphlist = nullptr;
   ptraj = nullptr;
@@ -1151,14 +1151,14 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         std::string var = pin->GetOrAddString(pib->block_name,"variable","none");
         if (var.compare("mcmom") == 0 || var.compare("Ermc") == 0 ||
             var.compare("Frmc") == 0 || var.compare("Prmc") == 0) {
-          moments_rad = true;
+          mom_flag_lab = true;
           std::string var = pin->GetOrAddString(pib->block_name,"frame","eulerian");
           if (var.compare("comoving") == 0)
-            moments_comoving = true;
+            mom_flag_com = true;
         } else if (var.compare("mcsrc") == 0) {
-            moments_srcterms = true;
+            mom_flag_src = true;
         } else if (var.compare("mcuser") == 0) {
-            moments_user = true;
+            mom_flag_usr = true;
         }
       }
     }

@@ -301,13 +301,13 @@ public:
   int loop_max_size;
   int nx1,nx2,nx3;
   int is,ie,js,je,ks,ke;
-  int nsrc, nmom; // # of elements in sourcterm, moments arrays
+  int nsrc, nmom, nuser_mom; // # of elements in sourcterm, moments arrays
 
   bool weighted_absorption; // flag controling how absorption is handled
-  bool moments_rad; // Compute/output moments
-  bool moments_comoving; // Compute moments in comoving frame
-  bool moments_srcterms; // Compute source terms for output
-  bool moments_user; // Compute user defined monte carlo moments
+  bool mom_flag_lab; // Compute/output moments
+  bool mom_flag_com; // Compute moments in comoving frame
+  bool mom_flag_src; // Compute source terms for output
+  bool mom_flag_usr; // Compute user defined monte carlo moments
   bool call_moments;
   bool call_srcterms;
 
@@ -336,6 +336,8 @@ public:
 
   AthenaArray<Real> emission;
   AthenaArray<Real> moments;
+  AthenaArray<Real> moments_com;
+  AthenaArray<Real> moments_user;
   AthenaArray<Real> sourceterms;
   AthenaArray<Real> scalars;
   AthenaArray<Real> rho;
@@ -358,8 +360,11 @@ public:
   void InitializePhoton(Photon *pphot, int ips, int ipe);
   void FinalizePhoton(Photon *pphot, int ip);
   void UpdateMoments(Photon *pphot, Real dl, Real etau, int ip);
-  void UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Real k2, Real k3,
-                     Real etau, int ip);
+  void UpdateMoments(Photon *pphot, Real dl, int ip);
+  void UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl, Real k1, Real k2,
+                                 Real k3,Real etau, int ip);
+  void UpdateMomentsOld(Photon *pphot, Real dl, Real pl, Real k1, Real k2, Real k3,
+                        Real etau, int ip);
   void NormalizeMoments(bool normalize, Real norm);
   void ResetMoments();
   void UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0,

@@ -64,13 +64,13 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   acceleration = pmy_mc->acceleration;
   time_acc = pmy_mc->time_acc;
   // set in mcoutput
-  moments_rad = pmy_mc->pmcout->moments_rad;
-  moments_comoving = pmy_mc->pmcout->moments_comoving;
-  moments_srcterms = pmy_mc->pmcout->moments_srcterms;
-  moments_user = pmy_mc->pmcout->moments_user;
-  call_moments = moments_rad || moments_comoving || moments_srcterms;
-  call_srcterms = coupled || moments_srcterms;
+  mom_flag_lab = pmy_mc->pmcout->mom_flag_lab;
+  mom_flag_com = pmy_mc->pmcout->mom_flag_com;
+  mom_flag_src = pmy_mc->pmcout->mom_flag_src;
+  mom_flag_usr = pmy_mc->pmcout->mom_flag_usr || (nuser_mom > 0);
 
+  call_srcterms = coupled || mom_flag_src;
+  call_moments = mom_flag_lab || mom_flag_com || call_srcterms || mom_flag_usr;
   // Set boundary values for this block
   SetBoundaryValues(pmy_mc->mc_bcs);
 
@@ -305,8 +305,13 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   if (boosts) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
   if (NSCALARS > 0) scalars.NewAthenaArray(ncells3,ncells2,ncells1);
   // moments is 1 (Er) + 3 (Fr) + 9 (Pr) + 1 (Eave) + 1 (net cool)
-  if (moments_rad) moments.NewAthenaArray(NMOM,ncells3,ncells2,ncells1);
-  if (call_srcterms) sourceterms.NewAthenaArray(8,ncells3,ncells2,ncells1);
+  nmom = 15;
+  if (mom_flag_lab) moments.NewAthenaArray(nmom,ncells3,ncells2,ncells1);
+  if (mom_flag_com) moments_com.NewAthenaArray(nmom,ncells3,ncells2,ncells1);
+  if (nuser_mom > 0)
+    moments_user.NewAthenaArray(nuser_mom,ncells3,ncells2,ncells1);
+  nsrc = 8;
+  if (call_srcterms) sourceterms.NewAthenaArray(nsrc,ncells3,ncells2,ncells1);
   if (pmy_mc->emission_array) emission.NewAthenaArray(ncells3,ncells2,ncells1);
   if (acceleration && !(coherent_scattering) && !(scattering_meth == SCATRES)) {
     planck_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
@@ -334,7 +339,7 @@ MonteCarloBlock::~MonteCarloBlock() {
   tgas.DeleteAthenaArray();
   if (boosts) vel.DeleteAthenaArray();
   if (NSCALARS > 0) scalars.DeleteAthenaArray();
-  if (moments_rad) moments.DeleteAthenaArray();
+  if (mom_flag_lab) moments.DeleteAthenaArray();
   if (call_srcterms) sourceterms.DeleteAthenaArray();
   if (pmy_mc->emission_array) emission.DeleteAthenaArray();
   if (acceleration && !(coherent_scattering) && !(scattering_meth == SCATRES)) {
@@ -526,7 +531,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
         LorentzTransform(pphot,to_eulr,ip,ip);
       }
       // Update moments that compute radiation force and net heating/cooling
-      if (coupled || moments_srcterms) {
+      if (call_srcterms) {
         UpdateSourceTerms(pphot,e_pre_scat,weight0,k1p0,k2p0,k3p0,ip);
       }
     } // status == evolving
@@ -587,7 +592,7 @@ void MonteCarloBlock::CoupleMonteCarloToFluid(Real dt) {
 
   Real edot_cgs = pmy_mc->time_cgs / (rho_cgs * SQR(vel_cgs));
   Real pdot_cgs = pmy_mc->time_cgs / (rho_cgs * vel_cgs);
-  
+
   MeshBlock *pmb = pmy_block;
   for (int k=pmb->ks; k<=pmb->ke; ++k) {
       for (int j=pmb->js; j<=pmb->je; ++j) {
@@ -792,19 +797,139 @@ void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign, int ips, i
 
 void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
 
-  Real pl = dl; // If path length not given, set it equal to displacement
-  Real k1 = pphot->k1p[ip]; // If k not given, set it equal to photon k
-  Real k2 = pphot->k2p[ip];
-  Real k3 = pphot->k3p[ip];
-  UpdateMoments(pphot, dl, pl, k1, k2, k3, etau, ip);
+  // Account for attenuation along ray
+  Real leff;
+  if (absorption_meth == ABSTAU) {
+    if (fabs(1.-etau) < TINY_NUMBER) {
+      leff = dl;
+    } else {
+      leff = (1.-etau)/pphot->acp[ip];;
+    }
+  } else {
+    leff = dl;
+  }
+  UpdateMoments(pphot, leff, ip);
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip)
+//! \fn void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip)
 //! \brief add contribution to radiation moments in current zone
 
-void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Real k2,
-                                    Real k3, Real etau, int ip) {
+void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
+
+  int i1 = pphot->i1p[ip];
+  int i2 = pphot->i2p[ip];
+  int i3 = pphot->i3p[ip];
+
+  Real k1 = pphot->k1p[ip];
+  Real k2 = pphot->k2p[ip];
+  Real k3 = pphot->k3p[ip];
+
+  // Normalize k vector if using general mover in spherical polar coords
+  if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_mover_flag)) {
+    k2 *= pphot->x1p[ip];
+    k3 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
+  }
+
+  const Real c_cgs = 2.99792458e10;
+  if (mom_flag_lab) {
+    // Weight moments by time spent in domain
+    Real weight = pphot->wp[ip] * pphot->ep[ip] * dl / c_cgs;
+
+    if (std::isinf(weight) || std::isnan(weight)) {
+      pphot->statp[ip] = DESTROYED;
+      pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
+                         " photon destroyed",ip);
+      return;
+    } else {
+      // Add contribution to corresponding moments
+      // Energy density
+      moments(MCIER,i3,i2,i1) += weight;
+      // Flux
+      moments(MCIFR1,i3,i2,i1) += weight * k1 * c_cgs;
+      moments(MCIFR2,i3,i2,i1) += weight * k2 * c_cgs;
+      moments(MCIFR3,i3,i2,i1) += weight * k3 * c_cgs;
+      // Radiation Pressure
+      moments(MCIPR11,i3,i2,i1) += weight * k1 * k1;
+      moments(MCIPR22,i3,i2,i1) += weight * k2 * k2;
+      moments(MCIPR33,i3,i2,i1) += weight * k3 * k3;
+      moments(MCIPR12,i3,i2,i1) += weight * k1 * k2;
+      moments(MCIPR13,i3,i2,i1) += weight * k1 * k3;
+      moments(MCIPR23,i3,i2,i1) += weight * k2 * k3;
+    }
+  }
+
+  if (mom_flag_com) {
+    // boost relevant quanitities to comoving frame
+    Real ecom = pphot->ep[ip];
+    Real dlcom = dl;
+
+    Real beta[3];
+    for (int i=0; i<3; ++i) {
+      beta[i] = vel(i,i3,i2,i1) / c_cgs;
+    }
+    Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
+
+    Real k1c,k2c,k3c;
+    if(beta2 > 0.) {
+      Real gamma = 1. / sqrt(1. - beta2); // assumes v^2 < c^2 checked elsewhere
+      Real bdk = k1 * beta[0] + k2 * beta[1] + k3 * beta[2];
+      Real gonembdk = gamma * (1. - bdk);
+      Real aber = gamma*(1.-gamma*bdk/(gamma+1.));
+
+      ecom *= gonembdk;
+      k1c = (k1 - aber * beta[0]) / gonembdk;
+      k2c = (k2 - aber * beta[1]) / gonembdk;
+      k3c = (k3 - aber * beta[2]) / gonembdk;
+      dlcom *= gonembdk;
+    }
+
+    Real weight = pphot->wp[ip] * ecom * dlcom / c_cgs;
+    if (std::isinf(weight) || std::isnan(weight) ||
+        std::isinf(k1c) || std::isnan(k1c) ||
+        std::isinf(k2c) || std::isnan(k2c) ||
+        std::isinf(k3c) || std::isnan(k3c) ) {
+      pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
+                       " comoving frame",ip);
+      return;
+    } else {
+      // Add contribution to corresponding moments
+      // Energy density
+      moments_com(MCIER,i3,i2,i1) += weight;
+      // Flux
+      moments_com(MCIFR1,i3,i2,i1) += weight * k1c * c_cgs;
+      moments_com(MCIFR2,i3,i2,i1) += weight * k2c * c_cgs;
+      moments_com(MCIFR3,i3,i2,i1) += weight * k3c * c_cgs;
+      // Radiation Pressure
+      moments_com(MCIPR11,i3,i2,i1) += weight * k1c * k1c;
+      moments_com(MCIPR22,i3,i2,i1) += weight * k2c * k2c;
+      moments_com(MCIPR33,i3,i2,i1) += weight * k3c * k3c;
+      moments_com(MCIPR12,i3,i2,i1) += weight * k1c * k2c;
+      moments_com(MCIPR13,i3,i2,i1) += weight * k1c * k3c;
+      moments_com(MCIPR23,i3,i2,i1) += weight * k2c * k3c;
+    }
+  }
+
+  if (call_srcterms) {
+    // Radiative Acceleration from flux (always lab frame)
+    Real weight = pphot->wp[ip] * pphot->ep[ip] * dl / c_cgs;
+    Real abs_coef = pphot->acp[ip];
+    Real sct_coef = pphot->scp[ip];
+    sourceterms(MCRSP1,i3,i2,i1) += (sct_coef+abs_coef) * weight * k1;
+    sourceterms(MCRSP2,i3,i2,i1) += (sct_coef+abs_coef) * weight * k2;
+    sourceterms(MCRSP3,i3,i2,i1) += (sct_coef+abs_coef) * weight * k3;
+  }
+
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl,
+//        Real k1, Real k2, Real k3,Real etau, int ip)
+//! \brief add contribution to radiation moments in current zone for acceleration
+
+void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl, Real k1,
+                                                Real k2, Real k3, Real etau, int ip) {
 
   const Real c_cgs = 2.99792458e10;;
   Real k1p = pphot->k1p[ip];
@@ -820,7 +945,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Re
 
   Real energy, abs_coef, sct_coef, step;
   // BCM: Comoving moments currently do not work with code acceleration
-  if (moments_comoving) {
+  if (mom_flag_com) {
     // boost relevant quanitities to comoving frame
     energy = pphot->ep[ip];
     int i1 = pphot->i1p[ip], i2 = pphot->i2p[ip], i3 = pphot->i3p[ip];
@@ -881,7 +1006,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Re
     int j = pphot->i2p[ip];
     int k = pphot->i3p[ip];
 
-    if (moments_rad) {
+    if (mom_flag_lab) {
       // Add contribution to corresponding moments
       // Energy density
       moments(MCIER,k,j,i) += path_weight;
@@ -920,6 +1045,126 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real pl, Real k1, Re
 
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::UpdateMomentsOld(Photon *pphot, Real dl, Real etau, int ip)
+//! \brief add contribution to radiation moments in current zone
+
+void MonteCarloBlock::UpdateMomentsOld(Photon *pphot, Real dl, Real pl, Real k1, Real k2,
+                                    Real k3, Real etau, int ip) {
+
+  const Real c_cgs = 2.99792458e10;;
+  Real k1p = pphot->k1p[ip];
+  Real k2p = pphot->k2p[ip];
+  Real k3p = pphot->k3p[ip];
+
+  // Normalize k vector if using general mover in spherical polar coords
+
+  if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_mover_flag)) {
+    k2p *= pphot->x1p[ip];
+    k3p *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
+  }
+
+  Real energy, abs_coef, sct_coef, step;
+  // BCM: Comoving moments currently do not work with code acceleration
+  if (mom_flag_com) {
+    // boost relevant quanitities to comoving frame
+    energy = pphot->ep[ip];
+    int i1 = pphot->i1p[ip], i2 = pphot->i2p[ip], i3 = pphot->i3p[ip];
+    Real beta[3];
+    for (int i=0; i<3; ++i) {
+      beta[i] = vel(i,i3,i2,i1) / c_cgs;
+    }
+    Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
+
+    if(beta2 > 0.) {
+      Real gamma = 1. / sqrt(1. - beta2); // assumes v^2 < c^2 checked elsewhere
+      Real bdk = k1p * beta[0] + k2p * beta[1] + k3p * beta[2];
+      Real gonembdk = gamma * (1. - bdk);
+      Real aber = gamma*(1.-gamma*bdk/(gamma+1.));
+
+      energy *= gonembdk;
+      k1p = (k1p - aber * beta[0]) / gonembdk;
+      k2p = (k2p - aber * beta[1]) / gonembdk;
+      k3p = (k3p - aber * beta[2]) / gonembdk;
+      abs_coef = pphot->acp[ip] / gonembdk;
+      sct_coef = pphot->scp[ip] / gonembdk;
+      step = dl * gonembdk;
+    }
+  } else {
+    // Use eulerian values
+    energy = pphot->ep[ip];
+    abs_coef = pphot->acp[ip];
+    sct_coef = pphot->scp[ip];
+    step = dl;
+  }
+  // Account for attenuation along ray
+  Real leff;
+  if (absorption_meth == ABSTAU) {
+    if (fabs(1.-etau) < TINY_NUMBER) {
+      leff = step;
+    } else {
+      leff = (1.-etau)/abs_coef;
+    }
+  } else {
+    leff = step;
+  }
+  // Weight moments by time spent in domain
+
+  Real weight = pphot->wp[ip] * energy * leff / c_cgs;
+  Real path_weight = weight * (pl / dl);
+
+  if ((std::isinf(weight)) || (std::isnan(weight))) {
+    pphot->statp[ip] = DESTROYED;
+    pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
+                       " photon destroyed",ip);
+  } else {
+    // Higher order moments are weighted by displacement direction vector k
+    Real weight1 = weight * k1;
+    Real weight2 = weight * k2;
+    Real weight3 = weight * k3;
+
+    int i = pphot->i1p[ip];
+    int j = pphot->i2p[ip];
+    int k = pphot->i3p[ip];
+
+    if (mom_flag_lab) {
+      // Add contribution to corresponding moments
+      // Energy density
+      moments(MCIER,k,j,i) += path_weight;
+      // Flux
+      moments(MCIFR1,k,j,i) += weight1 * c_cgs;
+      moments(MCIFR2,k,j,i) += weight2 * c_cgs;
+      moments(MCIFR3,k,j,i) += weight3 * c_cgs;
+
+      // Radiation Pressure
+      Real weightp = weight1 * k1p;
+      moments(MCIPR11,k,j,i) += weightp;
+      weightp = weight2 * k2p;
+      moments(MCIPR22,k,j,i) += weightp;
+      weightp = weight3 * k3p;
+      moments(MCIPR33,k,j,i) += weightp;
+      weightp = weight1 * k2p;
+      moments(MCIPR12,k,j,i) += weightp;
+      weightp = weight1 * k3p;
+      moments(MCIPR13,k,j,i)  += weightp;
+      weightp = weight2 * k3p;
+      moments(MCIPR23,k,j,i) += weightp;
+      // SWD: move these to new function or add another flag
+      // Photon mean energy
+      moments(MCIEN,k,j,i) += weight * energy;
+      // Jmean opacity
+      moments(MCIKJ,k,j,i) += weight * abs_coef;
+    }
+
+    if (call_srcterms) {
+      // Radiative Acceleration from flux
+      sourceterms(MCRSP1,k,j,i) += (sct_coef+abs_coef) * weight1;
+      sourceterms(MCRSP2,k,j,i) += (sct_coef+abs_coef) * weight2;
+      sourceterms(MCRSP3,k,j,i) += (sct_coef+abs_coef) * weight3;
+    }
+  }
+
+}
 
 //------------------------------------------------- --------------------------------------
 //! \fn void MonteCarloBlock::NormalizeMoments(bool normalize, Real norm)
@@ -1099,17 +1344,15 @@ void MonteCarloBlock::NormalizeSourceTerms(bool normalize, Real norm) {
   // Get integration time
   Real dt = pmy_mc->tint;
 
-  if (coupled || moments_srcterms) {
-    // Normalize sourcterms
-    for (int n=0; n<8; ++n) {
-      for (int k=ks; k<=ke; ++k) {
-        for (int j=js; j<=je; ++j) {
-          for (int i=is; i<=ie; ++i) {
-            if (normalize)
-              sourceterms(n,k,j,i) /= (dt * pcoord->vol(k,j,i) * norm);
-            else
-              sourceterms(n,k,j,i) *= (dt * pcoord->vol(k,j,i) * norm);
-          }
+  // Normalize sourcterms
+  for (int n=0; n<nsrc; ++n) {
+    for (int k=ks; k<=ke; ++k) {
+      for (int j=js; j<=je; ++j) {
+        for (int i=is; i<=ie; ++i) {
+          if (normalize)
+            sourceterms(n,k,j,i) /= (dt * pcoord->vol(k,j,i) * norm);
+          else
+            sourceterms(n,k,j,i) *= (dt * pcoord->vol(k,j,i) * norm);
         }
       }
     }

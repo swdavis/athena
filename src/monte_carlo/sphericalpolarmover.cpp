@@ -297,7 +297,7 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
           pphot->dtp[ip] -= dl/c_cgs;
           // Update moments
           if (pmcb->call_moments)
-            pmcb->UpdateMoments(pphot,dl,1.,ip);
+            pmcb->UpdateMoments(pphot,dl,ip);
           // Update postions
           pphot->x1p[ip] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
           pphot->x2p[ip] = acos((z0 + kz * dl) / pphot->x1p[ip]);
@@ -323,7 +323,7 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
         pphot->dtp[ip] -= dl/c_cgs;
 
         if (pmcb->call_moments)
-          pmcb->UpdateMoments(pphot,dl,1.,ip);
+          pmcb->UpdateMoments(pphot,dl,ip);
         // Update positions
         pphot->x1p[ip] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
         pphot->x2p[ip] = acos((z0 + kz * dl) / pphot->x1p[ip]);

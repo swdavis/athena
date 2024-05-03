@@ -234,7 +234,7 @@ void GenerateComptonTable(int io) {
       std::stringstream msg;
       if ((pfile = fopen(fname.c_str(),"w")) == NULL) {
         msg << "### FATAL ERROR in function [GenerateComptonTable]"
-          <<std::endl<< "Output file '" <<fname<< "' could not be opened" <<std::endl;
+            <<std::endl<< "Output file '" <<fname<< "' could not be opened" <<std::endl;
         throw std::runtime_error(msg.str().c_str());
       }
 

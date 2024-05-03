@@ -52,15 +52,12 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
     Real step = StepSize(pphot,ip);
     Real path_length;
     Real k1, k2, k3;
-    int count = 0;
     int iter = 0;
     Real c_cgs = 2.99792458e10;
-    int zone_counter = 0;
     Real chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
     while ( (pphot->statp[ip] == EVOLVING) && (tauremaining > TINY_NUMBER) &&
             (iter < checkmove) && (pphot->dtp[ip] > 0.) ) {
       iter++;
-      count++;
 
       bool accel_success = false;
       if ((acceleration) && (resonance)) {
@@ -84,44 +81,39 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
           accel_success = true;
         }
       }
-      if (!accel_success) {
-        path_length = step;
-        k1 = pphot->k1p[ip];
-        k2 = pphot->k2p[ip];
-        k3 = pphot->k3p[ip];
-      }
 
       if (!accel_success) {// Acceleration not triggered - take standard step
         if (tauremaining > chi * step) { // Photon hasn't yet reached tauremaining
           VerletStep(pphot,step,ip);
           if (pmy_mcb->pmy_mc->polarized)
             PropogatePolarization(pphot,step,ip);
+          tauremaining -= chi * step;
         } else { // Photon has reached end of tauremaining - step to make it 0
           step = tauremaining / chi;
           VerletStep(pphot,step,ip);
           if (pmy_mcb->pmy_mc->polarized)
             PropogatePolarization(pphot,step,ip);
+          tauremaining = 0.;
         }
-        tauremaining -= chi * step;
+        pphot->dtp[ip] -= step/c_cgs;
+        // Update moments
+        if (pmcb->call_moments) {
+          pmcb->UpdateMoments(pphot,step,ip);
+        }
       } else {
         // Photon has been given a new position on sphere of radius dl
         // Set exit parameters and continue the loop over photons
         step = dl;
         tauremaining = 0.;
+        if (pmcb->call_moments) {
+          pmcb->UpdateMomentsAcceleration(pphot,step,path_length,k1,k2,k3,1.,ip);
+        }
       }
 
-      // SWD: Clean up these checks
       // Check if photon changed zones
       if (UpdateZone(pphot,ip)) {
         UpdateOpacities(pphot,pmcb,ip);
-        zone_counter++;
         chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
-      }
-
-      pphot->dtp[ip] -= step/c_cgs;
-      // Update moments
-      if (pmcb->call_moments) {
-        pmcb->UpdateMoments(pphot,step,path_length,k1,k2,k3,1.,ip);
       }
 
       if (pphot->IsNanPhoton(ip)) {
