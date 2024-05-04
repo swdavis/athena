@@ -64,7 +64,8 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
     general_mover_flag = pin->GetOrAddBoolean("montecarlo","general_mover",false);
   scattering_meth = GetScatteringFlag(pin->GetOrAddString("montecarlo","scattering",
                                                           "none"));
-  nuser_var = 0; // Initialize photon user variables to zero
+  nuser_var = 0; // photon user variables to zero
+  nuser_mom = 0; // user moments
 
   // Set mininmum weight if using weighting for absorption
   weightratio = pin->GetOrAddReal("montecarlo","minweight",1.0e-20);
@@ -290,6 +291,37 @@ void MonteCarlo::EnrollUserOpacityFunction(OpacFunc_t opacfunc, bool abs) {
   else
     UserScatteringOpacity = opacfunc;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void void MonteCarlo::AllocateUserMoments(int n)
+//! \brief allocate user moments
+
+void MonteCarlo::AllocateUserMoments(int n) {
+
+  nuser_mom = n;
+  user_moment_names = new std::string[n];
+  user_moment_func = new UserMomentFunc_t[n];
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::EnrollUserMoment(int i, UserMomentFunc_t my_func,
+//                                        const char *name)
+//! \brief Enroll a user-defined history output function and set its name
+
+void MonteCarlo::EnrollUserMoment(int i, UserMomentFunc_t my_func, const char *name) {
+
+  std::stringstream msg;
+  if (i >= nuser_mom) {
+    msg << "### FATAL ERROR in EnrollUserMoment function" << std::endl
+        << "The number of the user-defined moment (" << i << ") "
+        << "exceeds the declared number (" << nuser_mom << ")." << std::endl;
+    ATHENA_ERROR(msg);
+  }
+  user_moment_names[i] = name;
+  user_moment_func[i] = my_func;
+
+}
+
 
 //----------------------------------------------------------------------------------------
 //! \fn enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string)
@@ -607,6 +639,7 @@ void MonteCarlo::ComputeEmission() {
 void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
                                      ParameterInput *pinput) {
 
+  // SWD: fix normalization for multiple outputs
   tint /= static_cast<Real>(nout);
   for (int i=0; i<nout; i++) {
 
@@ -660,15 +693,15 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
         std::cout << 0. << std::endl;
     }
 
-    Real norm_mom = static_cast<Real>(i+1);
+    //Real norm_mom = static_cast<Real>(i+1);
     // normalize moments for output
     for(int nb=0; nb<nblocal; ++nb) {
       MonteCarloBlock *pmcb = my_blocks(nb);
       if (pmcb->mom_flag_lab)
-        pmcb->NormalizeMoments(true,norm_mom);
+        pmcb->NormalizeMoments(true);
       // SWD: Not sure this is needed
       if (pmcb->call_srcterms)
-        pmcb->NormalizeSourceTerms(true,norm_mom);
+        pmcb->NormalizeSourceTerms(true);
     }
 
     // Write outputs
@@ -678,9 +711,9 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
     for(int nb=0; nb<nblocal; ++nb) {
       MonteCarloBlock *pmcb = my_blocks(nb);
       if (pmcb->mom_flag_lab)
-        pmcb->NormalizeMoments(false,norm_mom);
+        pmcb->NormalizeMoments(false);
       if (pmcb->call_srcterms)
-        pmcb->NormalizeSourceTerms(false,norm_mom);
+        pmcb->NormalizeSourceTerms(false);
     }
 
   } // end loop over nout
@@ -818,9 +851,9 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
   for(int nb=0; nb<nblocal; ++nb) {
     MonteCarloBlock *pmcb = my_blocks(nb);
     if (pmcb->mom_flag_lab)
-      pmcb->NormalizeMoments(true,1.);
+      pmcb->NormalizeMoments(true);
     if (pmcb->call_srcterms)
-      pmcb->NormalizeSourceTerms(true,1.);
+      pmcb->NormalizeSourceTerms(true);
 
   }
 }

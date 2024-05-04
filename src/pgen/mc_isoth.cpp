@@ -32,6 +32,7 @@ namespace {
   bool tnorm;
   Real logemin, logemax;
   Real DensityProfile(Real x, Real xl, Real xh, Real taul, Real tauh, Real kap);
+  void JMeanOpacity(MonteCarloBlock *pmcb, Photon *pphot, Real dl, int ip, int imom);
 }
 
 
@@ -229,7 +230,8 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 
   nuser_var = 1;
-
+  AllocateUserMoments(1);
+  EnrollUserMoment(0, JMeanOpacity, "kapJ");
 }
 
 namespace {
@@ -237,6 +239,18 @@ Real DensityProfile(Real x, Real xl, Real xh, Real taul, Real tauh, Real kap) {
 
   Real l0 = (xh-xl) / log(tauh/taul);
   return taul/l0/kap*exp((xh-x)/l0);
+}
+
+void JMeanOpacity(MonteCarloBlock *pmcb, Photon *pphot, Real dl, int ip, int imom) {
+
+  int i1 = pphot->i1p[ip];
+  int i2 = pphot->i2p[ip];
+  int i3 = pphot->i3p[ip];
+
+  const Real c_cgs = 2.99792458e10;
+  Real weight = pphot->acp[ip]*pphot->ep[ip]*pphot->wp[ip]*dl/c_cgs;
+  pmcb->moments_user(imom,i3,i2,i1) += weight;
+
 }
 
 }

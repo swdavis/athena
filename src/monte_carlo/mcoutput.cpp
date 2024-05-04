@@ -1149,16 +1149,24 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
       } else {
         // Look for moments
         std::string var = pin->GetOrAddString(pib->block_name,"variable","none");
-        if (var.compare("mcmom") == 0 || var.compare("Ermc") == 0 ||
+        if (var.compare("mclab") == 0 || var.compare("Ermc") == 0 ||
             var.compare("Frmc") == 0 || var.compare("Prmc") == 0) {
           mom_flag_lab = true;
-          std::string var = pin->GetOrAddString(pib->block_name,"frame","eulerian");
-          if (var.compare("comoving") == 0)
-            mom_flag_com = true;
+        } else if (var.compare("mccom") == 0 || var.compare("Ermc0") == 0 ||
+                   var.compare("Frmc0") == 0 || var.compare("Prmc0") == 0) {
+          mom_flag_com = true;
         } else if (var.compare("mcsrc") == 0) {
             mom_flag_src = true;
-        } else if (var.compare("mcuser") == 0) {
+        } else if (var.compare("uom") == 0) {
+          if (pmy_mc->nuser_mom > 0) {
             mom_flag_usr = true;
+          } else {
+            std::stringstream msg;
+            msg << "### ERROR in MCOutput constructor" << std::endl
+                << "user output moments requested bu nuser_mom = 0."
+                << std::endl;
+            ATHENA_ERROR(msg);
+          }
         }
       }
     }

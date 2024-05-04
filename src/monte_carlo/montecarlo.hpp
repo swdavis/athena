@@ -54,10 +54,7 @@ enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY
                      MC_USER_BNDRY = 6, MC_BLOCK_BNDRY = 7};
 // Array indices for monte carlo radiation moments
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
-      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCIEN = 10, MCIKJ = 11, MCIPR21=12, MCIPR31=13,
-      MCIPR32=14};
-//enum MomentsFlag{MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
-//      MCIPR12=7, MCIPR13=8, MCIPR23=9}
+      MCIPR12=7, MCIPR13=8, MCIPR23=9, MCIPR21=10, MCIPR31=11, MCIPR32=12};
 enum SourceTermFlag {MCRS0 = 0, MCRS1=1, MCRS2=2, MCRS3=3, MCRSP0=4, MCRSP1=5,
                      MCRSP2=6, MCRSP3=7};
 //----------------------------------------------------------------------------------------
@@ -70,7 +67,8 @@ typedef void (*ScatFunc_t)(MonteCarloBlock *pmcb, Photon *phot, int ips, int ipe
 typedef void (*UserMoveFunc_t)(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover,
                                int ip);
 typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, MCCoord *pco, int ip);
-
+typedef void (*UserMomentFunc_t)(MonteCarloBlock *pmcb, Photon *phot, Real dl, int ip,
+                                 int imom);
 //---------------------- prototypes for provided functions -------------------------------
 void DefaultGetTemperature(MonteCarloBlock *pmcb);
 //--------------------- prototypes for opacity.cpp functions -----------------------------
@@ -206,7 +204,7 @@ public:
 
   int list_size_init; // maximum number of photons run per output on any process
   int max_phots_init; // maximum number of photon elements
-  int nuser_var;
+  int nuser_var, nuser_mom;
   int checkmove,checkscat;
 
   enum EmissionFlag emission_flag;
@@ -233,6 +231,9 @@ public:
   OpacFunc_t UserScatteringOpacity;
   OpacFunc_t UserAbsorptionOpacity;
 
+  std::string *user_moment_names;
+  UserMomentFunc_t *user_moment_func;
+
   // functions
   // SWD: some of these functions could/should be private
   void RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput *pinput);
@@ -245,6 +246,8 @@ public:
   void EnrollUserGetTemperature(TempFunc_t tempfunc);
   void EnrollUserWorkInMove(UserMoveFunc_t userfunc);
   void EnrollUserOpacityFunction(OpacFunc_t opacfunc, bool abs);
+  void AllocateUserMoments(int n);
+  void EnrollUserMoment(int i, UserMomentFunc_t my_func, const char *name);
   void EnrollUserScatteringFunction(ScatFunc_t scatfunc);
   void Initialize(ParameterInput *pinput);
   void InitializeEmissionFlags(ParameterInput *pinput);
@@ -301,7 +304,7 @@ public:
   int loop_max_size;
   int nx1,nx2,nx3;
   int is,ie,js,je,ks,ke;
-  int nsrc, nmom, nuser_mom; // # of elements in sourcterm, moments arrays
+  int nsrc, nmom; // # of elements in sourcterm, moments arrays
 
   bool weighted_absorption; // flag controling how absorption is handled
   bool mom_flag_lab; // Compute/output moments
@@ -365,11 +368,11 @@ public:
                                  Real k3,Real etau, int ip);
   void UpdateMomentsOld(Photon *pphot, Real dl, Real pl, Real k1, Real k2, Real k3,
                         Real etau, int ip);
-  void NormalizeMoments(bool normalize, Real norm);
+  void NormalizeMoments(bool normalize);
   void ResetMoments();
   void UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0,
                          Real k1p0, Real k2p0, Real k3p0, int ip);
-  void NormalizeSourceTerms(bool normalize, Real norm);
+  void NormalizeSourceTerms(bool normalize);
   void ResetSourceTerms();
   // Functions for handling distributed emission over cells
   void ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &emm_tot);
@@ -379,6 +382,7 @@ public:
 private:
   int i1_, i2_, i3_; // used for emission
   Real nemit_; // used for emission
+
   void SetBoundaryValues(enum MCBoundaryFlag *input_bcs);
 };
 

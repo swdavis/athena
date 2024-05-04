@@ -152,10 +152,14 @@ Outputs::Outputs(Mesh *pm, ParameterInput *pin) {
       op.dcycle = pin->GetOrAddInteger(op.block_name,"dcycle", 0);
 
       if (op.dt == 0.0 && op.dcycle == 0) {
-        msg << "### FATAL ERROR in Outputs constructor" << std::endl
-            << "Either dt or dcycle must be specified in " << op.block_name
-            << std::endl;
-        ATHENA_ERROR(msg);
+        if (MONTE_CARLO_ENABLED) {
+          op.dcycle = 1;
+        } else {
+          msg << "### FATAL ERROR in Outputs constructor" << std::endl
+              << "Either dt or dcycle must be specified in " << op.block_name
+              << std::endl;
+          ATHENA_ERROR(msg);
+        }
       }
       if (op.dt > 0.0 && op.dcycle > 0) {
         msg << "### FATAL ERROR in Outputs constructor" << std::endl
@@ -763,7 +767,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     if (pmb != nullptr) pmcb = pmb->pmy_mcb;
 
     // monte carlo temperature
-    if (output_params.variable.compare("mcmom") == 0) {
+    if (output_params.variable.compare("mclab") == 0) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "tgas";
@@ -772,7 +776,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       num_vars_++;
     }
     // monte carlo density
-    if (output_params.variable.compare("mcmom") == 0) {
+    if (output_params.variable.compare("mclab") == 0) {
       pod = new OutputData;
       pod->type = "SCALARS";
       pod->name = "rho";
@@ -780,8 +784,8 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       AppendOutputDataNode(pod);
       num_vars_++;
     }
-    // monte carlo radiation energy density
-    if (output_params.variable.compare("mcmom") == 0 ||
+    // monte carlo radiation energy density lab frame
+    if (output_params.variable.compare("mclab") == 0 ||
         output_params.variable.compare("Ermc") == 0) {
       pod = new OutputData;
       pod->type = "SCALARS";
@@ -790,8 +794,18 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       AppendOutputDataNode(pod);
       num_vars_++;
     }
-    // monte carlo radiation flux vector
-    if (output_params.variable.compare("mcmom") == 0 ||
+    // monte carlo radiation energy density comoving frame
+    if (output_params.variable.compare("mccom") == 0 ||
+        output_params.variable.compare("Ermc0") == 0) {
+      pod = new OutputData;
+      pod->type = "SCALARS";
+      pod->name = "Ermc0";
+      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments_com,4,MCIER,1);
+      AppendOutputDataNode(pod);
+      num_vars_++;
+    }
+    // monte carlo radiation flux vector lab frame
+    if (output_params.variable.compare("mclab") == 0 ||
         output_params.variable.compare("Frmc") == 0) {
       pod = new OutputData;
       pod->type = "VECTORS";
@@ -800,13 +814,33 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       AppendOutputDataNode(pod);
       num_vars_+=3;
     }
-    // lab frame radiation pressure
-    if (output_params.variable.compare("mcmom") == 0 ||
+    // monte carlo radiation flux vector comoving frame
+    if (output_params.variable.compare("mccom") == 0 ||
+        output_params.variable.compare("Frmc0") == 0) {
+      pod = new OutputData;
+      pod->type = "VECTORS";
+      pod->name = "Frmc0";
+      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments_com,4,MCIFR1,3);
+      AppendOutputDataNode(pod);
+      num_vars_+=3;
+    }
+    // monte carlo radiation pressure lab frame
+    if (output_params.variable.compare("mclab") == 0 ||
         output_params.variable.compare("Prmc") == 0) {
       pod = new OutputData;
       pod->type = "TENSORS";
       pod->name = "Prmc";
       if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIPR11,9);
+      AppendOutputDataNode(pod);
+      num_vars_ += 9;
+    }
+    // monte carlo radiation pressure comoving frame
+    if (output_params.variable.compare("mccom") == 0 ||
+        output_params.variable.compare("Prmc0") == 0) {
+      pod = new OutputData;
+      pod->type = "TENSORS";
+      pod->name = "Prmc0";
+      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments_com,4,MCIPR11,9);
       AppendOutputDataNode(pod);
       num_vars_ += 9;
     }
@@ -840,25 +874,31 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       AppendOutputDataNode(pod);
       num_vars_+=3;
     }
-    // monte carlo mean energy
-    if (output_params.variable.compare("mcmom") == 0 ||
-        output_params.variable.compare("Eavemc") == 0) {
-      pod = new OutputData;
-      pod->type = "SCALARS";
-      pod->name = "Eavemc";
-      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIEN,1);
-      AppendOutputDataNode(pod);
-      num_vars_++;
-    }
-    // monte carlo J mean opacity
-    if (output_params.variable.compare("mcmom") == 0 ||
-        output_params.variable.compare("kapjmc") == 0) {
-      pod = new OutputData;
-      pod->type = "SCALARS";
-      pod->name = "kapjmc";
-      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIKJ,1);
-      AppendOutputDataNode(pod);
-      num_vars_++;
+    MonteCarlo *pmc = pmcb->pmy_mc;
+    if (pmc->nuser_mom > 0) {
+      bool output_all_uom = ContainVariable(output_params.variable, "uom")
+                        || ContainVariable(output_params.variable, "user_out_mom");
+      for (int n = 0; n < pmc->nuser_mom; ++n) {
+        char abbr_name[16], full_name[32];
+        std::snprintf(abbr_name, sizeof(abbr_name), "uom%d", n);
+        std::snprintf(full_name, sizeof(full_name), "user_out_mom%d", n);
+        if (output_all_uom ||
+            (pmc->user_moment_names[n].length() != 0
+             && ContainVariable(output_params.variable, pmc->user_moment_names[n]))
+            || ContainVariable(output_params.variable, abbr_name)
+            || ContainVariable(output_params.variable, abbr_name)) {
+          pod = new OutputData;
+          pod->type = "SCALARS";
+          if (pmc->user_moment_names[n].length() != 0) {
+            pod->name = pmc->user_moment_names[n];
+          } else {
+            pod->name = full_name;
+          }
+          pod->data.InitWithShallowSlice(pmcb->moments_user, 4, n, 1);
+          AppendOutputDataNode(pod);
+          num_vars_++;
+        }
+      }
     }
   } // endif (MONTE_CARLO_ENABLED)
 
