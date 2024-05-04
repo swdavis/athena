@@ -65,7 +65,7 @@ def eta_kappap_ff(rho,tgas,emin,emax):
 
 def cooling(tgas,rho,Ermc,hnu,kapj,emin,emax,scatflag=True):
     """
-    Computes the cooling assuming free-free emission and absorption, and 
+    Computes the cooling assuming free-free emission and absorption, and
     Compton scattering
     """
     kb = 1.3806580e-16
@@ -92,7 +92,7 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,length,periodic,
     """
     Write the remainder of the athinput file for convergence test
     """
-    if (vel is None):
+    if vel is None:
         vel = 0.
         boosts = False
     else:
@@ -108,15 +108,19 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,length,periodic,
     outfile.write("\n")
     outfile.write("<output1>\n")
     outfile.write("file_type  = hdf5\n")
-    outfile.write("dt         = 1.0e-11\n")
-    outfile.write("variable   = mcmom\n")
-    outfile.write("frame      = "+frame+"\n")
+    outfile.write("variable   = mclab\n")
+    outfile.write("id         = lab\n")
+    outfile.write("\n")
+    outfile.write("\n")
     outfile.write("<output2>\n")
     outfile.write("file_type  = hdf5\n")
-    outfile.write("dt         = 1.0e-11\n")
-    outfile.write("variable   = mcsrc\n")
-    #outfile.write("frame      = "+frame+"\n")
+    outfile.write("variable   = uom\n")
+    outfile.write("id         = uom\n")
     outfile.write("\n")
+    outfile.write("<output3>\n")
+    outfile.write("file_type  = hdf5\n")
+    outfile.write("variable   = mcsrc\n")
+    outfile.write("id         = src\n")
     outfile.write("\n")
     outfile.write("<mesh>\n")
     outfile.write("nx1        = 8       # Number of zones in X1-direction\n")
@@ -160,7 +164,7 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,length,periodic,
     outfile.write("<montecarlo>\n")
     outfile.write("nphot     = {:d}\n".format(nphot))
     outfile.write("iseed     = {:d}\n".format(iseed))
-    if (scattering):
+    if scattering:
         outfile.write("scattering = compton\n")
     else:
         outfile.write("scattering = none\n")
@@ -168,7 +172,7 @@ def write_athinput(iseed,nphot,vel,frame,dens,tgas,emin,emax,length,periodic,
     outfile.write("absorption = freefree\n")
     outfile.write("polarized = false\n")
     outfile.write("comptonio = 0\n")
-    if (boosts):
+    if boosts:
         outfile.write("boosts     = true\n")
     else:
         outfile.write("boosts     = false\n")
@@ -251,27 +255,27 @@ def main(**kwargs):
         print(com)
         system(com)
         # read hdf5 output
-        data = athena_read.athdf("mciso.out1.00000.athdf",quantities=['Ermc','Frmc1',
-                                 'Frmc2','Frmc3','Eavemc','kapjmc','tgas',
-                                 'rho'])
-        datac = athena_read.athdf("mciso.out2.00000.athdf",quantities=['Cooling'])
-
+        data_lab = athena_read.athdf("mciso.lab.00000.athdf",quantities=['Ermc','Frmc1',
+                                     'Frmc2','Frmc3','tgas','rho'])
+        data_src = athena_read.athdf("mciso.src.00000.athdf",quantities=['Cooling'])
+        data_usr = athena_read.athdf("mciso.uom.00000.athdf",quantities=['kapJ','eave'])
         output[i,0] = float(nphot)
-        ermc = np.average(data['Ermc'])
-        kapj = data['kapjmc']/dens
+        ermc = np.average(data_lab['Ermc'])
+        eave = data_usr['eave']/ermc
+        eave_ave = np.average(eave)
+        kapj = data_usr['kapJ']/ermc/dens
         kapj_ave = np.average(kapj)
-        cool = np.average(datac['Cooling'])
-        cdot, cdot_tgas = cooling(data['tgas'],data['rho'],data['Ermc'],data['Eavemc'],
-                                  kapj,emin,emax,scatflag=scatflag)
+        cool = np.average(data_src['Cooling'])
+        cdot, cdot_tgas = cooling(data_lab['tgas'],data_lab['rho'],data_lab['Ermc'],
+                                  eave,kapj,emin,emax,scatflag=scatflag)
         cdot_ave = np.average(cdot)
         dt_ave = np.average(abs(-cdot/cdot_tgas/tgas))
-        eave_ave = np.average(data["Eavemc"])
 
-        output[i,1] = np.average(abs(data['Ermc']-er))/er
+        output[i,1] = np.average(abs(ermc-er))/er
         output[i,2] = np.average(abs(kapj-kappap))/kappap
         output[i,3] = np.average(abs(cool))/eta
         output[i,4] = np.average(abs(cdot))/eta
-        output[i,5] = np.average(abs(data["Eavemc"]-(3.83223*kb*tgas)))/(3.83223*kb*tgas)
+        output[i,5] = np.average(abs(eave-(3.83223*kb*tgas)))/(3.83223*kb*tgas)
 
     # save plot to outfile
     np.savetxt(kwargs['outfile'],output)

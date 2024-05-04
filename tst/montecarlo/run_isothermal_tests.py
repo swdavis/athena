@@ -63,15 +63,7 @@ def main(**kwargs):
     print("Running radiation moments test with boosts in Eulerian frame.")
     system("python "+tstpath+"/boosts/convergence_dd.py {:d} {:d} {:d} 10 --vel=0.9"
            .format(iseed,nphot,nstep)+" --path "+path)
-    conv_boost_eul = np.loadtxt("conv.out")
-    system("rm conv.out")
-
-    # Run convergence test for estimate of radiation field in comoving frame
-    # with boosts
-    print("Running radiation moments test with boosts in comoving frame.")
-    system("python "+tstpath+"/boosts/convergence_dd.py {:d} {:d} {:d} 10 --vel=0.9"\
-           " --frame=comoving".format(iseed,nphot,nstep))
-    conv_boost_com = np.loadtxt("conv.out")
+    conv_boost_on = np.loadtxt("conv.out")
     system("rm conv.out")
 
     # Run convergence test for cooling functions without compton scattering
@@ -102,12 +94,9 @@ def main(**kwargs):
     print("Results for Er, Fr without boosts: ")
     for i in range(nstep):
         print(conv_boost_off[i,:])
-    print("Results for Er, Fr with boosts in Eulerian frame: ")
+    print("Results for Er, Fr with boosts: ")
     for i in range(nstep):
-        print(conv_boost_eul[i,:])
-    print("Results for Er, Fr with boosts in comoving frame: ")
-    for i in range(nstep):
-        print(conv_boost_eul[i,:])
+        print(conv_boost_on[i,:])
     print("Results for cooling without scattering: ")
     for i in range(nstep+2):
         print(conv_cool_abs[i,:])

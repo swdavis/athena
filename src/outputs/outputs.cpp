@@ -552,7 +552,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       pod = new OutputData;
       pod->type = "VECTORS";
       pod->name = "vel_xyz";
-      if (pmb != nullptr) pod->data.NewAthenaArray(3, phyd->w.GetDim3(), phyd->w.GetDim2(),
+      if (pmb != nullptr) pod->data.NewAthenaArray(3,phyd->w.GetDim3(),phyd->w.GetDim2(),
                                phyd->w.GetDim1());
       CalculateCartesianVector(src,  pod->data,  pmb->pcoord);
       AppendOutputDataNode(pod);
