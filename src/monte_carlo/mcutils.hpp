@@ -19,6 +19,7 @@ Real BessK0(Real x);
 Real BessK1(Real x);
 Real BessK(int n, Real x);
 int mcbisect(Real x, AthenaArray<Real> &array);
+int mcbisect(Real x, Real *array, int dim);
 std::complex<Real> ZetaFast(std::complex<Real> arg);
 std::complex<Real> ZetaVoigt(std::complex<Real> arg);
 

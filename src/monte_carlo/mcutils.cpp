@@ -157,6 +157,33 @@ int mcbisect(Real x, AthenaArray<Real> &array) {
 
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn int mcbisect(Real x, AthenaArray<Real> &array)
+//! \brief  use bisection to search array and return bin
+
+int mcbisect(Real x, Real *array, int dim) {
+
+  int nmax = dim;
+  int low = 0, high = nmax-1, mid;
+
+  while(low<=high) {
+    mid=(low+high)/2;
+    if(array[mid-1] <= x) {
+      if(array[mid] > x)
+        break;
+      else
+        low=mid+1;
+    }
+    else
+      high=mid-1;
+  }
+
+  if (low >= nmax-1)
+    return nmax-2;
+  else
+    return std::max(mid-1,0);
+
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn std::complex<Real> ZetaFast(std::complex<Real> arg)
