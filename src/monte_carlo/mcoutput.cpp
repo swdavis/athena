@@ -16,7 +16,7 @@
 // Athena++ headers
 #include "montecarlo.hpp"
 #include "mcoutput.hpp"
-#include "photonmover.hpp"
+#include "photonpusher.hpp"
 #include "../globals.hpp"
 #include "../outputs/io_wrapper.hpp"
 #include "../utils/buffer_utils.hpp"
@@ -461,7 +461,7 @@ void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
     }
 
     int ebin;
-    // SWD: general mover may require adjustment here
+    // SWD: general pusher may require adjustment here
     ebin = EnergyBinUniform(pphot->ep[ip],logarithmic);
     if (ebin < 0) return;
 
@@ -480,7 +480,7 @@ void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
         Real sph = sin(pphot->x3p[ip]);
         Real kr, kth, kph;
         // SWD: This should be adjusted
-        if (pphot->pmy_mcb->pmy_mc->general_mover_flag) {
+        if (pphot->pmy_mcb->pmy_mc->general_pusher_flag) {
           kr = pphot->k1p[ip];
           kth = pphot->k2p[ip]*pphot->x1p[ip];
           kph = pphot->k3p[ip]*pphot->x1p[ip]*sth;
@@ -501,7 +501,7 @@ void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
       if (COORDINATE_SYSTEM == "spherical_polar") {
         Real ksph[4];
         // SWD: This should be adjusted
-        if (pphot->pmy_mcb->pmy_mc->general_mover_flag) {
+        if (pphot->pmy_mcb->pmy_mc->general_pusher_flag) {
           ksph[IMC1] = pphot->k1p[ip];
           ksph[IMC2] = pphot->k2p[ip]*pphot->x1p[ip];
           ksph[IMC3] = pphot->k3p[ip]*pphot->x1p[ip]*sin(pphot->x2p[ip]);

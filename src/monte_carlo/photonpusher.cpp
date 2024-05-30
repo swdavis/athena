@@ -3,7 +3,7 @@
 // Copyright(C) 2014 James M. Stone <jmstone@princeton.edu> and other code contributors
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
-//! \file photonmover.cpp
+//! \file photonpusher.cpp
 //! \brief implementation for photon moving functions
 
 // C/C++ headers
@@ -11,14 +11,14 @@
 
 // Athena++ headers
 #include "photon.hpp"
-#include "photonmover.hpp"
+#include "photonpusher.hpp"
 #include "../mesh/mesh.hpp"
 #include "../globals.hpp"
 
 //----------------------------------------------------------------------------------------
-//! PhotonMover base class constructor, built from  MonteCarloBlock
+//! PhotonPusher base class constructor, built from  MonteCarloBlock
 
-PhotonMover::PhotonMover(MonteCarloBlock *pmcb) {
+PhotonPusher::PhotonPusher(MonteCarloBlock *pmcb) {
 
   pmy_mcb = pmcb;
   pcoord = NULL;
@@ -46,7 +46,7 @@ PhotonMover::PhotonMover(MonteCarloBlock *pmcb) {
 //----------------------------------------------------------------------------------------
 //! destructor
 
-PhotonMover::~PhotonMover() {
+PhotonPusher::~PhotonPusher() {
 
   if (acceleration) {
     mrwprob.DeleteAthenaArray();
@@ -69,10 +69,10 @@ PhotonMover::~PhotonMover() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PhotonMover::Move(Photon *pphot, int ips, int ipe)
+//! \fn void PhotonPusher::Move(Photon *pphot, int ips, int ipe)
 //  \brief base class move does nothing
 
-void PhotonMover::Move(Photon *pphot, int ips, int ipe) {
+void PhotonPusher::Move(Photon *pphot, int ips, int ipe) {
 
 }
 
@@ -89,15 +89,15 @@ Real ComparisonFunction(Real t, Real decayRate) {
 
 
 //----------------------------------------------------------------------------------------
-//! \fn Real PhotonMover::SampleEscapeTime(MCRandom *pran, Real decayRate, Real sphereRadius,
+//! \fn Real PhotonPusher::SampleEscapeTime(MCRandom *pran, Real decayRate, Real sphereRadius,
 //!                                        Real diffusionTime) {
 //! \brief Sample a photon escape time from a sphere using the rejection method
-Real PhotonMover::SampleEscapeTime(MCRandom *pran, Real decayRate, Real sphereRadius,
+Real PhotonPusher::SampleEscapeTime(MCRandom *pran, Real decayRate, Real sphereRadius,
                                    Real diffusionTime) {
   Real c = 2.99792458e10;
   Real lightCrossingTime = sphereRadius / c;
   Real timeSample;
-  
+
   bool reject = true;
   while (reject) {
     // Sample an area under the comparison function
@@ -118,11 +118,11 @@ Real PhotonMover::SampleEscapeTime(MCRandom *pran, Real decayRate, Real sphereRa
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn bool PhotonMover::MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real dist, 
+//! \fn bool PhotonPusher::MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real dist,
 //!                                       Real tauacc, int ip)
 //! \brief Accelerate photon diffusion with modified random walk method
 
-void PhotonMover::MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real tauacc,
+void PhotonPusher::MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real tauacc,
                                            Real &path_length, Real &k1, Real &k2, Real &k3, int ip) {
   MonteCarloBlock *pmcb = pmy_mcb;
   Real r0 = dist;
@@ -185,7 +185,7 @@ void PhotonMover::MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real d
     Real r = pphot->x1p[ip];
 
     // Cartesian position before move
-    Real x0 = r * sth * cph; 
+    Real x0 = r * sth * cph;
     Real y0 = r * sth * sph;
     Real z0 = r * cth;
 
@@ -250,18 +250,18 @@ void PhotonMover::MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real d
 
   } else {
     std::stringstream msg;
-    msg << "### FATAL ERROR in function [PhotonMover::MRWAcceleration]"
+    msg << "### FATAL ERROR in function [PhotonPusher::MRWAcceleration]"
           <<std::endl<< "Specified coordinate system not implemented for resonance acceleration" <<std::endl;
     throw std::runtime_error(msg.str().c_str());
   }
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, 
+//! \fn bool PhotonPusher::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist,
 //!                                       Real tauacc, int ip)
 //! \brief Accelerate photon diffusion with modified random walk method
 
-bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real tauacc,
+bool PhotonPusher::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real tauacc,
                                   int ip) {
 
   MonteCarloBlock *pmcb = pmy_mcb;
@@ -488,10 +488,10 @@ bool PhotonMover::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real PhotonMover::GetOpticalDepth(MCRandom *pran)
+//! \fn Real PhotonPusher::GetOpticalDepth(MCRandom *pran)
 //! \brief return exponentially distributed optical depth variable
 
-Real PhotonMover::GetOpticalDepth(MCRandom *pran) {
+Real PhotonPusher::GetOpticalDepth(MCRandom *pran) {
 
   Real dev = pran->uniform();
   while(dev <= 0.)
@@ -501,10 +501,10 @@ Real PhotonMover::GetOpticalDepth(MCRandom *pran) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real PhotonMover::GetExtinctionCoefficient(Real ac, Real sc)
+//! \fn Real PhotonPusher::GetExtinctionCoefficient(Real ac, Real sc)
 //! \brief returns total opacity or scattering opacity depending on method
 
-Real PhotonMover::GetExtinctionCoefficient(Real ac, Real sc) {
+Real PhotonPusher::GetExtinctionCoefficient(Real ac, Real sc) {
 
   Real chi;
   if (pmy_mcb->absorption_meth == ABSTAU) {
@@ -516,10 +516,10 @@ Real PhotonMover::GetExtinctionCoefficient(Real ac, Real sc) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real PhotonMover::ExpTauAbsorption(Real ac, Real dl)
+//! \fn Real PhotonPusher::ExpTauAbsorption(Real ac, Real dl)
 //! \brief Computes e^-tau_abs
 
-Real PhotonMover::ExpTauAbsorption(Real ac, Real dl) {
+Real PhotonPusher::ExpTauAbsorption(Real ac, Real dl) {
 
   if (pmy_mcb->absorption_meth == ABSTAU) {
     return exp(-ac * dl);
@@ -529,10 +529,10 @@ Real PhotonMover::ExpTauAbsorption(Real ac, Real dl) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PhotonMover::NextFace(Real dx1, Real dx2, Real dx3, int &face, Real &dx)
+//! \fn void PhotonPusher::NextFace(Real dx1, Real dx2, Real dx3, int &face, Real &dx)
 //! \brief returns flag with next face and distance to next face
 
-void PhotonMover::NextFace(Real dx1, Real dx2, Real dx3, int &face, Real &dx) {
+void PhotonPusher::NextFace(Real dx1, Real dx2, Real dx3, int &face, Real &dx) {
 
 // face tells which cell coordinates need to be updatde
 //   x:   0
@@ -600,11 +600,11 @@ void PhotonMover::NextFace(Real dx1, Real dx2, Real dx3, int &face, Real &dx) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PhotonMover::MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
+//! \fn void PhotonPusher::MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
 //!                           MonteCarloBlock *pmcb, int face, bool ascend[3], int ip))
 //! \brief updates photon zone when face is known
 
-void PhotonMover::MovePhotonToNextZone(Photon *pphot, MCCoord *pco, MonteCarloBlock *pmcb,
+void PhotonPusher::MovePhotonToNextZone(Photon *pphot, MCCoord *pco, MonteCarloBlock *pmcb,
                                        int face, bool ascend[3], int ip) {
 
   // Update face(s) and adjust positions to lie exactly on boundary
@@ -679,10 +679,10 @@ void PhotonMover::MovePhotonToNextZone(Photon *pphot, MCCoord *pco, MonteCarloBl
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn bool PhotonMover::UpdateZone(photon *pphot, int ip)
+//! \fn bool PhotonPusher::UpdateZone(photon *pphot, int ip)
 //! \brief check/updates photon zone after displacement
 
-bool PhotonMover::UpdateZone(Photon *pphot, int ip) {
+bool PhotonPusher::UpdateZone(Photon *pphot, int ip) {
 
   bool change = false;
   MonteCarloBlock *pmcb = pmy_mcb;
@@ -762,10 +762,10 @@ bool PhotonMover::UpdateZone(Photon *pphot, int ip) {
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void PhotonMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4])
+//! \fn void PhotonPusher::CurvalinearToCartesian(Photon *pphot, Real kcart[4])
 //! \brief convert k vector from curvalinear to cartesian
 
-void PhotonMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
+void PhotonPusher::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
 
   // SWD broken by vectorization
   // Default corresponds to Cartesian so just copy
@@ -774,10 +774,10 @@ void PhotonMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PhotonMover::InitializeMWDist(void)
+//! \fn void PhotonPusher::InitializeMWDist(void)
 //! \brief initialize modified randon walk path length distribution
 
-void PhotonMover::InitializeMRWDist(void) {
+void PhotonPusher::InitializeMRWDist(void) {
 
   nmax = 1000;
   mrwprob.NewAthenaArray(nmax);
@@ -810,7 +810,7 @@ void PhotonMover::InitializeMRWDist(void) {
 //! \fn Real MRWDist(MCRandom *pran)
 //! \brief get modified randon walk path length
 
-Real PhotonMover::MRWDist(MCRandom *pran) {
+Real PhotonPusher::MRWDist(MCRandom *pran) {
 
   Real x0 = pran->uniform();
 
@@ -845,10 +845,10 @@ Real PhotonMover::MRWDist(MCRandom *pran) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void  PhotonMover::ReadComptonGreensFunction()
+//! \fn void  PhotonPusher::ReadComptonGreensFunction()
 //! \brief Reads in pre-tabulated binary table used in MRW acceleration with Compton scat.
 
-void PhotonMover::ReadComptonGreensFunction(void) {
+void PhotonPusher::ReadComptonGreensFunction(void) {
 
   int nt=200,nxi=100,np=100;
   //int nt=50,nxi=2,np=100;
@@ -858,7 +858,7 @@ void PhotonMover::ReadComptonGreensFunction(void) {
   // Read in time array
   if((pfile = fopen("compton_table_t.out","r")) == NULL) {
     std::stringstream msg;
-    msg << "### FATAL ERROR in function [PhotonMover:ReadComptonGreensFunction]"
+    msg << "### FATAL ERROR in function [PhotonPusher:ReadComptonGreensFunction]"
           <<std::endl<< "Input file compton_table_t.out could not be opened" <<std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
@@ -872,7 +872,7 @@ void PhotonMover::ReadComptonGreensFunction(void) {
   // Read in initial dimensionless energy array
   if((pfile = fopen("compton_table_x1.out","r")) == NULL) {
     std::stringstream msg;
-    msg << "### FATAL ERROR in function [PhotonMover:ReadComptonGreensFunction]"
+    msg << "### FATAL ERROR in function [PhotonPusher:ReadComptonGreensFunction]"
           <<std::endl<< "Input file compton_table_x1.out could not be opened" <<std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
@@ -886,7 +886,7 @@ void PhotonMover::ReadComptonGreensFunction(void) {
   // Read in probability array
   if((pfile = fopen("compton_table_p.out","r")) == NULL) {
     std::stringstream msg;
-    msg << "### FATAL ERROR in function [PhotonMover:ReadComptonGreensFunction]"
+    msg << "### FATAL ERROR in function [PhotonPusher:ReadComptonGreensFunction]"
           <<std::endl<< "Input file compton_table_p.out could not be opened" <<std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
@@ -899,7 +899,7 @@ void PhotonMover::ReadComptonGreensFunction(void) {
   // Read in output dimensionless energy array
   if((pfile = fopen("compton_table_x.out","r")) == NULL) {
     std::stringstream msg;
-    msg << "### FATAL ERROR in function [PhotonMover:ReadComptonGreensFunction]"
+    msg << "### FATAL ERROR in function [PhotonPusher:ReadComptonGreensFunction]"
           <<std::endl<< "Input file compton_table_x.out could not be opened" <<std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
@@ -916,10 +916,10 @@ void PhotonMover::ReadComptonGreensFunction(void) {
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void  PhotonMover::ReadRadiusDistribution()
+//! \fn void  PhotonPusher::ReadRadiusDistribution()
 //! \brief Reads in pre-tabulated binary table used in MRW acceleration with advection
 
-void PhotonMover::ReadRadiusDistribution(void) {
+void PhotonPusher::ReadRadiusDistribution(void) {
 
   int ny=100,np=100;
 
@@ -928,7 +928,7 @@ void PhotonMover::ReadRadiusDistribution(void) {
   // Read in y (y=exp(-t)) array
   if((pfile = fopen("radius_table_t.out","r")) == NULL) {
     std::stringstream msg;
-    msg << "### FATAL ERROR in function [PhotonMover:ReadRadiusDistribution]"
+    msg << "### FATAL ERROR in function [PhotonPusher:ReadRadiusDistribution]"
           <<std::endl<< "Input file radius_table_t.out could not be opened" <<std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
@@ -941,7 +941,7 @@ void PhotonMover::ReadRadiusDistribution(void) {
   // Read in probability array
   if((pfile = fopen("radius_table_p.out","r")) == NULL) {
     std::stringstream msg;
-    msg << "### FATAL ERROR in function [PhotonMover:ReadTRadiusDistribution]"
+    msg << "### FATAL ERROR in function [PhotonPusher:ReadTRadiusDistribution]"
           <<std::endl<< "Input file radius_table_p.out could not be opened" <<std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
@@ -954,7 +954,7 @@ void PhotonMover::ReadRadiusDistribution(void) {
   // Read in output dimensionless radius
   if((pfile = fopen("radius_table_r.out","r")) == NULL) {
     std::stringstream msg;
-    msg << "### FATAL ERROR in function [PhotonMover:ReadRadiusDistribution]"
+    msg << "### FATAL ERROR in function [PhotonPusher:ReadRadiusDistribution]"
           <<std::endl<< "Input file radius_table_r.out could not be opened" <<std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
@@ -970,10 +970,10 @@ void PhotonMover::ReadRadiusDistribution(void) {
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void  PhotonMover::ReadTimeDistribution()
+//! \fn void  PhotonPusher::ReadTimeDistribution()
 //! \brief Reads in pre-tabulated binary table used in MRW acceleration with advection
 
-void PhotonMover::ReadTimeDistribution(void) {
+void PhotonPusher::ReadTimeDistribution(void) {
 
   int ntau=100,np=400;
 
@@ -982,7 +982,7 @@ void PhotonMover::ReadTimeDistribution(void) {
 
   if((pfile = fopen("time_table_tau.out","r")) == NULL) {
     std::stringstream msg;
-    msg << "### FATAL ERROR in function [PhotonMover:ReadTimeDistribution]"
+    msg << "### FATAL ERROR in function [PhotonPusher:ReadTimeDistribution]"
           <<std::endl<< "Input file time_table_y.out could not be opened" <<std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
@@ -995,7 +995,7 @@ void PhotonMover::ReadTimeDistribution(void) {
   // Read in probability array
   if((pfile = fopen("time_table_p.out","r")) == NULL) {
     std::stringstream msg;
-    msg << "### FATAL ERROR in function [PhotonMover:ReadTimeDistribution]"
+    msg << "### FATAL ERROR in function [PhotonPusher:ReadTimeDistribution]"
           <<std::endl<< "Input file time_table_p.out could not be opened" <<std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
@@ -1008,7 +1008,7 @@ void PhotonMover::ReadTimeDistribution(void) {
   // Read in output dimensionless radius
   if((pfile = fopen("time_table_t.out","r")) == NULL) {
     std::stringstream msg;
-    msg << "### FATAL ERROR in function [PhotonMover:ReadTimeDistribution]"
+    msg << "### FATAL ERROR in function [PhotonPusher:ReadTimeDistribution]"
           <<std::endl<< "Input file time_table_t.out could not be opened" <<std::endl;
       throw std::runtime_error(msg.str().c_str());
   }
@@ -1023,10 +1023,10 @@ void PhotonMover::ReadTimeDistribution(void) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real PhotonMover::InterpComptonEnergy(Real x0, Real time, Real prob)
+//! \fn Real PhotonPusher::InterpComptonEnergy(Real x0, Real time, Real prob)
 //! \brief return energy for photon after MRW with compton scattering
 
-Real PhotonMover::InterpComptonEnergy(Real xi, Real time, Real prob) {
+Real PhotonPusher::InterpComptonEnergy(Real xi, Real time, Real prob) {
 
   // get interpolant for prob
   int ip = mcbisect(prob,mrwp);
@@ -1064,10 +1064,10 @@ Real PhotonMover::InterpComptonEnergy(Real xi, Real time, Real prob) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real PhotonMover::InterpPathTime(Real tau, Real prob)
+//! \fn Real PhotonPusher::InterpPathTime(Real tau, Real prob)
 //! \brief return time/path for photon undergoing MRW at given tau
 
-Real PhotonMover::InterpPathTime(Real tau, Real prob) {
+Real PhotonPusher::InterpPathTime(Real tau, Real prob) {
 
   // get interpolant for prob
   int ip = mcbisect(prob,mrwtp);

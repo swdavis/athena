@@ -21,7 +21,7 @@
 #include "../mesh/mesh.hpp"
 #include "../monte_carlo/montecarlo.hpp"
 #include "../monte_carlo/photon.hpp"
-#include "../monte_carlo/photonmover.hpp"
+#include "../monte_carlo/photonpusher.hpp"
 
 #if !MONTE_CARLO_ENABLED
 #error "This problem requires monte carlo"
@@ -112,7 +112,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     pphot->k3p[ip] = cth;
 
     // Convert k unit vector to k^\alpha
-    if (pmy_mc->general_mover_flag) {
+    if (pmy_mc->general_pusher_flag) {
       pphot->k2p[ip] /= pphot->x1p[ip];
       pphot->k3p[ip] /= (pphot->x1p[ip]*sin(pphot->x2p[ip]));
       pphot->dk0p[ip] = 0.;
@@ -190,7 +190,7 @@ void FinalPositionSphericalPolar(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pp
   Real sph = sin(pphot->x3p[ip]);
 
   Real kr, kth, kph;
-  if (pmcb->pmy_mc->general_mover_flag) {
+  if (pmcb->pmy_mc->general_pusher_flag) {
     kr = pphot->k1p[ip];
     kth = r * pphot->k2p[ip];
     kph = r * sth * pphot->k3p[ip];

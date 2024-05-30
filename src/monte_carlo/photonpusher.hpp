@@ -1,11 +1,11 @@
-#ifndef PHOTONMOVER_HPP
-#define PHOTONMOVER_HPP
+#ifndef PHOTONPUSHER_HPP
+#define PHOTONPUSHER_HPP
 //========================================================================================
 // Athena++ astrophysical MHD code
 // Copyright(C) 2014 James M. Stone <jmstone@princeton.edu> and other code contributors
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
-//! \file photonmover.hpp
+//! \file photonpusher.hpp
 //! \brief defines abstract base derived classes for moving photons
 
 // Athena++ headers
@@ -26,13 +26,13 @@ class Coordinate;
 Real GetOpticalDepth(MCRandom *pran);
 
 //----------------------------------------------------------------------------------------
-//! \class PhotonMover
+//! \class PhotonPusher
 //! \brief abstract base class for all derived classes
 
-class PhotonMover {
+class PhotonPusher {
 public:
-  PhotonMover(MonteCarloBlock *pmcb);
-  ~PhotonMover();
+  PhotonPusher(MonteCarloBlock *pmcb);
+  ~PhotonPusher();
   // data
 
   Real dl; // current displacement
@@ -83,8 +83,8 @@ public:
                                 Real diffusionTime);
   virtual bool MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Real tauacc,
                                int ip);
-  virtual void MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real dist, 
-                               Real tauacc, Real &path_length, Real &k1, Real &k2, 
+  virtual void MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real dist,
+                               Real tauacc, Real &path_length, Real &k1, Real &k2,
                                Real &k3, int ip);
   virtual Real MRWDist(MCRandom *pran);
   virtual void ReadComptonGreensFunction(void);
@@ -95,13 +95,13 @@ public:
 };
 
 //----------------------------------------------------------------------------------------
-//! \class CartesianMover
+//! \class CartesianPusher
 //! \brief derived class for moving in Cartesian coordinates
 
-class CartesianMover : public PhotonMover {
+class CartesianPusher : public PhotonPusher {
 public:
-  CartesianMover(MonteCarloBlock *pmcb);
-  ~CartesianMover();
+  CartesianPusher(MonteCarloBlock *pmcb);
+  ~CartesianPusher();
 
   // functions
   void Move(Photon *pphot, int ips, int ipe);
@@ -109,13 +109,13 @@ public:
 };
 
 //----------------------------------------------------------------------------------------
-//! \class SphericalPolarMover
+//! \class SphericalPolarPusher
 //! \brief derived class for moving in spherical-polar coordinates
 
-class SphericalPolarMover : public PhotonMover {
+class SphericalPolarPusher : public PhotonPusher {
 public:
-  SphericalPolarMover(MonteCarloBlock *pmcb);
-  ~SphericalPolarMover();
+  SphericalPolarPusher(MonteCarloBlock *pmcb);
+  ~SphericalPolarPusher();
 
   // functions
   void Move(Photon *pphot, int ips, int ipe);
@@ -123,13 +123,13 @@ public:
 };
 
 //----------------------------------------------------------------------------------------
-//! \class GeneralMover
+//! \class GeneralPusher
 //! \brief derived class for moving in general coordinates
 
-class GeneralMover : public PhotonMover {
+class GeneralPusher : public PhotonPusher {
 public:
-  GeneralMover(MonteCarloBlock *pmcb);
-  ~GeneralMover();
+  GeneralPusher(MonteCarloBlock *pmcb);
+  ~GeneralPusher();
 
   Real step_par;
   Real gamma[NCOORD][NCOORD][NCOORD];
@@ -144,4 +144,4 @@ public:
 
 };
 
-#endif // PHOTONMOVER_HPP
+#endif // PHOTONPUSHER_HPP

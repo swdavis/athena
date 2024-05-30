@@ -21,7 +21,7 @@
 #include "../mesh/mesh.hpp"
 #include "../monte_carlo/montecarlo.hpp"
 #include "../monte_carlo/photon.hpp"
-#include "../monte_carlo/photonmover.hpp"
+#include "../monte_carlo/photonpusher.hpp"
 
 #if !MONTE_CARLO_ENABLED
 #error "This problem requires monte carlo"
@@ -169,7 +169,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     }
 
     // Convert k unit vector to k^\alpha
-    if (pmy_mc->general_mover_flag) {
+    if (pmy_mc->general_pusher_flag) {
       pphot->k0p[ip] = 1.;
       pphot->k2p[ip] /= pphot->x1p[ip];
       pphot->k3p[ip] /= (pphot->x1p[ip]*sin(pphot->x2p[ip]));

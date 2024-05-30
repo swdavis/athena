@@ -21,7 +21,7 @@
 #include "../mesh/mesh.hpp"
 #include "../monte_carlo/montecarlo.hpp"
 #include "../monte_carlo/photon.hpp"
-#include "../monte_carlo/photonmover.hpp"
+#include "../monte_carlo/photonpusher.hpp"
 #include "../globals.hpp"
 
 #if !MONTE_CARLO_ENABLED
@@ -40,7 +40,7 @@ namespace {
   bool first;
 
   // user function definitions
-  void TurningPointCheck(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
+  void TurningPointCheck(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher,
                          int ip);
 
 }
@@ -344,7 +344,7 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot, int ip) {
 
 namespace {
 
-void TurningPointCheck(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
+void TurningPointCheck(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher,
                        int ip) {
 
   // Check if r is increasing and set sign of du/dlamda accordingly

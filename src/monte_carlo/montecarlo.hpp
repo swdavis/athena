@@ -33,7 +33,7 @@ class MeshBlock;
 class MonteCarloBlock;
 class ParameterInput;
 class Photon;
-class PhotonMover;
+class PhotonPusher;
 class MCRandom;
 class MCBoundaryValues;
 class MCOutoupt;
@@ -64,7 +64,7 @@ typedef void (*TempFunc_t)(MonteCarloBlock *pmcb);
 typedef void (*MCBValFunc_t)(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
 typedef Real (*OpacFunc_t)(MonteCarloBlock *pmcb,  Photon *pphot, int ip);
 typedef void (*ScatFunc_t)(MonteCarloBlock *pmcb, Photon *phot, int ips, int ipe);
-typedef void (*UserMoveFunc_t)(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover,
+typedef void (*UserMoveFunc_t)(MonteCarloBlock *pmcb, Photon *phot, PhotonPusher *ppusher,
                                int ip);
 typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, MCCoord *pco, int ip);
 typedef void (*UserMomentFunc_t)(MonteCarloBlock *pmcb, Photon *phot, Real dl, int ip,
@@ -221,7 +221,7 @@ public:
   bool computedmin;
   bool time_acc;  // use MRW acceleration with time limit
   bool raytrace_flag; // Will trace photons rather than scatter
-  bool general_mover_flag; // Use integration for photon movement
+  bool general_pusher_flag; // Use integration for photon movement
 
   // function pointers
   UserMoveFunc_t UserWorkInMove;
@@ -281,7 +281,7 @@ public:
   MCCoord *pcoord;
 
   Photon* pphot; // ptr to photon packet
-  PhotonMover* pmover; // ptr to photon mover
+  PhotonPusher* ppusher; // ptr to photon pusher
   MCRandom *pran; // ptr to random number generator
   MCBoundaryValues *pbval; // ptr to MC boundary values
 
@@ -326,7 +326,7 @@ public:
   enum AbsorptionOpacityFlag absorption_opac;
   enum ScatteringFlag scattering_meth;
 
-  // Associated with general mover
+  // Associated with general pusher
   // SWD some of these should be eliminated others moved to MonteCarlo?
   bool boyerlindquist_flag; // use Boyer-Lindquist coordinates
   bool orthotet_flag; // use orthonormal tetrad for TransferPhotons()

@@ -553,7 +553,7 @@ void MCKerrSchild::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]) {
   gamma[IMC3][IMC3][IMC0] = gamma[IMC3][IMC0][IMC3];
   gamma[IMC3][IMC3][IMC1] = gamma[IMC3][IMC1][IMC3];
   gamma[IMC3][IMC3][IMC2] = gamma[IMC3][IMC2][IMC3];
-  gamma[IMC3][IMC3][IMC3] = -a / sigma * sth2 * (r + a2 * sth2 / sigma * 
+  gamma[IMC3][IMC3][IMC3] = -a / sigma * sth2 * (r + a2 * sth2 / sigma *
                             (1. - 2. * r2 / sigma));
 
 }
@@ -740,6 +740,56 @@ void MCBoyerLindquist::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD
   gamma[IMC3][IMC3][IMC1] = gamma[IMC3][IMC1][IMC3];
   gamma[IMC3][IMC3][IMC2] = gamma[IMC3][IMC2][IMC3];
 }
+
+
+//----------------------------------------------------------------------------------------
+//! MCKerrSchild constructor, built from Coord and MonteCarloBlock
+
+MCKerrSchildCartesian::MCKerrSchildCartesian(Coordinates *pcoord, MonteCarloBlock *pmcb)
+  : MCCoord(pcoord,pmcb) {
+
+}
+
+//----------------------------------------------------------------------------------------
+//! MCKerrSchild constructor for processes without own MeshBlock
+
+MCKerrSchildCartesian::MCKerrSchildCartesian(int ncells1, int ncells2, int ncells3, bool acc)
+  : MCCoord(ncells1,ncells2,ncells3,acc) {
+
+}
+
+//----------------------------------------------------------------------------------------
+//! destructor
+MCKerrSchildCartesian::~MCKerrSchildCartesian() {
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCKerrSchildCartesian::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD])
+//! \brief compute metric in cartesian Kerr-Schild
+
+void MCKerrSchildCartesian::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCKerrSchildCartesian::InverseMetric(Real x[NCOORD], Real gcov[NCOORD][NCOORD])
+//! \brief compute metric in cartesian Kerr-Schild
+
+void MCKerrSchildCartesian::InverseMetric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
+
+}
+//----------------------------------------------------------------------------------------
+//! \fn void MCKerrSchildCartesian::Connect(Real x[NCOORD], Real gcov[NCOORD][NCOORD])
+//! \brief compute metric in cartesian Kerr-Schild
+
+void MCKerrSchildCartesian::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]) {
+
+
+}
+
+
+
 
 //----------------------------------------------------------------------------------------
 //! MCMinkowski constructor, built from Coord and MonteCarloBlock

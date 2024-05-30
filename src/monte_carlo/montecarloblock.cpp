@@ -13,7 +13,7 @@
 // Athena++ headers
 #include "montecarlo.hpp"
 #include "photon.hpp"
-#include "photonmover.hpp"
+#include "photonpusher.hpp"
 #include "../athena.hpp"
 #include "../athena_arrays.hpp"
 #include "../parameter_input.hpp"
@@ -46,7 +46,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   pphot  = new Photon(this,pin);
 
   // Initialize to nullptr and set below
-  pmover = nullptr;
+  ppusher = nullptr;
   pcoord = nullptr;
 
   // get seed and intitialize randon number generator
@@ -236,15 +236,15 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   pmy_mc->computedmin = computedmin;
   if (COORDINATE_SYSTEM == "cartesian") {
     GetZonePosition = GetZonePositionCartesian;
-    if (pmy_mc->general_mover_flag) {
-      pmover = new GeneralMover(this);
+    if (pmy_mc->general_pusher_flag) {
+      ppusher = new GeneralPusher(this);
       if (pmb != nullptr)
         pcoord = new MCCartesian(pmb->pcoord,this);
       else
         pcoord = new MCCartesian(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
                                  computedmin);
     } else {
-      pmover = new CartesianMover(this);
+      ppusher = new CartesianPusher(this);
       if (pmb != nullptr)
         pcoord = new MCCoord(pmb->pcoord,this);
       else
@@ -253,15 +253,15 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     }
   } else if (COORDINATE_SYSTEM == "spherical_polar") {
     GetZonePosition = GetZonePositionSphericalPolar;
-    if (pmy_mc->general_mover_flag) {
-      pmover = new GeneralMover(this);
+    if (pmy_mc->general_pusher_flag) {
+      ppusher = new GeneralPusher(this);
       if (pmb != nullptr)
         pcoord = new MCSphericalPolar(pmb->pcoord,this);
       else
         pcoord = new MCSphericalPolar(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
                                       computedmin);
     } else {
-      pmover = new SphericalPolarMover(this);
+      ppusher = new SphericalPolarPusher(this);
       if (pmb != nullptr)
         pcoord = new MCCoord(pmb->pcoord,this);
       else
@@ -270,7 +270,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     }
   } else if (COORDINATE_SYSTEM == "cylindrical") {
     GetZonePosition = GetZonePositionCylindrical;
-    pmover = new GeneralMover(this);
+    ppusher = new GeneralPusher(this);
     if (pmb != nullptr)
       pcoord = new MCCylindrical(pmb->pcoord,this);
     else
@@ -278,7 +278,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
                                  computedmin);
   } else if (COORDINATE_SYSTEM == "kerr-schild") {
     GetZonePosition = GetZonePositionSphericalPolar;//approximate
-    pmover = new GeneralMover(this);
+    ppusher = new GeneralPusher(this);
     if (boyerlindquist_flag) {
      if (pmb != nullptr)
        pcoord = new MCBoyerLindquist(pmb->pcoord,this);
@@ -300,7 +300,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     }
   } else if (COORDINATE_SYSTEM == "minkowski") {
     GetZonePosition = GetZonePositionCartesian;
-    pmover = new GeneralMover(this);
+    ppusher = new GeneralPusher(this);
     if (pmb != nullptr)
       pcoord = new MCMinkowski(pmb->pcoord,this);
     else
@@ -314,8 +314,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
           << std::endl;
       ATHENA_ERROR(msg);
   }
-  // Set pcoord in pmover
-  pmover->pcoord = pcoord;
+  // Set pcoord in ppusher
+  ppusher->pcoord = pcoord;
 
   // Set absorption opacity and method
   absorption_meth = GetAbsorptionMethodFlag(pin->GetOrAddString("montecarlo","abs_method",
@@ -366,7 +366,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 MonteCarloBlock::~MonteCarloBlock() {
 
   delete pphot;
-  delete pmover;
+  delete ppusher;
   delete pran;
   //delete pspec;
   //delete pphlist;
@@ -420,7 +420,7 @@ void MonteCarloBlock::RayTracePhotonsOnBlock() {
 
   // Photon initialized in coordinate frame
   // move photon until  stopping condition
-  pmover->Move(pphot,0,pphot->nphot-1);
+  ppusher->Move(pphot,0,pphot->nphot-1);
 
   for (int ip=pphot->nphot-1; ip >= 0; ip--) {
     if (pphot->statp[ip] != EVOLVING) {
@@ -510,7 +510,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
   }
 
   // move all samples to next interaction or boundary
-  pmover->Move(pphot,0,pphot->nphot-1);
+  ppusher->Move(pphot,0,pphot->nphot-1);
 
   // perform all absorption and scattering related tasks for all samples
   for (int ip=0; ip<pphot->nphot; ip++) {
@@ -864,8 +864,8 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   Real k2 = pphot->k2p[ip];
   Real k3 = pphot->k3p[ip];
 
-  // Normalize k vector if using general mover in spherical polar coords
-  if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_mover_flag)) {
+  // Normalize k vector if using general pusher in spherical polar coords
+  if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_pusher_flag)) {
     k2 *= pphot->x1p[ip];
     k3 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
   }
@@ -981,9 +981,9 @@ void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl,
   Real k2p = pphot->k2p[ip];
   Real k3p = pphot->k3p[ip];
 
-  // Normalize k vector if using general mover in spherical polar coords
+  // Normalize k vector if using general pusher in spherical polar coords
 
-  if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_mover_flag)) {
+  if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_pusher_flag)) {
     k2p *= pphot->x1p[ip];
     k3p *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
   }
@@ -1101,9 +1101,9 @@ void MonteCarloBlock::UpdateMomentsOld(Photon *pphot, Real dl, Real pl, Real k1,
   Real k2p = pphot->k2p[ip];
   Real k3p = pphot->k3p[ip];
 
-  // Normalize k vector if using general mover in spherical polar coords
+  // Normalize k vector if using general pusher in spherical polar coords
 
-  if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_mover_flag)) {
+  if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_pusher_flag)) {
     k2p *= pphot->x1p[ip];
     k3p *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
   }
@@ -1350,8 +1350,8 @@ void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0,
   Real k2 = pphot->k2p[ip];
   Real k3 = pphot->k3p[ip];
 
-  // Normalize k vector if using general mover in spherical polar coords
-  if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_mover_flag)) {
+  // Normalize k vector if using general pusher in spherical polar coords
+  if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_pusher_flag)) {
     k2 *= pphot->x1p[ip];
     k3 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
     k2p0 *= pphot->x1p[ip];

@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 
 """
-Read in athena results to judge convergence of general mover through
+Read in athena results to judge convergence of general pusher through
 spherical grid as stepsize decreases
 """
 
@@ -15,14 +15,14 @@ from os import system
 import athena_mc_list as mclist
 from athena_mc_list import photons
 
-def write_athinput(iseed,nphot,step,file='athinput.sphtran',generalmover=True):
+def write_athinput(iseed,nphot,step,file='athinput.sphtran',generalpusher=True):
     """
     Write the remainder of the athinput file for convergence test
     """
 
     outfile = open(file,'w')
     outfile.write("<comment>\n")
-    outfile.write("problem   =  Test movement through spherical grid using general mover or spherical mover\n")
+    outfile.write("problem   =  Test movement through spherical grid using general pusher or spherical pusher\n")
     outfile.write("reference =\n")
     outfile.write("configure = --prob=mc_sph_tran -mc --coord=spherical_polar\n")
     outfile.write("\n")
@@ -63,12 +63,12 @@ def write_athinput(iseed,nphot,step,file='athinput.sphtran',generalmover=True):
     outfile.write("emission   = freefree\n")
     outfile.write("absorption = none\n")
     outfile.write("polarized = false\n")
-    if (generalmover):
+    if (generalpusher):
         outfile.write("stepsize = {:e}\n".format(step))
-        outfile.write("general_mover = true\n")
+        outfile.write("general_pusher = true\n")
         outfile.write("varystep = true\n")
         outfile.write("checkmove = 100000000\n")
-    elif (sphpol_mover):
+    elif (sphpol_pusher):
         outfile.write("stepsize = {:e}\n".format(step))
         outfile.write("sphpol_alt = true\n")
         outfile.write("varystep = true\n")
@@ -105,8 +105,8 @@ def main(**kwargs):
     # Set up array to store norm for convergence evaluation
     error = np.zeros((nstep+1,2))
 
-    # First do a run with standard cell-by-cell spherical mover integration
-    write_athinput(iseed,nphot,0.,sphpol_mover=True, generalmover=False)
+    # First do a run with standard cell-by-cell spherical pusher integration
+    write_athinput(iseed,nphot,0.,sphpol_pusher=True, generalpusher=False)
     com="mpirun -np {:d} ".format(mcranks+1)+athena_path+"/athena -i athinput.sphtran"
     system(com)
     com="python ~/Documents/athena/vis/python/montecarlo/joinlists.py sphtran.out1 {:d} 0 0 -rm".format(mcranks+1)
@@ -116,7 +116,7 @@ def main(**kwargs):
     error[0,0] = 0.
     error[0,1] = np.average(phots.user[:,0])
     
-    # Next loop over step size with general mover prescription
+    # Next loop over step size with general pusher prescription
     for i,step in enumerate(steps):            
         i += 1
         write_athinput(iseed+99*i,nphot,step)

@@ -80,7 +80,7 @@ public:
 
   static bool initialized;
   static bool polarized;
-  static bool general_mover_flag;
+  static bool general_pusher_flag;
 
 
   //#ifdef MPI_PARALLEL

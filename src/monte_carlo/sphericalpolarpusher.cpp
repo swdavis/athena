@@ -3,12 +3,12 @@
 // Copyright(C) 2014 James M. Stone <jmstone@princeton.edu> and other code contributors
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
-//! \file sphericalpolarmover.cpp
+//! \file sphericalpolarpusher.cpp
 //  \brief implementation for moving photons through sphericalpolar grid
 
 // Athena++ headers
 #include "photon.hpp"
-#include "photonmover.hpp"
+#include "photonpusher.hpp"
 #include "../mesh/mesh.hpp"
 
 
@@ -16,25 +16,25 @@
 //#define NBUFFER 50
 
 //----------------------------------------------------------------------------------------
-//! SphericalPolarMover class constructor, derived from PhotonMover base class
+//! SphericalPolarPusher class constructor, derived from PhotonPusher base class
 
-SphericalPolarMover::SphericalPolarMover(MonteCarloBlock *pmcb)
-  : PhotonMover(pmcb) {
+SphericalPolarPusher::SphericalPolarPusher(MonteCarloBlock *pmcb)
+  : PhotonPusher(pmcb) {
 
 }
 
 //----------------------------------------------------------------------------------------
 //! destructor
 
-SphericalPolarMover::~SphericalPolarMover() {
+SphericalPolarPusher::~SphericalPolarPusher() {
 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe)
+//! \fn void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe)
 //! \brief Moves photon using cell-by-cell approach through spherical polar grid
 
-void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
+void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
 
   MonteCarloBlock *pmcb = pmy_mcb;
   MCRandom *pran = pmy_mcb->pran;
@@ -352,7 +352,7 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
     // -------------------------- Debugging ----------------------------------------------
     if (iter >= checkmove) {
       std::stringstream msg;
-      msg << "Warning: iter exceeded " << checkmove << " in photon mover.";
+      msg << "Warning: iter exceeded " << checkmove << " in photon pusher.";
       pphot->PrintPhoton(msg.str(),ip);
 #ifdef DEBUG_SM
       int nmax = (NBUFFER > iter) ? iter : NBUFFER;
@@ -388,10 +388,10 @@ void SphericalPolarMover::Move(Photon *pphot, int ips, int ipe) {
 
 // SWD: Deprecated and slated for removal
 //----------------------------------------------------------------------------------------
-//! \fn void SphericalPolarMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4])
+//! \fn void SphericalPolarPusher::CurvalinearToCartesian(Photon *pphot, Real kcart[4])
 //! \brief convert k vector from curvalinear to cartesian
 
-void SphericalPolarMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
+void SphericalPolarPusher::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
 
   // SWD: Broken by parallelization
   /*

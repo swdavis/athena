@@ -20,7 +20,7 @@
 #include "../mesh/mesh.hpp"
 #include "../monte_carlo/montecarlo.hpp"
 #include "../monte_carlo/photon.hpp"
-#include "../monte_carlo/photonmover.hpp"
+#include "../monte_carlo/photonpusher.hpp"
 #include "../globals.hpp"
 
 #if !MONTE_CARLO_ENABLED
@@ -45,7 +45,7 @@ namespace {
                    0.75,0.8,0.85,0.9,0.95,1.};
 
   // User function definitions
-  void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,int ip);
+  void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher,int ip);
   void GetDirectionKerrtrans(Photon *pphot, Real alpha, Real beta, int ip);
   void GetDirectionTetrad(Photon *pphot, Real alpha, Real beta, int ip);
   void TransformPhotonAtDisk(MonteCarloBlock *pmcb, Photon *pphot, int ip);
@@ -379,40 +379,41 @@ void TransformPhotonAtDisk(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 
 void TransformPhotonAtGridEdge(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 
-  // Construct the orthonormal tetrad at edge of simulation grid
-  Real ucon[4];
-  ucon[IMC0] = 1.;
-  ucon[IMC1] = 0.;
-  ucon[IMC2] = 0.;
-  ucon[IMC3] = 0.;
+  if (pphot->polarized) {
+    // Construct the orthonormal tetrad at edge of simulation grid
+    Real ucon[4];
+    ucon[IMC0] = 1.;
+    ucon[IMC1] = 0.;
+    ucon[IMC2] = 0.;
+    ucon[IMC3] = 0.;
 
-  // create tetrad basis
-  Real gcov[4][4], gcon[4][4];
-  Real x[4];
-  x[IMC0] = pphot->x0p[ip];
-  x[IMC1] = pphot->x1p[ip];
-  x[IMC2] = pphot->x2p[ip];
-  x[IMC3] = pphot->x3p[ip];
-  pmcb->pcoord->Metric(x, gcov);
-  pmcb->pcoord->InverseMetric(x,gcon);
-  Real wcon[4] = {0,1.,0.,0.}; // Q=1 points along projected BH symmetry axis
-  Real vcov[4] = {1.,0.,0.,1.};// Make image center point away from origin
-  Real vcon[4];
-  CovToCon(vcov,vcon,gcon);
-  Real econ[4][4], ecov[4][4];
-  ConstructTetrad(ucon, vcon, wcon, gcov, econ, ecov);
+    // create tetrad basis
+    Real gcov[4][4], gcon[4][4];
+    Real x[4];
+    x[IMC0] = pphot->x0p[ip];
+    x[IMC1] = pphot->x1p[ip];
+    x[IMC2] = pphot->x2p[ip];
+    x[IMC3] = pphot->x3p[ip];
+    pmcb->pcoord->Metric(x, gcov);
+    pmcb->pcoord->InverseMetric(x,gcon);
+    Real wcon[4] = {0,1.,0.,0.}; // Q=1 points along projected BH symmetry axis
+    Real vcov[4] = {1.,0.,0.,1.};// Make image center point away from origin
+    Real vcon[4];
+    CovToCon(vcov,vcon,gcon);
+    Real econ[4][4], ecov[4][4];
+    ConstructTetrad(ucon, vcon, wcon, gcov, econ, ecov);
 
-  // Get stokes parameters
-  std::complex<Real> tcopy[4][4];
-  pphot->PolarizationToTetrad(tcopy,ecov,ip);
-  Real stokes[4];
+    // Get stokes parameters
+    std::complex<Real> tcopy[4][4];
+    pphot->PolarizationToTetrad(tcopy,ecov,ip);
+    Real stokes[4];
 
-  TensorToStokes(tcopy,stokes);
-  pphot->sip[ip] = stokes[0];
-  pphot->sqp[ip] = stokes[1];
-  pphot->sup[ip] = stokes[2];
-  //pphot->PrintPhoton("finalize photon",ip);
-
+    TensorToStokes(tcopy,stokes);
+    pphot->sip[ip] = stokes[0];
+    pphot->sqp[ip] = stokes[1];
+    pphot->sup[ip] = stokes[2];
+    //pphot->PrintPhoton("finalize photon",ip);
+  }
 }
 
 
@@ -526,7 +527,7 @@ void GetDirectionTetrad(Photon *pphot, Real alpha, Real beta, int ip) {
 
 }
 
-void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover, int ip) {
+void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher, int ip) {
 
  // check if photon has crossed midplane and whether to terminate or keep integrating
 
@@ -648,21 +649,21 @@ void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
     // set plane crossing to zero
     pphot->user[4][ip] = 0.;
 
-    // Initialize and transform Stokes vector
-    Real stokes[4];
-    int ipol = static_cast<int>(kcopy[IMC2]*20.);
-    Real aint = kcopy[IMC3] - much[ipol];
-    Real frac = polch[ipol]*(1.-aint) + polch[ipol+1]*aint;
-    stokes[0] = 1.0;
-    stokes[1] = frac;
-    stokes[2] = 0.0;
-    stokes[3] = 0.0;
-    std::complex<Real> tcopy[4][4];
-    StokesToTensor(stokes,tcopy);
-    pphot->PolarizationToCoord(tcopy,econ,ip);
-
+    if (pphot->polarized) {
+      // Initialize and transform Stokes vector
+      Real stokes[4];
+      int ipol = static_cast<int>(kcopy[IMC2]*20.);
+      Real aint = kcopy[IMC3] - much[ipol];
+      Real frac = polch[ipol]*(1.-aint) + polch[ipol+1]*aint;
+      stokes[0] = 1.0;
+      stokes[1] = frac;
+      stokes[2] = 0.0;
+      stokes[3] = 0.0;
+      std::complex<Real> tcopy[4][4];
+      StokesToTensor(stokes,tcopy);
+      pphot->PolarizationToCoord(tcopy,econ,ip);
     //pphot->PrintPhoton("midlplane crossing",ip);
-
+    }
   } // if (reverse)
 }
 

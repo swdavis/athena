@@ -59,9 +59,9 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   time_acc = pin->GetOrAddBoolean("montecarlo","time_acc",false);
   raytrace_flag = pin->GetOrAddBoolean("montecarlo", "raytrace", false);
   if (raytrace_flag)
-    general_mover_flag = true;
+    general_pusher_flag = true;
   else
-    general_mover_flag = pin->GetOrAddBoolean("montecarlo","general_mover",false);
+    general_pusher_flag = pin->GetOrAddBoolean("montecarlo","general_pusher",false);
   scattering_meth = GetScatteringFlag(pin->GetOrAddString("montecarlo","scattering",
                                                           "none"));
   nuser_var = 0; // photon user variables to zero

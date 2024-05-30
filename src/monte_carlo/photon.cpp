@@ -18,7 +18,7 @@
 // class variable initialization
 bool Photon::initialized = false;
 bool Photon::polarized = false;
-bool Photon::general_mover_flag = false;
+bool Photon::general_pusher_flag = false;
 
 int Photon::inscp = -1, Photon::istatp = -1, Photon::itrp = -1;
 int Photon::ii1p = -1, Photon::ii2p = -1, Photon::ii3p = -1;
@@ -97,13 +97,13 @@ void Photon::PrintPhoton(int ip) {
             << std::endl
             << "k: " << k1p[ip] << " " << k2p[ip] << " " << k3p[ip] << " " << k0p[ip]
             << std::endl;
-  if (general_mover_flag) {
+  if (general_pusher_flag) {
     std::cout << "dk: " << dk1p[ip] << " " << dk2p[ip] << " " << dk3p[ip] << " "
               << dk0p[ip] << std::endl;
   }
   if (polarized) {
     std:: cout << "stokes: " << sip[ip] << " " << sqp[ip] << " " << sup[ip] << std::endl;
-    if (general_mover_flag) {
+    if (general_pusher_flag) {
       std:: cout << "pol tensor: ";
         for (int k = 0; k < 4; k++) {
           for (int l = 0; l < 4; l++) {
@@ -252,8 +252,8 @@ void Photon::Initialize(MonteCarlo *pmc, ParameterInput *pin) {
   ik2p = AddRealProperty("k2");
   ik3p = AddRealProperty("k3");
 
-  if (pmc->general_mover_flag) {
-    general_mover_flag = true;
+  if (pmc->general_pusher_flag) {
+    general_pusher_flag = true;
     // Add change in photon momentum.
     idk0p = AddRealProperty("dk0");
     idk1p = AddRealProperty("dk1");
@@ -277,7 +277,7 @@ void Photon::Initialize(MonteCarlo *pmc, ParameterInput *pin) {
     isqp = AddRealProperty("sqp");
     isup = AddRealProperty("sup");
     isvp = AddRealProperty("svp");
-    if (general_mover_flag) {
+    if (general_pusher_flag) {
       // Add complex polarization tensor
       for (int i=0; i<4; i++) {
         for (int j=0; j<4; j++) {
@@ -403,7 +403,7 @@ void Photon::SendToNeighbors() {
     for (int j = 0; j < naux; ++j)
       *pr++ = aux[j][k];
     // copy complex properties
-    if (general_mover_flag && polarized) {
+    if (general_pusher_flag && polarized) {
       std::complex<Real> *pc(ppb->cbuf + ParticleBuffer::ncplx * ppb->npar);
       for (int j = 0; j < ncplx; ++j) {
         *pc++ = cplxprop[j][k];
@@ -448,7 +448,7 @@ void Photon::SendToNeighbors() {
                   dst, send.tag + 2, my_comm, &req);
         MPI_Request_free(&req);
         // Send complex properties
-        if (general_mover_flag && polarized) {
+        if (general_pusher_flag && polarized) {
           MPI_Isend(send.cbuf, npsend * ParticleBuffer::ncplx, MPI_ATHENA_COMPLEX,
                     dst, send.tag + 3, my_comm, &req);
           MPI_Request_free(&req);
@@ -591,7 +591,7 @@ bool Photon::ReceiveFromNeighbors() {
 	    //MPI_Status stat;
 	    //MPI_Request_get_status(recv.reqr,&test,&stat);
 	    //printf("t2: %d %d %d %d %d %d %d %d %d %d\n",Globals::my_rank,nb_rank,nb.snb.lid,nb.bufid,recv.tag+1,pmy_block->lid,test,stat.MPI_SOURCE,stat.MPI_TAG,stat.MPI_ERROR);
-            if (general_mover_flag && polarized) {
+            if (general_pusher_flag && polarized) {
               MPI_Irecv(recv.cbuf, recv.npar * ParticleBuffer::ncplx, MPI_ATHENA_COMPLEX,
                         nb_rank, recv.tag + 3, my_comm, &recv.reqc);
             }
@@ -608,7 +608,7 @@ bool Photon::ReceiveFromNeighbors() {
         if (!recv.flagr) {
           MPI_Test(&recv.reqr, &recv.flagr, MPI_STATUS_IGNORE);
 	}
-        if (general_mover_flag && polarized) {
+        if (general_pusher_flag && polarized) {
           if (!recv.flagc)
             MPI_Test(&recv.reqc, &recv.flagc, MPI_STATUS_IGNORE);
           if (recv.flagi && recv.flagr && recv.flagc) {
@@ -625,7 +625,7 @@ bool Photon::ReceiveFromNeighbors() {
 	    //printf("b: %d %d %d %d %d\n",Globals::my_rank,nb_rank,nb.snb.lid,nb.bufid,recv_[nb.bufid].tag+1);
 	    //printf("n: %d\n",recv.flagn);
 	    MPI_Wait(&recv.reqr, MPI_STATUS_IGNORE);
-	    //printf("wait %d\n",Globals::my_rank);	    
+	    //printf("wait %d\n",Globals::my_rank);
 	  }
         }
       }

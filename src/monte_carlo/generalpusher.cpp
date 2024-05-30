@@ -3,13 +3,13 @@
 // Copyright(C) 2014 James M. Stone <jmstone@princeton.edu> and other code contributors
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
-//! \file grmover.cpp
+//! \file grpusher.cpp
 //! \brief implementation for moving photons via integration with metric and connection
 
 // Athena++ headers
 #include "montecarlo.hpp"
 #include "photon.hpp"
-#include "photonmover.hpp"
+#include "photonpusher.hpp"
 #include "../mesh/mesh.hpp"
 
 // SWD: remove all of these
@@ -20,10 +20,10 @@
 #define max_iteration 2
 
 //----------------------------------------------------------------------------------------
-//! GeneralMover class constructor, derived from PhotonMover base class
+//! GeneralPusher class constructor, derived from PhotonPusher base class
 
-GeneralMover::GeneralMover(MonteCarloBlock *pmcb)
-  : PhotonMover(pmcb) {
+GeneralPusher::GeneralPusher(MonteCarloBlock *pmcb)
+  : PhotonPusher(pmcb) {
 
   step_par = pmy_mcb->stepsize;
 
@@ -32,15 +32,15 @@ GeneralMover::GeneralMover(MonteCarloBlock *pmcb)
 //----------------------------------------------------------------------------------------
 //! destructor
 
-GeneralMover::~GeneralMover() {
+GeneralPusher::~GeneralPusher() {
 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void GeneralMover::Move(Photon *pphot, int ips, int ipe)
+//! \fn void GeneralPusher::Move(Photon *pphot, int ips, int ipe)
 //! \brief Moves photon using geodesic integration
 
-void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
+void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
 
   MonteCarloBlock *pmcb = pmy_mcb;
   MCRandom *pran = pmy_mcb->pran;
@@ -118,7 +118,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
 
       if (pphot->IsNanPhoton(ip)) {
         pphot->statp[ip] = DESTROYED;
-        pphot->PrintPhoton("Photon returned Nan in general mover",ip);
+        pphot->PrintPhoton("Photon returned Nan in general pusher",ip);
       }
       step = StepSize(pphot,ip);
 
@@ -136,7 +136,7 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
       }*/
 
     if (iter >= checkmove) {
-      std::cout << "Warning: iter exceeded " << checkmove << " in photon mover."
+      std::cout << "Warning: iter exceeded " << checkmove << " in photon pusher."
                 << std::endl;
       pphot->PrintPhoton(ip);
       std::cout << "tau remaining, chi: " << tauremaining << " " << chi << std::endl;
@@ -147,10 +147,10 @@ void GeneralMover::Move(Photon *pphot, int ips, int ipe) {
 
 // SWD: The conversion from Curvalinear  to Cartesian should be generalized or removed
 //----------------------------------------------------------------------------------------
-//! \fn void GeneralMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4])
+//! \fn void GeneralPusher::CurvalinearToCartesian(Photon *pphot, Real kcart[4])
 //! \brief convert k vector from curvalinear to cartesian
 
-void GeneralMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
+void GeneralPusher::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
 
   /*
   Real r = pphot->x[IMC1];
@@ -173,10 +173,10 @@ void GeneralMover::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void GeneralMover::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip)
+//! \fn void GeneralPusher::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip)
 //! \brief update opacities after a photon has changed zones
 
-void GeneralMover::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip) {
+void GeneralPusher::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip) {
 
   pmy_mcb = pmcb;
 
@@ -207,10 +207,10 @@ void GeneralMover::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip)
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void GeneralMover::VerletStep(Photon *pphot, Real step, int ip)
+//! \fn void GeneralPusher::VerletStep(Photon *pphot, Real step, int ip)
 //! \brief performs a single verlet integration step
 
-void GeneralMover::VerletStep(Photon *pphot, Real step, int ip) {
+void GeneralPusher::VerletStep(Photon *pphot, Real step, int ip) {
 
   Real k_n1[NCOORD],k_n1_copy[NCOORD];
   Real dk_n1[NCOORD];
@@ -294,10 +294,10 @@ void GeneralMover::VerletStep(Photon *pphot, Real step, int ip) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void GeneralMover::PropogatePolarization(Photon *pphot, Real step, int ip)
+//! \fn void GeneralPusher::PropogatePolarization(Photon *pphot, Real step, int ip)
 //! \brief propogates polarization tensor a single step
 
-void GeneralMover::PropogatePolarization(Photon *pphot, Real step, int ip) {
+void GeneralPusher::PropogatePolarization(Photon *pphot, Real step, int ip) {
 
   // SWD: Gamma does not need recomputing
   //Real gamma[NCOORD][NCOORD][NCOORD];
@@ -333,13 +333,13 @@ void GeneralMover::PropogatePolarization(Photon *pphot, Real step, int ip) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real GeneralMover::StepSize(Photon *pphot, int ip)
+//! \fn Real GeneralPusher::StepSize(Photon *pphot, int ip)
 //! \brief computes stepsize based on size of current zone
 
 // SWD: Requires updates
 // return the stepsize based on the current zone and k-vector
 // this should be updated with every iteration since k continuously changes
-Real GeneralMover::StepSize(Photon *pphot, int ip) {
+Real GeneralPusher::StepSize(Photon *pphot, int ip) {
 
   if (!pmy_mcb->varystep_flag) {
     return step_par; // keep step constant

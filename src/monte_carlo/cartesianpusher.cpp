@@ -3,37 +3,37 @@
 // Copyright(C) 2014 James M. Stone <jmstone@princeton.edu> and other code contributors
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
-//! \file cartesianmover.cpp
+//! \file cartesianpusher.cpp
 //  \brief implementation for moving photons through cartesian grid
 
 // Athena++ headers
 #include "photon.hpp"
-#include "photonmover.hpp"
+#include "photonpusher.hpp"
 #include "../mesh/mesh.hpp"
 
 // function prototypes
 Real DistanceToNearestFace(MCCoord *pco, Photon *pphot, int ip);
 
 //----------------------------------------------------------------------------------------
-//! CartesianMover class constructor, derived from PhotonMover base class
+//! CartesianPusher class constructor, derived from PhotonPusher base class
 
-CartesianMover::CartesianMover(MonteCarloBlock *pmcb)
-  : PhotonMover(pmcb) {
+CartesianPusher::CartesianPusher(MonteCarloBlock *pmcb)
+  : PhotonPusher(pmcb) {
 
 }
 
 //----------------------------------------------------------------------------------------
 //! destructor
 
-CartesianMover::~CartesianMover() {
+CartesianPusher::~CartesianPusher() {
 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void CartesianMover::Move(Photon *pphot, int ips, int ipe)
+//! \fn void CartesianPusher::Move(Photon *pphot, int ips, int ipe)
 //! \brief Moves photon using cell-by-cell approach through spherical polar grid
 
-void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
+void CartesianPusher::Move(Photon *pphot, int ips, int ipe) {
 
   MonteCarloBlock *pmcb = pmy_mcb;
   MCRandom *pran = pmy_mcb->pran;
@@ -167,7 +167,7 @@ void CartesianMover::Move(Photon *pphot, int ips, int ipe) {
     }
 
     if (iter >= checkmove) {
-      std::cout << "Warning: iter exceeded " << checkmove << " in photon mover."
+      std::cout << "Warning: iter exceeded " << checkmove << " in photon pusher."
                 << std::endl;
       std::cout << "tau: " << tau0 << " " << tauremaining << std::endl;
       pphot->PrintPhoton(ip);

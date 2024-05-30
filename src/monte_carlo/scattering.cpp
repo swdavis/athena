@@ -8,7 +8,7 @@
 
 // Athena++ headers
 #include "montecarlo.hpp"
-#include "photonmover.hpp"
+#include "photonpusher.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn void NoScatter(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe)
@@ -61,7 +61,7 @@ void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
 void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
 
   MCRandom *pran = pmcb->pran;
-  PhotonMover *pmover = pmcb->pmover;
+  PhotonPusher *ppusher = pmcb->ppusher;
 
   for (int ip=ips; ip<=ipe; ip++) {
 
@@ -72,7 +72,7 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int 
     stokes[2] = pphot->sup[ip] / norm;
 
     // SWD: should be done outside of scattering -- i.e. transform to tetrad
-    //pmover->CurvalinearToCartesian(pphot);
+    //ppusher->CurvalinearToCartesian(pphot);
 
     // Polarized scattering must be computed relative to cartesian bases due to
     // definition of stokes vectors
@@ -226,7 +226,7 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int 
     kz = mup;
 
     // SWD: Should be done outside of scattering
-    //pmover->CartesianToCurvalinear(pphot);
+    //ppusher->CartesianToCurvalinear(pphot);
   } // end loop over ip
 
 }
@@ -360,7 +360,7 @@ void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
                              int ipe) {
 
   MCRandom *pran = pmcb->pran;
-  PhotonMover *pmover = pmcb->pmover;
+  PhotonPusher *ppusher = pmcb->ppusher;
 
   for (int ip=ips; ip<=ipe; ip++) {
 
@@ -371,7 +371,7 @@ void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
     stokes[2] = pphot->sup[ip] / norms;
 
     // SWD: needs to be generalized
-    //pmover->CurvalinearToCartesian(pphot);
+    //ppusher->CurvalinearToCartesian(pphot);
     // Polarized scattering must be computed relative to cartesian basis due
     // to definition of stokes vectors
     Real &kx = pphot->k1p[ip];
@@ -510,7 +510,7 @@ void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
     kz = k3p;
 
     // SWD: move outside of scattering
-    //pmover->CartesianToCurvalinear(pphot);
+    //ppusher->CartesianToCurvalinear(pphot);
   } // end loop over ip
 }
 
@@ -529,7 +529,7 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe
     Real &kz = pphot->k3p[ip];
 
     bool sphnorm = false;
-    if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_mover_flag)) {
+    if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_pusher_flag)) {
       sphnorm = true;
       ky *= pphot->x1p[ip];
       kz *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
@@ -610,7 +610,7 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe
 void ScatterDust(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
 
   MCRandom *pran = pmcb->pran;
-  PhotonMover *pmover = pmcb->pmover;
+  PhotonPusher *ppusher = pmcb->ppusher;
 
   Real g=0.41; //will make an parameter
   Real g2 = g*g;
@@ -802,7 +802,7 @@ void ScatterDust(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
     kz = cthp;
 
     // SWD: Should be done outside of scattering
-    //pmover->CartesianToCurvalinear(pphot);
+    //ppusher->CartesianToCurvalinear(pphot);
   } // end loop over ip
 }
 

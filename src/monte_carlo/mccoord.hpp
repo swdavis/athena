@@ -90,6 +90,23 @@ public:
 };
 
 //----------------------------------------------------------------------------------------
+//! \class MCKerrSchildCartesian
+//! \brief derived class for cartesian Kerr-Schild coordinates
+
+class MCKerrSchildCartesian: public MCCoord {
+public:
+  MCKerrSchildCartesian(Coordinates *pcoord, MonteCarloBlock *pmcb);
+  MCKerrSchildCartesian(int ncells1, int ncells2, int ncells3, bool acc);
+  ~MCKerrSchildCartesian();
+
+  // functions
+  void Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
+  void Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
+  void InverseMetric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
+
+};
+
+//----------------------------------------------------------------------------------------
 //! \class MCCylindrical
 //! \brief derived class for Cylindrical coordinates
 

@@ -22,7 +22,7 @@
 #include "../mesh/mesh.hpp"
 #include "../monte_carlo/montecarlo.hpp"
 #include "../monte_carlo/photon.hpp"
-#include "../monte_carlo/photonmover.hpp"
+#include "../monte_carlo/photonpusher.hpp"
 #include "../globals.hpp"
 
 #if !MONTE_CARLO_ENABLED
@@ -38,8 +38,8 @@ namespace {
   Real logemin, logemax;
 
   // function headers
-  void SphericalEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover, int ip);
-  void TimedEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonMover *pmover, int ip);
+  void SphericalEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonPusher *ppusher, int ip);
+  void TimedEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonPusher *ppusher, int ip);
 }
 
 
@@ -315,12 +315,12 @@ namespace {
 
 // Used to evalue photons time distribution as fixed spherical
 // escape surface
-void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
+void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher,
                      int ip) {
 
-  pphot->user[0][ip] += pmover->dl * pphot->wp[ip];
-  pphot->user[1][ip] += pmover->dl * pphot->wp[ip] * pphot->ep[ip];
-  pphot->user[2][ip] += pmover->dl * pphot->wp[ip] * pphot->acp[ip];
+  pphot->user[0][ip] += ppusher->dl * pphot->wp[ip];
+  pphot->user[1][ip] += ppusher->dl * pphot->wp[ip] * pphot->ep[ip];
+  pphot->user[2][ip] += ppusher->dl * pphot->wp[ip] * pphot->acp[ip];
 
   // First check radius condition
   Real r = sqrt(SQR(pphot->x1p[ip])+SQR(pphot->x2p[ip])+SQR(pphot->x3p[ip]));
@@ -339,7 +339,7 @@ void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
 }
 
 // Used to test photons radial distributions after a fixed travel time
-void TimedEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover,
+void TimedEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher,
                  int ip) {
 
   // First check radius condition

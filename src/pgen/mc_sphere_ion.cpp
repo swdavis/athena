@@ -29,7 +29,7 @@
 #include "../mesh/mesh.hpp"
 #include "../monte_carlo/montecarlo.hpp"
 #include "../monte_carlo/photon.hpp"
-#include "../monte_carlo/photonmover.hpp"
+#include "../monte_carlo/photonpusher.hpp"
 #include "../parameter_input.hpp"
 #include "../scalars/scalars.hpp"
 
@@ -174,7 +174,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     pphot->k3p[ip] = mu;
 
     // Resize direction vector to sphpol code coords
-    if (pphot->general_mover_flag) {
+    if (pphot->general_pusher_flag) {
       pphot->k2p[ip] /= pphot->x1p[ip];
       pphot->k3p[ip] /= pphot->x1p[ip] * sin(pphot->x2p[ip]);
     }
