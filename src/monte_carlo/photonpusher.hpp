@@ -139,6 +139,8 @@ public:
   void CurvalinearToCartesian(Photon *pphot, Real kcart[4]);
   void UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip);
   void VerletStep(Photon *pphot, Real step, int ip);
+  void RK4Step(Photon *pphot, Real step, int ip);
+  void SubStep(Real xcon[4], Real kcov[4], Real dl[8]);
   void PropogatePolarization(Photon *nphot, Real step, int ip);
   Real StepSize(Photon *pphot, int ip);
 

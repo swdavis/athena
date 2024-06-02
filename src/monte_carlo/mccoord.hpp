@@ -30,9 +30,11 @@ public:
   AthenaArray<Real> vol;
   AthenaArray<Real> dmin;
 
-  virtual void Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
-  virtual void InverseMetric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
-  virtual void Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
+  virtual void Metric(Real x[4],Real gcov[4][4]);
+  virtual void MetricDerivative(Real x[4],Real dgcov[4][4][4]);
+  virtual void InverseMetric(Real x[4],Real gcon[4][4]);
+  virtual void InverseMetricDerivative(Real x[4],Real dgcon[4][4][4]);
+  virtual void Connect(Real x[4],Real gamma[4][4][4]);
 
   Real GetMass() const {return bh_mass_;}
   Real GetSpin() const {return bh_spin_;}
@@ -68,41 +70,8 @@ public:
   ~MCSphericalPolar();
 
   // functions
-  void Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
-  void Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
-};
-
-//----------------------------------------------------------------------------------------
-//! \class MCKerrSchild
-//! \brief derived class for Kerr-Schild coordinates
-
-class MCKerrSchild: public MCCoord {
-public:
-  MCKerrSchild(Coordinates *pcoord, MonteCarloBlock *pmcb);
-  MCKerrSchild(int ncells1, int ncells2, int ncells3, bool acc);
-  ~MCKerrSchild();
-
-  // functions
-  void Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
-  void Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
-  void InverseMetric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
-
-};
-
-//----------------------------------------------------------------------------------------
-//! \class MCKerrSchildCartesian
-//! \brief derived class for cartesian Kerr-Schild coordinates
-
-class MCKerrSchildCartesian: public MCCoord {
-public:
-  MCKerrSchildCartesian(Coordinates *pcoord, MonteCarloBlock *pmcb);
-  MCKerrSchildCartesian(int ncells1, int ncells2, int ncells3, bool acc);
-  ~MCKerrSchildCartesian();
-
-  // functions
-  void Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
-  void Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
-  void InverseMetric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
+  void Metric(Real x[4], Real gcov[4][4]);
+  void Connect(Real x[4], Real gamma[4][4][4]);
 
 };
 
@@ -117,8 +86,44 @@ public:
   ~MCCylindrical();
 
   // functions
-  void Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
-  void Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
+  void Metric(Real x[4], Real gcov[4][4]);
+  void Connect(Real x[4], Real gamma[4][4][4]);
+
+};
+
+//----------------------------------------------------------------------------------------
+//! \class MCKerrSchild
+//! \brief derived class for Kerr-Schild coordinates
+
+class MCKerrSchild: public MCCoord {
+public:
+  MCKerrSchild(Coordinates *pcoord, MonteCarloBlock *pmcb);
+  MCKerrSchild(int ncells1, int ncells2, int ncells3, bool acc);
+  ~MCKerrSchild();
+
+  // functions
+  void Metric(Real x[4], Real gcov[4][4]);
+  void InverseMetric(Real x[4], Real gcov[4][4]);
+  void Connect(Real x[4], Real gamma[4][4][4]);
+  void InverseMetricDerivative(Real x[4], Real dgcon[4][4][4]);
+
+};
+
+//----------------------------------------------------------------------------------------
+//! \class MCKerrSchildCartesian
+//! \brief derived class for cartesian Kerr-Schild coordinates
+
+class MCKerrSchildCartesian: public MCCoord {
+public:
+  MCKerrSchildCartesian(Coordinates *pcoord, MonteCarloBlock *pmcb);
+  MCKerrSchildCartesian(int ncells1, int ncells2, int ncells3, bool acc);
+  ~MCKerrSchildCartesian();
+
+  // functions
+  void Metric(Real x[4], Real gcov[4][4]);
+  void InverseMetric(Real x[4], Real gcov[4][4]);
+  void Connect(Real x[4], Real gamma[4][4][4]);
+  void InverseMetricDerivative(Real x[4], Real dgcon[4][4][4]);
 
 };
 
@@ -133,9 +138,10 @@ public:
   ~MCBoyerLindquist();
 
   // functions
-  void Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]);
-  void Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
-  void InverseMetric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]);
+  void Metric(Real x[4], Real gcov[4][4]);
+  void InverseMetric(Real x[4], Real gcov[4][4]);
+  void Connect(Real x[4], Real gamma[4][4][4]);
+
 };
 
 //----------------------------------------------------------------------------------------

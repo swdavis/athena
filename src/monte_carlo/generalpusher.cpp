@@ -294,6 +294,71 @@ void GeneralPusher::VerletStep(Photon *pphot, Real step, int ip) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void GeneralPusher::RK4Step(Photon *pphot, Real step, int ip)
+//! \brief performs a single verlet integration step
+
+void GeneralPusher::RK4Step(Photon *pphot, Real step, int ip) {
+
+  Real k_n1[NCOORD],k_n1_copy[NCOORD];
+  Real dk_n1[NCOORD];
+  Real error;
+  Real x[NCOORD], k0[NCOORD];
+
+  // SWD: Need to think about how to do this better without invoking recurssion
+  // SWD: Need to rename variables and clean this up with new scheme
+
+  x[IMC0] = pphot->x0p[ip] += (pphot->k0p[ip])*step + 0.5*(pphot->dk0p[ip])*SQR(step);
+  x[IMC1] = pphot->x1p[ip] += (pphot->k1p[ip])*step + 0.5*(pphot->dk1p[ip])*SQR(step);
+  x[IMC2] = pphot->x2p[ip] += (pphot->k2p[ip])*step + 0.5*(pphot->dk2p[ip])*SQR(step);
+  x[IMC3] = pphot->x3p[ip] += (pphot->k3p[ip])*step + 0.5*(pphot->dk3p[ip])*SQR(step);
+
+  k0[IMC0] = pphot->k0p[ip];
+  k0[IMC1] = pphot->k1p[ip];
+  k0[IMC2] = pphot->k2p[ip];
+  k0[IMC3] = pphot->k3p[ip];
+
+
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void GeneralPusher::SubStep(Real xcon[4], Real kcov[4], Real dl[9])
+//! \brief performs a single verlet integration step
+
+void GeneralPusher::SubStep(Real xcon[4], Real kcov[4], Real dl[8]) {
+
+
+  Real gcov[4][4];
+  Real gcon[4][4];
+  Real dgcon[4][4][4];
+  pcoord->Metric(xcon, gcov);
+  pcoord->InverseMetric(xcon, gcon);
+  pcoord->InverseMetricDerivative(xcon, dgcon);
+
+  for (int i = 0; i < 9; i++)
+    dl[i] = 0.0;
+
+  for (int j = 0; j < 4; j++)
+    for (int i = 0; i < 4; i++)
+      dl[j] += gcon[j][i] * kcov[i];
+
+  for (int k = 0; k < 4; k++)
+    for (int j = 0; j < 4; j++)
+      for (int i = 0; i < 4; i++)
+        dl[k+4] -= 0.5 * dgcon[k][j][i] * kcov[j] * kcov[i];
+  // proper distance
+  /*Real ku[4] = {};
+  for (int j = 1; j < 4; j++)
+    for (int i = 0; i < 4; i++)
+      ku[j] += (gcon[j][i] - gcon[0][j] * gcon[0][i] / gcon[0][0]) * kcov[i];
+  for (int j = 1; j < 4; j++)
+    for (int i = 1; i < 4; i++)
+      dl[8] += gcov[j][i] * ku[j] * ku[i];
+      dl[8] = -std::sqrt(dl[8]);*/
+
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void GeneralPusher::PropogatePolarization(Photon *pphot, Real step, int ip)
 //! \brief propogates polarization tensor a single step
 

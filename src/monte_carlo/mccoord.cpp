@@ -11,8 +11,6 @@
 // * inverse metric for spherical polar and cylindrical
 // * remove zeroing of metric,connection at top?
 // * remove extraneous variable definitions
-// * rename X to x to better match athena style
-// * add mass parameter to black hole metrics
 // * conversion to cgs units for black hole metrics?
 
 // Athena++ headers
@@ -117,13 +115,13 @@ MCCoord::~MCCoord() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCCoord::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD])
+//! \fn void MCCoord::Metric(Real x[4], Real gcov[4][4])
 //! \brief compute metric in flat spacetime cartesian
 
-void MCCoord::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
+void MCCoord::Metric(Real x[4], Real gcov[4][4]) {
 
-  for (int i = 0; i < NCOORD; i++) {
-    for (int j = 0; j < NCOORD; j++) {
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
       if (i == j) {
         if (i == IMC0)
           gcov[i][i] = -1.;
@@ -136,13 +134,28 @@ void MCCoord::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCCoord::InverseMetric(Real x[NCOORD], Real gcon[NCOORD][NCOORD])
+//! \fn void MCCoord::MetricDerivative(Real x[4], Real dgcov[4][4][4])
+//! \brief compute metric derivative in flat spacetime cartesian
+
+void MCCoord::MetricDerivative(Real x[4], Real dgcov[4][4][4]) {
+
+  for(int i = 0; i < 4; i++) {
+    for(int j = 0; j < 4; j++) {
+      for(int k = 0; k < 4; k++) {
+        dgcov[i][j][k]=0;
+      }
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCCoord::InverseMetric(Real x[4], Real gcon[4][4])
 //! \brief compute inverse metric in flat spacetime cartesian
 
-void MCCoord::InverseMetric(Real x[NCOORD], Real gcon[NCOORD][NCOORD]) {
+void MCCoord::InverseMetric(Real x[4], Real gcon[4][4]) {
 
-  for (int i = 0; i < NCOORD; i++) {
-    for (int j = 0; j < NCOORD; j++) {
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
       if (i == j) {
         if (i == IMC0)
           gcon[i][i] = -1.;
@@ -155,14 +168,30 @@ void MCCoord::InverseMetric(Real x[NCOORD], Real gcon[NCOORD][NCOORD]) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCCoord::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD])
+//! \fn void MCCoord::InverseMetricDerivative(Real x[4], Real dgcon[4][4][4])
+//! \brief compute derivative of inverse metric in flat spacetime cartesian
+
+void MCCoord::InverseMetricDerivative(Real x[4], Real dgcon[4][4][4]) {
+
+  for(int i = 0; i < 4; i++) {
+    for(int j = 0; j < 4; j++) {
+      for(int k = 0; k < 4; k++) {
+        dgcon[i][j][k]=0;
+      }
+    }
+  }
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCCoord::Connect(Real x[4], Real gamma[4][4][4])
 //! \brief compute connection in flat spacetime cartesian
 
-void MCCoord::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]) {
+void MCCoord::Connect(Real x[4], Real gamma[4][4][4]) {
 
-  for (int i = 0; i < NCOORD; i++) {
-    for (int j = 0; j < NCOORD; j++) {
-      for (int k = 0; k < NCOORD; k++) {
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      for (int k = 0; k < 4; k++) {
         gamma[i][j][k] = 0.;
       }
     }
@@ -215,13 +244,13 @@ MCSphericalPolar::~MCSphericalPolar() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCSphericalPolar::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD])
+//! \fn void MCSphericalPolar::Metric(Real x[4], Real gcov[4][4])
 //! \brief compute metric in flat spacetime spherical polar
 
-void MCSphericalPolar::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
+void MCSphericalPolar::Metric(Real x[4], Real gcov[4][4]) {
 
-  for (int i = 0; i < NCOORD; i++) {
-    for (int j = 0; j < NCOORD; j++) {
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
       gcov[i][j] = 0;
     }
   }
@@ -235,14 +264,14 @@ void MCSphericalPolar::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCSphericalPolar::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD])
+//! \fn void MCSphericalPolar::Connect(Real x[4], Real gamma[4][4][4])
 //! \brief compute connection in flat spacetime spherical polar
 
-void MCSphericalPolar::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]) {
+void MCSphericalPolar::Connect(Real x[4], Real gamma[4][4][4]) {
 
-  for(int i = 0; i < NCOORD; i++) {
-    for(int j = 0; j < NCOORD; j++) {
-      for(int k = 0; k < NCOORD; k++) {
+  for(int i = 0; i < 4; i++) {
+    for(int j = 0; j < 4; j++) {
+      for(int k = 0; k < 4; k++) {
         gamma[i][j][k]=0;
       }
     }
@@ -284,13 +313,13 @@ MCCylindrical::~MCCylindrical() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCCylindrical::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD])
+//! \fn void MCCylindrical::Metric(Real x[4], Real gcov[4][4])
 //! \brief compute metric in flat spacetime cylindrical
 
-void MCCylindrical::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
+void MCCylindrical::Metric(Real x[4], Real gcov[4][4]) {
 
-  for(int i = 0; i < NCOORD; i++) {
-    for(int j = 0; j < NCOORD; j++) {
+  for(int i = 0; i < 4; i++) {
+    for(int j = 0; j < 4; j++) {
       gcov[i][j] = 0;
     }
   }
@@ -302,14 +331,14 @@ void MCCylindrical::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCCylindrical::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD])
+//! \fn void MCCylindrical::Connect(Real x[4], Real gamma[4][4][4])
 //! \brief compute connection in flat spacetime cylindrical
 
-void MCCylindrical::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]) {
+void MCCylindrical::Connect(Real x[4], Real gamma[4][4][4]) {
 
-  for(int i = 0; i < NCOORD; i++) {
-    for(int j = 0; j < NCOORD; j++) {
-      for(int k = 0; k < NCOORD; k++) {
+  for(int i = 0; i < 4; i++) {
+    for(int j = 0; j < 4; j++) {
+      for(int k = 0; k < 4; k++) {
         gamma[i][j][k]=0;
       }
     }
@@ -343,13 +372,13 @@ MCKerrSchild::~MCKerrSchild() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCKerrSchild::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD])
+//! \fn void MCKerrSchild::Metric(Real x[4], Real gcov[4][4])
 //! \brief compute metric in spherical polar Kerr-Schild
 
-void MCKerrSchild::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
+void MCKerrSchild::Metric(Real x[4], Real gcov[4][4]) {
 
-  for (int i = 0; i < NCOORD; i++) {
-    for (int j = 0; j < NCOORD; j++) {
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
       gcov[i][j] = 0.;
     }
   }
@@ -385,14 +414,14 @@ void MCKerrSchild::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCKerrSchild::InverseMetric(Real x[NCOORD], Real gcon[NCOORD][NCOORD])
+//! \fn void MCKerrSchild::InverseMetric(Real x[4], Real gcon[4][4])
 //! \brief compute inverse metric in spherical polar Kerr-Schild
 
-void MCKerrSchild::InverseMetric(Real x[NCOORD], Real gcon[NCOORD][NCOORD]) {
+void MCKerrSchild::InverseMetric(Real x[4], Real gcon[4][4]) {
 
   // equations come from Takahasi (2007) Appendix
-  for (int i = 0; i < NCOORD; i++) {
-    for (int j = 0; j < NCOORD; j++) {
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
       gcon[i][j] = 0.;
     }
   }
@@ -425,14 +454,14 @@ void MCKerrSchild::InverseMetric(Real x[NCOORD], Real gcon[NCOORD][NCOORD]) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCKerrSchild::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD])
+//! \fn void MCKerrSchild::Connect(Real x[4], Real gamma[4][4][4])
 //! \brief compute connection in spherical polar Kerr-Schild
 
-void MCKerrSchild::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]) {
+void MCKerrSchild::Connect(Real x[4], Real gamma[4][4][4]) {
 
-  for(int i = 0; i < NCOORD; i++) {
-    for(int j = 0; j < NCOORD; j++) {
-      for(int k = 0; k < NCOORD; k++) {
+  for(int i = 0; i < 4; i++) {
+    for(int j = 0; j < 4; j++) {
+      for(int k = 0; k < 4; k++) {
         gamma[i][j][k]=0;
       }
     }
@@ -559,6 +588,111 @@ void MCKerrSchild::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void MCKerrSchild::InverseMetricDerivative(Real x[4], Real dgcon[4][4][4])
+//! \brief compute derivative of the inverse metric in spherical polar Kerr-Schild
+
+void MCKerrSchild::InverseMetricDerivative(Real x[4], Real dgcon[4][4][4]) {
+
+  for(int i = 0; i < 4; i++) {
+    for(int j = 0; j < 4; j++) {
+      for(int k = 0; k < 4; k++) {
+        dgcon[i][j][k]=0;
+      }
+    }
+  }
+
+  Real a = bh_spin_;
+  Real r = x[IMC1];
+  Real r2 = SQR(r);
+  Real sth = sin(x[IMC2]);
+  Real cth = cos(x[IMC2]);
+  Real cth2 = SQR(cth);
+  Real sth2 = SQR(sth);
+  Real s2th = 2.*sth*cth;
+  Real c2th = cth2 - sth2;
+
+  Real a2 = SQR(a);
+  Real sigma = r2 + a2 * cth2;
+  Real sigma2 = SQR(sigma);
+  Real alts = r2 - a2 * cth2;
+
+  dgcon[IMC1][IMC0][IMC0] = 2. * alts / sigma2;
+  dgcon[IMC1][IMC0][IMC1] = -dgcon[IMC1][IMC0][IMC0];
+  dgcon[IMC1][IMC1][IMC0] = dgcon[IMC1][IMC0][IMC1];
+  dgcon[IMC1][IMC1][IMC1] = 2.*(alts-a2*r*sth2) / sigma2;
+  dgcon[IMC1][IMC1][IMC3] = -2*a*r / sigma2;
+  dgcon[IMC1][IMC2][IMC2] = -2*r / sigma2;
+  dgcon[IMC1][IMC3][IMC1] = dgcon[IMC1][IMC1][IMC3];
+  dgcon[IMC1][IMC3][IMC3] = -2*r / sth2 / sigma2;
+
+  dgcon[IMC2][IMC0][IMC0] = -2.*a2*r*s2th / sigma2;
+  dgcon[IMC2][IMC0][IMC1] = 2.*a2*r*s2th / sigma2;
+  dgcon[IMC2][IMC1][IMC0] = dgcon[IMC2][IMC0][IMC1];
+  dgcon[IMC2][IMC1][IMC1] = a2*(a2+r*(r-2.))*s2th / sigma2;
+  dgcon[IMC2][IMC1][IMC3] = a*a2*s2th / sigma2;
+  dgcon[IMC2][IMC2][IMC2] = a2*s2th / sigma2;
+  dgcon[IMC2][IMC3][IMC1] = dgcon[IMC2][IMC1][IMC3];
+  dgcon[IMC2][IMC3][IMC3] = -2*(r2+a2*c2th)*cth/sth/sth2 / sigma2;
+}
+
+//----------------------------------------------------------------------------------------
+//! MCKerrSchild constructor, built from Coord and MonteCarloBlock
+
+MCKerrSchildCartesian::MCKerrSchildCartesian(Coordinates *pcoord, MonteCarloBlock *pmcb)
+  : MCCoord(pcoord,pmcb) {
+
+}
+
+//----------------------------------------------------------------------------------------
+//! MCKerrSchild constructor for processes without own MeshBlock
+
+MCKerrSchildCartesian::MCKerrSchildCartesian(int ncells1, int ncells2, int ncells3,
+                                             bool acc)
+  : MCCoord(ncells1,ncells2,ncells3,acc) {
+
+}
+
+//----------------------------------------------------------------------------------------
+//! destructor
+MCKerrSchildCartesian::~MCKerrSchildCartesian() {
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCKerrSchildCartesian::Metric(Real x[4], Real gcov[4][4])
+//! \brief compute metric in cartesian Kerr-Schild
+
+void MCKerrSchildCartesian::Metric(Real x[4], Real gcov[4][4]) {
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCKerrSchildCartesian::InverseMetric(Real x[4], Real gcov[4][4])
+//! \brief compute metric in cartesian Kerr-Schild
+
+void MCKerrSchildCartesian::InverseMetric(Real x[4], Real gcov[4][4]) {
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCKerrSchildCartesian::InverseMetricDerivative(Real x[4],
+//           Real dgcon[4][4][4])
+//! \brief compute derivative of inverse metric in cartesian Kerr-Schild
+
+void MCKerrSchildCartesian::InverseMetricDerivative(Real x[4], Real dgcon[4][4][4]) {
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCKerrSchildCartesian::Connect(Real x[4], Real gcov[4][4])
+//! \brief compute metric in cartesian Kerr-Schild
+
+void MCKerrSchildCartesian::Connect(Real x[4], Real gamma[4][4][4]) {
+
+
+}
+
+//----------------------------------------------------------------------------------------
 //! MCBoyerLindquist, built from Coord and MonteCarloBlock
 
 MCBoyerLindquist::MCBoyerLindquist(Coordinates *pcoord, MonteCarloBlock *pmcb)
@@ -579,14 +713,14 @@ MCBoyerLindquist::~MCBoyerLindquist() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCBoyerLindquist::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD])
+//! \fn void MCBoyerLindquist::Metric(Real x[4], Real gcov[4][4])
 //! \brief compute metric for Boyer-Lindquist coordinates
 
-void MCBoyerLindquist::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
+void MCBoyerLindquist::Metric(Real x[4], Real gcov[4][4]) {
 
   // equation for the Metric comes from the inside cover of Hartle
-  for (int i = 0; i < NCOORD; i++) {
-    for (int j = 0; j < NCOORD; j++) {
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
       gcov[i][j] = 0.;
     }
   }
@@ -615,16 +749,16 @@ void MCBoyerLindquist::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCBoyerLindquist::InverseMetric(Real x[NCOORD], Real gcon[NCOORD][NCOORD])
+//! \fn void MCBoyerLindquist::InverseMetric(Real x[4], Real gcon[4][4])
 //! \brief compute inverse metric for Boyer-Lindquist coordinates
 
-void MCBoyerLindquist::InverseMetric(Real x[NCOORD], Real gcon[NCOORD][NCOORD]) {
+void MCBoyerLindquist::InverseMetric(Real x[4], Real gcon[4][4]) {
 
   // Equation comes from ColinsCosmos.com/wiki/boyer-lindquist-coordinates, which
   // sites Frolov & Novikov Section D.1 (but I don't have access to this book)
 
-  for (int i = 0; i < NCOORD; i++) {
-    for (int j = 0; j < NCOORD; j++) {
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
       gcon[i][j] = 0.;
     }
   }
@@ -655,16 +789,16 @@ void MCBoyerLindquist::InverseMetric(Real x[NCOORD], Real gcon[NCOORD][NCOORD]) 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MCBoyerLindquist::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD])
+//! \fn void MCBoyerLindquist::Connect(Real x[4], Real gamma[4][4][4])
 //! \brief compute connection for Boyer-Lindquist coordinates
 
-void MCBoyerLindquist::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]) {
+void MCBoyerLindquist::Connect(Real x[4], Real gamma[4][4][4]) {
 
   // equations for the connection coefficients come from Frutos-Alfaro et al. (2012)
 
-  for (int i = 0; i < NCOORD; i++) {
-    for (int j = 0; j < NCOORD; j++) {
-      for (int k = 0; k < NCOORD; k++) {
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      for (int k = 0; k < 4; k++) {
         gamma[i][j][k] = 0.;
       }
     }
@@ -740,56 +874,6 @@ void MCBoyerLindquist::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD
   gamma[IMC3][IMC3][IMC1] = gamma[IMC3][IMC1][IMC3];
   gamma[IMC3][IMC3][IMC2] = gamma[IMC3][IMC2][IMC3];
 }
-
-
-//----------------------------------------------------------------------------------------
-//! MCKerrSchild constructor, built from Coord and MonteCarloBlock
-
-MCKerrSchildCartesian::MCKerrSchildCartesian(Coordinates *pcoord, MonteCarloBlock *pmcb)
-  : MCCoord(pcoord,pmcb) {
-
-}
-
-//----------------------------------------------------------------------------------------
-//! MCKerrSchild constructor for processes without own MeshBlock
-
-MCKerrSchildCartesian::MCKerrSchildCartesian(int ncells1, int ncells2, int ncells3, bool acc)
-  : MCCoord(ncells1,ncells2,ncells3,acc) {
-
-}
-
-//----------------------------------------------------------------------------------------
-//! destructor
-MCKerrSchildCartesian::~MCKerrSchildCartesian() {
-
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void MCKerrSchildCartesian::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD])
-//! \brief compute metric in cartesian Kerr-Schild
-
-void MCKerrSchildCartesian::Metric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
-
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void MCKerrSchildCartesian::InverseMetric(Real x[NCOORD], Real gcov[NCOORD][NCOORD])
-//! \brief compute metric in cartesian Kerr-Schild
-
-void MCKerrSchildCartesian::InverseMetric(Real x[NCOORD], Real gcov[NCOORD][NCOORD]) {
-
-}
-//----------------------------------------------------------------------------------------
-//! \fn void MCKerrSchildCartesian::Connect(Real x[NCOORD], Real gcov[NCOORD][NCOORD])
-//! \brief compute metric in cartesian Kerr-Schild
-
-void MCKerrSchildCartesian::Connect(Real x[NCOORD], Real gamma[NCOORD][NCOORD][NCOORD]) {
-
-
-}
-
-
-
 
 //----------------------------------------------------------------------------------------
 //! MCMinkowski constructor, built from Coord and MonteCarloBlock
