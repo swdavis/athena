@@ -626,7 +626,7 @@ void MCKerrSchild::InverseMetricDerivative(Real x[4], Real dgcon[4][4][4]) {
   dgcon[IMC1][IMC3][IMC3] = -2*r / sth2 / sigma2;
 
   dgcon[IMC2][IMC0][IMC0] = -2.*a2*r*s2th / sigma2;
-  dgcon[IMC2][IMC0][IMC1] = 2.*a2*r*s2th / sigma2;
+  dgcon[IMC2][IMC0][IMC1] = -dgcon[IMC2][IMC0][IMC0];
   dgcon[IMC2][IMC1][IMC0] = dgcon[IMC2][IMC0][IMC1];
   dgcon[IMC2][IMC1][IMC1] = a2*(a2+r*(r-2.))*s2th / sigma2;
   dgcon[IMC2][IMC1][IMC3] = a*a2*s2th / sigma2;
