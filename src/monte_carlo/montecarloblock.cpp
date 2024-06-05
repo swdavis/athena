@@ -20,6 +20,7 @@
 #include "../mesh/mesh.hpp"
 #include "../hydro/hydro.hpp"
 #include "../globals.hpp"
+#include "../scalars/scalars.hpp"
 
 // SWD: remove these
 static Real test;
@@ -339,6 +340,10 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   if (nx3 > 1) ncells3 = nx3 + 2*(NGHOST);
   rho.NewAthenaArray(ncells3,ncells2,ncells1);
   tgas.NewAthenaArray(ncells3,ncells2,ncells1);
+  if (boosts || (COORDINATE_SYSTEM != "cartesian")) {
+    tran_cmv.NewAthenaArray(ncells3,ncells2,ncells1,4,4);
+    tran_crd.NewAthenaArray(ncells3,ncells2,ncells1,4,4);
+  }
   if (boosts) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
   if (NSCALARS > 0) scalars.NewAthenaArray(ncells3,ncells2,ncells1);
   // moments is 1 (Er) + 3 (Fr) + 9 (Pr) + 1 (Eave) + 1 (net cool)
@@ -374,6 +379,10 @@ MonteCarloBlock::~MonteCarloBlock() {
 
   rho.DeleteAthenaArray();
   tgas.DeleteAthenaArray();
+  if (boosts || (COORDINATE_SYSTEM != "cartesian")) {
+    tran_cmv.DeleteAthenaArray();
+    tran_crd.DeleteAthenaArray();
+  }
   if (boosts) vel.DeleteAthenaArray();
   if (NSCALARS > 0) scalars.DeleteAthenaArray();
   if (mom_flag_lab) moments.DeleteAthenaArray();
@@ -1596,6 +1605,90 @@ void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe) {
         * emiss_to_weight;
 
     } // end loop over ip
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::GetDensity()
+//! \brief Make hard copy of density from MeshBlock to MonteCarloBlock.
+//  Uses hard copy so that rho is always in cgs units
+
+void MonteCarloBlock::GetDensity() {
+
+  for (int k=ks; k<=ke; ++k) {
+    for (int j=js; j<=je; ++j) {
+      for (int i=is; i<=ie; ++i) {
+        rho(k,j,i) = rho_cgs * pmy_block->phydro->u(IDN,k,j,i);
+      }
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::GetScalars(MonteCarloBlock *pmcb)
+//! \brief Make a hard copy of scalars from MeshBlock to MonteCarloBlock.
+
+void MonteCarloBlock::GetScalars() {
+
+  for (int k=ks; k<=ke; ++k) {
+    for (int j=js; j<=je; ++j) {
+      for (int i=is; i<=ie; ++i) {
+        scalars(k,j,i) = pmy_block->pscalars->s(0,k,j,i);
+      }
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::GetVelocities()
+//! \brief Make hard copy of velocites from MeshBlock to MonteCarloBlock.
+//  Uses hard copy so that velocities is always fraction of speed of light
+
+void MonteCarloBlock::GetVelocity() {
+
+
+  for (int k=ks; k<=ke; ++k) {
+    for (int j=js; j<=je; ++j) {
+      for (int i=is; i<=ie; ++i) {
+        Real rho = pmy_block->phydro->u(IDN,k,j,i);
+        vel(0,k,j,i) = vel_cgs * pmy_block->phydro->u(IM1,k,j,i) / rho;
+        vel(1,k,j,i) = vel_cgs * pmy_block->phydro->u(IM2,k,j,i) / rho;
+        vel(2,k,j,i) = vel_cgs * pmy_block->phydro->u(IM3,k,j,i) / rho;
+      }
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::GetTemperature()
+//! \brief default function for computing temperature if no user function provided.
+//  Assumes EOS of from P=RTd.
+
+void MonteCarloBlock::GetTemperature() {
+
+  if (pmy_mc->UserGetTemperature != nullptr) {
+    pmy_mc->UserGetTemperature(this);
+    return;
+  }
+
+  Real rideal = 8.314e7;
+  Hydro* phydro = pmy_block->phydro;
+
+  Real tconv;
+  if (tgas_cgs <= 0.)
+    tconv = 1. / rideal;
+  else
+    tconv = tgas_cgs;
+
+  // compute temperature from pressure and density
+  for (int k=ks; k<=ke; ++k) {
+    for (int j=js; j<=je; ++j) {
+      for (int i=is; i<=ie; ++i) {
+        Real temp = tconv * phydro->w(IEN,k,j,i) / phydro->w(IDN,k,j,i);
+        // apply temperature floor
+        tgas(k,j,i) = (temp > tfloor_cgs) ? temp : tfloor_cgs;
+      }
+    }
   }
 }
 

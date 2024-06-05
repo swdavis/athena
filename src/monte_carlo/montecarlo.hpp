@@ -69,8 +69,6 @@ typedef void (*UserMoveFunc_t)(MonteCarloBlock *pmcb, Photon *phot, PhotonPusher
 typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, MCCoord *pco, int ip);
 typedef void (*UserMomentFunc_t)(MonteCarloBlock *pmcb, Photon *phot, Real dl, int ip,
                                  int imom);
-//---------------------- prototypes for provided functions -------------------------------
-void DefaultGetTemperature(MonteCarloBlock *pmcb);
 //--------------------- prototypes for opacity.cpp functions -----------------------------
 Real NoOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
 Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
@@ -226,7 +224,7 @@ public:
   // function pointers
   UserMoveFunc_t UserWorkInMove;
   EmisFunc_t GetEmission;
-  TempFunc_t GetTemperature;
+  TempFunc_t UserGetTemperature;
   ScatFunc_t UserScattering;
   OpacFunc_t UserScatteringOpacity;
   OpacFunc_t UserAbsorptionOpacity;
@@ -258,9 +256,9 @@ private:
   // functions
   MCBValFunc_t BoundaryFunction_[6];
 
-  void GetDensity(MonteCarloBlock *pmcb);
-  void GetScalars(MonteCarloBlock *pmcb);
-  void GetVelocity(MonteCarloBlock *pmcb);
+  //void GetDensity(MonteCarloBlock *pmcb);
+  //void GetScalars(MonteCarloBlock *pmcb);
+  //void GetVelocity(MonteCarloBlock *pmcb);
 
 };
 
@@ -346,6 +344,8 @@ public:
   AthenaArray<Real> rho;
   AthenaArray<Real> tgas;
   AthenaArray<Real> vel;
+  AthenaArray<Real> tran_cmv;
+  AthenaArray<Real> tran_crd;
   AthenaArray<Real> planck_opacity; // for acceleration
   AthenaArray<Real> planck_inv_opacity; // for acceleration
 
@@ -377,7 +377,10 @@ public:
   // Functions for handling distributed emission over cells
   void ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &emm_tot);
   void SetEmissionCellWeight(Photon *pphot, int ips, int ipe);
-
+  void GetDensity();
+  void GetScalars();
+  void GetVelocity();
+  void GetTemperature();
 
 private:
   int i1_, i2_, i3_; // used for emission
