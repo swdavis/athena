@@ -148,33 +148,6 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
   } // end loop over ip
 }
 
-// SWD: The conversion from Curvalinear  to Cartesian should be generalized or removed
-//----------------------------------------------------------------------------------------
-//! \fn void GeneralPusher::CurvalinearToCartesian(Photon *pphot, Real kcart[4])
-//! \brief convert k vector from curvalinear to cartesian
-
-void GeneralPusher::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
-
-  /*
-  Real r = pphot->x[IMC1];
-  Real cth = cos(pphot->x[IMC2]);
-  Real sth = sqrt(1. - SQR(cth));
-  Real cph = cos(pphot->x[IMC3]);
-  Real sph = sin(pphot->x[IMC3]);
-
-  Real nth = pphot->k[IMC2]*r;
-  Real nph = pphot->k[IMC3]*r*sth;
-  // Compute cartesian
-  kcart[IMC1] = (pphot->k[IMC1]*sth*cph+nth*cth*cph-nph*sph);
-  kcart[IMC2] = (pphot->k[IMC1]*sth*sph+nth*cth*sph+nph*cph);
-  kcart[IMC3] = (pphot->k[IMC1]*cth-nth*sth);
-  Real norm = sqrt(SQR(kcart[IMC1])+SQR(kcart[IMC2])+SQR(kcart[IMC3]));
-  kcart[IMC1] /= norm;
-  kcart[IMC2] /= norm;
-  kcart[IMC3] /= norm;
-  */
-}
-
 //----------------------------------------------------------------------------------------
 //! \fn void GeneralPusher::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip)
 //! \brief update opacities after a photon has changed zones
@@ -192,6 +165,7 @@ void GeneralPusher::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip
     int i3 = pphot->i3p[ip];
     if (pmcb->boosts) {
       // Shift photon energy to comoving frame
+      //shift = pmy_mcb->LorentzTransformFrequencyShift(pphot,ip);
       shift = pmy_mcb->LorentzTransformFrequencyShift(pphot,ip);
       Real energy = pphot->ep[ip] * shift;
       // compute opacities in comoving frame

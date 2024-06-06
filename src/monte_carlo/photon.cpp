@@ -751,7 +751,8 @@ void Photon::GetPositionIndices(int ibegin, int iend) {
     MonteCarloBlock *pmcb = pmy_mcb;
     if (pmcb->boosts) {
       // Shift photon energy to comoving frame
-      Real shift = pmcb->LorentzTransformFrequencyShift(this,k);
+      //Real shift = pmcb->LorentzTransformFrequencyShift(this,k);
+      Real shift = pmcb->FrequencyShiftComoving(this,k);
       if (( std::isinf(shift)) || (std::isnan(shift)) ) {
         printf("shift: %d %d %d %g %g %g %g\n",i1p[k],i2p[k],i3p[k],shift,xi1,xi2,xi3);
       }

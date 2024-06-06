@@ -212,6 +212,7 @@ public:
   bool dynamic; // is monte carlo evolving with time
   bool coupled; // is monte carlo evolution coupled to hydro
   bool boosts;  // Compute lorentz transformations
+  bool tetrads; // convert from coordinate frame
   bool emission_array;  // Compute and save zone emissivities
   bool emission_eqwt; // Set initial weights equal
   bool polarized;// track photon polarization
@@ -255,10 +256,6 @@ private:
 
   // functions
   MCBValFunc_t BoundaryFunction_[6];
-
-  //void GetDensity(MonteCarloBlock *pmcb);
-  //void GetScalars(MonteCarloBlock *pmcb);
-  //void GetVelocity(MonteCarloBlock *pmcb);
 
 };
 
@@ -313,6 +310,7 @@ public:
   bool call_srcterms;
 
   bool boosts;  // Compute lorentz transformations
+  bool tetrads; // Compute tetrads
   bool coupled; // Whether time dependent code is coupled to hydro
   bool coherent_scattering; // photon does notchange energy after scattering
   bool acceleration;  // use MRW acceleration
@@ -331,6 +329,7 @@ public:
   bool varystep_flag; // use variable (true) or constant (false) step
 
   Real rho_cgs, vel_cgs, tgas_cgs, tfloor_cgs, l_cgs;
+  Real betamax;
   Real stepsize;
   Real minweight;
   Real emiss_to_weight; // used relate weight to emission array
@@ -355,8 +354,6 @@ public:
   void RayTracePhotonsOnBlock(); // Ray trace photon on this block
   void TransferPhotonsOnBlock(); // Transfer photons on this block
   void CoupleMonteCarloToFluid(Real dt);  // couple monte carlo to mesh
-  void CoordinateToComoving(Photon *pphot, int ips, int ipe);
-  void ComovingToCoordinate(Photon *pphot, int ips, int ipe);
   void LorentzTransform(Photon *pphot, const Real sign, int ips, int ipe);
   Real LorentzTransformFrequencyShift(Photon *pphot, int ip);
   void TetradTransform(Photon *pphot, const Real sign, int ips, int ipe);
@@ -381,6 +378,13 @@ public:
   void GetScalars();
   void GetVelocity();
   void GetTemperature();
+  void ComputeTransformations();
+  void TransformToComoving(Photon *pphot, int ips, int ipe);
+  void TransformToCoordinate(Photon *pphot, int ips, int ipe);
+  Real FrequencyShiftComoving(Photon *pphot, int ips);
+  void  FrequencyAngleShiftComoving(Photon *pphot, int ip, Real &shift,
+                                    Real &k1, Real &k2, Real &k3);
+  Real FrequencyShiftCoordinate(Photon *pphot, int ips);
 
 private:
   int i1_, i2_, i3_; // used for emission

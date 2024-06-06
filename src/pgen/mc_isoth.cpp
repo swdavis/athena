@@ -178,6 +178,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
       pphot->dk2p[ip] = 0.;
       pphot->dk3p[ip] = 0.;
     }
+
     //printf("%g %g \n",pphot->ep[ip],pphot->wp[ip]);
     // Set status flag
     if (pphot->wp[ip] < 0.0)

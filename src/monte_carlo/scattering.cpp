@@ -71,9 +71,6 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int 
     stokes[1] = pphot->sqp[ip] / norm;
     stokes[2] = pphot->sup[ip] / norm;
 
-    // SWD: should be done outside of scattering -- i.e. transform to tetrad
-    //ppusher->CurvalinearToCartesian(pphot);
-
     // Polarized scattering must be computed relative to cartesian bases due to
     // definition of stokes vectors
     Real &kx = pphot->k1p[ip];
@@ -225,8 +222,6 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int 
     ky = sthetap * sin(phip);
     kz = mup;
 
-    // SWD: Should be done outside of scattering
-    //ppusher->CartesianToCurvalinear(pphot);
   } // end loop over ip
 
 }
@@ -369,9 +364,7 @@ void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
     stokes[0] = 1.;
     stokes[1] = pphot->sqp[ip] / norms;
     stokes[2] = pphot->sup[ip] / norms;
-
-    // SWD: needs to be generalized
-    //ppusher->CurvalinearToCartesian(pphot);
+;
     // Polarized scattering must be computed relative to cartesian basis due
     // to definition of stokes vectors
     Real &kx = pphot->k1p[ip];
