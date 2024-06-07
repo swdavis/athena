@@ -347,8 +347,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   rho.NewAthenaArray(ncells3,ncells2,ncells1);
   tgas.NewAthenaArray(ncells3,ncells2,ncells1);
   if (boosts || tetrads) {
-    tran_cmv.NewAthenaArray(ncells3,ncells2,ncells1,4,4);
-    tran_crd.NewAthenaArray(ncells3,ncells2,ncells1,4,4);
+    boost_cmv.NewAthenaArray(ncells3,ncells2,ncells1,4,4);
+    boost_lab.NewAthenaArray(ncells3,ncells2,ncells1,4,4);
   }
   if (boosts) vel.NewAthenaArray(ncells3,ncells2,ncells1,4);
   if (NSCALARS > 0) scalars.NewAthenaArray(ncells3,ncells2,ncells1);
@@ -386,8 +386,8 @@ MonteCarloBlock::~MonteCarloBlock() {
   rho.DeleteAthenaArray();
   tgas.DeleteAthenaArray();
   if (boosts || (COORDINATE_SYSTEM != "cartesian")) {
-    tran_cmv.DeleteAthenaArray();
-    tran_crd.DeleteAthenaArray();
+    boost_cmv.DeleteAthenaArray();
+    boost_lab.DeleteAthenaArray();
   }
   if (boosts) vel.DeleteAthenaArray();
   if (NSCALARS > 0) scalars.DeleteAthenaArray();
@@ -885,7 +885,11 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
       pphot->statp[ip] = DESTROYED;
       pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
                          " photon destroyed",ip);
+
       return;
+    } else if (std::isnan(k1) || std::isnan(k2) || std::isnan(k3)) {
+      pphot->PrintPhoton("Warning: Nan in k moments,"
+                         " photon destroyed",ip);
     } else {
       // Add contribution to corresponding moments
       // Energy density
@@ -912,33 +916,13 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     Real dlcom = dl * shift;
     Real ecom = pphot->ep[ip] * shift;
 
-    /*Real beta[3];
-    for (int i=0; i<3; ++i) {
-      beta[i] = vel(i3,i2,i1,i+1);
-    }
-    Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
-
-    Real k1c,k2c,k3c;
-    if(beta2 > 0.) {
-      Real gamma = 1. / sqrt(1. - beta2); // assumes v^2 < c^2 checked elsewhere
-      Real bdk = k1 * beta[0] + k2 * beta[1] + k3 * beta[2];
-      Real gonembdk = gamma * (1. - bdk);
-      Real aber = gamma*(1.-gamma*bdk/(gamma+1.));
-
-      ecom *= gonembdk;
-      k1c = (k1 - aber * beta[0]) / gonembdk;
-      k2c = (k2 - aber * beta[1]) / gonembdk;
-      k3c = (k3 - aber * beta[2]) / gonembdk;
-      dlcom *= gonembdk;
-      }*/
-
     Real weight = pphot->wp[ip] * ecom * dlcom / c_cgs;
     if (std::isinf(weight) || std::isnan(weight) ||
         std::isinf(k1c) || std::isnan(k1c) ||
         std::isinf(k2c) || std::isnan(k2c) ||
         std::isinf(k3c) || std::isnan(k3c) ) {
-      //pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
-      //                 " comoving frame",ip);
+      pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
+                         " comoving frame",ip);
       return;
     } else {
       // Add contribution to corresponding moments
@@ -1705,84 +1689,33 @@ void MonteCarloBlock::GetTemperature() {
 
 void MonteCarloBlock::ComputeTransformations() {
 
-
-  Real tetrad[4][4];
-  Real invtet[4][4];
-  Real boost[4][4];
-  Real invboost[4][4];
   // loop over all cells on block
   for (int k=ks; k<=ke; k++) {
     for (int j=js; j<=je; j++) {
       for (int i=is; i<=ie; i++) {
-        // compute tetrad if needed
-        if (tetrads) {
-          Real ttt = 1.;
-        } else {
-          for (int l=0; l<4; l++) {
-            for (int m=0; m<4; m++) {
-              tetrad[l][m] = 0.;
-              invtet[l][m] = 0.;
-            }
-            tetrad[l][l] = 1.;
-            invtet[l][l] = 1.;
-          }
+        boost_cmv(k,j,i,0,0) = vel(k,j,i,0);
+        boost_lab(k,j,i,0,0) = vel(k,j,i,0);
+        for (int m=1; m<4; m++) {
+          boost_cmv(k,j,i,0,m) = -vel(k,j,i,m);
+          boost_lab(k,j,i,0,m) = vel(k,j,i,m);
         }
-        // compute boost matrix id needed
-        if (boosts) {
-          boost[0][0] = vel(k,j,i,0);
-          invboost[0][0] = vel(k,j,i,0);
+        for (int l=1; l<4; l++) {
+          boost_cmv(k,j,i,l,0) = -vel(k,j,i,l);
+          boost_lab(k,j,i,l,0) = vel(k,j,i,l);
           for (int m=1; m<4; m++) {
-            boost[0][m] = -vel(k,j,i,m);
-            invboost[0][m] = vel(k,j,i,m);
+            boost_cmv(k,j,i,l,m) = vel(k,j,i,l)*vel(k,j,i,m)/(1.+vel(k,j,i,0));
+            boost_lab(k,j,i,l,m) = boost_cmv(k,j,i,l,m);
           }
-          for (int l=1; l<4; l++) {
-            boost[l][0] = -vel(k,j,i,l);
-            invboost[l][0] = vel(k,j,i,l);
-            for (int m=1; m<4; m++) {
-              boost[l][m] = vel(k,j,i,l)*vel(k,j,i,m)/(1.+vel(k,j,i,0));
-              invboost[l][m] = boost[l][m];
-            }
-            boost[l][l] += 1.;
-            invboost[l][l] += 1.;
-          }
-          /*for (int l=0; l<4; l++) {
-            for (int m=0; m<4; m++) {
-              Real sum = 0.;
-              for (int n=0; n<4; n++) {
-                sum += boost[l][n]*invboost[n][m];
-              }
-              printf("%d %d %g \n",l,m,sum);
-            }
-            }*/
-        } else {
-          // no boost (diagonal matrix)
-          for (int l=0; l<4; l++) {
-            for (int m=0; m<4; m++) {
-              boost[l][m] = 0.;
-              invboost[l][m] = 0.;
-            }
-            boost[l][l] = 1.;
-            invboost[l][l] = 1.;
-          }
-        }
-        // Compute tranformation matrices as combination of tetrad and boost
-        for (int l=0; l<4; l++) {
-          for (int m=0; m<4; m++) {
-            tran_cmv(k,j,i,l,m) = 0.;
-            tran_crd(k,j,i,l,m) = 0.;
-            for (int n=0; n<4; n++) {
-              tran_cmv(k,j,i,l,m) += boost[l][n]*tetrad[n][m];
-              tran_crd(k,j,i,l,m) += invtet[l][n]*invboost[n][m];
-            }
-          }
+          boost_cmv(k,j,i,l,l) += 1.;
+          boost_lab(k,j,i,l,l) += 1.;
         }
         /*for (int l=0; l<4; l++) {
           for (int m=0; m<4; m++) {
             Real sum = 0.;
             for (int n=0; n<4; n++) {
-              sum += tran_cmv(k,j,i,l,n)*tran_crd(k,j,i,n,m);
+              sum += boost_cmv(k,j,i,l,n)*boost_lab(k,j,i,n,m);
             }
-            printf("%d %d %g \n",l,m,sum);
+            printf("%d %d %g\n",l,m,sum,);
           }
           }*/
       } // loop over i
@@ -1807,10 +1740,11 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
     ki[1] = pphot->k1p[ip];
     ki[2] = pphot->k2p[ip];
     ki[3] = pphot->k3p[ip];
+
     for (int j=0; j<4; j++) {
       kf[j] = 0.;
       for (int i=0; i<4; i++) {
-        kf[j] += tran_cmv(i3,i2,i1,j,i) * ki[i];
+        kf[j] += boost_cmv(i3,i2,i1,j,i) * ki[i];
       }
     }
     Real nufact = kf[0]/ki[0];
@@ -1846,7 +1780,7 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
     for (int j=0; j<4; j++) {
       kf[j] = 0.;
       for (int i=0; i<4; i++) {
-        kf[j] += tran_crd(i3,i2,i1,j,i) * ki[i];
+        kf[j] += boost_lab(i3,i2,i1,j,i) * ki[i];
       }
     }
     pphot->k0p[ip] = kf[0];
@@ -1891,7 +1825,7 @@ Real  MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip) {
 
     Real k0 = 0.;
     for (int i=0; i<4; i++) {
-      k0 += tran_cmv(i3,i2,i1,0,i) * ki[i];
+      k0 += boost_cmv(i3,i2,i1,0,i) * ki[i];
     }
     return k0/ki[0];
 
@@ -1918,7 +1852,7 @@ void  MonteCarloBlock::FrequencyAngleShiftComoving(Photon *pphot, int ip, Real &
     for (int j=0; j<4; j++) {
       kf[j] = 0.;
       for (int i=0; i<4; i++) {
-        kf[j] += tran_cmv(i3,i2,i1,j,i) * ki[i];
+        kf[j] += boost_cmv(i3,i2,i1,j,i) * ki[i];
       }
     }
     shift = kf[0]/ki[0];
@@ -1944,7 +1878,7 @@ Real  MonteCarloBlock::FrequencyShiftCoordinate(Photon *pphot, int ip) {
     ki[3] = pphot->k3p[ip];
     Real k0 = 0.;
     for (int i=0; i<4; i++) {
-      k0 += tran_crd(i3,i2,i1,0,i) * ki[i];
+      k0 += boost_lab(i3,i2,i1,0,i) * ki[i];
     }
     return k0/ki[0];
 

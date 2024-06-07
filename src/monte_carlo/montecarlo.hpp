@@ -343,8 +343,8 @@ public:
   AthenaArray<Real> rho;
   AthenaArray<Real> tgas;
   AthenaArray<Real> vel;
-  AthenaArray<Real> tran_cmv;
-  AthenaArray<Real> tran_crd;
+  AthenaArray<Real> boost_cmv;
+  AthenaArray<Real> boost_lab;
   AthenaArray<Real> planck_opacity; // for acceleration
   AthenaArray<Real> planck_inv_opacity; // for acceleration
 

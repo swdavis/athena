@@ -199,6 +199,36 @@ void MCCoord::Connect(Real x[4], Real gamma[4][4][4]) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void MCCoord::Tetrad(Real x[4], Real tetrad[4][4])
+//! \brief compute a diagonal tetrad
+
+void MCCoord::Tetrad(Real x[4], Real tetrad[4][4]) {
+
+  for (int l=0; l<4; l++) {
+    for (int m=0; m<4; m++) {
+      tetrad[l][m] = 0.;
+    }
+    tetrad[l][l] = 1.;
+  }
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCCoord::InverseTetrad(Real x[4], Real invtet[4][4])
+//! \brief compute a diagonal tetrad
+
+void MCCoord::InverseTetrad(Real x[4], Real invtet[4][4]) {
+
+  for (int l=0; l<4; l++) {
+    for (int m=0; m<4; m++) {
+      invtet[l][m] = 0.;
+    }
+    invtet[l][l] = 1.;
+  }
+
+}
+
+//----------------------------------------------------------------------------------------
 //! MCCartesian constructor, built from Coord and MonteCarloBlock
 
 MCCartesian::MCCartesian(Coordinates *pcoord, MonteCarloBlock *pmcb)

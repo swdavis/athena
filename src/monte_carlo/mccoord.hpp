@@ -35,6 +35,8 @@ public:
   virtual void InverseMetric(Real x[4],Real gcon[4][4]);
   virtual void InverseMetricDerivative(Real x[4],Real dgcon[4][4][4]);
   virtual void Connect(Real x[4],Real gamma[4][4][4]);
+  virtual void Tetrad(Real x[4], Real tetrad[4][4]);
+  virtual void InverseTetrad(Real x[4], Real invtet[4][4]);
 
   Real GetMass() const {return bh_mass_;}
   Real GetSpin() const {return bh_spin_;}
