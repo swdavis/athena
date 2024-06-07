@@ -664,14 +664,98 @@ MCKerrSchildCartesian::~MCKerrSchildCartesian() {
 
 void MCKerrSchildCartesian::Metric(Real x[4], Real gcov[4][4]) {
 
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      gcov[i][j] = 0.;
+    }
+  }
+
+  // Calculate useful quantities
+  Real a = bh_spin_;
+  Real m = bh_mass_;
+  Real a2 = a * a;
+  Real rr2 = x[IMC1] * x[IMC1] + x[IMC2] * x[IMC2] + x[IMC3] * x[IMC3];
+  Real r2 = 0.5 * (rr2 - a2 + std::hypot(rr2 - a2, 2.0 * a * x[IMC3]));
+  Real r = std::sqrt(r2);
+  Real f = 2.0 * m * r2 * r / (r2 * r2 + a2 * x[IMC3] * x[IMC3]);
+
+  // Calculate null vector
+  Real l_0 = 1.0;
+  Real l_1 = (r * x[IMC1] + a * x[IMC2]) / (r2 + a2);
+  Real l_2 = (r * x[IMC2] - a * x[IMC1]) / (r2 + a2);
+  Real l_3 = x[IMC3] / r;
+
+  // Calculate metric components
+  gcov[IMC0][IMC0] = f * l_0 * l_0 - 1.0;
+  gcov[IMC0][IMC1] = f * l_0 * l_1;
+  gcov[IMC0][IMC2] = f * l_0 * l_2;
+  gcov[IMC0][IMC3] = f * l_0 * l_3;
+
+  gcov[IMC1][IMC0] = f * l_1 * l_0;
+  gcov[IMC1][IMC1] = f * l_1 * l_1 + 1.0;
+  gcov[IMC1][IMC2] = f * l_1 * l_2;
+  gcov[IMC1][IMC3] = f * l_1 * l_3;
+
+  gcov[IMC2][IMC0] = f * l_2 * l_0;
+  gcov[IMC2][IMC1] = f * l_2 * l_1;
+  gcov[IMC2][IMC2] = f * l_2 * l_2 + 1.0;
+  gcov[IMC2][IMC3] = f * l_2 * l_3;
+
+  gcov[IMC3][IMC0] = f * l_3 * l_0;
+  gcov[IMC3][IMC1] = f * l_3 * l_1;
+  gcov[IMC3][IMC2] = f * l_3 * l_2;
+  gcov[IMC3][IMC3] = f * l_3 * l_3 + 1.0;
+  return;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void MCKerrSchildCartesian::InverseMetric(Real x[4], Real gcov[4][4])
 //! \brief compute metric in cartesian Kerr-Schild
 
-void MCKerrSchildCartesian::InverseMetric(Real x[4], Real gcov[4][4]) {
+void MCKerrSchildCartesian::InverseMetric(Real x[4], Real gcon[4][4]) {
 
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      gcon[i][j] = 0.;
+    }
+  }
+
+  // Calculate useful quantities
+  Real a = bh_spin_;
+  Real m = bh_mass_;
+  Real a2 = a * a;
+  Real rr2 = x[IMC1] * x[IMC1] + x[IMC2] * x[IMC2] + x[IMC3] * x[IMC3];
+  Real r2 = 0.5 * (rr2 - a2 + std::hypot(rr2 - a2, 2.0 * a * x[IMC3]));
+  Real r = std::sqrt(r2);
+  Real f = 2.0 * m * r2 * r / (r2 * r2 + a2 * x[IMC3] * x[IMC3]);
+
+  // Calculate null vector
+  Real l0 = -1.0;
+  Real l1 = (r * x[IMC1] + a * x[IMC2]) / (r2 + a2);
+  Real l2 = (r * x[IMC2] - a * x[IMC1]) / (r2 + a2);
+  Real l3 = x[IMC3] / r;
+
+  // Calculate metric components
+  gcon[IMC0][IMC0] = -f * l0 * l0 - 1.0;
+  gcon[IMC0][IMC1] = -f * l0 * l1;
+  gcon[IMC0][IMC2] = -f * l0 * l2;
+  gcon[IMC0][IMC3] = -f * l0 * l3;
+
+  gcon[IMC1][IMC0] = -f * l1 * l0;
+  gcon[IMC1][IMC1] = -f * l1 * l1 + 1.0;
+  gcon[IMC1][IMC2] = -f * l1 * l2;
+  gcon[IMC1][IMC3] = -f * l1 * l3;
+
+  gcon[IMC2][IMC0] = -f * l2 * l0;
+  gcon[IMC2][IMC1] = -f * l2 * l1;
+  gcon[IMC2][IMC2] = -f * l2 * l2 + 1.0;
+  gcon[IMC2][IMC3] = -f * l2 * l3;
+
+  gcon[IMC3][IMC0] = -f * l3 * l0;
+  gcon[IMC3][IMC1] = -f * l3 * l1;
+  gcon[IMC3][IMC2] = -f * l3 * l2;
+  gcon[IMC3][IMC3] = -f * l3 * l3 + 1.0;
+  return;
 }
 
 //----------------------------------------------------------------------------------------
@@ -681,6 +765,106 @@ void MCKerrSchildCartesian::InverseMetric(Real x[4], Real gcov[4][4]) {
 
 void MCKerrSchildCartesian::InverseMetricDerivative(Real x[4], Real dgcon[4][4][4]) {
 
+  for(int i = 0; i < 4; i++) {
+    for(int j = 0; j < 4; j++) {
+      for(int k = 0; k < 4; k++) {
+        dgcon[i][j][k]=0;
+      }
+    }
+  }
+
+  // Calculate useful quantities
+  Real a = bh_spin_;
+  Real m = bh_mass_;
+  Real a2 = a * a;
+  Real rr2 = x[IMC1] * x[IMC1] + x[IMC2] * x[IMC2] + x[IMC3] * x[IMC3];
+  Real r2 = 0.5 * (rr2 - a2 + std::hypot(rr2 - a2, 2.0 * a * x[IMC3]));
+  Real r = std::sqrt(r2);
+  Real f = 2.0 * m * r2 * r / (r2 * r2 + a2 * x[IMC3] * x[IMC3]);
+
+  // Calculate null vector
+  Real l0 = -1.0;
+  Real l1 = (r * x[IMC1] + a * x[IMC2]) / (r2 + a2);
+  Real l2 = (r * x[IMC2] - a * x[IMC1]) / (r2 + a2);
+  Real l3 = x[IMC3] / r;
+
+  // Calculate scalar derivatives
+  Real dr_dx = r * x[IMC1] / (2.0 * r2 - rr2 + a2);
+  Real dr_dy = r * x[IMC2] / (2.0 * r2 - rr2 + a2);
+  Real dr_dz = (r * x[IMC3] + a2 * x[IMC3] / r) / (2.0 * r2 - rr2 + a2);
+  Real df_dx = -(r2 * r2 - 3.0 * a2 * x[IMC3] * x[IMC3]) * dr_dx / (r * (r2 * r2 + a2 * x[IMC3] * x[IMC3])) * f;
+  Real df_dy = -(r2 * r2 - 3.0 * a2 * x[IMC3] * x[IMC3]) * dr_dy / (r * (r2 * r2 + a2 * x[IMC3] * x[IMC3])) * f;
+  Real df_dz =
+      -((r2 * r2 - 3.0 * a2 * x[IMC3] * x[IMC3]) * dr_dz + 2.0 * a2 * r * x[IMC3]) / (r * (r2 * r2 + a2 * x[IMC3] * x[IMC3])) * f;
+
+  // Calculate vector derivatives
+  Real dl0_dx = 0.0;
+  Real dl0_dy = 0.0;
+  Real dl0_dz = 0.0;
+  Real dl1_dx = ((x[IMC1] - 2.0 * r * l1) * dr_dx + r) / (r2 + a2);
+  Real dl1_dy = ((x[IMC1] - 2.0 * r * l1) * dr_dy + a) / (r2 + a2);
+  Real dl1_dz = (x[IMC1] - 2.0 * r * l1) * dr_dz / (r2 + a2);
+  Real dl2_dx = ((x[IMC2] - 2.0 * r * l2) * dr_dx - a) / (r2 + a2);
+  Real dl2_dy = ((x[IMC2] - 2.0 * r * l2) * dr_dy + r) / (r2 + a2);
+  Real dl2_dz = (x[IMC2] - 2.0 * r * l2) * dr_dz / (r2 + a2);
+  Real dl3_dx = -x[IMC3] / r2 * dr_dx;
+  Real dl3_dy = -x[IMC3] / r2 * dr_dy;
+  Real dl3_dz = -x[IMC3] / r2 * dr_dz + 1.0 / r;
+
+  // Calculate metric component x-derivatives
+  dgcon[IMC1][IMC0][IMC0] = -(df_dx * l0 * l0 + f * dl0_dx * l0 + f * l0 * dl0_dx);
+  dgcon[IMC1][IMC0][IMC1] = -(df_dx * l0 * l1 + f * dl0_dx * l1 + f * l0 * dl1_dx);
+  dgcon[IMC1][IMC0][IMC2] = -(df_dx * l0 * l2 + f * dl0_dx * l2 + f * l0 * dl2_dx);
+  dgcon[IMC1][IMC0][IMC3] = -(df_dx * l0 * l3 + f * dl0_dx * l3 + f * l0 * dl3_dx);
+  dgcon[IMC1][IMC1][IMC0] = -(df_dx * l1 * l0 + f * dl1_dx * l0 + f * l1 * dl0_dx);
+  dgcon[IMC1][IMC1][IMC1] = -(df_dx * l1 * l1 + f * dl1_dx * l1 + f * l1 * dl1_dx);
+  dgcon[IMC1][IMC1][IMC2] = -(df_dx * l1 * l2 + f * dl1_dx * l2 + f * l1 * dl2_dx);
+  dgcon[IMC1][IMC1][IMC3] = -(df_dx * l1 * l3 + f * dl1_dx * l3 + f * l1 * dl3_dx);
+  dgcon[IMC1][IMC2][IMC0] = -(df_dx * l2 * l0 + f * dl2_dx * l0 + f * l2 * dl0_dx);
+  dgcon[IMC1][IMC2][IMC1] = -(df_dx * l2 * l1 + f * dl2_dx * l1 + f * l2 * dl1_dx);
+  dgcon[IMC1][IMC2][IMC2] = -(df_dx * l2 * l2 + f * dl2_dx * l2 + f * l2 * dl2_dx);
+  dgcon[IMC1][IMC2][IMC3] = -(df_dx * l2 * l3 + f * dl2_dx * l3 + f * l2 * dl3_dx);
+  dgcon[IMC1][IMC3][IMC0] = -(df_dx * l3 * l0 + f * dl3_dx * l0 + f * l3 * dl0_dx);
+  dgcon[IMC1][IMC3][IMC1] = -(df_dx * l3 * l1 + f * dl3_dx * l1 + f * l3 * dl1_dx);
+  dgcon[IMC1][IMC3][IMC2] = -(df_dx * l3 * l2 + f * dl3_dx * l2 + f * l3 * dl2_dx);
+  dgcon[IMC1][IMC3][IMC3] = -(df_dx * l3 * l3 + f * dl3_dx * l3 + f * l3 * dl3_dx);
+
+  // Calculate metric component y-derivatives
+  dgcon[IMC2][IMC0][IMC0] = -(df_dy * l0 * l0 + f * dl0_dy * l0 + f * l0 * dl0_dy);
+  dgcon[IMC2][IMC0][IMC1] = -(df_dy * l0 * l1 + f * dl0_dy * l1 + f * l0 * dl1_dy);
+  dgcon[IMC2][IMC0][IMC2] = -(df_dy * l0 * l2 + f * dl0_dy * l2 + f * l0 * dl2_dy);
+  dgcon[IMC2][IMC0][IMC3] = -(df_dy * l0 * l3 + f * dl0_dy * l3 + f * l0 * dl3_dy);
+  dgcon[IMC2][IMC1][IMC0] = -(df_dy * l1 * l0 + f * dl1_dy * l0 + f * l1 * dl0_dy);
+  dgcon[IMC2][IMC1][IMC1] = -(df_dy * l1 * l1 + f * dl1_dy * l1 + f * l1 * dl1_dy);
+  dgcon[IMC2][IMC1][IMC2] = -(df_dy * l1 * l2 + f * dl1_dy * l2 + f * l1 * dl2_dy);
+  dgcon[IMC2][IMC1][IMC3] = -(df_dy * l1 * l3 + f * dl1_dy * l3 + f * l1 * dl3_dy);
+  dgcon[IMC2][IMC2][IMC0] = -(df_dy * l2 * l0 + f * dl2_dy * l0 + f * l2 * dl0_dy);
+  dgcon[IMC2][IMC2][IMC1] = -(df_dy * l2 * l1 + f * dl2_dy * l1 + f * l2 * dl1_dy);
+  dgcon[IMC2][IMC2][IMC2] = -(df_dy * l2 * l2 + f * dl2_dy * l2 + f * l2 * dl2_dy);
+  dgcon[IMC2][IMC2][IMC3] = -(df_dy * l2 * l3 + f * dl2_dy * l3 + f * l2 * dl3_dy);
+  dgcon[IMC2][IMC3][IMC0] = -(df_dy * l3 * l0 + f * dl3_dy * l0 + f * l3 * dl0_dy);
+  dgcon[IMC2][IMC3][IMC1] = -(df_dy * l3 * l1 + f * dl3_dy * l1 + f * l3 * dl1_dy);
+  dgcon[IMC2][IMC3][IMC2] = -(df_dy * l3 * l2 + f * dl3_dy * l2 + f * l3 * dl2_dy);
+  dgcon[IMC2][IMC3][IMC3] = -(df_dy * l3 * l3 + f * dl3_dy * l3 + f * l3 * dl3_dy);
+
+  // Calculate metric component z-derivatives
+  dgcon[IMC3][IMC0][IMC0] = -(df_dz * l0 * l0 + f * dl0_dz * l0 + f * l0 * dl0_dz);
+  dgcon[IMC3][IMC0][IMC1] = -(df_dz * l0 * l1 + f * dl0_dz * l1 + f * l0 * dl1_dz);
+  dgcon[IMC3][IMC0][IMC2] = -(df_dz * l0 * l2 + f * dl0_dz * l2 + f * l0 * dl2_dz);
+  dgcon[IMC3][IMC0][IMC3] = -(df_dz * l0 * l3 + f * dl0_dz * l3 + f * l0 * dl3_dz);
+  dgcon[IMC3][IMC1][IMC0] = -(df_dz * l1 * l0 + f * dl1_dz * l0 + f * l1 * dl0_dz);
+  dgcon[IMC3][IMC1][IMC1] = -(df_dz * l1 * l1 + f * dl1_dz * l1 + f * l1 * dl1_dz);
+  dgcon[IMC3][IMC1][IMC2] = -(df_dz * l1 * l2 + f * dl1_dz * l2 + f * l1 * dl2_dz);
+  dgcon[IMC3][IMC1][IMC3] = -(df_dz * l1 * l3 + f * dl1_dz * l3 + f * l1 * dl3_dz);
+  dgcon[IMC3][IMC2][IMC0] = -(df_dz * l2 * l0 + f * dl2_dz * l0 + f * l2 * dl0_dz);
+  dgcon[IMC3][IMC2][IMC1] = -(df_dz * l2 * l1 + f * dl2_dz * l1 + f * l2 * dl1_dz);
+  dgcon[IMC3][IMC2][IMC2] = -(df_dz * l2 * l2 + f * dl2_dz * l2 + f * l2 * dl2_dz);
+  dgcon[IMC3][IMC2][IMC3] = -(df_dz * l2 * l3 + f * dl2_dz * l3 + f * l2 * dl3_dz);
+  dgcon[IMC3][IMC3][IMC0] = -(df_dz * l3 * l0 + f * dl3_dz * l0 + f * l3 * dl0_dz);
+  dgcon[IMC3][IMC3][IMC1] = -(df_dz * l3 * l1 + f * dl3_dz * l1 + f * l3 * dl1_dz);
+  dgcon[IMC3][IMC3][IMC2] = -(df_dz * l3 * l2 + f * dl3_dz * l2 + f * l3 * dl2_dz);
+  dgcon[IMC3][IMC3][IMC3] = -(df_dz * l3 * l3 + f * dl3_dz * l3 + f * l3 * dl3_dz);
+  return;
 }
 
 //----------------------------------------------------------------------------------------
