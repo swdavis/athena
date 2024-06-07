@@ -15,7 +15,6 @@
 #include "../parameter_input.hpp"
 #include "../mesh/mesh.hpp"
 #include "../hydro/hydro.hpp"
-#include "../scalars/scalars.hpp"
 
 // GSL library
 #if RAN3 == 0
@@ -33,7 +32,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
 
   UserWorkInMove=nullptr;
   GetEmission=nullptr;
-  GetTemperature=nullptr;
+  UserGetTemperature=nullptr;
 
   // Set flags that control emission, absorption and scattering
   InitializeEmissionFlags(pin);
@@ -259,7 +258,7 @@ void MonteCarlo::EnrollUserEmissionFunction(EmisFunc_t emissfunc) {
 
 void MonteCarlo::EnrollUserGetTemperature(TempFunc_t tempfunc) {
 
-  GetTemperature = tempfunc;
+  UserGetTemperature = tempfunc;
 }
 
 //----------------------------------------------------------------------------------------
@@ -353,101 +352,6 @@ enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::GetDensity(MonteCarloBlock *pmcb)
-//! \brief Make hard copy of density from MeshBlock to MonteCarloBlock.
-//  Uses hard copy so that rho is always in cgs units
-
-void MonteCarlo::GetDensity(MonteCarloBlock *pmcb) {
-
-  // MonteCarloBlock ranges should always match MeshBlock ranges
-  int il = pmcb->is; int iu = pmcb->ie;
-  int jl = pmcb->js; int ju = pmcb->je;
-  int kl = pmcb->ks; int ku = pmcb->ke;
-
-  for (int k=kl; k<=ku; ++k) {
-    for (int j=jl; j<=ju; ++j) {
-      for (int i=il; i<=iu; ++i) {
-        pmcb->rho(k,j,i) = pmcb->rho_cgs * pmcb->pmy_block->phydro->u(IDN,k,j,i);
-      }}}
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::GetScalars(MonteCarloBlock *pmcb)
-//! \brief Make hard copy of scalars from MeshBlock to MonteCarloBlock.
-
-void MonteCarlo::GetScalars(MonteCarloBlock *pmcb) {
-
-  // MonteCarloBlock ranges should always match MeshBlock ranges
-  int il = pmcb->is; int iu = pmcb->ie;
-  int jl = pmcb->js; int ju = pmcb->je;
-  int kl = pmcb->ks; int ku = pmcb->ke;
-
-  for (int k=kl; k<=ku; ++k) {
-    for (int j=jl; j<=ju; ++j) {
-      for (int i=il; i<=iu; ++i) {
-        pmcb->scalars(k,j,i) = pmcb->pmy_block->pscalars->s(0,k,j,i);
-      }}}
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::GetVelocities(MonteCarloBlock *pmcb)
-//! \brief Make hard copy of velocites from MeshBlock to MonteCarloBlock.
-//  Uses hard copy so that velocities is always fraction of speed of light
-
-void MonteCarlo::GetVelocity(MonteCarloBlock *pmcb) {
-
-  // MonteCarloBlock ranges should always match MeshBlock ranges
-  int il = pmcb->is; int iu = pmcb->ie;
-  int jl = pmcb->js; int ju = pmcb->je;
-  int kl = pmcb->ks; int ku = pmcb->ke;
-
-  for (int k=kl; k<=ku; ++k) {
-    for (int j=jl; j<=ju; ++j) {
-      for (int i=il; i<=iu; ++i) {
-        Real rho = pmcb->pmy_block->phydro->u(IDN,k,j,i);
-        pmcb->vel(0,k,j,i) = pmcb->vel_cgs *
-          pmcb->pmy_block->phydro->u(IM1,k,j,i) / rho;
-        pmcb->vel(1,k,j,i) = pmcb->vel_cgs *
-          pmcb->pmy_block->phydro->u(IM2,k,j,i) / rho;
-        pmcb->vel(2,k,j,i) = pmcb->vel_cgs *
-          pmcb->pmy_block->phydro->u(IM3,k,j,i) / rho;
-      }}}
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void DefaultGetTemperature(MonteCarloBlock *pmcb)
-//! \brief default function for computing temperature if no user function provided.
-//  Assumes EOS of from P=RTd.
-
-void DefaultGetTemperature(MonteCarloBlock *pmcb) {
-
-  Real rideal = 8.314e7;
-  Hydro* phydro = pmcb->pmy_block->phydro;
-
-   // MonteCarloBlock ranges should always match MeshBlock ranges
-  int il = pmcb->is; int iu = pmcb->ie;
-  int jl = pmcb->js; int ju = pmcb->je;
-  int kl = pmcb->ks; int ku = pmcb->ke;
-
-  Real tconv;
-  if (pmcb->tgas_cgs <= 0.)
-    tconv = 1. / rideal;
-  else
-    tconv = pmcb->tgas_cgs;
-
-  // compute temperature from pressure and density
-  for (int k=kl; k<=ku; ++k) {
-    for (int j=jl; j<=ju; ++j) {
-      for (int i=il; i<=iu; ++i) {
-        Real tgas = tconv * phydro->w(IEN,k,j,i) / phydro->w(IDN,k,j,i);
-        // apply temperature floor
-        pmcb->tgas(k,j,i) = (tgas > pmcb->tfloor_cgs) ? tgas : pmcb->tfloor_cgs;
-      }
-    }
-  }
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::Initialize(ParameterInput *pinput)
 //! \brief initialize grid data in each monte carlo block
 
@@ -470,17 +374,15 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
   tint *= time_cgs;
   tmax *= time_cgs;
 
-  if (GetTemperature == nullptr)
-    GetTemperature = DefaultGetTemperature;
-
   // Initialize monte carlo blocks
   for (int i=0; i<nblocal; i++) {
     MonteCarloBlock *pmcb = my_blocks(i);
     // Initialize variables over all blocks
-    GetDensity(pmcb);
-    GetTemperature(pmcb);
-    if (boosts) GetVelocity(pmcb);
-    if (NSCALARS > 0) GetScalars(pmcb);
+    pmcb->GetDensity();
+    pmcb->GetTemperature();
+    if (boosts) pmcb->GetVelocity();
+    if (boosts || tetrads) pmcb->ComputeTransformations();
+    if (NSCALARS > 0) pmcb->GetScalars();
 
     // initialize counters to zero
     pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
@@ -789,10 +691,11 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
   for (int i=0; i<nblocal; i++) {
     MonteCarloBlock *pmcb = my_blocks(i);
     // Initialize variables over all blocks
-    GetDensity(pmcb);
-    GetTemperature(pmcb);
-    if (boosts) GetVelocity(pmcb);
-    if (NSCALARS > 0) GetScalars(pmcb); //scalars
+    pmcb->GetDensity();
+    pmcb->GetTemperature();
+    if (boosts) pmcb->GetVelocity();
+    if (boosts || tetrads) pmcb->ComputeTransformations();
+    if (NSCALARS > 0) pmcb->GetScalars(); //scalars
     // reset counters
     pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
   }

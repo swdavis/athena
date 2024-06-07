@@ -396,8 +396,10 @@ void TransformPhotonAtGridEdge(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
     x[IMC3] = pphot->x3p[ip];
     pmcb->pcoord->Metric(x, gcov);
     pmcb->pcoord->InverseMetric(x,gcon);
-    Real wcon[4] = {0,1.,0.,0.}; // Q=1 points along projected BH symmetry axis
-    Real vcov[4] = {1.,0.,0.,1.};// Make image center point away from origin
+    Real wcon[4] = {0.,1.,0.,0.};
+    Real vcov[4] = {0.,1.,0.,0.};
+    //Real wcon[4] = {0,1.,0.,0.}; // Q=1 points along projected BH symmetry axis
+    //Real vcov[4] = {1.,0.,0.,1.};// Make image center point away from origin
     Real vcon[4];
     CovToCon(vcov,vcon,gcon);
     Real econ[4][4], ecov[4][4];
@@ -498,9 +500,12 @@ void GetDirectionTetrad(Photon *pphot, Real alpha, Real beta, int ip) {
   pcoord->InverseMetric(x,gcon);
 
   // Set tetrad vector for camera
-  Real ucon[4] = {0.,0.,0.,1.}; // Static observer
-  Real wcon[4] = {0,-1.,0.,0.}; // Q=1 points along projected BH symmetry axis
-  Real vcov[4] = {1.,0.,0.,1.};// Make image center point away from origin
+  Real ucon[4] = {1.,0.,0.,0.}; // Static observer
+  Real wcon[4] = {0.,0,-1.,0.}; // Q=1 points along projected BH symmetry axis
+  Real vcov[4] = {1.,1.,0.,0.};// Make image center point away from origin
+  //Real ucon[4] = {0.,0.,0.,1.}; // Static observer
+  //Real wcon[4] = {0,-1.,0.,0.}; // Q=1 points along projected BH symmetry axis
+  //Real vcov[4] = {1.,0.,0.,1.};// Make image center point away from origin
   Real vcon[4];
   CovToCon(vcov,vcon,gcon);
 

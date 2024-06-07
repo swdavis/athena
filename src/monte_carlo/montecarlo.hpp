@@ -69,8 +69,6 @@ typedef void (*UserMoveFunc_t)(MonteCarloBlock *pmcb, Photon *phot, PhotonPusher
 typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, MCCoord *pco, int ip);
 typedef void (*UserMomentFunc_t)(MonteCarloBlock *pmcb, Photon *phot, Real dl, int ip,
                                  int imom);
-//---------------------- prototypes for provided functions -------------------------------
-void DefaultGetTemperature(MonteCarloBlock *pmcb);
 //--------------------- prototypes for opacity.cpp functions -----------------------------
 Real NoOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
 Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
@@ -214,6 +212,7 @@ public:
   bool dynamic; // is monte carlo evolving with time
   bool coupled; // is monte carlo evolution coupled to hydro
   bool boosts;  // Compute lorentz transformations
+  bool tetrads; // convert from coordinate frame
   bool emission_array;  // Compute and save zone emissivities
   bool emission_eqwt; // Set initial weights equal
   bool polarized;// track photon polarization
@@ -226,7 +225,7 @@ public:
   // function pointers
   UserMoveFunc_t UserWorkInMove;
   EmisFunc_t GetEmission;
-  TempFunc_t GetTemperature;
+  TempFunc_t UserGetTemperature;
   ScatFunc_t UserScattering;
   OpacFunc_t UserScatteringOpacity;
   OpacFunc_t UserAbsorptionOpacity;
@@ -257,10 +256,6 @@ private:
 
   // functions
   MCBValFunc_t BoundaryFunction_[6];
-
-  void GetDensity(MonteCarloBlock *pmcb);
-  void GetScalars(MonteCarloBlock *pmcb);
-  void GetVelocity(MonteCarloBlock *pmcb);
 
 };
 
@@ -315,6 +310,7 @@ public:
   bool call_srcterms;
 
   bool boosts;  // Compute lorentz transformations
+  bool tetrads; // Compute tetrads
   bool coupled; // Whether time dependent code is coupled to hydro
   bool coherent_scattering; // photon does notchange energy after scattering
   bool acceleration;  // use MRW acceleration
@@ -333,6 +329,7 @@ public:
   bool varystep_flag; // use variable (true) or constant (false) step
 
   Real rho_cgs, vel_cgs, tgas_cgs, tfloor_cgs, l_cgs;
+  Real betamax;
   Real stepsize;
   Real minweight;
   Real emiss_to_weight; // used relate weight to emission array
@@ -346,6 +343,8 @@ public:
   AthenaArray<Real> rho;
   AthenaArray<Real> tgas;
   AthenaArray<Real> vel;
+  AthenaArray<Real> boost_cmv;
+  AthenaArray<Real> boost_lab;
   AthenaArray<Real> planck_opacity; // for acceleration
   AthenaArray<Real> planck_inv_opacity; // for acceleration
 
@@ -355,8 +354,6 @@ public:
   void RayTracePhotonsOnBlock(); // Ray trace photon on this block
   void TransferPhotonsOnBlock(); // Transfer photons on this block
   void CoupleMonteCarloToFluid(Real dt);  // couple monte carlo to mesh
-  void CoordinateToComoving(Photon *pphot, int ips, int ipe);
-  void ComovingToCoordinate(Photon *pphot, int ips, int ipe);
   void LorentzTransform(Photon *pphot, const Real sign, int ips, int ipe);
   Real LorentzTransformFrequencyShift(Photon *pphot, int ip);
   void TetradTransform(Photon *pphot, const Real sign, int ips, int ipe);
@@ -377,7 +374,17 @@ public:
   // Functions for handling distributed emission over cells
   void ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &emm_tot);
   void SetEmissionCellWeight(Photon *pphot, int ips, int ipe);
-
+  void GetDensity();
+  void GetScalars();
+  void GetVelocity();
+  void GetTemperature();
+  void ComputeTransformations();
+  void TransformToComoving(Photon *pphot, int ips, int ipe);
+  void TransformToCoordinate(Photon *pphot, int ips, int ipe);
+  Real FrequencyShiftComoving(Photon *pphot, int ips);
+  void  FrequencyAngleShiftComoving(Photon *pphot, int ip, Real &shift,
+                                    Real &k1, Real &k2, Real &k3);
+  Real FrequencyShiftCoordinate(Photon *pphot, int ips);
 
 private:
   int i1_, i2_, i3_; // used for emission

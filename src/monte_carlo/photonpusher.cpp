@@ -285,9 +285,9 @@ bool PhotonPusher::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Rea
   Real beta[3], beta2, gamma, gonembdk;
   if (boosts) {
     // tranform relevant quanitites to comoving frame
-    beta[0] = pmcb->vel(0,pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]) / 2.99792458e10;
-    beta[1] = pmcb->vel(1,pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]) / 2.99792458e10;
-    beta[2] = pmcb->vel(2,pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]) / 2.99792458e10;
+    beta[0] = pmcb->vel(1,pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]);
+    beta[1] = pmcb->vel(2,pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]);
+    beta[2] = pmcb->vel(3,pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]);
     beta2 = SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
     gamma = 1./sqrt(1.-beta2);
     Real bdk = (pphot->k1p[ip]*beta[0]+pphot->k2p[ip]*beta[1]+pphot->k3p[ip]*beta[2]);
@@ -660,7 +660,8 @@ void PhotonPusher::MovePhotonToNextZone(Photon *pphot, MCCoord *pco, MonteCarloB
     int &i3 = pphot->i3p[ip];
     if (pmy_mcb->boosts) {
       // Shift photon energy to comoving frame
-      Real shift = pmy_mcb->LorentzTransformFrequencyShift(pphot,ip);
+      //Real shift = pmy_mcb->LorentzTransformFrequencyShift(pphot,ip);
+      Real shift = pmy_mcb->FrequencyShiftComoving(pphot,ip);
       pphot->ep[ip] *= shift;
       // compute opacities in comoving frame
       pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
@@ -761,17 +762,6 @@ bool PhotonPusher::UpdateZone(Photon *pphot, int ip) {
 }
 
 
-//----------------------------------------------------------------------------------------
-//! \fn void PhotonPusher::CurvalinearToCartesian(Photon *pphot, Real kcart[4])
-//! \brief convert k vector from curvalinear to cartesian
-
-void PhotonPusher::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
-
-  // SWD broken by vectorization
-  // Default corresponds to Cartesian so just copy
-  //for (int i=0; i<4; ++i)
-  //  kcart[i] = pphot->k[i];
-}
 
 //----------------------------------------------------------------------------------------
 //! \fn void PhotonPusher::InitializeMWDist(void)

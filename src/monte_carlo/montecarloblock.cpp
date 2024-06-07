@@ -20,6 +20,7 @@
 #include "../mesh/mesh.hpp"
 #include "../hydro/hydro.hpp"
 #include "../globals.hpp"
+#include "../scalars/scalars.hpp"
 
 // SWD: remove these
 static Real test;
@@ -149,6 +150,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   tgas_cgs = pin->GetOrAddReal("problem","tgas_cgs",-1.);
   tfloor_cgs = pin->GetOrAddReal("problem","tfloor_cgs",0.);
   l_cgs = pin->GetOrAddReal("problem","l_cgs",1.);
+  betamax = pin->GetOrAddReal("problem","betamax",0.999);
 
   // SWD:  stepsize control needs to be modified
   stepsize = pin->GetOrAddReal("montecarlo","stepsize",1.0e-3);
@@ -234,7 +236,9 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   if (acceleration)
     computedmin = true;
   pmy_mc->computedmin = computedmin;
+  tetrads = true;
   if (COORDINATE_SYSTEM == "cartesian") {
+    tetrads = false;
     GetZonePosition = GetZonePositionCartesian;
     if (pmy_mc->general_pusher_flag) {
       ppusher = new GeneralPusher(this);
@@ -261,6 +265,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
         pcoord = new MCSphericalPolar(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
                                       computedmin);
     } else {
+      tetrads = false;
       ppusher = new SphericalPolarPusher(this);
       if (pmb != nullptr)
         pcoord = new MCCoord(pmb->pcoord,this);
@@ -314,6 +319,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
           << std::endl;
       ATHENA_ERROR(msg);
   }
+  pmy_mc->tetrads = tetrads;
+
   // Set pcoord in ppusher
   ppusher->pcoord = pcoord;
 
@@ -339,7 +346,11 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   if (nx3 > 1) ncells3 = nx3 + 2*(NGHOST);
   rho.NewAthenaArray(ncells3,ncells2,ncells1);
   tgas.NewAthenaArray(ncells3,ncells2,ncells1);
-  if (boosts) vel.NewAthenaArray(3,ncells3,ncells2,ncells1);
+  if (boosts || tetrads) {
+    boost_cmv.NewAthenaArray(ncells3,ncells2,ncells1,4,4);
+    boost_lab.NewAthenaArray(ncells3,ncells2,ncells1,4,4);
+  }
+  if (boosts) vel.NewAthenaArray(ncells3,ncells2,ncells1,4);
   if (NSCALARS > 0) scalars.NewAthenaArray(ncells3,ncells2,ncells1);
   // moments is 1 (Er) + 3 (Fr) + 9 (Pr) + 1 (Eave) + 1 (net cool)
   nmom = 13;
@@ -374,6 +385,10 @@ MonteCarloBlock::~MonteCarloBlock() {
 
   rho.DeleteAthenaArray();
   tgas.DeleteAthenaArray();
+  if (boosts || (COORDINATE_SYSTEM != "cartesian")) {
+    boost_cmv.DeleteAthenaArray();
+    boost_lab.DeleteAthenaArray();
+  }
   if (boosts) vel.DeleteAthenaArray();
   if (NSCALARS > 0) scalars.DeleteAthenaArray();
   if (mom_flag_lab) moments.DeleteAthenaArray();
@@ -499,7 +514,8 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
     // Lorentz transform E, k to Eulerian frame and update opacities
     // only for newly emitted samples
     if (boosts) {
-      LorentzTransform(pphot,to_eulr,nold,pphot->nphot-1);
+      //LorentzTransform(pphot,to_eulr,nold,pphot->nphot-1);
+      TransformToCoordinate(pphot,nold,pphot->nphot-1);
     }
     if (call_srcterms) {
       // Update source terms to relect newly emitted samples
@@ -544,7 +560,8 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
       Real e_pre_scat = pphot->ep[ip];
       // Lorentz transform to comoving frame for scattering
       if (boosts) {
-        LorentzTransform(pphot,to_comv,ip,ip);
+        TransformToComoving(pphot,ip,ip);
+        //LorentzTransform(pphot,to_comv,ip,ip);
       }
       // call scattering function and update counters
       Scatter(this,pphot,ip,ip);
@@ -567,7 +584,8 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
       }
       // Lorentz transform to Eulerian frame and shift opacities
       if (boosts) {
-        LorentzTransform(pphot,to_eulr,ip,ip);
+        TransformToCoordinate(pphot,ip,ip);
+        //LorentzTransform(pphot,to_eulr,ip,ip);
       }
       // Update moments that compute radiation force and net heating/cooling
       if (call_srcterms) {
@@ -648,21 +666,6 @@ void MonteCarloBlock::CoupleMonteCarloToFluid(Real dt) {
       }
   }
 }
-//----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::ComovingToCoordinate(Photon *pphot, int ips, int ipe)
-//! \brief Transform photon sample to coordinate/Eulerian frame
-
-void MonteCarloBlock::ComovingToCoordinate(Photon *pphot, int ips, int ipe) {
-
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::ComovingToCoordinate(Photon *pphot, int ips, int ipe)
-//! \brief Transform photon sample to comoving frame
-
-void MonteCarloBlock::CoordinateToComoving(Photon *pphot, int ips, int ipe) {
-
-}
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign, int ips,
@@ -692,7 +695,7 @@ void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign, int ips,
 
     Real beta[3];
     for (int i=0; i<3; ++i) {
-      beta[i] = sign * vel(i,i3,i2,i1) / 2.9979e10;
+      beta[i] = sign * vel(i3,i2,i1,i+1)/vel(i3,i2,i1,0);
     }
     Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
 
@@ -702,6 +705,7 @@ void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign, int ips,
       Real bdk = k1 * beta[0] + k2 * beta[1] + k3 * beta[2];
       Real gonembdk = gamma * (1. - bdk);
       Real aber = gamma*(1.-gamma*bdk/(gamma+1.));
+
       pphot->ep[ip] *= gonembdk;
       k1 = (k1 - aber * beta[0]) / gonembdk;
       k2 = (k2 - aber * beta[1]) / gonembdk;
@@ -710,7 +714,8 @@ void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign, int ips,
       // Transform opacities
       // Must be performed even when transforming to comoving frame because inverse
       // process is performed to go back to Eulerian frame in cases where scattering
-      // is coherent
+      // is computed
+
       pphot->acp[ip] /= gonembdk;
       pphot->scp[ip] /= gonembdk;
     }
@@ -730,13 +735,14 @@ Real MonteCarloBlock::LorentzTransformFrequencyShift(Photon *pphot, int ip) {
 
   Real beta[3];
   for (int i=0; i<3; ++i) {
-    beta[i] = vel(i,i3,i2,i1) / 2.9979e10;
+    beta[i] = vel(i3,i2,i1,i+1)/vel(i3,i2,i1,0);
   }
   Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
   Real gonembdk;
   if(beta2 > 0.) {
     Real gamma = 1. / sqrt(1. - beta2); // assumes v^2 < c^2 checked elsewhere
     Real bdk = k1 * beta[0] + k2 * beta[1] + k3 * beta[2];
+    printf("a: %g %g %g %g %g %g\n",gamma,vel(i3,i2,i1,0),bdk,beta[0],beta[1],beta[2]);
     gonembdk = gamma * (1. - bdk);
   } else {
     gonembdk = 1.;
@@ -764,7 +770,7 @@ void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign, int ips, i
     int i1 = pphot->i1p[ip], i2 = pphot->i2p[ip], i3 = pphot->i3p[ip];
     Real beta[3];
     for (int i=0; i<3; ++i) {
-      beta[i] = sign * vel(i,i3,i2,i1) / 2.9979e10;
+      beta[i] = sign * vel(i3,i2,i1,i+1);
     }
     Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
     Real gamma = 1. / sqrt(1. - beta2);
@@ -879,7 +885,11 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
       pphot->statp[ip] = DESTROYED;
       pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
                          " photon destroyed",ip);
+
       return;
+    } else if (std::isnan(k1) || std::isnan(k2) || std::isnan(k3)) {
+      pphot->PrintPhoton("Warning: Nan in k moments,"
+                         " photon destroyed",ip);
     } else {
       // Add contribution to corresponding moments
       // Energy density
@@ -900,28 +910,11 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
 
   if (mom_flag_com) {
     // boost relevant quanitities to comoving frame
-    Real ecom = pphot->ep[ip];
-    Real dlcom = dl;
+     Real shift,k1c,k2c,k3c;
+    FrequencyAngleShiftComoving(pphot,ip,shift,k1c,k2c,k3c);
 
-    Real beta[3];
-    for (int i=0; i<3; ++i) {
-      beta[i] = vel(i,i3,i2,i1) / c_cgs;
-    }
-    Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
-
-    Real k1c,k2c,k3c;
-    if(beta2 > 0.) {
-      Real gamma = 1. / sqrt(1. - beta2); // assumes v^2 < c^2 checked elsewhere
-      Real bdk = k1 * beta[0] + k2 * beta[1] + k3 * beta[2];
-      Real gonembdk = gamma * (1. - bdk);
-      Real aber = gamma*(1.-gamma*bdk/(gamma+1.));
-
-      ecom *= gonembdk;
-      k1c = (k1 - aber * beta[0]) / gonembdk;
-      k2c = (k2 - aber * beta[1]) / gonembdk;
-      k3c = (k3 - aber * beta[2]) / gonembdk;
-      dlcom *= gonembdk;
-    }
+    Real dlcom = dl * shift;
+    Real ecom = pphot->ep[ip] * shift;
 
     Real weight = pphot->wp[ip] * ecom * dlcom / c_cgs;
     if (std::isinf(weight) || std::isnan(weight) ||
@@ -929,7 +922,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
         std::isinf(k2c) || std::isnan(k2c) ||
         std::isinf(k3c) || std::isnan(k3c) ) {
       pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
-                       " comoving frame",ip);
+                         " comoving frame",ip);
       return;
     } else {
       // Add contribution to corresponding moments
@@ -996,7 +989,7 @@ void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl,
     int i1 = pphot->i1p[ip], i2 = pphot->i2p[ip], i3 = pphot->i3p[ip];
     Real beta[3];
     for (int i=0; i<3; ++i) {
-      beta[i] = vel(i,i3,i2,i1) / c_cgs;
+      beta[i] = vel(i3,i2,i1,i+1);
     }
     Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
 
@@ -1116,7 +1109,7 @@ void MonteCarloBlock::UpdateMomentsOld(Photon *pphot, Real dl, Real pl, Real k1,
     int i1 = pphot->i1p[ip], i2 = pphot->i2p[ip], i3 = pphot->i3p[ip];
     Real beta[3];
     for (int i=0; i<3; ++i) {
-      beta[i] = vel(i,i3,i2,i1) / c_cgs;
+      beta[i] = vel(i3,i2,i1,i+1);
     }
     Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
 
@@ -1598,6 +1591,299 @@ void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe) {
     } // end loop over ip
   }
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::GetDensity()
+//! \brief Make hard copy of density from MeshBlock to MonteCarloBlock.
+//  Uses hard copy so that rho is always in cgs units
+
+void MonteCarloBlock::GetDensity() {
+
+  for (int k=ks; k<=ke; ++k) {
+    for (int j=js; j<=je; ++j) {
+      for (int i=is; i<=ie; ++i) {
+        rho(k,j,i) = rho_cgs * pmy_block->phydro->u(IDN,k,j,i);
+      }
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::GetScalars(MonteCarloBlock *pmcb)
+//! \brief Make a hard copy of scalars from MeshBlock to MonteCarloBlock.
+
+void MonteCarloBlock::GetScalars() {
+
+  for (int k=ks; k<=ke; ++k) {
+    for (int j=js; j<=je; ++j) {
+      for (int i=is; i<=ie; ++i) {
+        scalars(k,j,i) = pmy_block->pscalars->s(0,k,j,i);
+      }
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::GetVelocities()
+//! \brief Make hard copy of velocites from MeshBlock to MonteCarloBlock.
+//  Uses hard copy so that velocities is always fraction of speed of light
+
+void MonteCarloBlock::GetVelocity() {
+
+  Real c_cgs = 2.99792458e10;
+  for (int k=ks; k<=ke; ++k) {
+    for (int j=js; j<=je; ++j) {
+      for (int i=is; i<=ie; ++i) {
+        Real rho = pmy_block->phydro->u(IDN,k,j,i);
+        vel(k,j,i,1) = vel_cgs * pmy_block->phydro->u(IM1,k,j,i) / (rho * c_cgs);
+        vel(k,j,i,2) = vel_cgs * pmy_block->phydro->u(IM2,k,j,i) / (rho * c_cgs);
+        vel(k,j,i,3) = vel_cgs * pmy_block->phydro->u(IM3,k,j,i) / (rho * c_cgs);
+        Real beta0 = std::sqrt(SQR(vel(k,j,i,1))+SQR(vel(k,j,i,2))+SQR(vel(k,j,i,3)));
+        Real beta = (beta0 > betamax) ? betamax : beta0;
+        Real gamma = 1. / std::sqrt(1. - beta*beta);
+        vel(k,j,i,0) = gamma;
+        //gamma = 1;
+        for (int l=1; l<4; ++l)
+          vel(k,j,i,l) *= gamma * beta / beta0 ;
+      }
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::GetTemperature()
+//! \brief default function for computing temperature if no user function provided.
+//  Assumes EOS of from P=RTd.
+
+void MonteCarloBlock::GetTemperature() {
+
+  if (pmy_mc->UserGetTemperature != nullptr) {
+    pmy_mc->UserGetTemperature(this);
+    return;
+  }
+
+  Real rideal = 8.314e7;
+  Hydro* phydro = pmy_block->phydro;
+
+  Real tconv;
+  if (tgas_cgs <= 0.)
+    tconv = 1. / rideal;
+  else
+    tconv = tgas_cgs;
+
+  // compute temperature from pressure and density
+  for (int k=ks; k<=ke; ++k) {
+    for (int j=js; j<=je; ++j) {
+      for (int i=is; i<=ie; ++i) {
+        Real temp = tconv * phydro->w(IEN,k,j,i) / phydro->w(IDN,k,j,i);
+        // apply temperature floor
+        tgas(k,j,i) = (temp > tfloor_cgs) ? temp : tfloor_cgs;
+      }
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::ComputeTransformations()
+//! \brief compute transformation matrices between comoving frame and coordinate frame
+
+void MonteCarloBlock::ComputeTransformations() {
+
+  // loop over all cells on block
+  for (int k=ks; k<=ke; k++) {
+    for (int j=js; j<=je; j++) {
+      for (int i=is; i<=ie; i++) {
+        boost_cmv(k,j,i,0,0) = vel(k,j,i,0);
+        boost_lab(k,j,i,0,0) = vel(k,j,i,0);
+        for (int m=1; m<4; m++) {
+          boost_cmv(k,j,i,0,m) = -vel(k,j,i,m);
+          boost_lab(k,j,i,0,m) = vel(k,j,i,m);
+        }
+        for (int l=1; l<4; l++) {
+          boost_cmv(k,j,i,l,0) = -vel(k,j,i,l);
+          boost_lab(k,j,i,l,0) = vel(k,j,i,l);
+          for (int m=1; m<4; m++) {
+            boost_cmv(k,j,i,l,m) = vel(k,j,i,l)*vel(k,j,i,m)/(1.+vel(k,j,i,0));
+            boost_lab(k,j,i,l,m) = boost_cmv(k,j,i,l,m);
+          }
+          boost_cmv(k,j,i,l,l) += 1.;
+          boost_lab(k,j,i,l,l) += 1.;
+        }
+        /*for (int l=0; l<4; l++) {
+          for (int m=0; m<4; m++) {
+            Real sum = 0.;
+            for (int n=0; n<4; n++) {
+              sum += boost_cmv(k,j,i,l,n)*boost_lab(k,j,i,n,m);
+            }
+            printf("%d %d %g\n",l,m,sum,);
+          }
+          }*/
+      } // loop over i
+    } // loop over j
+  } // loop over k
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe)
+//! \brief convert momentum vector to comoving (or tetrad) frame
+
+void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
+
+  for(int ip=ips; ip<=ipe; ip++) {
+
+    int i1 = pphot->i1p[ip];
+    int i2 = pphot->i2p[ip];
+    int i3 = pphot->i3p[ip];
+
+    Real ki[4], kf[4];
+    ki[0] = pphot->k0p[ip];
+    ki[1] = pphot->k1p[ip];
+    ki[2] = pphot->k2p[ip];
+    ki[3] = pphot->k3p[ip];
+
+    for (int j=0; j<4; j++) {
+      kf[j] = 0.;
+      for (int i=0; i<4; i++) {
+        kf[j] += boost_cmv(i3,i2,i1,j,i) * ki[i];
+      }
+    }
+    Real nufact = kf[0]/ki[0];
+    pphot->k0p[ip] = 1.;
+    // SWD: maybe better to renormalize
+    pphot->k1p[ip] = kf[1]/kf[0];
+    pphot->k2p[ip] = kf[2]/kf[0];
+    pphot->k3p[ip] = kf[3]/kf[0];
+
+    pphot->ep[ip] *= nufact;
+    pphot->acp[ip] /= nufact;
+    pphot->scp[ip] /= nufact;
+  }
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe)
+//! \brief convert momentum vector to coordinate frame
+
+ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
+
+   for(int ip=ips; ip<=ipe; ip++) {
+    int i1 = pphot->i1p[ip];
+    int i2 = pphot->i2p[ip];
+    int i3 = pphot->i3p[ip];
+
+    Real ki[4], kf[4];
+    ki[0] = pphot->k0p[ip];
+    ki[1] = pphot->k1p[ip];
+    ki[2] = pphot->k2p[ip];
+    ki[3] = pphot->k3p[ip];
+    for (int j=0; j<4; j++) {
+      kf[j] = 0.;
+      for (int i=0; i<4; i++) {
+        kf[j] += boost_lab(i3,i2,i1,j,i) * ki[i];
+      }
+    }
+    pphot->k0p[ip] = kf[0];
+    pphot->k1p[ip] = kf[1];
+    pphot->k2p[ip] = kf[2];
+    pphot->k3p[ip] = kf[3];
+    Real nufact = kf[0]/ki[0];
+    pphot->ep[ip] *= nufact;
+    pphot->acp[ip] /= nufact;
+    pphot->scp[ip] /= nufact;
+
+    if (!pmy_mc->general_pusher_flag) {
+      Real knorm = std::sqrt(SQR(kf[1])+SQR(kf[2])+SQR(kf[3]));
+      pphot->k0p[ip] = 1.;
+      pphot->k1p[ip] = kf[1]/knorm;
+      pphot->k2p[ip] = kf[2]/knorm;
+      pphot->k3p[ip] = kf[3]/knorm;
+    } else {
+      pphot->k0p[ip] = kf[0];
+      pphot->k1p[ip] = kf[1];
+      pphot->k2p[ip] = kf[2];
+      pphot->k3p[ip] = kf[3];
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Real MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip)
+//! \brief frequency shift factor from coordinate to comoving
+
+Real  MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip) {
+
+    int i1 = pphot->i1p[ip];
+    int i2 = pphot->i2p[ip];
+    int i3 = pphot->i3p[ip];
+
+    Real ki[4];
+    ki[0] = pphot->k0p[ip];
+    ki[1] = pphot->k1p[ip];
+    ki[2] = pphot->k2p[ip];
+    ki[3] = pphot->k3p[ip];
+
+    Real k0 = 0.;
+    for (int i=0; i<4; i++) {
+      k0 += boost_cmv(i3,i2,i1,0,i) * ki[i];
+    }
+    return k0/ki[0];
+
+ }
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::FrequencyAngelShiftComoving(Photon *pphot, int ip,
+//             Real &shift, Real &k1, Real &k2, Real &k3) {
+//! \brief frequency shift factor angular aberation from coordinate to comoving
+
+void  MonteCarloBlock::FrequencyAngleShiftComoving(Photon *pphot, int ip, Real &shift,
+                                                   Real &k1, Real &k2, Real &k3) {
+
+    int i1 = pphot->i1p[ip];
+    int i2 = pphot->i2p[ip];
+    int i3 = pphot->i3p[ip];
+
+    Real ki[4];
+    ki[0] = pphot->k0p[ip];
+    ki[1] = pphot->k1p[ip];
+    ki[2] = pphot->k2p[ip];
+    ki[3] = pphot->k3p[ip];
+    Real kf[4];
+    for (int j=0; j<4; j++) {
+      kf[j] = 0.;
+      for (int i=0; i<4; i++) {
+        kf[j] += boost_cmv(i3,i2,i1,j,i) * ki[i];
+      }
+    }
+    shift = kf[0]/ki[0];
+    k1 = kf[1]/kf[0];
+    k2 = kf[2]/kf[0];
+    k3 = kf[3]/kf[0];
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Real MonteCarloBlock::FrequencyShiftCoordinate(Photon *pphot, int ip)
+//! \brief frequency shift factor from coordinate to comoving
+
+Real  MonteCarloBlock::FrequencyShiftCoordinate(Photon *pphot, int ip) {
+
+    int i1 = pphot->i1p[ip];
+    int i2 = pphot->i2p[ip];
+    int i3 = pphot->i3p[ip];
+
+    Real ki[4];
+    ki[0] = pphot->k0p[ip];
+    ki[1] = pphot->k1p[ip];
+    ki[2] = pphot->k2p[ip];
+    ki[3] = pphot->k3p[ip];
+    Real k0 = 0.;
+    for (int i=0; i<4; i++) {
+      k0 += boost_lab(i3,i2,i1,0,i) * ki[i];
+    }
+    return k0/ki[0];
+
+ }
+
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs)

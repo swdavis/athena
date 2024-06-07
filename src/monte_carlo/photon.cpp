@@ -93,13 +93,13 @@ void Photon::PrintPhoton(int ip) {
   std::cout << "----------------------------" << std::endl
             << "Energy, weight: " << ep[ip] << " " << wp[ip] << std::endl
             << "i: " << i1p[ip] << " " << i2p[ip] << " " << i3p[ip] <<std::endl
-            << "x: " << x1p[ip] << " " << x2p[ip] << " " << x3p[ip] << " " << x0p[ip]
+            << "x: " << x0p[ip] << " " << x1p[ip] << " " << x2p[ip] << " " << x3p[ip]
             << std::endl
-            << "k: " << k1p[ip] << " " << k2p[ip] << " " << k3p[ip] << " " << k0p[ip]
+            << "k: " << k0p[ip] << " " << k1p[ip] << " " << k2p[ip] << " " << k3p[ip]
             << std::endl;
   if (general_pusher_flag) {
-    std::cout << "dk: " << dk1p[ip] << " " << dk2p[ip] << " " << dk3p[ip] << " "
-              << dk0p[ip] << std::endl;
+    std::cout << "dk: " << dk0p[ip] << " " << dk1p[ip] << " " << dk2p[ip] << " "
+              << dk3p[ip] << std::endl;
   }
   if (polarized) {
     std:: cout << "stokes: " << sip[ip] << " " << sqp[ip] << " " << sup[ip] << std::endl;
@@ -751,7 +751,8 @@ void Photon::GetPositionIndices(int ibegin, int iend) {
     MonteCarloBlock *pmcb = pmy_mcb;
     if (pmcb->boosts) {
       // Shift photon energy to comoving frame
-      Real shift = pmcb->LorentzTransformFrequencyShift(this,k);
+      //Real shift = pmcb->LorentzTransformFrequencyShift(this,k);
+      Real shift = pmcb->FrequencyShiftComoving(this,k);
       if (( std::isinf(shift)) || (std::isnan(shift)) ) {
         printf("shift: %d %d %d %g %g %g %g\n",i1p[k],i2p[k],i3p[k],shift,xi1,xi2,xi3);
       }

@@ -362,9 +362,6 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot) {
   // Obtain intitial energy, polarization, direction and weight
   // Utilize free-free emission function in emission.cpp
   PhotonEmitFreeFree(this,pphot,logemin,logemax);
-  // initialize kcart
-  //ppusher->CurvalinearToCartesian(pphot);
-
 
   if (pphot->weight < 0.0) pphot->status = DESTROYED;
 

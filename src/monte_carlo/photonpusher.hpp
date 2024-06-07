@@ -76,7 +76,6 @@ public:
                MonteCarloBlock *pmcb, int face, bool ascend[3], int ip);
   virtual bool UpdateZone(Photon *pphot, int ip);
 //  virtual bool UpdateSingleZone(Photon *pphot, int ip, bool *multizone);
-  virtual void CurvalinearToCartesian(Photon *pphot, Real kcart[4]);
   virtual void InitializeMRWDist(void);
   // Acceleration methods
   virtual Real SampleEscapeTime(MCRandom *pran, Real decayRate, Real sphereRadius,
@@ -92,6 +91,7 @@ public:
   virtual void ReadRadiusDistribution(void);
   virtual void ReadTimeDistribution(void);
   virtual Real InterpPathTime(Real tau, Real prob);
+
 };
 
 //----------------------------------------------------------------------------------------
@@ -119,7 +119,7 @@ public:
 
   // functions
   void Move(Photon *pphot, int ips, int ipe);
-  void CurvalinearToCartesian(Photon *pphot, Real kcart[4]);
+
 };
 
 //----------------------------------------------------------------------------------------
@@ -136,7 +136,6 @@ public:
 
   // functions
   void Move(Photon *pphot, int ips, int ipe);
-  void CurvalinearToCartesian(Photon *pphot, Real kcart[4]);
   void UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip);
   void VerletStep(Photon *pphot, Real step, int ip);
   void RK4Step(Photon *pphot, Real step, int ip);

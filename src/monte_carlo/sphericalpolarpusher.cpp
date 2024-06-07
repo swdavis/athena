@@ -46,10 +46,6 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
     Real tauremaining = GetOpticalDepth(pran);
 
     // References for momentum vectors
-    //CurvalinearToCartesian(pphot);// SWD: Redundant calculation of cth,sth,cph,sph
-    //Real& kx = pphot->kcart[0];
-    //Real& ky = pphot->kcart[1];
-    //Real& kz = pphot->kcart[2];
     Real& kr  = pphot->k1p[ip];
     Real& kth = pphot->k2p[ip];
     Real& kph = pphot->k3p[ip];
@@ -384,24 +380,4 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
 
   } // loop over ip
 
-}
-
-// SWD: Deprecated and slated for removal
-//----------------------------------------------------------------------------------------
-//! \fn void SphericalPolarPusher::CurvalinearToCartesian(Photon *pphot, Real kcart[4])
-//! \brief convert k vector from curvalinear to cartesian
-
-void SphericalPolarPusher::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
-
-  // SWD: Broken by parallelization
-  /*
-  Real cth = cos(pphot->x[IMC2]);
-  Real sth = sqrt(1. - SQR(cth));
-  Real cph = cos(pphot->x[IMC3]);
-  Real sph = sin(pphot->x[IMC3]);
-  // Compute cartesian
-  kcart[IMC1] = pphot->k[IMC1]*sth*cph + pphot->k[IMC2]*cth*cph - pphot->k[IMC3]*sph;
-  kcart[IMC2] = pphot->k[IMC1]*sth*sph + pphot->k[IMC2]*cth*sph + pphot->k[IMC3]*cph;
-  kcart[IMC3] = pphot->k[IMC1]*cth - pphot->k[IMC2]*sth;
-  */
 }

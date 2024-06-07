@@ -77,6 +77,7 @@ void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real l
   pphot->k1p[ip] = sth*cphi;
   pphot->k2p[ip] = sth*sphi;
   pphot->k3p[ip] = cth;
+
 }
 
 

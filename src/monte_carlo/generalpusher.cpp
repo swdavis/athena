@@ -84,17 +84,20 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
 
       if (!accel_success) {// Acceleration not triggered - take standard step
         if (tauremaining > chi * step) { // Photon hasn't yet reached tauremaining
-          VerletStep(pphot,step,ip);
+          //VerletStep(pphot,step,ip);
+          RK4Step(pphot,step,ip);
           if (pmy_mcb->pmy_mc->polarized)
             PropogatePolarization(pphot,step,ip);
           tauremaining -= chi * step;
         } else { // Photon has reached end of tauremaining - step to make it 0
           step = tauremaining / chi;
-          VerletStep(pphot,step,ip);
+          //VerletStep(pphot,step,ip);
+          RK4Step(pphot,step,ip);
           if (pmy_mcb->pmy_mc->polarized)
             PropogatePolarization(pphot,step,ip);
           tauremaining = 0.;
         }
+        //pphot->PrintPhoton(ip);
         pphot->dtp[ip] -= step/c_cgs;
         // Update moments
         if (pmcb->call_moments) {
@@ -145,33 +148,6 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
   } // end loop over ip
 }
 
-// SWD: The conversion from Curvalinear  to Cartesian should be generalized or removed
-//----------------------------------------------------------------------------------------
-//! \fn void GeneralPusher::CurvalinearToCartesian(Photon *pphot, Real kcart[4])
-//! \brief convert k vector from curvalinear to cartesian
-
-void GeneralPusher::CurvalinearToCartesian(Photon *pphot, Real kcart[4]) {
-
-  /*
-  Real r = pphot->x[IMC1];
-  Real cth = cos(pphot->x[IMC2]);
-  Real sth = sqrt(1. - SQR(cth));
-  Real cph = cos(pphot->x[IMC3]);
-  Real sph = sin(pphot->x[IMC3]);
-
-  Real nth = pphot->k[IMC2]*r;
-  Real nph = pphot->k[IMC3]*r*sth;
-  // Compute cartesian
-  kcart[IMC1] = (pphot->k[IMC1]*sth*cph+nth*cth*cph-nph*sph);
-  kcart[IMC2] = (pphot->k[IMC1]*sth*sph+nth*cth*sph+nph*cph);
-  kcart[IMC3] = (pphot->k[IMC1]*cth-nth*sth);
-  Real norm = sqrt(SQR(kcart[IMC1])+SQR(kcart[IMC2])+SQR(kcart[IMC3]));
-  kcart[IMC1] /= norm;
-  kcart[IMC2] /= norm;
-  kcart[IMC3] /= norm;
-  */
-}
-
 //----------------------------------------------------------------------------------------
 //! \fn void GeneralPusher::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip)
 //! \brief update opacities after a photon has changed zones
@@ -189,6 +165,7 @@ void GeneralPusher::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip
     int i3 = pphot->i3p[ip];
     if (pmcb->boosts) {
       // Shift photon energy to comoving frame
+      //shift = pmy_mcb->LorentzTransformFrequencyShift(pphot,ip);
       shift = pmy_mcb->LorentzTransformFrequencyShift(pphot,ip);
       Real energy = pphot->ep[ip] * shift;
       // compute opacities in comoving frame
@@ -295,29 +272,113 @@ void GeneralPusher::VerletStep(Photon *pphot, Real step, int ip) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void GeneralPusher::RK4Step(Photon *pphot, Real step, int ip)
-//! \brief performs a single verlet integration step
+//! \brief performs a single RK4 integration step of Hamiltonian formalism
 
 void GeneralPusher::RK4Step(Photon *pphot, Real step, int ip) {
 
-  Real k_n1[NCOORD],k_n1_copy[NCOORD];
-  Real dk_n1[NCOORD];
-  Real error;
-  Real x[NCOORD], k0[NCOORD];
+  Real x0[4];
+  x0[IMC0] = pphot->x0p[ip];
+  x0[IMC1] = pphot->x1p[ip];
+  x0[IMC2] = pphot->x2p[ip];
+  x0[IMC3] = pphot->x3p[ip];
 
-  // SWD: Need to think about how to do this better without invoking recurssion
-  // SWD: Need to rename variables and clean this up with new scheme
+  Real kcon[4];
+  kcon[IMC0] = pphot->k0p[ip];
+  kcon[IMC1] = pphot->k1p[ip];
+  kcon[IMC2] = pphot->k2p[ip];
+  kcon[IMC3] = pphot->k3p[ip];
 
-  x[IMC0] = pphot->x0p[ip] += (pphot->k0p[ip])*step + 0.5*(pphot->dk0p[ip])*SQR(step);
-  x[IMC1] = pphot->x1p[ip] += (pphot->k1p[ip])*step + 0.5*(pphot->dk1p[ip])*SQR(step);
-  x[IMC2] = pphot->x2p[ip] += (pphot->k2p[ip])*step + 0.5*(pphot->dk2p[ip])*SQR(step);
-  x[IMC3] = pphot->x3p[ip] += (pphot->k3p[ip])*step + 0.5*(pphot->dk3p[ip])*SQR(step);
+  {
+    Real gcov[4][4];
+  pcoord->Metric(x0, gcov);
+  Real a = 0.;
+  for (int j = 1; j < 4; j++)
+    for (int i = 1; i < 4; i++)
+      a += gcov[j][i] * kcon[j] * kcon[i];
+  Real b = 0.;
+  for (int i = 1; i < 4; i++)
+    b += 2. * gcov[0][i] * kcon[0] * kcon[i];
+  Real c = gcov[0][0] * kcon[0] * kcon[0];
+  Real d = std::sqrt(SQR(b) - 4.*a*c);
+  Real factor = b < 0. ? (d-b) / (2.*a) : -2.*c / (b+d);
+  Real s = 2.;
+  }
+  Real k0[4], gcov[4][4];
+  pcoord->Metric(x0, gcov);
+  for (int j = 0; j < 4; j++) {
+    k0[j] = 0.;
+    for (int i = 0; i < 4; i++)
+      k0[j] += gcov[j][i]*kcon[i];
+  }
+  Real dl[8], x[4], k[4], xs[4], ks[4];
+  // first stubstep
+  SubStep(x0,k0,dl);
+  for (int i = 0; i < 4; i++) {
+    x[i] = x0[i] + step / 6. * dl[i];
+    k[i] = k0[i] + step / 6. * dl[i+4];
+  }
+  // second substep
+  for (int i = 0; i < 4; i++) {
+    xs[i] = x0[i] + 0.5 * step * dl[i];
+    ks[i] = k0[i] + 0.5 * step * dl[i+4];
+  }
+  SubStep(xs,ks,dl);
+  for (int i = 0; i < 4; i++) {
+    x[i] += step / 3. * dl[i];
+    k[i] += step / 3. * dl[i+4];
+  }
+  // third substep
+  for (int i = 0; i < 4; i++) {
+    xs[i] = x0[i] + 0.5 * step * dl[i];
+    ks[i] = k0[i] + 0.5 * step * dl[i+4];
+  }
+  SubStep(xs,ks,dl);
+  for (int i = 0; i < 4; i++) {
+    x[i] += step / 3. * dl[i];
+    k[i] += step / 3. * dl[i+4];
+  }
+  // fourth substep
+  for (int i = 0; i < 4; i++) {
+    xs[i] = x0[i] + step * dl[i];
+    ks[i] = k0[i] + step * dl[i+4];
+  }
+  SubStep(xs,ks,dl);
+  for (int i = 0; i < 4; i++) {
+    x[i] += step / 6. * dl[i];
+    k[i] += step / 6. * dl[i+4];
+  }
 
-  k0[IMC0] = pphot->k0p[ip];
-  k0[IMC1] = pphot->k1p[ip];
-  k0[IMC2] = pphot->k2p[ip];
-  k0[IMC3] = pphot->k3p[ip];
 
+  Real gcon[4][4];
+  pcoord->InverseMetric(x, gcon);
+  for (int j = 0; j < 4; j++) {
+    kcon[j] = 0.;
+    for (int i = 0; i < 4; i++) {
+      kcon[j] += gcon[j][i]*k[i];
+    }
+  }
+  // Renormalize space components to keep k on shell
+  pcoord->Metric(x, gcov);
+  Real a = 0.;
+  for (int j = 1; j < 4; j++)
+    for (int i = 1; i < 4; i++)
+      a += gcov[j][i] * kcon[j] * kcon[i];
+  Real b = 0.;
+  for (int i = 1; i < 4; i++)
+    b += 2. * gcov[0][i] * kcon[0] * kcon[i];
+  Real c = gcov[0][0] * kcon[0] * kcon[0];
+  Real d = std::sqrt(SQR(b) - 4.*a*c);
+  Real factor = b < 0. ? (d-b) / (2.*a) : -2.*c / (b+d);
 
+  // Update photon parameters
+  pphot->x0p[ip] = x[IMC0];
+  pphot->x1p[ip] = x[IMC1];
+  pphot->x2p[ip] = x[IMC2];
+  pphot->x3p[ip] = x[IMC3];
+  pphot->k0p[ip] = kcon[IMC0];
+  pphot->k1p[ip] = kcon[IMC1] * factor;
+  pphot->k2p[ip] = kcon[IMC2] * factor;
+  pphot->k3p[ip] = kcon[IMC3] * factor;
 
 }
 
@@ -327,26 +388,24 @@ void GeneralPusher::RK4Step(Photon *pphot, Real step, int ip) {
 
 void GeneralPusher::SubStep(Real xcon[4], Real kcov[4], Real dl[8]) {
 
-
-  Real gcov[4][4];
-  Real gcon[4][4];
-  Real dgcon[4][4][4];
-  pcoord->Metric(xcon, gcov);
-  pcoord->InverseMetric(xcon, gcon);
-  pcoord->InverseMetricDerivative(xcon, dgcon);
-
   for (int i = 0; i < 9; i++)
     dl[i] = 0.0;
 
+  Real gcon[4][4];
+  pcoord->InverseMetric(xcon, gcon);
   for (int j = 0; j < 4; j++)
     for (int i = 0; i < 4; i++)
       dl[j] += gcon[j][i] * kcov[i];
 
+  Real dgcon[4][4][4];
+  pcoord->InverseMetricDerivative(xcon, dgcon);
   for (int k = 0; k < 4; k++)
     for (int j = 0; j < 4; j++)
       for (int i = 0; i < 4; i++)
         dl[k+4] -= 0.5 * dgcon[k][j][i] * kcov[j] * kcov[i];
   // proper distance
+  //Real gcov[4][4];
+  //pcoord->Metric(xcon, gcov);
   /*Real ku[4] = {};
   for (int j = 1; j < 4; j++)
     for (int i = 0; i < 4; i++)
