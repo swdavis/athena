@@ -1279,7 +1279,7 @@ void Spectrum::WriteSpectrum(std::string fname) {
           if (errors(0,k,j,i) == 0.)
             errors(0,k,j,i) = intens(0,k,j,i)/sqrt(count(k,j,i));
         } else {
-          errors(0,j,j,i) = 0.;
+          errors(0,k,j,i) = 0.;
         }
       }
     }
@@ -1372,9 +1372,11 @@ void MCOutput::OutputSpectrum(bool wtflag) {
 
     if ( (time >= pspect->last_time+pspect->dt) || (time == tstart) || (time >= tlim)
          || wtflag ) {
-#ifdef MPI_PARALLEL
       if (Globals::my_rank == 0) {
         pspecout = new Spectrum(pspect);
+      }
+#ifdef MPI_PARALLEL
+      if (Globals::my_rank == 0) {
         // Receive spectra from other processes and add to output spectrum
         for(int i=1; i<Globals::nranks; ++i)
           ReceiveMonteCarloSpectrum(pspecout,true);

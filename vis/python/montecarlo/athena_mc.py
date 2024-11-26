@@ -1284,7 +1284,8 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
 
     for i in range(phots.nphot):
         if ((xbins[i] >= 0) and (mubins[i] >= 0) and (phibins[i] >= 0)):
-            wght = phots.weight[i]
+            #wght = phots.weight[i]
+            wght = phots.weight[i]*phots.energy[i]
             #if ((phots.q[i]**2+phots.u[i]**2) > 1.001):
             #    wght = 0.
             #    print("Warning: polarization too high: ",phots.q[i],phots.u[i],phots.weight[i],np.sqrt(phots.q[i]**2+phots.u[i]**2))
@@ -1326,7 +1327,8 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     for k in range(nintens):
         for j in range(nphi):
             for i in range(nmu):
-                fac = nphi*nmu*emid/(mumid[i]*dnu*2.*np.pi*phots.dt)
+                #fac = nphi*nmu*emid/(mumid[i]*dnu*2.*np.pi*phots.dt)
+                fac = nphi*nmu/(mumid[i]*dnu*2.*np.pi*phots.dt)
                 intensity[k,j,i,:] *= fac
                 if yerror:
                     errors[k,j,i,:] *= fac**2
@@ -1336,10 +1338,17 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     if yerror:
         for k in range(nintens):
             inds = np.where(count > 1.)
+            #for i in range(len(inds[0])):
+            #    etmp = errors[k,inds[0][i],inds[1][i],inds[2][i]]
+            #    itmp = intensity[k,inds[0][i],inds[1][i],inds[2][i]]
+            #    ctmp = count[inds[0][i],inds[1][i],inds[2][i]]
+            #    if (etmp-itmp**2/ctmp < 0.):
+            #        print(i,etmp,itmp,ctmp,etmp-itmp**2/ctmp)
             errors[k,inds[0],inds[1],inds[2]] = np.sqrt(errors[k,inds[0],inds[1],inds[2]]
               - intensity[k,inds[0],inds[1],inds[2]]**2 / count[inds[0],inds[1],inds[2]])
             inds = np.where(count <= 1.)
             errors[k,inds[0],inds[1],inds[2]] = 0.
+            print(errors/intensity)
         spectrum['errors'] = errors
 
     if yerror:

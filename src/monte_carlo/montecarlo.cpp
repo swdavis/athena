@@ -381,7 +381,7 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
     pmcb->GetDensity();
     pmcb->GetTemperature();
     if (boosts) pmcb->GetVelocity();
-    if (boosts || tetrads) pmcb->ComputeTransformations();
+    if (boosts) pmcb->ComputeTransformations();
     if (NSCALARS > 0) pmcb->GetScalars();
 
     // initialize counters to zero
@@ -694,7 +694,7 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
     pmcb->GetDensity();
     pmcb->GetTemperature();
     if (boosts) pmcb->GetVelocity();
-    if (boosts || tetrads) pmcb->ComputeTransformations();
+    if (boosts) pmcb->ComputeTransformations();
     if (NSCALARS > 0) pmcb->GetScalars(); //scalars
     // reset counters
     pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;

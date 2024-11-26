@@ -78,7 +78,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   Real mp = 1.6726e-24;
   Real sigmat = 6.65248e-25;
   Real kappaes = sigmat * (1. + 2.*heabund) / (mp * (1.+4.*heabund) );
-  if (tau > 0.) {
+  if (constdens && (tau > 0.)) {
     Real length;
     if (COORDINATE_SYSTEM == "cartesian") {
       Real xlow = pin->GetReal("mesh","x3min");
@@ -322,11 +322,15 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
           xi -= static_cast<Real>(ii);
           Real xj = (lt - lmint) / dlt;
           int jj = std::floor(xj);
-          while ((temp_grid(jj+1) < temp) && (jj<ntem-1)){
+
+          while ((jj<ntem-2) && (temp_grid(jj+1) < temp)){
             jj++;
           }
-          while ((temp_grid(jj) > temp) && (jj>0)){
+          while ((jj>0) && (temp_grid(jj) > temp)){
             jj--;
+          }
+          if(jj > ntem-2) {
+            jj = ntem-2;
           }
           xj = (temp-temp_grid(jj))/(temp_grid(jj+1)-temp_grid(jj));
 
@@ -383,7 +387,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
   fscanf(opac_file,"%d",&(nrho));
 
   // Create arrays for opacity
-  fre_grid.NewAthenaArray(nfre);
+  fre_grid.NewAthenaArray(nfre+1);
   temp_grid.NewAthenaArray(ntem);
   rho_grid.NewAthenaArray(nrho);
   ross_tab.NewAthenaArray(nfre,ntem,nrho);
@@ -477,28 +481,31 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
   }
 
 
-  /*Real dummy;
-  for(int k=0; k<nfre; ++k) {
-    Real ffnrm = 3.692146e8;
-    Real heabund = 0.09; //hardcode for now (should be parameter)
-    Real mp = 1.67262192369e-24;
-    Real h = 6.62607015e-27;
-    Real kb = 1.380649e-16;
-    Real nu = fre_grid(k) / h;
-    for(int j=0; j<ntem; ++j) {
-      Real tgas = temp_grid(j);
-      Real ehnu = exp(-h*nu / (kb * tgas) );
-      for(int i=0; i<nrho; ++i) {
-        Real nh = rho_grid(i) / (mp*(1.+4.*heabund));
-        Real nhe = nh*heabund;
-        Real ne = nh + 2.*nhe;
-        fscanf(opac_file,"%lf",&(dummy));
-        Real aff = ffnrm/sqrt(tgas)/pow(nu,3);
-        Real opac = ne * (nh + 4. * nhe) * aff * (1. - ehnu);
-        plan_tab(k,j,i) = opac;
+  bool useff = pin->GetOrAddBoolean("problem","useff",false);
+  if (useff) {
+    Real dummy;
+    for(int k=0; k<nfre; ++k) {
+      Real ffnrm = 3.692146e8;
+      Real heabund = 0.09; //hardcode for now (should be parameter)
+      Real mp = 1.67262192369e-24;
+      Real h = 6.62607015e-27;
+      Real kb = 1.380649e-16;
+      Real nu = fre_grid(k) / h;
+      for(int j=0; j<ntem; ++j) {
+        Real tgas = temp_grid(j);
+        Real ehnu = exp(-h*nu / (kb * tgas) );
+        for(int i=0; i<nrho; ++i) {
+          Real nh = rho_grid(i) / (mp*(1.+4.*heabund));
+          Real nhe = nh*heabund;
+          Real ne = nh + 2.*nhe;
+          fscanf(opac_file,"%lf",&(dummy));
+          Real aff = ffnrm/sqrt(tgas)/pow(nu,3);
+          Real opac = ne * (nh + 4. * nhe) * aff * (1. - ehnu);
+          plan_tab(k,j,i) = opac;
+        }
       }
     }
-    }*/
+  }
 
 
   // planck mean for each frequency group
@@ -511,8 +518,12 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
         max = (max < plan_tab(k,j,i)) ? plan_tab(k,j,i) : max;
       }
       if (max/min < 1.2) {
-        for(int k=0; k<nfre; ++k)
+        for(int k=0; k<nfre; ++k) {
+          //if ((j == 15) || (j == 16)) {
+          //  printf("%g %g\n",temp_grid(j),rho_grid(i));
+          //}
           plan_tab(k,j,i) = 1.e-60;
+        }
       }
     }
   }
@@ -580,14 +591,16 @@ Real TableOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   xk -= static_cast<Real>(k);
 
   int j = std::floor(xj);
-  while ((temp_grid(j+1) < temp) && (j<ntem-1)){
+  while ((j<ntem-2) && (temp_grid(j+1) < temp)){
     j++;
   }
-  while ((temp_grid(j) > temp) && (j>0)){
+  while ((j>0) && (temp_grid(j) > temp)){
     j--;
   }
+  if(j > ntem-2) {
+    j = ntem-2;
+  }
   xj = (temp-temp_grid(j))/(temp_grid(j+1)-temp_grid(j));
-
   Real opacl = (1.-xi) * ((1.-xj) * plan_tab(k,j,i) + xj * plan_tab(k,j+1,i))
                  + xi  * ((1.-xj) * plan_tab(k,j,i+1) + xj * plan_tab(k,j+1,i+1));
   Real opach = (1.-xi) * ((1.-xj) * plan_tab(k+1,j,i) + xj * plan_tab(k+1,j+1,i))
@@ -645,13 +658,15 @@ Real TableEmission(MonteCarloBlock *pmcb, int i3, int i2, int i1) {
   int j = std::floor(xj);
 
   xi -= static_cast<Real>(i);
-  while ((temp_grid(j+1) < temp) && (j<ntem-1)){
+  while ((j<ntem-2) && (temp_grid(j+1) < temp)){
     j++;
   }
-  while ((temp_grid(j) > temp) && (j>0)){
+  while ((j>0) && (temp_grid(j) > temp)){
     j--;
   }
-  xj = (temp-temp_grid(j))/(temp_grid(j+1)-temp_grid(j));
+  if(j > ntem-2) {
+    j = ntem-2;
+  }
 
   Real eta = (1.-xi) * ((1.-xj) * eta_tab(j,i) + xj * eta_tab(j+1,i))
                + xi  * ((1.-xj) * eta_tab(j,i+1) + xj * eta_tab(j+1,i+1));

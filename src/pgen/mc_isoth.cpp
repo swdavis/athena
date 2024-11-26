@@ -169,7 +169,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     }
 
     // Convert k unit vector to k^\alpha
-    if (pmy_mc->general_pusher_flag) {
+    /*if (pmy_mc->general_pusher_flag) {
       pphot->k0p[ip] = 1.;
       pphot->k2p[ip] /= pphot->x1p[ip];
       pphot->k3p[ip] /= (pphot->x1p[ip]*sin(pphot->x2p[ip]));
@@ -177,7 +177,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
       pphot->dk1p[ip] = 0.;
       pphot->dk2p[ip] = 0.;
       pphot->dk3p[ip] = 0.;
-    }
+      }*/
 
     //printf("%g %g \n",pphot->ep[ip],pphot->wp[ip]);
     // Set status flag
@@ -194,6 +194,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     pphot->acp[ip] = AbsorptionOpacity(this,pphot,ip);
     pphot->scp[ip] = ScatteringOpacity(this,pphot,ip);
 
+    //pphot->PrintPhoton("start",ip);
     //printf("start: %d %g %g %d\n",pphot->i3p[ip],pphot->wp[ip],pphot->ep[ip],pphot->statp[ip]);
   }
   //pphot->nphot++;

@@ -73,7 +73,11 @@ public:
 
   // functions
   void Metric(Real x[4], Real gcov[4][4]);
+  void InverseMetric(Real x[4], Real gcon[4][4]);
   void Connect(Real x[4], Real gamma[4][4][4]);
+  void InverseMetricDerivative(Real x[4], Real dgcon[4][4][4]);
+  void Tetrad(Real x[4], Real tetrad[4][4]);
+  void InverseTetrad(Real x[4], Real invtet[4][4]);
 
 };
 

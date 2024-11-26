@@ -274,7 +274,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
     GetDirectionTetrad(pphot, alpha0, beta0, ip);
 
-    pphot->ep[ip] = pphot->k0p[ip];
+    pphot->ep[ip] = -pphot->k0p[ip];
 
     // Initialize dk to zero
     pphot->dk0p[ip] = 0;
@@ -535,7 +535,7 @@ void GetDirectionTetrad(Photon *pphot, Real alpha, Real beta, int ip) {
 void MidplaneCrossing(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher, int ip) {
 
  // check if photon has crossed midplane and whether to terminate or keep integrating
-
+  pphot->PrintPhoton("in move",ip);
   if (pphot->x1p[ip] < rh + 1.0e-5) {
     pphot->statp[ip] = DESTROYED;
     pphot->user[2][ip] = 0.;

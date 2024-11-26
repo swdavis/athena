@@ -81,16 +81,15 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
           accel_success = true;
         }
       }
-
       if (!accel_success) {// Acceleration not triggered - take standard step
         if (tauremaining > chi * step) { // Photon hasn't yet reached tauremaining
           //VerletStep(pphot,step,ip);
           RK4Step(pphot,step,ip);
           if (pmy_mcb->pmy_mc->polarized)
             PropogatePolarization(pphot,step,ip);
-          tauremaining -= chi * step;
+          tauremaining -= chi * step * pphot->ep[ip];
         } else { // Photon has reached end of tauremaining - step to make it 0
-          step = tauremaining / chi;
+          step = tauremaining / (chi * pphot->ep[ip]);
           //VerletStep(pphot,step,ip);
           RK4Step(pphot,step,ip);
           if (pmy_mcb->pmy_mc->polarized)
@@ -98,7 +97,7 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
           tauremaining = 0.;
         }
         //pphot->PrintPhoton(ip);
-        pphot->dtp[ip] -= step/c_cgs;
+        pphot->dtp[ip] -= pphot->ep[ip]*step/c_cgs;
         // Update moments
         if (pmcb->call_moments) {
           pmcb->UpdateMoments(pphot,step,ip);
@@ -166,7 +165,7 @@ void GeneralPusher::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip
     if (pmcb->boosts) {
       // Shift photon energy to comoving frame
       //shift = pmy_mcb->LorentzTransformFrequencyShift(pphot,ip);
-      shift = pmy_mcb->LorentzTransformFrequencyShift(pphot,ip);
+      shift = pmy_mcb->FrequencyShiftComoving(pphot,ip);
       Real energy = pphot->ep[ip] * shift;
       // compute opacities in comoving frame
       pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
@@ -288,21 +287,6 @@ void GeneralPusher::RK4Step(Photon *pphot, Real step, int ip) {
   kcon[IMC2] = pphot->k2p[ip];
   kcon[IMC3] = pphot->k3p[ip];
 
-  {
-    Real gcov[4][4];
-  pcoord->Metric(x0, gcov);
-  Real a = 0.;
-  for (int j = 1; j < 4; j++)
-    for (int i = 1; i < 4; i++)
-      a += gcov[j][i] * kcon[j] * kcon[i];
-  Real b = 0.;
-  for (int i = 1; i < 4; i++)
-    b += 2. * gcov[0][i] * kcon[0] * kcon[i];
-  Real c = gcov[0][0] * kcon[0] * kcon[0];
-  Real d = std::sqrt(SQR(b) - 4.*a*c);
-  Real factor = b < 0. ? (d-b) / (2.*a) : -2.*c / (b+d);
-  Real s = 2.;
-  }
   Real k0[4], gcov[4][4];
   pcoord->Metric(x0, gcov);
   for (int j = 0; j < 4; j++) {
@@ -482,5 +466,5 @@ Real GeneralPusher::StepSize(Photon *pphot, int ip) {
   Real step = (stepx1 < stepx2) ? stepx1 : stepx2;
   step = (step < stepx3) ? step : stepx3;
 
-  return step * step_par;
+  return step * step_par / pphot->ep[ip];
 }

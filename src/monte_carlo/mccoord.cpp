@@ -285,11 +285,32 @@ void MCSphericalPolar::Metric(Real x[4], Real gcov[4][4]) {
     }
   }
 
+  Real r = x[IMC1];
   Real sth = sin(x[IMC2]);
-  gcov[IMC0][IMC0] = -1;
-  gcov[IMC1][IMC1] = 1;
-  gcov[IMC2][IMC2] = x[IMC1] * x[IMC1];
-  gcov[IMC3][IMC3] = x[IMC1] * x[IMC1] * sth * sth;
+  gcov[IMC0][IMC0] = -1.;
+  gcov[IMC1][IMC1] = 1.;
+  gcov[IMC2][IMC2] = r * r;
+  gcov[IMC3][IMC3] = r * r * sth * sth;
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCSphericalPolar::InverseMetric(Real x[4], Real gcon[4][4])
+//! \brief compute metric in flat spacetime spherical polar
+
+void MCSphericalPolar::InverseMetric(Real x[4], Real gcon[4][4]) {
+
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      gcon[i][j] = 0;
+    }
+  }
+  Real r = x[IMC1];
+  Real sth = sin(x[IMC2]);
+  gcon[IMC0][IMC0] = -1;
+  gcon[IMC1][IMC1] = 1;
+  gcon[IMC2][IMC2] = 1. / (r * r);
+  gcon[IMC3][IMC3] = 1. / (r * r * sth *sth);
 
 }
 
@@ -306,22 +327,80 @@ void MCSphericalPolar::Connect(Real x[4], Real gamma[4][4][4]) {
       }
     }
   }
-
+  Real r = x[IMC1];
   Real sth = sin(x[IMC2]);
   Real cth = cos(x[IMC2]);
 
-  gamma[IMC1][IMC2][IMC2] = -x[IMC1];
-  gamma[IMC1][IMC3][IMC3] = -x[IMC1]*sth*sth;
-  gamma[IMC2][IMC1][IMC2] = 1./x[IMC1];
+  gamma[IMC1][IMC2][IMC2] = -r;
+  gamma[IMC1][IMC3][IMC3] = -r * sth * sth;
+  gamma[IMC2][IMC1][IMC2] = 1. / r;
   gamma[IMC2][IMC2][IMC1] = gamma[IMC2][IMC1][IMC2];
   gamma[IMC2][IMC3][IMC3] = -sth*cth;
-  gamma[IMC3][IMC1][IMC3] = 1./x[IMC1];
-  gamma[IMC3][IMC2][IMC3] = cth/sth;
+  gamma[IMC3][IMC1][IMC3] = 1. / r;
+  gamma[IMC3][IMC2][IMC3] = cth / sth;
   gamma[IMC3][IMC3][IMC1] = gamma[IMC3][IMC1][IMC3];
   gamma[IMC3][IMC3][IMC2] = gamma[IMC3][IMC2][IMC3];
 
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void MCSphericalPolar::InverseMetricDerivative(Real x[4], Real dgcon[4][4][4])
+//! \brief compute a diagonal tetrad
+
+void MCSphericalPolar::InverseMetricDerivative(Real x[4], Real dgcon[4][4][4]) {
+
+  for(int i = 0; i < 4; i++) {
+    for(int j = 0; j < 4; j++) {
+      for(int k = 0; k < 4; k++) {
+        dgcon[i][j][k]=0;
+      }
+    }
+  }
+
+  Real r = x[IMC1];
+  Real sth = sin(x[IMC2]);
+  Real cth = cos(x[IMC2]);
+  dgcon[IMC1][IMC2][IMC2] = -2./(r*r*r);
+  dgcon[IMC1][IMC3][IMC3] = -2./(r*r*r)/(sth*sth);
+  dgcon[IMC2][IMC3][IMC3] = -2.*cth/(r*r)/(sth*sth*sth);
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCSphericalPolar::Tetrad(Real x[4], Real tetrad[4][4])
+//! \brief compute a diagonal tetrad
+
+void MCSphericalPolar::Tetrad(Real x[4], Real tetrad[4][4]) {
+
+  for (int l=0; l<4; l++) {
+    for (int m=0; m<4; m++) {
+      tetrad[l][m] = 0.;
+    }
+    tetrad[l][l] = 1.;
+  }
+  Real r = x[IMC1];
+  Real sth = sin(x[IMC2]);
+  tetrad[IMC2][IMC2] = 1. / r;
+  tetrad[IMC3][IMC3] = 1. / (r*sth);
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCSphericalPolar::InverseTetrad(Real x[4], Real invtet[4][4])
+//! \brief compute a diagonal tetrad
+
+void MCSphericalPolar::InverseTetrad(Real x[4], Real invtet[4][4]) {
+
+  for (int l=0; l<4; l++) {
+    for (int m=0; m<4; m++) {
+      invtet[l][m] = 0.;
+    }
+    invtet[l][l] = 1.;
+  }
+  Real r = x[IMC1];
+  Real sth = sin(x[IMC2]);
+  invtet[IMC2][IMC2] = r;
+  invtet[IMC3][IMC3] = r * sth;
+}
 //----------------------------------------------------------------------------------------
 //! MCCylindrical constructor, built from Coord and MonteCarloBlock
 
@@ -894,7 +973,7 @@ void MCKerrSchildCartesian::InverseMetricDerivative(Real x[4], Real dgcon[4][4][
   dgcon[IMC3][IMC3][IMC1] = -(df_dz * l3 * l1 + f * dl3_dz * l1 + f * l3 * dl1_dz);
   dgcon[IMC3][IMC3][IMC2] = -(df_dz * l3 * l2 + f * dl3_dz * l2 + f * l3 * dl2_dz);
   dgcon[IMC3][IMC3][IMC3] = -(df_dz * l3 * l3 + f * dl3_dz * l3 + f * l3 * dl3_dz);
-  return;
+
 }
 
 //----------------------------------------------------------------------------------------

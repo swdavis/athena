@@ -80,7 +80,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
   fscanf(opac_file,"%d",&(nrho));
 
   // Create arrays for opacity
-  fre_grid.NewAthenaArray(nfre);
+  fre_grid.NewAthenaArray(nfre+1);
   temp_grid.NewAthenaArray(ntem);
   rho_grid.NewAthenaArray(nrho);
   ross_tab.NewAthenaArray(nfre,ntem,nrho);
@@ -294,11 +294,14 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
           xi -= static_cast<Real>(ii);
           Real xj = (lt - lmint) / dlt;
           int jj = std::floor(xj);
-          while ((temp_grid(jj+1) < temp) && (jj<ntem-1)){
+          while ((jj<ntem-2) && (temp_grid(jj+1) < temp)){
             jj++;
           }
-          while ((temp_grid(jj) > temp) && (jj>0)){
+          while ((jj>0) && (temp_grid(jj) > temp)){
             jj--;
+          }
+          if(jj > ntem-2) {
+            jj = ntem-2;
           }
           xj = (temp-temp_grid(jj))/(temp_grid(jj+1)-temp_grid(jj));
 
@@ -585,11 +588,14 @@ Real TableOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   int k = std::floor(xk);
   xi -= static_cast<Real>(i);
   xk -= static_cast<Real>(k);
-  while ((temp_grid(j+1) < temp) && (j<ntem-1)){
+  while ((j<ntem-2) && (temp_grid(j+1) < temp)){
     j++;
   }
-  while ((temp_grid(j) > temp) && (j>0)){
+  while ((j>0) && (temp_grid(j) > temp)){
     j--;
+  }
+  if(j > ntem-2) {
+    j = ntem-2;
   }
   xj = (temp-temp_grid(j))/(temp_grid(j+1)-temp_grid(j));
 
@@ -648,11 +654,14 @@ Real TableEmission(MonteCarloBlock *pmcb, int i3, int i2, int i1) {
   int j = std::floor(xj);
 
   xi -= static_cast<Real>(i);
-  while ((temp_grid(j+1) < temp) && (j<ntem-1)){
+  while ((j<ntem-2) && (temp_grid(j+1) < temp)){
     j++;
   }
-  while ((temp_grid(j) > temp) && (j>0)){
+  while ((j>0) && (temp_grid(j) > temp)){
     j--;
+  }
+  if(j > ntem-2) {
+    j = ntem-2;
   }
   xj = (temp-temp_grid(j))/(temp_grid(j+1)-temp_grid(j));
 
