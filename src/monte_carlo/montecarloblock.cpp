@@ -514,10 +514,11 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
 
     // user definied photon initialization
     InitializePhoton(pphot,nold,pphot->nphot-1);
-    if (ptraj != nullptr) {
-      for (int ip=nold; ip < pphot->nphot; ip++)
-        ptraj->InitializeTrajectory(pphot->trp[ip]);
-    }
+    //if (ptraj != nullptr) {
+    //  for (int ip=nold; ip < pphot->nphot; ip++)
+    //    ptraj->InitializeTrajectory(pphot->trp[ip]);
+    //}
+
     // Lorentz transform E, k to Eulerian frame and update opacities
     // only for newly emitted samples
     if (boosts || tetrads) {
@@ -537,7 +538,6 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
 
   // perform all absorption and scattering related tasks for all samples
   for (int ip=0; ip<pphot->nphot; ip++) {
-
     // record initial weight and direction
     Real weight0 = pphot->wp[ip];
     Real k1p0 = pphot->k1p[ip];
@@ -610,9 +610,9 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
       if (pphot->statp[ip] != BUFFERED) {
         // User defined completion work
         FinalizePhoton(pphot,ip);
-        if (ptraj != nullptr) {
-          ptraj->CompleteTrajectory(pphot->trp[ip]);
-        }
+        //if (ptraj != nullptr) {
+        //  ptraj->CompleteTrajectory(pphot->trp[ip]);
+        //}
       }
 
       if (pphot->statp[ip] == ESCAPED) {
@@ -928,7 +928,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
 
       return;
     } else if (std::isnan(k1) || std::isnan(k2) || std::isnan(k3)) {
-      pphot->PrintPhoton("Warning: Nan in k moments,"
+      pphot->PrintPhoton("Warning: Nan in k in UpdateMoments(),"
                          " photon destroyed",ip);
     } else {
       // Add contribution to corresponding moments
@@ -1652,7 +1652,6 @@ void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe) {
       // photons emitted in each cell
       pphot->wp[ip] = emission(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip])
         * emiss_to_weight;
-
     } // end loop over ip
   }
 }
@@ -1708,8 +1707,11 @@ void MonteCarloBlock::GetVelocity() {
         Real gamma = 1. / std::sqrt(1. - beta*beta);
         vel(k,j,i,0) = gamma;
         //gamma = 1;
-        for (int l=1; l<4; ++l)
+        for (int l=1; l<4; ++l) {
           vel(k,j,i,l) *= gamma * beta / beta0 ;
+          //if (Globals::my_rank == 0)
+          //  printf("v: %d %g\n",l,vel(k,j,i,l));
+        }
       }
     }
   }
@@ -1780,7 +1782,7 @@ void MonteCarloBlock::ComputeTransformations() {
             for (int n=0; n<4; n++) {
               sum += boost_cmv(k,j,i,l,n)*boost_lab(k,j,i,n,m);
             }
-            printf("%d %d %g\n",l,m,sum,);
+            printf("%d %d %g\n",l,m,sum);
           }
           }*/
       } // loop over i
@@ -1844,6 +1846,7 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
 
     //pphot->PrintPhoton("to com",ip);
     Real nufact = pphot->k0p[ip]/k0init;
+
     pphot->k0p[ip] = 1.;
     // SWD: maybe better to renormalize
     pphot->k1p[ip] = kf[1]/kf[0];
@@ -1853,6 +1856,7 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
     pphot->ep[ip] *= nufact;
     pphot->acp[ip] /= nufact;
     pphot->scp[ip] /= nufact;
+
   }
 }
 
@@ -1861,9 +1865,9 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
 //! \fn void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe)
 //! \brief convert momentum vector to coordinate frame
 
- void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
+void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
 
-   for(int ip=ips; ip<=ipe; ip++) {
+  for(int ip=ips; ip<=ipe; ip++) {
     int i1 = pphot->i1p[ip];
     int i2 = pphot->i2p[ip];
     int i3 = pphot->i3p[ip];
@@ -1930,7 +1934,8 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
     pphot->ep[ip] *= nufact;
     pphot->acp[ip] /= nufact;
     pphot->scp[ip] /= nufact;
-   }
+
+  } // for ip loop
 }
 
 //----------------------------------------------------------------------------------------

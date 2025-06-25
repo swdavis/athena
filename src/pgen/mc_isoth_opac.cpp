@@ -120,6 +120,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     for (int k=ks; k<=ke; k++) {
       Real x1 = pcoord->x3v(k);
       if (!constdens) rho = DensityProfile(x1,xlow,xhigh,taumin,taumax,kappaes);
+      if ((k == ks) || (k == ke)) printf("min/max dens: %g\n",rho);
       for (int j=js; j<=je; j++) {
         for (int i=is; i<=ie; i++) {
           phydro->u(IDN,k,j,i) = rho;
@@ -340,13 +341,18 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
             Real eta = (1.-xi) * ((1.-xj)*eta_nu_tab(l,jj,ii)+xj*eta_nu_tab(l,jj+1,ii))
               + xi * ((1.-xj)*eta_nu_tab(l,jj,ii+1)+xj*eta_nu_tab(l,jj+1,ii+1));
             eta_cum_tab(k,j,i,l+1) =  eta_cum_tab(k,j,i,l)+eta;
+            if ((Globals::my_rank == 0) && (k==ks) && (j == js) && (i == is)) {
+              printf("%d %g %g %g %g %g %g %g\n",l,fre_grid(l)/keverg,eta_cum_tab(k,j,i,l),
+                     eta,eta_nu_tab(l,jj,ii),eta_nu_tab(l,jj+1,ii),eta_nu_tab(l,jj,ii+1),
+                     eta_nu_tab(l,jj+1,ii+1));
+            }
           }
 
           for(int l=0; l<nfre+1; ++l) {
             eta_cum_tab(k,j,i,l) /= eta_cum_tab(k,j,i,nfre);
 
             if ((Globals::my_rank == 0) && (k==ks) && (j == js) && (i == is)) {
-              printf("%d %g %g\n",l,fre_grid(l)/keverg,eta_cum_tab(k,j,i,l));
+              printf("%d %d %g %g\n",l,jj,fre_grid(l)/keverg,eta_cum_tab(k,j,i,l));
             }
           }
         }
@@ -393,8 +399,12 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
   ross_tab.NewAthenaArray(nfre,ntem,nrho);
   plan_tab.NewAthenaArray(nfre,ntem,nrho);
 
+  if (Globals::my_rank == 0)
+    printf("Frequency grid (keV):\n");
   for(int i=1; i<=nfre; ++i){
     fscanf(opac_file,"%lf",&(fre_grid(i)));
+    if (Globals::my_rank == 0)
+      printf("%d %g\n",i,fre_grid(i));
   }
   fre_grid(0) = fre_grid(1)*fre_grid(1)/fre_grid(2);
   // convert to erg
@@ -414,8 +424,13 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
   }
   // convert to kelvin
   Real kb = 1.380649e-16;
-  for(int i=0; i<ntem; ++i)
+  if (Globals::my_rank == 0)
+    printf("Temperature grid:\n");
+  for(int i=0; i<ntem; ++i) {
     temp_grid(i) *= keverg/kb;
+    if (Globals::my_rank == 0)
+      printf("%d %g\n",i,temp_grid(i));
+  }
   lmint = std::log10(temp_grid(0));
   lmaxt = std::log10(temp_grid(ntem-1));
   dlt = (lmaxt-lmint)/static_cast<Real>(ntem-1);
@@ -427,8 +442,12 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
     }*/
 
   // density grid (g/cm^3)
+  if (Globals::my_rank == 0)
+    printf("Density Grid:\n");
   for(int i=0; i<nrho; ++i) {
     fscanf(opac_file,"%lf",&(rho_grid(i)));
+    if (Globals::my_rank == 0)
+      printf("%d %g\n",i,rho_grid(i));
   }
   lmind = std::log10(rho_grid(0));
   lmaxd = std::log10(rho_grid(nrho-1));
@@ -667,6 +686,7 @@ Real TableEmission(MonteCarloBlock *pmcb, int i3, int i2, int i1) {
   if(j > ntem-2) {
     j = ntem-2;
   }
+  xj = (temp-temp_grid(j))/(temp_grid(j+1)-temp_grid(j));
 
   Real eta = (1.-xi) * ((1.-xj) * eta_tab(j,i) + xj * eta_tab(j+1,i))
                + xi  * ((1.-xj) * eta_tab(j,i+1) + xj * eta_tab(j+1,i+1));

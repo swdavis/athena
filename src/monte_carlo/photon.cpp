@@ -114,13 +114,6 @@ void Photon::PrintPhoton(int ip) {
     }
   }
   std::cout << "opacity: " << scp[ip] << " " << acp[ip] << std::endl;
-  if (nuser_var > 0) {
-    std::cout << "User vars:";
-      for (int i=0; i<nuser_var; i++) {
-        std::cout << " " << user[i][ip];
-      }
-      std::cout << std::endl;
-  }
   std::cout << "dt: " << dtp[ip] << " ";
   if (statp[ip] == EVOLVING)
     std::cout << "EVOLVING" << std::endl;
@@ -678,71 +671,112 @@ void Photon::GetPositionIndices(int ibegin, int iend) {
     pmy_block->pcoord->MeshCoordsToIndices(x1p[k]/l1cgs, x2p[k]/l2cgs, x3p[k]/l3cgs,
                                            xi1, xi2, xi3);
 
-    int i1 = i1p[k] = static_cast<int>(xi1);
-    //if (i1p[k] < is) {i1p[k] = is;}
-    //if (i1p[k] > ie) {i1p[k] = ie;}
-    if (i1p[k] = ie+1) {i1p[k] = ie;}
-    int i2 = i2p[k] = static_cast<int>(xi2);
-    //if (i2p[k] < js) i2p[k] = js;
-    //if (i2p[k] > je) i2p[k] = je;
-    if (i2p[k] = je+1) i2p[k] = je;
-    int i3 =i3p[k] = static_cast<int>(xi3);
-    //if (i3p[k] < ks) i3p[k] = ks;
-    //if (i3p[k] > ke) i3p[k] = ke;
-    if (i3p[k] = ke+1) i3p[k] = ke;
+    i1p[k] = static_cast<int>(xi1);
+    i2p[k] = static_cast<int>(xi2);
+    i3p[k] = static_cast<int>(xi3);
 
-    // MeshCoordsToIndicies can fail for refined grids so check is needed
+    // MeshCoordsToIndicies can fail for refined grids so we make some checks
+
+    // First check to make zone index is correct
     MCCoord *pco = pmy_mcb->pcoord;
-    bool on_block = true;
     while (x1p[k] > pco->x1f(i1p[k]+1)) {
       i1p[k]++;
-      if (i1p[k] > ie) {
-        on_block = false;
+      if (i1p[k] > ie+1) {
         break;
       }
     }
     while (x1p[k] < pco->x1f(i1p[k])) {
       i1p[k]--;
-      if (i1p[k] < is) {
-        on_block = false;
+      if (i1p[k] < is-1) {
         break;
       }
     }
     while (x2p[k] > pco->x2f(i2p[k]+1)) {
       i2p[k]++;
-      if (i2p[k] > je) {
-        on_block = false;
+      if (i2p[k] > je+1) {
         break;
       }
     }
     while (x2p[k] < pco->x2f(i2p[k])) {
       i2p[k]--;
-      if (i2p[k] < js) {
-        on_block = false;
+      if (i2p[k] < js-1) {
         break;
       }
     }
     while (x3p[k] > pco->x3f(i3p[k]+1)) {
       i3p[k]++;
-      if (i3p[k] > ke) {
-        on_block = false;
+      if (i3p[k] > ke+1) {
         break;
       }
     }
     while (x3p[k] < pco->x3f(i3p[k])) {
       i3p[k]--;
-      if (i3p[k] < ks) {
-        on_block = false;
+      if (i3p[k] < ks-1) {
         break;
       }
     }
+    bool on_block = true;
+    // Next check to see if sample landed in active zone or adjacent
+    if ( (i1p[k] < is-1) || (i1p[k] > ie+1) || (i2p[k] < js-1) || (i2p[k] > je+1)
+         || (i3p[k] < ks-1) || (i3p[k] > ke+1) ) {
+      on_block = false;
+    } else {
+      Real tol = 0.01;
+      // if sample in adjacent ghost cell, set to active cell if sufficinetly
+      // close and update position and position index accordingly
+      if (i1p[k] == is-1) {
+        Real dxr = (pco->x1f(is)-x1p[k])/(pco->x1f(is+1)-pco->x1f(is));
+        if (fabs(dxr) < tol) {
+          i1p[k] = is;
+          x1p[k] = pco->x1f(is);
+        } else {
+          on_block = false;
+        }
+      } else if (i1p[k] == ie+1) {
+        Real dxr = (x1p[k]-pco->x1f(ie+1))/(pco->x1f(ie+1)-pco->x1f(ie));
+        if (fabs(dxr) < tol) {
+          i1p[k] = ie;
+          x1p[k] = pco->x1f(ie+1);
+        } else {
+          on_block = false;
+        }
+      } else if (i2p[k] == js-1) {
+        Real dxr = (pco->x2f(js)-x2p[k])/(pco->x2f(js+1)-pco->x2f(js));
+        if (fabs(dxr) < tol) {
+          i2p[k] = js;
+          x2p[k] = pco->x2f(js);
+        } else {
+          on_block = false;
+        }
+      } else if (i2p[k] == je+1) {
+        Real dxr = (x2p[k]-pco->x2f(je+1))/(pco->x2f(je+1)-pco->x2f(je));
+        if (fabs(dxr) < tol) {
+          i2p[k] = je;
+          x2p[k] = pco->x2f(je+1);
+        } else {
+          on_block = false;
+        }
+      } else if (i3p[k] == ks-1) {
+        Real dxr = (pco->x3f(ks)-x3p[k])/(pco->x3f(ks+1)-pco->x3f(ks));
+        if (fabs(dxr) < tol) {
+          i3p[k] = ks;
+          x3p[k] = pco->x3f(ks);
+        } else {
+          on_block = false;
+        }
+      } else if (i3p[k] == ke+1) {
+        Real dxr = (x3p[k]-pco->x3f(ke+1))/(pco->x3f(ke+1)-pco->x3f(ke));
+        if (fabs(dxr) < tol) {
+          i3p[k] = ke;
+          x3p[k] = pco->x3f(ke+1);
+        } else {
+          on_block = false;
+        }
+      }
+    } // end of else
     if (on_block)
       statp[k] = EVOLVING;
     else {
-      //printf("%d %d %d\n",i1,i2,i3);
-      //printf("min/max: %g %g %g %g %g %g\n",pco->x1f(is),pco->x1f(ie+1),pco->x2f(js),
-      //         pco->x2f(je+1),pco->x3f(ks),pco->x3f(ke+1));
-    //printf("%d %d %d %d %d %d\n",is,ie,js,je,ks,ke);
       PrintPhoton("Warning: [GetPostionIndicies], Photon not on block, destroyed",k);
       statp[k] = DESTROYED;
       continue;

@@ -41,7 +41,7 @@ namespace {
   AthenaArray<Real> plan_tab;
   AthenaArray<Real> eta_cum_tab;
   AthenaArray<Real> eta_tab;
-  AthenaArray<Real> prob_tab;
+
   //functions
   Real TableOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
   Real IntegrateEmission(Real temp, Real num, Real nup, Real am, Real ap);
@@ -188,7 +188,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
         min = (min > plan_tab(k,j,i)) ? plan_tab(k,j,i) : min;
         max = (max < plan_tab(k,j,i)) ? plan_tab(k,j,i) : max;
       }
-      /*if (max/min < 1.2) {
+      if (max/min < 1.2) {
         Real ffnrm = 3.692146e8;
         Real heabund = 0.09; //hardcode for now (should be parameter)
         Real mp = 1.67262192369e-24;
@@ -207,9 +207,9 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
           plan_tab(k,j,i) = opac;
           // plan_tab(k,j,i) = 1.e-60;
 
-          }
+        }
 
-          }*/
+      }
     }
   }
 
@@ -596,6 +596,7 @@ Real TableOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   }
   if(j > ntem-2) {
     j = ntem-2;
+    temp = temp_grid(j+1);
   }
   xj = (temp-temp_grid(j))/(temp_grid(j+1)-temp_grid(j));
 
@@ -653,6 +654,7 @@ Real TableEmission(MonteCarloBlock *pmcb, int i3, int i2, int i1) {
   int i = std::floor(xi);
   int j = std::floor(xj);
 
+  Real xi0 = xi;
   xi -= static_cast<Real>(i);
   while ((j<ntem-2) && (temp_grid(j+1) < temp)){
     j++;
@@ -662,12 +664,15 @@ Real TableEmission(MonteCarloBlock *pmcb, int i3, int i2, int i1) {
   }
   if(j > ntem-2) {
     j = ntem-2;
+    temp = temp_grid(j+1);
   }
   xj = (temp-temp_grid(j))/(temp_grid(j+1)-temp_grid(j));
 
   Real eta = (1.-xi) * ((1.-xj) * eta_tab(j,i) + xj * eta_tab(j+1,i))
                + xi  * ((1.-xj) * eta_tab(j,i+1) + xj * eta_tab(j+1,i+1));
-
+  if (eta <= 0.) {
+    printf("%d %d %g %g %g %g\n",i,j,xi,xj,xi0,eta);
+  }
   return eta;
 }
 
@@ -683,6 +688,7 @@ Real SampleEmissivity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   int i = mcbisect(dev,prob,nfre+1);
   Real a = (dev-prob[i])/(prob[i+1]-prob[i]);
   Real a1 = 1.-a;
+  printf("%d %g %g\n",i,a,a1);
   //if (std::isinf(a)) {
   /*printf("%d %d %d\n",i3,i2,i1);
     for (int j=0; j< nfre+1; ++j)

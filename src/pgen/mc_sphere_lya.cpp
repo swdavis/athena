@@ -164,7 +164,9 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
       throw std::runtime_error(msg.str().c_str());
     }
   }
-
+  // Set number of samples per block because emmision_flag is set to EMISNONE
+  nphremain = pin->GetInteger("montecarlo", "nphot");
+  nphrun = 0;
 }
 
 
@@ -255,7 +257,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     // to the values appropriate in the emitted zone
     pphot->acp[ip] = AbsorptionOpacity(this,pphot,ip);
     pphot->scp[ip] = ScatteringOpacity(this,pphot,ip);
-
+    //pphot->PrintPhoton(ip);
   } // loop over ip
 }
 

@@ -42,6 +42,7 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
   PhotonTrajectoryList *ptraj = pmy_mcb->ptraj;
 
   for (int ip=ips; ip<=ipe; ip++) {
+
     // get number of mean free paths photon will travel
     Real tauremaining = GetOpticalDepth(pran);
 
@@ -311,7 +312,7 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
           kth = kx * cth * cph + ky * cth * sph - kz * sth;
           kph = -kx * sph + ky * cph;
         }
-        if (ptraj != NULL) ptraj->AddToTrajectory(pphot,ip);
+        //if (ptraj != NULL) ptraj->AddToTrajectory(pphot,ip);
         tauremaining = 0.; // will cause break out while loop
 
       } else { // Photon moves to next zone and reduce tauremaining
@@ -340,10 +341,10 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
         kr  = kx * sth * cph + ky * sth * sph + kz * cth;
         kth = kx * cth * cph + ky * cth * sph - kz * sth;
         kph = -kx * sph + ky * cph;
-        if (ptraj != NULL) ptraj->AddToTrajectory(pphot,ip);
+        //if (ptraj != NULL) ptraj->AddToTrajectory(pphot,ip);
       }
 
-    }
+    } // end while loop
 
     // -------------------------- Debugging ----------------------------------------------
     if (iter >= checkmove) {

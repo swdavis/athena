@@ -70,7 +70,7 @@ def plot_blackbody(spectrum,ax,xunit,yunit,bbtemp,bbnorm):
     xfaces = spectrum['xfaces']
     x = 0.5*(xfaces[1:]+xfaces[:-1])
     nu = athenamc.get_frequency(spectrum['units'],xfaces)
-    
+
     # Plot blackbody spectrum
     c = 2.99792458e10
     kb = 1.380649e-16
@@ -85,7 +85,7 @@ def plot_blackbody(spectrum,ax,xunit,yunit,bbtemp,bbnorm):
 
 # Main function
 def main(**kwargs):
-    
+
     # Get blackbody parameters
     bbtemp = kwargs.pop('bbtemp')
     bbnorm = kwargs.pop('bbnorm')

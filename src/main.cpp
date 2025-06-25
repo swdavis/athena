@@ -545,8 +545,9 @@ int main(int argc, char *argv[]) {
 #endif
       if (pmesh->time < pmesh->tlim) // skip the final output as it happens later
         if (MONTE_CARLO_ENABLED) {
-          if (pmc->dynamic )
+          if (pmc->dynamic) {
             pouts->MakeOutputs(pmesh,pmc,pinput);
+          }
         } else {
           pouts->MakeOutputs(pmesh,pinput);
         }

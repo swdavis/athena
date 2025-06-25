@@ -658,7 +658,7 @@ void PhotonPusher::MovePhotonToNextZone(Photon *pphot, MCCoord *pco, MonteCarloB
     int &i1 = pphot->i1p[ip];
     int &i2 = pphot->i2p[ip];
     int &i3 = pphot->i3p[ip];
-    if (pmy_mcb->boosts) {
+    if (pmy_mcb->boosts || false) {
       // Shift photon energy to comoving frame
       //Real shift = pmy_mcb->LorentzTransformFrequencyShift(pphot,ip);
       Real shift = pmy_mcb->FrequencyShiftComoving(pphot,ip);

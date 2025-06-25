@@ -274,8 +274,13 @@ void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, in
 
   MCRandom *pran = pmcb->pran;
   Real mec2 = 8.18711e-7;
-
+  Real ethom = 1.602176634e-10;
   for (int ip=ips; ip<=ipe; ip++) {
+
+    if (pphot->ep[ip] < ethom) {
+      ScatterThomsonUnpolarized(pmcb,pphot,ip,ip);
+      continue;
+    }
 
     Real &k1 = pphot->k1p[ip];
     Real &k2 = pphot->k2p[ip];
