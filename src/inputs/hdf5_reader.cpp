@@ -19,6 +19,7 @@
 #include "../athena_arrays.hpp"  // AthenaArray
 #include "../defs.hpp"           // SINGLE_PRECISION_ENABLED
 #include "hdf5_reader.hpp"
+#include "../globals.hpp"             // Globals
 
 // Only proceed if HDF5 enabled
 #ifdef HDF5OUTPUT
