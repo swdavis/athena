@@ -1259,7 +1259,7 @@ void Spectrum::WriteSpectrum(std::string fname) {
   Real norms;
   if (nsrun != pmy_mc->nsamp) {
     norms = static_cast<Real>(nsrun)/static_cast<Real>(pmy_mc->nsamp);
-    printf("nsru != nsamp: %d %d\n",nsrun,pmy_mc->nsamp);
+    printf("nsrun != nsamp: %d %d\n",nsrun,pmy_mc->nsamp);
   } else {
     norms = 1.;
   }

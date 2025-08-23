@@ -3,18 +3,17 @@ Support for manipulating and plotting Monte Carlo outputs
 """
 
 # standard python modules
-import numpy as np
 import struct
-import gc
-import matplotlib.pyplot as plt
-import matplotlib.colors as colors
 import time
 import gc
 import math
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import colors
 
 #SWD: Maybe photons be rewritten simply as dictionary
 #SWD: Add error control
-class photons:
+class Photons:
     """
     Class for storing photon list data
     """
@@ -25,19 +24,18 @@ class photons:
         self.polarized = phlist['polarized']
         self.ntot = phlist['ntot']
         self.coord = phlist['coord']
-        if (self.polarized):
+        if self.polarized:
             self.npars = self.npars + 2
         ncol = phlist['npars']
         self.nphot = phlist['length']
-        if (ncol < self.npars):
-            raise ValueError("Error creating photon: ncol {:d} < npars {:d}"
-                             .format(ncol,self.npars))
+        if ncol < self.npars:
+            raise ValueError(f"Error creating photon: ncol {ncol} < npars {self.npars}")
+        
+        if ncol > self.npars:
+            self.nuser = ncol - self.npars
+            self.user = np.zeros((self.nphot,self.nuser))
         else:
-            if (ncol > self.npars):
-                self.nuser = ncol - self.npars
-                self.user = np.zeros((self.nphot,self.nuser))
-            else:
-                self.nuser = 0
+            self.nuser = 0
 
         # allocate arrays for each variable
         self.weight = phlist['list'][:,0]
@@ -50,15 +48,15 @@ class photons:
         self.k1 = phlist['list'][:,6]
         self.k2 = phlist['list'][:,7]
         self.k3 = phlist['list'][:,8]
-        if (self.polarized):
+        if self.polarized:
             self.q = phlist['list'][:,10]
             self.u = phlist['list'][:,11]
             #self.v = phlist['list'][:,12]
-        if (self.nuser > 0):
+        if self.nuser > 0:
             for i in range(self.nuser):
                 self.user[:,i] = phlist['list'][:,i+self.npars]
 
-def read_list(filename,data=True,header=True):
+def read_list(filename, data=True, header=True):
     """
     Read unformated list output and return as a dictionary
     """
@@ -72,7 +70,7 @@ def read_list(filename,data=True,header=True):
             raw_data = data_file.read()
         raw_data_ascii = raw_data[0:mxh_].decode('ascii', 'replace')
     except:
-        print("Could not open "+filename+" for reading.")
+        print(f"Could not open {filename} for reading.")
         return None
 
     # Store in dictionary
@@ -87,7 +85,7 @@ def read_list(filename,data=True,header=True):
             raise RuntimeError('File not formatted as expected')
         return current_index+expected_string_len
 
-    if (header):
+    if header:
         try:
             current_index = skip_string("dt=")
             end_of_line_index = current_index + 1
@@ -139,8 +137,8 @@ def read_list(filename,data=True,header=True):
         phlist['coord'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
         current_index = end_of_line_index + 1
 
-    old = False
-    if (data):
+    #old = False
+    if data:
         # Read in data
         npars = phlist['npars']
         length = phlist['length']
@@ -155,13 +153,13 @@ def read_list(filename,data=True,header=True):
         ti = time.time()
         for i in range(nloop+1):
             vals = ()
-            if (i == nloop):
+            if i == nloop:
                 size = sizelast
             else:
                 size = sizeloop
             end_index = begin_index + 8*size
             format_string = '>' + 'd'*size
-            if (i > 0):
+            if i > 0:
                 print(i,"/",nloop)
                 tf = time.time()
                 print(tf-ti)
@@ -171,15 +169,14 @@ def read_list(filename,data=True,header=True):
             lrd = len(raw_data)
             if lrd < end_index:
                 deficit = math.ceil((end_index - lrd) / (8*npars))
-                print("Warning raw_data is smaller than expected by at least"
-                      " {:d} samples.".format(deficit))
+                print(f"Warning raw_data is smaller than expected by at least {deficit} samples.")
                 end_index -= deficit*npars*8
                 length -= deficit
                 phlist['length'] = length
                 format_string = '>' + 'd'*(size-deficit*npars)
             vals = struct.unpack(format_string, raw_data[begin_index:end_index])
             begin_index = end_index
-            if (i == 0):
+            if i == 0:
                 phlist['list'] = np.array(vals)
             else:
                 phlist['list'] = np.append(phlist['list'],np.array(vals))
@@ -196,11 +193,11 @@ def write_list(filename,phlist,header=True,length=None):
     """
     Write photon list (dictionary) to file
     """
-    if (header):
+    if header:
         outfile = open(filename, 'w')
         # Write header information
         outfile.write("dt={:.8e}\n".format(phlist['dt']))
-        if (length is None):
+        if length is None:
             outfile.write("length={:d}\n".format(phlist['length']))
         else:
             outfile.write("length={:d}\n".format(length))
@@ -215,15 +212,15 @@ def write_list(filename,phlist,header=True,length=None):
     nelements = phlist['length']*phlist['npars']
     phlist['list'] = phlist['list'].reshape(nelements)
     myfmt='>'+'d'*nelements
-    bin=struct.pack(myfmt,*(phlist['list']))
-    outfile.write(bin)
+    data = struct.pack(myfmt,*(phlist['list']))
+    outfile.write(data)
     outfile.close()
 
 def get_luminosity_list(phlist):
     """
     Read in list file and compute luminoisty
     """
-    phots = photons(phlist)
+    phots = Photons(phlist)
     lumin = np.sum(phots.weight*phots.energy)/phots.dt
 
     return lumin
@@ -264,11 +261,11 @@ def write_spectrum(filename,spectrum):
     bin=struct.pack(myfmt,*(spectrum['phifaces']))
     outfile.write(bin)
     # Write data
-    nelements = (spectrum['nintens']*nx*nmu*nphi)
+    nelements = spectrum['nintens']*nx*nmu*nphi
     myfmt='>'+'d'*nelements
-    bin=struct.pack(myfmt,*(spectrum['intensity'].reshape(nelements)))
-    outfile.write(bin)
-    if (spectrum['yerror'] == 'true'):
+    data=struct.pack(myfmt,*(spectrum['intensity'].reshape(nelements)))
+    outfile.write(data)
+    if spectrum['yerror'] == 'true':
         bin=struct.pack(myfmt,*(spectrum['errors'].reshape(nelements)))
         outfile.write(bin)
     outfile.close()
@@ -382,38 +379,41 @@ def read_spectrum(filename):
     end_index = begin_index + 8*nelements
     vals = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
     spectrum['intensity'] = vals.reshape((nintens,nphi,nmu,nx))
-    if (spectrum['yerror'] == 'true'):
+    if spectrum['yerror'] == 'true':
         begin_index = end_index
         end_index = begin_index + 8*nelements
         vals = np.array(struct.unpack(format_string, raw_data[begin_index:end_index]))
         spectrum['errors'] = vals.reshape((nintens,nphi,nmu,nx))
     return spectrum
 
-# Check if headers match
-def header_match(dict1,dict2,dict_type):
+
+def header_match(dict1, dict2, dict_type):
+    """
+    Check if headers match
+    """
 
     match = True
-    if (dict1 is None):
+    if dict1 is None:
         return False
-    if (dict2 is None):
+    if dict2 is None:
         return False
-    if (dict_type == 'list'):
-        if (dict1['npars'] != dict2['npars']):
+    if dict_type == 'list':
+        if dict1['npars'] != dict2['npars']:
             match = False
-        elif (dict1['polarized'] != dict2['polarized']):
+        elif dict1['polarized'] != dict2['polarized']:
             match = False
-    elif (dict_type == 'spec'):
-        if (dict1['nx'] != dict2['nx']):
+    elif dict_type == 'spec':
+        if dict1['nx'] != dict2['nx']:
             match = False
-        elif (dict1['nmu'] != dict2['nmu']):
+        elif dict1['nmu'] != dict2['nmu']:
             match = False
-        elif (dict1['nphi'] != dict2['nphi']):
+        elif dict1['nphi'] != dict2['nphi']:
             match = False
-        elif (dict1['nintens'] != dict2['nintens']):
+        elif dict1['nintens'] != dict2['nintens']:
             match = False
-        elif (dict1['units'] != dict2['units']):
+        elif dict1['units'] != dict2['units']:
             match = False
-        elif (dict1['yerror'] != dict2['yerror']):
+        elif dict1['yerror'] != dict2['yerror']:
             match = False
     else:
         print("file type: "+dict_type+" not supported. Returning false.")
@@ -421,25 +421,25 @@ def header_match(dict1,dict2,dict_type):
 
     return match
 
-def add_spectra(spec1,spec2,method='statistical'):
+def add_spectra(spec1, spec2, method='statistical'):
     """
     Add two spectra to create single spectrum
     """
-    if (not header_match(spec1,spec2,'spec')):
+    if not header_match(spec1,spec2,'spec'):
         raise RuntimeError('[add_specta]: headers do not match')
 
     # copy spectra to new dictionaries to avoid modification of originals
     spec1c = spec1.copy()
     spec2c = spec2.copy()
 
-    if (method == 'statistical'):
-        if (spec1c['dt'] != spec2c['dt']):
+    if method == 'statistical':
+        if spec1c['dt'] != spec2c['dt']:
             raise RuntimeError('[add_specta]: statistical averaging requested' \
                                'but spectra have different integration times')
         # undo normalization by photon count
         spec1c['intensity'] *= spec1c['ntot']
         spec2c['intensity'] *= spec2c['ntot']
-        if (spec1c['yerror']):
+        if spec1c['yerror']:
             spec1c['errors'] *= spec1c['ntot']
             spec2c['errors'] *= spec2c['ntot']
     #elif (method == 'temporal'):
@@ -458,65 +458,71 @@ def add_spectra(spec1,spec2,method='statistical'):
 
     # sum unormalized intensity and error arrays
     spec_out['intensity'] = np.add(spec1c['intensity'],spec2c['intensity'])
-    if (spec_out['yerror']):
+    if spec_out['yerror']:
         spec_out['errors'] = np.add(spec1c['errors'],spec2c['errors'])
 
     spec_out['ntot'] = spec1c['ntot']+ spec2['ntot']
 
-    if (method == 'statistical'):
+    if method == 'statistical':
         # renormalization by photon number
         spec_out['intensity'] /= spec_out['ntot']
-        if (spec_out['yerror']):
+        if spec_out['yerror']:
             spec_out['errors'] /= spec_out['ntot']
 
 
     return spec_out
 
 # Retrun x for desired units
-def convert_xaxis(newunit,spectrum):
-
+def convert_xaxis(newunit, spectrum):
+    """
+    Convert the x-axis from one unit type to another type
+    """
+    
     h = 6.62607015e-27
     everg = 1.6021772e-12
     c = 2.99792e10
 
     baseunit = spectrum['units']
     xfaces = spectrum['xfaces']
-    if (baseunit == 'kev'):
+    if baseunit == 'kev':
         nu = xfaces*1000.*everg/h
-    if (baseunit == 'ev'):
+    elif baseunit == 'ev':
         nu = xfaces*everg/h
-    if (baseunit == 'nu'):
+    elif baseunit == 'nu':
         nu = xfaces
-    if (baseunit == 'lambda'):
+    elif baseunit == 'lambda':
         nu = c/1.e8/xfaces
-    if (newunit == 'kev'):
+    if newunit == 'kev':
         spectrum['xfaces'] = nu*h/(everg*1000.)
-    if (newunit == 'ev'):
+    elif newunit == 'ev':
         spectrum['xfaces'] = nu*h/everg
-    if (newunit == 'nu'):
+    elif newunit == 'nu':
         spectrum['xfaces'] = nu
-    if (newunit == 'lambda'):
+    elif newunit == 'lambda':
         spectrum['xfaces'] = c/nu*1.e8
     spectrum['units'] = newunit
 
 # Return nu
-def get_frequency(xunit,xfaces):
-
+def get_frequency(xunit, xfaces):
+    """
+    Return frequency given current xunit
+    """
+    
     h = 6.62607015e-27
     everg = 1.6021772e-12
     c = 2.99792e10
 
-    if (xunit == 'kev'):
+    if xunit == 'kev':
         nu = 0.5*(xfaces[1:]+xfaces[:-1])*1000.*everg/h
-    if (xunit == 'ev'):
+    elif xunit == 'ev':
         nu = 0.5*(xfaces[1:]+xfaces[:-1])*everg/h
-    if (xunit == 'nu'):
+    elif xunit == 'nu':
         nu = 0.5*(xfaces[1:]+xfaces[:-1])
-    if (xunit == 'lambda'):
+    elif xunit == 'lambda':
         nu = 0.5*(1./xfaces[:-1]+1./xfaces[1:])*c/1.e8
     return nu
 
-def compute_nulnu_error(intensity,nu,errors=None):
+def compute_nulnu_error(intensity, nu, errors=None):
     """
     Compute nu*L_nu and error
     """
@@ -525,10 +531,9 @@ def compute_nulnu_error(intensity,nu,errors=None):
     if errors is not None:
         err = errors[0,:]*nu
         return y, err
-    else:
-        return y, None
+    return y, None
 
-def compute_lnu_error(intensity,errors=None):
+def compute_lnu_error(intensity, errors=None):
     """
     Compute L_nu and error
     """
@@ -536,10 +541,9 @@ def compute_lnu_error(intensity,errors=None):
     if errors is not None:
         yerr = errors[0,:]
         return y, yerr
-    else:
-        return y, None
+    return y, None
 
-def compute_counts_error(intensity,nu,errors=None):
+def compute_counts_error(intensity, nu, errors=None):
     """
     Compute L_nu and error
     """
@@ -548,8 +552,7 @@ def compute_counts_error(intensity,nu,errors=None):
     if errors is not None:
         yerr = errors[0,:]/(h*nu)
         return y, yerr
-    else:
-        return y, None
+    return y, None
 
 def compute_pol_frac_error(intensity,errors=None):
     """
@@ -565,8 +568,7 @@ def compute_pol_frac_error(intensity,errors=None):
         eu = errors[2,:]
         err = np.sqrt(((q*eq)**2+(u*eu)**2)/(q**2+u**2) + (q**2+u**2)*(ei/i)**2)/i
         return frac*100, err*100.
-    else:
-        return frac*100, None
+    return frac*100, None
 
 def compute_pol_angle_error(intensity,errors=None):
     """
@@ -580,8 +582,7 @@ def compute_pol_angle_error(intensity,errors=None):
         eu = errors[2,:]
         err = 90./np.pi*np.sqrt(((u*eu)**2+(q*eq)**2))/(q**2+u**2)
         return angle, err
-    else:
-        return angle, None
+    return angle, None
 
 def compute_q_error(intensity,errors=None):
     """
@@ -595,8 +596,7 @@ def compute_q_error(intensity,errors=None):
         eq = errors[1,:]
         err = np.sqrt(eq**2 + (q**2)*(ei/i)**2)/i
         return frac, err
-    else:
-        return frac, None
+    return frac, None
 
 def compute_u_error(intensity,errors=None):
     """
@@ -610,8 +610,7 @@ def compute_u_error(intensity,errors=None):
         eu = errors[1,:]
         err = np.sqrt(eu**2 + (u**2)*(ei/i)**2)/i
         return frac, err
-    else:
-        return frac, None
+    return frac, None
 
 def compute_flux_frac_error(intensity,mufaces,errors=None):
     """
@@ -626,18 +625,19 @@ def compute_flux_frac_error(intensity,mufaces,errors=None):
         ei = errors[0,:]
         err = np.sqrt(ei**2 + np.sum((dmu*mu*ei)**2)*i**2/flux**2)/flux/2.
         return frac, err
-    else:
-        return frac, None
+    return frac, None
 
 def polarization_requested(yunit):
-
-    if (yunit == 'polfrac'):
+    """
+    Determine whether code requires polarization based on requested y unit
+    """
+    if yunit == 'polfrac':
         return True
-    elif (yunit == 'polangle'):
+    elif yunit == 'polangle':
         return True
-    elif (yunit == 'q'):
+    elif yunit == 'q':
         return True
-    elif (yunit == 'u'):
+    elif yunit == 'u':
         return True
     else:
         return False
@@ -651,18 +651,18 @@ def plot_frequency(spectrum,imu,iphi='ave',xunit='kev',yunit='nulnu',
     # Set up x axis as bin midpoints
     xfaces = spectrum['xfaces']
     x = 0.5*(xfaces[1:]+xfaces[:-1])
-    if (nu is None):
+    if nu is None:
         nu = get_frequency(spectrum['units'],xfaces)
 
     # Initialize x labels
     xlabel = None
-    if (xunit == 'kev'):
+    if xunit == 'kev':
         xlabel = r"$E {\rm (keV)}$"
-    if (xunit == 'ev'):
+    if xunit == 'ev':
         xlabel = r"$E {\rm (eV)}$"
-    if (xunit == 'nu'):
+    if xunit == 'nu':
         xlabel = r"$\nu {\rm (Hz)}$"
-    if (xunit == 'lambda'):
+    if xunit == 'lambda':
         xlabel = r"$\lambda {\rm (\AA)$"
 
     # Check if error requested and stored
@@ -713,25 +713,25 @@ def plot_frequency(spectrum,imu,iphi='ave',xunit='kev',yunit='nulnu',
     # Set y, yerr, and ylabel according to input units
     yerr = None
     ylabel = None
-    if (yunit == 'nulnu'):
+    if yunit == 'nulnu':
         ylabel = r"$\nu L_\nu {\rm (erg/s)}$"
         y, yerr = compute_nulnu_error(intensity,nu,errors)
-    elif (yunit == 'lnu'):
+    elif yunit == 'lnu':
         ylabel = r"$L_\nu {\rm (erg/s/Hz)}$"
         y, yerr = compute_lnu_error(intensity,errors)
-    elif (yunit == 'counts'):
+    elif yunit == 'counts':
         ylabel = r"$N_\nu {\rm (counts/s/Hz)}$"
         y, yerr = compute_counts_error(intensity,nu,errors)
-    elif (yunit == 'polfrac'):
+    elif yunit == 'polfrac':
         ylabel = r"$\rm Pol.\; Fraction \; (\%)$"
         y, yerr = compute_pol_frac_error(intensity,errors)
-    elif (yunit == 'polangle'):
+    elif yunit == 'polangle':
         ylabel = r"$\rm Pol.\; Angle$"
         y, yerr = compute_pol_angle_error(intensity,errors)
-    elif (yunit == 'q'):
+    elif yunit == 'q':
         ylabel = r"$Q_\nu/I_\nu$"
         y, yerr = compute_q_error(intensity,errors)
-    elif (yunit == 'u'):
+    elif yunit == 'u':
         ylabel = r"$U_\nu/I_\nu$"
         y, yerr = compute_u_error(intensity,errors)
     else:
@@ -753,7 +753,7 @@ def plot_theta(spectrum,ix,iphi='ave',xunit='mu',yunit='lnu',
 
     # Initialize x labels
     xlabel = None
-    if (xunit == 'mu'):
+    if xunit == 'mu':
         xlabel = r"$\cos \theta$"
 
     # Check if error requested and stored
@@ -804,47 +804,47 @@ def plot_theta(spectrum,ix,iphi='ave',xunit='mu',yunit='lnu',
     # Set y, yerr, and ylabel according to input units
     yerr = None
     ylabel = None
-    if (yunit == 'nulnu'):
+    if yunit == 'nulnu':
         ylabel = r"$\nu L_\nu {\rm (erg/s)}$"
         y, yerr = compute_nulnu_error(intensity,nu,errors)
-    elif (yunit == 'lnu'):
+    elif yunit == 'lnu':
         ylabel = r"$L_\nu {\rm (erg/s/Hz)}$"
         y, yerr = compute_lnu_error(intensity,errors)
-    elif (yunit == 'counts'):
+    elif yunit == 'counts':
         ylabel = r"$N_\nu {\rm (counts/s/Hz)}$"
         y, yerr = compute_counts_error(intensity,nu,errors)
-    elif (yunit == 'polfrac'):
+    elif yunit == 'polfrac':
         ylabel = r"$\rm Pol.\; Fraction \; (\%)$"
         y, yerr = compute_pol_frac_error(intensity,errors)
-    elif (yunit == 'polangle'):
+    elif yunit == 'polangle':
         ylabel = r"$\rm Pol.\; Angle$"
         y, yerr = compute_pol_angle_error(intensity,errors)
-    elif (yunit == 'q'):
+    elif yunit == 'q':
         ylabel = r"$Q_\nu/I_\nu$"
         y, yerr = compute_q_error(intensity,errors)
-    elif (yunit == 'u'):
+    elif yunit == 'u':
         ylabel = r"$U_\nu/I_\nu$"
         y, yerr = compute_u_error(intensity,errors)
-    elif (yunit == 'fluxfrac'):
+    elif yunit == 'fluxfrac':
         ylabel = r"$I_\nu/F_\nu$"
         y, yerr = compute_flux_frac_error(intensity,xfaces,errors)
 
-    if (verbose):
+    if verbose:
         print(yunit)
-        if (isinstance(ix,int)):
-            print("x: ",spectrum['xfaces'][ix],' ',spectrum['units'])
+        if isinstance(ix, int):
+            print("x: ", spectrum['xfaces'][ix],' ', spectrum['units'])
         else:
-            print("x: ",ix)
-        if (isinstance(iphi,int)):
+            print("x: ", ix)
+        if isinstance(iphi, int):
             print("phi: ",spectrum['phifaces'][iphi])
         else:
             print("phi: ",iphi)
 
     # Return x and y variables, there labels, and possible error on y
-    return x,y,yerr,xlabel,ylabel
+    return x, y, yerr, xlabel, ylabel
 
-def plot_phi(spectrum,ix,imu='sum',xunit='phi',yunit='lnu',
-               plterr=True,nu=None):
+def plot_phi(spectrum, ix, imu='sum', xunit='phi', yunit='lnu',
+               plterr=True, nu=None):
     """
     Generate plot versus azimuthal angle (phi)
     """
@@ -855,7 +855,7 @@ def plot_phi(spectrum,ix,imu='sum',xunit='phi',yunit='lnu',
 
     # Initialize x labels
     xlabel = None
-    if (xunit == 'phi'):
+    if xunit == 'phi':
         xlabel = r"$\phi/(2\pi)$"
 
     # Check if error requested and stored
@@ -876,7 +876,7 @@ def plot_phi(spectrum,ix,imu='sum',xunit='phi',yunit='lnu',
         errors = None
 
     # Selection for polar angle
-    if (imu == 'sum'):
+    if imu == 'sum':
         nmu = spectrum['nmu']
         mumid = 0.5*(spectrum['mufaces'][1:]+spectrum['mufaces'][:-1])
         intensity = np.tensordot(mumid,intensity,axes=[0,2])/nmu
@@ -905,28 +905,28 @@ def plot_phi(spectrum,ix,imu='sum',xunit='phi',yunit='lnu',
     # Set y, yerr, and ylabel according to input units
     yerr = None
     ylabel = None
-    if (yunit == 'nulnu'):
+    if yunit == 'nulnu':
         ylabel = r"$\nu L_\nu {\rm (erg/s)}$"
         y, yerr = compute_nulnu_error(intensity,nu,errors)
-    elif (yunit == 'lnu'):
+    elif yunit == 'lnu':
         ylabel = r"$L_\nu {\rm (erg/s/Hz)}$"
         y, yerr = compute_lnu_error(intensity,errors)
-    elif (yunit == 'counts'):
+    elif yunit == 'counts':
         ylabel = r"$N_\nu {\rm (counts/s/Hz)}$"
         y, yerr = compute_counts_error(intensity,nu,errors)
-    elif (yunit == 'polfrac'):
+    elif yunit == 'polfrac':
         ylabel = r"$\rm Pol.\; Fraction \; (\%)$"
         y, yerr = compute_pol_frac_error(intensity,errors)
-    elif (yunit == 'polangle'):
+    elif yunit == 'polangle':
         ylabel = r"$\rm Pol.\; Angle$"
         y, yerr = compute_pol_angle_error(intensity,errors)
-    elif (yunit == 'q'):
+    elif yunit == 'q':
         ylabel = r"$Q_\nu/I_\nu$"
         y, yerr = compute_q_error(intensity,errors)
-    elif (yunit == 'u'):
+    elif yunit == 'u':
         ylabel = r"$U_\nu/I_\nu$"
         y, yerr = compute_u_error(intensity,errors)
-    elif (yunit == 'fluxfrac'):
+    elif yunit == 'fluxfrac':
         ylabel = r"$I_\nu/F_\nu$"
         y, yerr = compute_flux_frac_error(intensity,xfaces,errors)
 
@@ -941,29 +941,29 @@ def make_plot(x,y,yerr=None,ax=None,xmin=None,xmax=None,ymin=None,ymax=None,
     General wrapper for plotting of Monte Carlo spectral plots
     """
 
-    if (ax is None):
+    if ax is None:
         # Create figure, axis and assume a single plot window
         fig = plt.figure()
         ax = fig.add_subplot(1,1,1)
 
-    if (fmt is None):
+    if fmt is None:
         fmt = '.'
 
-    if (yerr is not None):
+    if yerr is not None:
         ax.errorbar(x,y,yerr=yerr,fmt=fmt,**kwargs)
     else:
         ax.plot(x,y,fmt,**kwargs)
 
     # Set axis labelx
-    if (xlabel is not None):
+    if xlabel is not None:
         ax.set_xlabel(xlabel)
-    if (ylabel is not None):
+    if ylabel is not None:
         ax.set_ylabel(ylabel)
 
     # Set axis scales
-    if (xscale is not None):
+    if xscale is not None:
         ax.set_xscale(xscale)
-    if (yscale is not None):
+    if yscale is not None:
         ax.set_yscale(yscale)
 
     # (re)Set plot ranges
@@ -1003,18 +1003,18 @@ def get_luminosity(spec):
     c = 2.99792e10
     xaxis = spec['units']
     xfaces = spec['xfaces']
-    if (xaxis == 'kev'):
+    if xaxis == 'kev':
         dnu = (xfaces[1:]-xfaces[:-1])*1000.*everg/h
-        emid = 0.5*(xfaces[1:]+xfaces[:-1])*1000.*everg
-    if (xaxis == 'ev'):
+        #emid = 0.5*(xfaces[1:]+xfaces[:-1])*1000.*everg
+    elif xaxis == 'ev':
         dnu = (xfaces[1:]-xfaces[:-1])*everg/h
-        emid = 0.5*(xfaces[1:]+xfaces[:-1])*everg
-    if (xaxis == 'nu'):
-        dnu = (xfaces[1:]-xfaces[:-1])
-        emid = 0.5*(xfaces[1:]+xfaces[:-1])*h
-    if (xaxis == 'lambda'):
+        #emid = 0.5*(xfaces[1:]+xfaces[:-1])*everg
+    elif xaxis == 'nu':
+        dnu = xfaces[1:]-xfaces[:-1]
+        #emid = 0.5*(xfaces[1:]+xfaces[:-1])*h
+    elif xaxis == 'lambda':
         dnu = (1./xfaces[:-1]-1./xfaces[1:])*c/1.e8
-        emid = 0.5*(1./xfaces[:-1]-1./xfaces[1:])*c*h/1.e8
+        #emid = 0.5*(1./xfaces[:-1]-1./xfaces[1:])*c*h/1.e8
 
     # compute sum over frequency and solid angle
     lumin = 0.
@@ -1025,17 +1025,18 @@ def get_luminosity(spec):
     lumin *= 2.*np.pi/nmu/nphi
     return lumin
 
-def build_bins(xmin,xmax,nx,logx):
+def build_bins(xmin, xmax, nx, logx):
     """
     Builds a x-axis grid for binning the photons
     """
-    if (logx):
+    if logx:
         return np.logspace(np.log10(xmin),np.log10(xmax),nx+1)
-    else:
-        return np.linspace(xmin,xmax,nx+1)
+    return np.linspace(xmin,xmax,nx+1)
 
-def get_bins(xphots,xfaces,nx,uniform=True,log=True):
-
+def get_bins(xphots, xfaces, nx, uniform=True, log=True):
+    """
+    Returns the bin numbers corresponding photon samples
+    """
     xbins = np.zeros(len(xphots),dtype=int)-1
     if uniform:
         if log:
@@ -1059,7 +1060,7 @@ def get_bins(xphots,xfaces,nx,uniform=True,log=True):
         # use binary search for non uniform data
         return get_bins_binary_search(xphots,xfaces,nx)
 
-def get_bins_binary_search(xphots,xfaces,nx):
+def get_bins_binary_search(xphots, xfaces, nx):
     """
     Returns x bin numbers corresponding to xphots for non-uniformly
     binned data via binary search.
@@ -1072,7 +1073,7 @@ def get_bins_binary_search(xphots,xfaces,nx):
     xbins[indsm] = -1
     return xbins
 
-def get_angle_bins_cartesian(photons,nmu,mufaces,nphi,phifaces):
+def get_angle_bins_cartesian(photons,nmu, mufaces, nphi, phifaces):
     """
     Bin angles in theta, phi defined relative to x,y,z axes
     """
@@ -1097,39 +1098,34 @@ def get_angle_bins_cartesian(photons,nmu,mufaces,nphi,phifaces):
         sth = np.sin(photons.x2)
         cph = np.cos(photons.x3)
         sph = np.sin(photons.x3)
-        if (not skipphi):
+        if not skipphi:
             kx = kr*sth*cph + kth*cth*cph - kph*sph
             ky = kr*sth*sph + kth*cth*sph - kph*cph
-        if (not skipmu):
+        if not skipmu:
             kz = kr*cth - kth*sth
     else:
-        if (not skipphi):
+        if not skipphi:
             kx = photons.k1
             ky = photons.k2
-        if (not skipmu):
+        if not skipmu:
             kz = photons.k3
 
-    if (skipmu):
+    if skipmu:
         # return 0
         mubins = np.zeros(photons.nphot,dtype=int)
     else:
         # Bin based on k . z
         mu = abs(kz)
         mubins = get_bins(mu,mufaces,nmu,log=False)
-    if (skipphi):
+    if skipphi:
         # return 0
         phibins = np.zeros(photons.nphot,dtype=int)
     else:
-        if (skipmu):
-            mu = abs(kz)
-        smu = np.sqrt(1.-mu*mu)
-
-        phi = np.arctan2(ky,kx)
+        phi = np.arctan2(ky, kx)
         phi[(phi<0.).nonzero()] += 2.*np.pi
-        phibins = get_bins(phi,phifaces,nphi,log=False)
+        phibins = get_bins(phi, phifaces, nphi, log=False)
 
-
-    return mubins,phibins
+    return mubins, phibins
 
 
 def get_angle_bins_spherical(photons,nmu,mufaces):
@@ -1142,7 +1138,7 @@ def get_angle_bins_spherical(photons,nmu,mufaces):
     else:
         skipmu = False
 
-    if (skipmu):
+    if skipmu:
         return np.zeros(photons.nphot,dtype=int),np.zeros(photons.nphot,dtype=int)
 
     if photons.coord == 'spherical_polar':
@@ -1161,30 +1157,30 @@ def get_angle_bins_spherical(photons,nmu,mufaces):
     # return 0 for phi
     phibins = np.zeros(photons.nphot,dtype=int)
 
-    return mubins,phibins
+    return mubins, phibins
 
-def get_angle_bins_hybrid(photons,nmu,mufaces,nphi,phifaces):
+def get_angle_bins_hybrid(photons, nmu, mufaces, nphi, phifaces):
     """
     Bin angles in theta, phi defined relative to x,y,z axes, but with phi
     defined by local azimuthal angle
     """
-    if (nmu == 1):
-        printf("Error: this function requires nmu > 1")
+    if nmu == 1:
+        print("Error: this function requires nmu > 1")
         return  np.zeros(photons.nphot,dtype=int),np.zeros(photons.nphot,dtype=int)
-    if (nphi == 1):
-        printf("Error: this function requires nphi > 1")
+    if nphi == 1:
+        print("Error: this function requires nphi > 1")
         return np.zeros(photons.nphot,dtype=int),np.zeros(photons.nphot,dtype=int)
 
-    if (photons.coord != 'spherical_polar'):
-        printf("Error: this function only works with spherical polar")
+    if photons.coord != 'spherical_polar':
+        print("Error: this function only works with spherical polar")
         return np.zeros(photons.nphot,dtype=int),np.zeros(photons.nphot,dtype=int)
-    else:
-        kr = photons.k1
-        kth = photons.k2
-        kph = photons.k3
-        cth = np.cos(photons.x2)
-        sth = np.sin(photons.x2)
-        kz = kr*cth - kth*sth
+
+    kr = photons.k1
+    kth = photons.k2
+    kph = photons.k3
+    cth = np.cos(photons.x2)
+    sth = np.sin(photons.x2)
+    kz = kr*cth - kth*sth
 
     # Bin based on k . z
     mu = abs(kz)
@@ -1195,7 +1191,7 @@ def get_angle_bins_hybrid(photons,nmu,mufaces,nphi,phifaces):
     inds = (kr < 0.).nonzero()
     phi[inds] = np.pi - phi[inds]
     phi[(phi<0.).nonzero()] += 2.*np.pi
-    phibins = get_bins(phi,phifaces,nphi,log=False)
+    phibins = get_bins(phi, phifaces, nphi, log=False)
 
     return mubins,phibins
 
@@ -1221,23 +1217,22 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     c = 2.99792e10
     preset = False
     spectrum['xaxis'] = xaxis
-    if (xaxis == 'kev'):
+    if xaxis == 'kev':
         xphots = phots.energy/everg/1000.
         preset = True
-    if (xaxis == 'ev'):
+    elif xaxis == 'ev':
         xphots = phots.energy/everg
         preset = True
-    if (xaxis == 'nu'):
+    elif xaxis == 'nu':
         xphots = phots.energy/h
         preset = True
-    if (xaxis == 'lambda'):
+    elif xaxis == 'lambda':
         xphots = c*h/(phots.energy*1.e8)
         preset = True
-    if (not preset):
+    if not preset:
         if xfunc is None:
             raise RuntimeError('Unrecognized xunit and no xfunc provided')
-        else:
-            xphots = xfunc(phots.energy,True,**kwargs)
+        xphots = xfunc(phots.energy,True,**kwargs)
 
     # Create bins
     xfaces = build_bins(xmin,xmax,nx,logx)
@@ -1256,11 +1251,11 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     phifaces = build_bins(phimin,phimax,nphi,False)
     spectrum['phifaces'] = phifaces
 
-    if (anglebin == 'cartesian'):
+    if anglebin == 'cartesian':
         mubins, phibins = get_angle_bins_cartesian(phots,nmu,mufaces,nphi,phifaces)
-    elif (anglebin == 'spherical'):
+    elif anglebin == 'spherical':
         mubins, phibins = get_angle_bins_spherical(phots,nmu,mufaces)
-    elif (anglebin == 'hybrid'):
+    elif anglebin == 'hybrid':
         mubins, phibins = get_angle_bins_hybrid(phots,nmu,mufaces,nphi,phifaces)
     else:
         print("Error: anglebin == "+anglebin+". Must be cartesian, spherical, or hybrid.")
@@ -1279,17 +1274,12 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     if yerror:
         errors = np.zeros((nintens,nphi,nmu,nx))
 
-    if (mask is not None):
+    if mask is not None:
         xbins[mask] = -1
 
     for i in range(phots.nphot):
         if ((xbins[i] >= 0) and (mubins[i] >= 0) and (phibins[i] >= 0)):
-            #wght = phots.weight[i]
             wght = phots.weight[i]*phots.energy[i]
-            #if ((phots.q[i]**2+phots.u[i]**2) > 1.001):
-            #    wght = 0.
-            #    print("Warning: polarization too high: ",phots.q[i],phots.u[i],phots.weight[i],np.sqrt(phots.q[i]**2+phots.u[i]**2))
-            #print phibins[i],mubins[i],xbins[i]
             count[phibins[i],mubins[i],xbins[i]] += 1.
             intensity[0,phibins[i],mubins[i],xbins[i]] += wght
             if phots.polarized:
@@ -1305,21 +1295,21 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     h = 6.62607015e-27
     everg = 1.6021772e-12
     c = 2.99792e10
-    if (xaxis == 'kev'):
+    if xaxis == 'kev':
         dnu = (xfaces[1:]-xfaces[:-1])*1000.*everg/h
-        emid = 0.5*(xfaces[1:]+xfaces[:-1])*1000.*everg
-    if (xaxis == 'ev'):
+        #emid = 0.5*(xfaces[1:]+xfaces[:-1])*1000.*everg
+    elif xaxis == 'ev':
         dnu = (xfaces[1:]-xfaces[:-1])*everg/h
-        emid = 0.5*(xfaces[1:]+xfaces[:-1])*everg
-    if (xaxis == 'nu'):
-        dnu = (xfaces[1:]-xfaces[:-1])
-        emid = 0.5*(xfaces[1:]+xfaces[:-1])*h
-    if (xaxis == 'lambda'):
+        #emid = 0.5*(xfaces[1:]+xfaces[:-1])*everg
+    elif xaxis == 'nu':
+        dnu = xfaces[1:]-xfaces[:-1]
+        #emid = 0.5*(xfaces[1:]+xfaces[:-1])*h
+    elif xaxis == 'lambda':
         dnu = (1./xfaces[:-1]-1./xfaces[1:])*c/1.e8
-        emid = 0.5*(1./xfaces[:-1]-1./xfaces[1:])*c*h/1.e8
-    if (not preset):
+        #emid = 0.5*(1./xfaces[:-1]-1./xfaces[1:])*c*h/1.e8
+    if not preset:
         efaces = xfunc(xfaces,False,**kwargs)
-        emid = 0.5*(efaces[1:]+efaces[:-1])
+        #emid = 0.5*(efaces[1:]+efaces[:-1])
         dnu  = (efaces[1:]-efaces[:-1])/h
 
     # Normalize intensities
@@ -1358,7 +1348,7 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
 
     return spectrum
 
-def get_image_bins(phots,rcam,ifaces,xfaces,yfaces):
+def get_image_bins(phots, rcam, ifaces, xfaces, yfaces):
     """
     Bin photons in image plane coordinates
     """
@@ -1366,8 +1356,8 @@ def get_image_bins(phots,rcam,ifaces,xfaces,yfaces):
     nx  = xfaces.size - 1
     ny = yfaces.size - 1
 
-    thc = 0.5*(xfaces[1:]+xfaces[:-1])
-    if (phots.coord == 'spherical_polar'):
+    #thc = 0.5*(xfaces[1:]+xfaces[:-1])
+    if phots.coord == 'spherical_polar':
         sth = np.sin(phots.x2)
         cth = np.cos(phots.x2)
         sph = np.sin(phots.x3)
@@ -1380,7 +1370,7 @@ def get_image_bins(phots,rcam,ifaces,xfaces,yfaces):
         kx = phots.k1*sth*cph + phots.k2*cth*cph - phots.k3*sph
         ky = phots.k1*sth*sph + phots.k2*cth*sph + phots.k3*cph
         kz = phots.k1*cth - phots.k2*sth
-    elif (phots.coord == 'cartesian'):
+    elif phots.coord == 'cartesian':
         xp = phots.x1
         yp = phots.x2
         zp = phots.x3
@@ -1402,7 +1392,7 @@ def get_image_bins(phots,rcam,ifaces,xfaces,yfaces):
     sphf = np.sin(phf)
     #np.set_printoptions(threshold=1000)
 
-    ibins = get_bins(cthf,ifaces,ninc,log=False)
+    ibins = get_bins(cthf, ifaces, ninc, log=False)
 
     kth = kx*cthf*cphf + ky*cthf*sphf - kz*sthf
     kph = -kx*sphf + ky*cphf
@@ -1416,8 +1406,8 @@ def get_image_bins(phots,rcam,ifaces,xfaces,yfaces):
     #    print(q,ibins[i],x[i],y[i],xbins[i],ybins[i])
     return ibins, xbins, ybins
 
-def make_image_mc(phots,rcam,ninc,imin,imax,nen,emin,emax,
-                  nx,xmin,xmax,ny,ymin,ymax,unit,mask=None,**kwargs):
+def make_image_mc(phots, rcam, ninc, imin, imax, nen, emin, emax,
+                  nx, xmin, xmax, ny, ymin, ymax, unit, mask=None,):
     """
     Create a binned image from photon list
     """
@@ -1452,7 +1442,7 @@ def make_image_mc(phots,rcam,ninc,imin,imax,nen,emin,emax,
     # set units
     image['unit'] = unit
 
-    ibins, xbins, ybins = get_image_bins(phots,rcam,ifaces,xfaces,yfaces)
+    ibins, xbins, ybins = get_image_bins(phots, rcam, ifaces, xfaces, yfaces)
     #set ebins temporarily to 0
     ebins = np.zeros(len(ibins),dtype=int)
 
@@ -1466,7 +1456,7 @@ def make_image_mc(phots,rcam,ninc,imin,imax,nen,emin,emax,
     image['nintens'] = nintens
 
 
-    if (mask is not None):
+    if mask is not None:
         ibins[mask] = -1
 
     intensity = np.zeros((nintens,ninc,nen,ny,nx))
@@ -1483,7 +1473,7 @@ def make_image_mc(phots,rcam,ninc,imin,imax,nen,emin,emax,
     mumid = abs(0.5*(ifaces[1:]+ifaces[:-1]))
     dmu = ifaces[1:]-ifaces[:-1]
 
-    if (image['nen'] == 1):
+    if image['nen'] == 1:
         dnu = np.array([1.])
     else:
         h = 6.62607015e-27
@@ -1513,37 +1503,36 @@ def subsample_polarization(q,u,x,y,step,average):
     nx = len(x)
     ny = len(y)
 
-    if (not average):
+    if not average:
         x = x[step // 2:nx:step]
         y = y[step // 2:ny:step]
         q = q[step // 2:nx:step,step // 2:ny:step]
         u = u[step // 2:nx:step,step // 2:ny:step]
         return q,u,x,y
-    else:
-        # too lazy to work out pythony way of doing this
-        xp = np.zeros(nx // step)
-        yp = np.zeros(ny // step)
-        qp = np.zeros((nx // step,ny // step))
-        up = np.zeros((nx // step,ny // step))
-        for i in range(nx // step):
-            xp[i] = np.average(x[i*step:(i+1)*step])
-        for i in range(ny // step):
-            yp[i] = np.average(y[i*step:(i+1)*step])
-        for i in range(nx // step):
-            for j in range(ny // step):
-                qp[i,j] = np.average(q[i*step:(i+1)*step,j*step:(j+1)*step])
-                up[i,j] = np.average(u[i*step:(i+1)*step,j*step:(j+1)*step])
 
-        return qp,up,xp,yp
+    # too lazy to work out pythony way of doing this
+    xp = np.zeros(nx // step)
+    yp = np.zeros(ny // step)
+    qp = np.zeros((nx // step,ny // step))
+    up = np.zeros((nx // step,ny // step))
+    for i in range(nx // step):
+        xp[i] = np.average(x[i*step:(i+1)*step])
+    for i in range(ny // step):
+        yp[i] = np.average(y[i*step:(i+1)*step])
+    for i in range(nx // step):
+        for j in range(ny // step):
+            qp[i,j] = np.average(q[i*step:(i+1)*step,j*step:(j+1)*step])
+            up[i,j] = np.average(u[i*step:(i+1)*step,j*step:(j+1)*step])
+
+    return qp,up,xp,yp
 
 
-
-def plot_image(image,iinc,type='intensity',pvec=False,average=False,step=4,
-               ax=None,**kwargs):
+def plot_image(image, iinc, itype='intensity', pvec=False, average=False, step=4,
+               ax=None, **kwargs):
     """
     Plot an image
     """
-    if (ax is None):
+    if ax is None:
         # Create figure, axis and assume a single plot window
         fig = plt.figure()
         ax = fig.add_subplot(1,1,1)
@@ -1553,38 +1542,38 @@ def plot_image(image,iinc,type='intensity',pvec=False,average=False,step=4,
     cmap = plt.get_cmap(kwargs['colormap'])
     plt.figure()
 
-    if (polarization_requested(type)):
-        if (not image['polarized']):
-            raise RuntimeError("Polarization type requested ("+type+
+    if polarization_requested(itype):
+        if not image['polarized']:
+            raise RuntimeError("Polarization type requested ("+itype+
                                ") but image is unpolarized")
-    if (type == 'intensity'):
+    if itype == 'intensity':
         vals = image['intensity'][0,iinc,0,:,:]
         clabel=r"$I$"
         if vmin is None:
             vmin = 1.e-5*np.max(vals)
-    elif (type == 'q'):
+    elif itype == 'q':
         vals = image['intensity'][1,iinc,0,:,:]
         clabel=r"$Q/I$"
-    elif (type == 'u'):
+    elif itype == 'u':
         vals = image['intensity'][2,iinc,0,:,:]
         clabel=r"$U/I$"
-    elif (type == 'polangle'):
+    elif itype == 'polangle':
         q = image['intensity'][1,iinc,0,:,:]
         u = image['intensity'][2,iinc,0,:,:]
         vals = 90./np.pi*np.arctan2(u,q)
         vals[vals < 0.] += 360.
-        if (vmin is None):
+        if vmin is None:
             vmin = 0.
         clabel = r"$\rm Pol.\; Angle$"
-    elif (type == 'polfrac'):
+    elif itype == 'polfrac':
         q = image['intensity'][1,iinc,0,:,:]
         u = image['intensity'][2,iinc,0,:,:]
         vals = np.sqrt(q**2+u**2)
-        if (vmin is None):
+        if vmin is None:
             vmin = 0.
         clabel = r"$\rm Pol.\; Fraction$"
     else:
-        raise RuntimeError("Type:"+type+" is not defined.")
+        raise RuntimeError("Type:"+itype+" is not defined.")
 
     if kwargs['vnorm']:
         vm = np.max(vals)
@@ -1592,7 +1581,7 @@ def plot_image(image,iinc,type='intensity',pvec=False,average=False,step=4,
         vmax = 1.
         vmin /= vm
 
-    if (kwargs['logc']):
+    if kwargs['logc']:
         vals[vals <= 0.] = 1.e-20 * np.max(vals)
         norm = colors.LogNorm(vmin=vmin,vmax=vmax)
     else:
@@ -1605,10 +1594,10 @@ def plot_image(image,iinc,type='intensity',pvec=False,average=False,step=4,
 
     plt.xlim(image['xfaces'][0],image['xfaces'][-1])
     plt.ylim(image['yfaces'][0],image['yfaces'][-1])
-    if (image['unit'] == 'cm'):
+    if image['unit'] == 'cm':
         plt.xlabel(r"$x \; (\rm cm)$")
         plt.ylabel(r"$y \; (\rm cm)$")
-        if (type == 'intensity'):
+        if itype == 'intensity':
             clabel=r"$I \; (\rm erg/s/cm^2)$"
     else:
         plt.xlabel(r"$x$")
@@ -1616,8 +1605,8 @@ def plot_image(image,iinc,type='intensity',pvec=False,average=False,step=4,
 
     plt.colorbar(im,label=clabel)
     plt.gca().set_aspect('equal')
-    if (pvec):
-        if (image['polarized']):
+    if pvec:
+        if image['polarized']:
             q = image['intensity'][1,iinc,0,:,:]
             u = image['intensity'][2,iinc,0,:,:]
             q, u, x, y = subsample_polarization(q,u,x,y,step,average)
@@ -1664,22 +1653,22 @@ def write_image(filename,image):
     # Write binfaces
     outfile = open(filename, 'ab')
     myfmt='>'+'d'*(ninc+1)
-    bin=struct.pack(myfmt,*(image['ifaces']))
-    outfile.write(bin)
+    data=struct.pack(myfmt,*(image['ifaces']))
+    outfile.write(data)
     myfmt='>'+'d'*(nen+1)
-    bin=struct.pack(myfmt,*(image['efaces']))
-    outfile.write(bin)
+    data=struct.pack(myfmt,*(image['efaces']))
+    outfile.write(data)
     myfmt='>'+'d'*(nx+1)
-    bin=struct.pack(myfmt,*(image['xfaces']))
-    outfile.write(bin)
+    data=struct.pack(myfmt,*(image['xfaces']))
+    outfile.write(data)
     myfmt='>'+'d'*(ny+1)
-    bin=struct.pack(myfmt,*(image['yfaces']))
-    outfile.write(bin)
+    data=struct.pack(myfmt,*(image['yfaces']))
+    outfile.write(data)
     # Write data
-    nelements = (image['nintens']*ninc*nen*ny*nx)
+    nelements = image['nintens']*ninc*nen*ny*nx
     myfmt='>'+'d'*nelements
-    bin=struct.pack(myfmt,*(image['intensity'].reshape(nelements)))
-    outfile.write(bin)
+    data=struct.pack(myfmt,*(image['intensity'].reshape(nelements)))
+    outfile.write(data)
     outfile.close()
 
 def read_image(filename):

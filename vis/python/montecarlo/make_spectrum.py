@@ -10,7 +10,7 @@ import numpy as np
 
 # Athena++ modules
 import athena_mc as athenamc
-from athena_mc import photons
+from athena_mc import Photons
 
 # Main function
 def main(**kwargs):
@@ -24,7 +24,7 @@ def main(**kwargs):
     get_lum = kwargs.pop('calclum')
     if (get_lum):
         print("List luminosity: {:e}".format(athenamc.get_luminosity_list(phlist)))
-    phots = photons(phlist)
+    phots = Photons(phlist)
 
     # Generate spectrum from phots
     nx = kwargs.pop('nx')
