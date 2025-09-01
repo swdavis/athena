@@ -45,7 +45,7 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
 
     // get number of mean free paths photon will travel
     Real tauremaining = GetOpticalDepth(pran);
-
+    Real tau0 = tauremaining;
     // References for momentum vectors
     Real& kr  = pphot->k1p[ip];
     Real& kth = pphot->k2p[ip];
@@ -267,9 +267,9 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
 #endif
 
       Real chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
-      chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max
+      //chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max
       bool test = false;
-      if (dl > tauremaining / chi) { // Photon remains in zone
+      if ((chi > 0.) && (dl > tauremaining / chi)) { // Photon remains in zone
         bool accel_success = false;
         if (acceleration) {
           Real dist = pco->dmin(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]);
@@ -313,8 +313,7 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
           kph = -kx * sph + ky * cph;
         }
         //if (ptraj != NULL) ptraj->AddToTrajectory(pphot,ip);
-        tauremaining = 0.; // will cause break out while loop
-
+        break;
       } else { // Photon moves to next zone and reduce tauremaining
         // Update moments
         pphot->dtp[ip] -= dl/c_cgs;

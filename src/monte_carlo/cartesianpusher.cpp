@@ -98,7 +98,7 @@ void CartesianPusher::Move(Photon *pphot, int ips, int ipe) {
       NextFace(dlx,dly,dlz,face,dl);
       Real chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
 
-      if (dl > tauremaining / chi) { // Photon remains in zone
+      if ((chi > 0.) && (dl > tauremaining / chi)) { // Photon remains in zone
         bool accel_success = false;
         if (acceleration) {
           Real dist;

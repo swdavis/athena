@@ -30,7 +30,7 @@ class Photons:
         self.nphot = phlist['length']
         if ncol < self.npars:
             raise ValueError(f"Error creating photon: ncol {ncol} < npars {self.npars}")
-        
+
         if ncol > self.npars:
             self.nuser = ncol - self.npars
             self.user = np.zeros((self.nphot,self.nuser))

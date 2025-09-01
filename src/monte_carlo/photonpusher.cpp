@@ -512,7 +512,8 @@ Real PhotonPusher::GetExtinctionCoefficient(Real ac, Real sc) {
   } else {
     chi = sc + ac;
   }
-  return (chi > TINY_NUMBER) ? chi : TINY_NUMBER;
+  return chi;
+  //return (chi > TINY_NUMBER) ? chi : TINY_NUMBER;
 }
 
 //----------------------------------------------------------------------------------------
