@@ -173,7 +173,7 @@ if __name__ == '__main__':
     parser.add_argument('--yunit',
         default = 'nulnu',
         help = 'variable to be used for y axis: nulnu, lnu, counts')
-    parser.add_argument('--ploterr',
+    parser.add_argument('-ploterr',
         action = 'store_true',
         help = 'plot intensity with error bar')
     parser.add_argument('--outfile',
