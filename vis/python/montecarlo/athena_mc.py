@@ -1338,7 +1338,7 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
               - intensity[k,inds[0],inds[1],inds[2]]**2 / count[inds[0],inds[1],inds[2]])
             inds = np.where(count <= 1.)
             errors[k,inds[0],inds[1],inds[2]] = 0.
-            print(errors/intensity)
+
         spectrum['errors'] = errors
 
     if yerror:
