@@ -385,6 +385,8 @@ MonteCarloBlock::~MonteCarloBlock() {
 
   delete pphot;
   delete ppusher;
+  delete pcoord;
+  delete pbval;
   delete pran;
   //delete pspec;
   //delete pphlist;
@@ -392,7 +394,7 @@ MonteCarloBlock::~MonteCarloBlock() {
 
   rho.DeleteAthenaArray();
   tgas.DeleteAthenaArray();
-  if (boosts || (COORDINATE_SYSTEM != "cartesian")) {
+  if (boosts || tetrads) {
     boost_cmv.DeleteAthenaArray();
     boost_lab.DeleteAthenaArray();
   }

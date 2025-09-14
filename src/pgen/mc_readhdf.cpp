@@ -97,7 +97,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
   //fre_grid(0) = fre_grid(1)*fre_grid(1)/fre_grid(2);
   // convert to erg
   Real keverg = 1.602176634e-9;
-  for(int i=0; i<=nfre; ++i)
+  for(int i=0; i<nfre; ++i)
     fre_grid(i) *= keverg;
   lmine = std::log10(fre_grid(0));
   lmaxe = std::log10(fre_grid(nfre-1));
@@ -259,18 +259,22 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
           int ii = std::floor(xi);
           if (ii < 0) {
             ii = 0;
-            printf("Warning: %g exceeds largest density in grid: %g.",
-                   rho,rho_grid(nrho-1));
+            printf("Warning: %g is less than the lowest density in grid: %g.",
+                   rho(k,j,i),rho_grid(0));
             on_grid = false;
           } else if (ii > nrho-2) {
             ii = nrho-2;
-            printf("Warning: %g is less than smallest density in grid: %g.",
-                   rho,rho_grid(0));
+            printf("Warning: %g exceeds the largest density in grid: %g.",
+                   rho(k,j,i),rho_grid(nrho-1));
             on_grid = false;
           }
           xi -= static_cast<Real>(ii);
           Real xj = (lt - lmint) / dlt;
           int jj = std::floor(xj);
+          if (jj < 0)
+            jj = 0;
+          if (jj > ntem-2)
+            jj = ntem-2;
           while ((jj<ntem-2) && (temp_grid(jj+1) < temp)){
             jj++;
           }
@@ -429,6 +433,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   // Determine locations of initial values
   std::string input_filename = pin->GetString("problem", "input_filename");
   bool resampled = pin->GetOrAddBoolean("problem","resampled",false);
+  bool gr_input = pin->GetOrAddBoolean("problem","gr_input",false);
 
   if (resampled) {
     for (int k=ks; k<=ke; ++k) {
@@ -564,6 +569,20 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     }
     }
     }*/
+
+  if (gr_input) {
+    // For now, just assumes we are treating density, velocity as non-relativistic
+    // analogs
+    // primitive variable is internal energy rather than pressure
+    Real gamma = peos->GetGamma();
+    for (int k=ks; k<=ke; ++k) {
+      for (int j=js; j<=je; ++j) {
+        for (int i=is; i<=ie; ++i) {
+          phydro->w(IPR,k,j,i) *= (gamma-1.);
+        }
+      }
+    }
+  }
 
   // Initialize conserved
   peos->PrimitiveToConserved(phydro->w, pfield->bcc, phydro->u, pcoord, il, iu, jl, ju,

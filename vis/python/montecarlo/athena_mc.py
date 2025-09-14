@@ -1236,6 +1236,7 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
 
     # Create bins
     xfaces = build_bins(xmin,xmax,nx,logx)
+    print(xphots)
     spectrum['nx'] = nx
     spectrum['xfaces'] = xfaces
 
@@ -1279,6 +1280,7 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
 
     for i in range(phots.nphot):
         if ((xbins[i] >= 0) and (mubins[i] >= 0) and (phibins[i] >= 0)):
+
             wght = phots.weight[i]*phots.energy[i]
             count[phibins[i],mubins[i],xbins[i]] += 1.
             intensity[0,phibins[i],mubins[i],xbins[i]] += wght
