@@ -33,6 +33,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   UserWorkInMove=nullptr;
   GetEmission=nullptr;
   UserGetTemperature=nullptr;
+  UserGetNumberDensity=nullptr;
 
   // Set flags that control emission, absorption and scattering
   InitializeEmissionFlags(pin);
@@ -262,6 +263,15 @@ void MonteCarlo::EnrollUserGetTemperature(TempFunc_t tempfunc) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::EnrollUserGetNumberDensity(NumbFunc_t numbfunc)
+//! \brief Enroll a user-defined function for computing number densities
+
+void MonteCarlo::EnrollUserGetNumberDensity(NumbFunc_t numbfunc) {
+
+  UserGetNumberDensity = numbfunc;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::EnrollUserWorkInMove(UserMoveFunc_t userfunc)
 //! \brief Enroll a user-defined condition to be called during photon moves
 
@@ -380,6 +390,7 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
     // Initialize variables over all blocks
     pmcb->GetDensity();
     pmcb->GetTemperature();
+    pmcb->GetNumberDensity();
     if (boosts) pmcb->GetVelocity();
     if (boosts) pmcb->ComputeTransformations();
     if (NSCALARS > 0) pmcb->GetScalars();
@@ -593,6 +604,7 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
         std::cout << static_cast<Real>(nscat)/static_cast<Real>(ntot) << std::endl;
       else
         std::cout << 0. << std::endl;
+      std::cout << "nscat: " << nscat << std::endl;
     }
 
     //Real norm_mom = static_cast<Real>(i+1);
@@ -693,6 +705,7 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
     // Initialize variables over all blocks
     pmcb->GetDensity();
     pmcb->GetTemperature();
+    pmcb->GetNumberDensity();
     if (boosts) pmcb->GetVelocity();
     if (boosts) pmcb->ComputeTransformations();
     if (NSCALARS > 0) pmcb->GetScalars(); //scalars

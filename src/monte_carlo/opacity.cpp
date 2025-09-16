@@ -50,16 +50,10 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   int &i3 = pphot->i3p[ip];
 
   Real ffnrm = 3.692146e8;
-  Real heabund = 0.09; //hardcode for now (should be parameter)
-  Real mp = 1.67262192369e-24;
   Real h = 6.62607015e-27;
   Real kb = 1.380649e-16;
 
   //ffnrm *= 12.;  // Added to match the Athena++ prescription
-
-  Real nh = pmcb->rho(i3,i2,i1) / (mp*(1.+4.*heabund));
-  Real nhe = nh*heabund;
-  Real ne = nh + 2.*nhe;
 
   Real nu = energy / h;
   Real tgas = pmcb->tgas(i3,i2,i1);
@@ -67,7 +61,7 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 
   Real aff = ffnrm/sqrt(tgas)/pow(nu,3);
 
-  return ne * (nh + 4. * nhe) * aff * (1. - ehnu);
+  return pmcb->nel(i3,i2,i1) * pmcb->nion(i3,i2,i1) * aff * (1. - ehnu);
 
 }
 
@@ -100,8 +94,7 @@ Real ThomsonOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   Real mp = 1.67262192369e-24;
   Real sigmat = 6.65248e-25;
 
-  Real kappaes = sigmat * (1. + 2.*heabund) / (mp * (1.+4.*heabund) );
-  return kappaes * pmcb->rho(i3,i2,i1);
+  return pmcb->nel(i3,i2,i1) * sigmat;
 }
 
 //----------------------------------------------------------------------------------------
@@ -115,13 +108,10 @@ Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   int &i3 = pphot->i3p[ip];
   Real &energy = pphot->ep[ip];
 
-  Real heabund = 0.09; //hardcode for now (should be parameter)
-  Real mp = 1.67262192369e-24;
   Real sigmat = 6.65248e-25;
   Real kmec2 = 1.68638e-10;
   Real mec2 = 8.18711e-7;
 
-  Real kappa0 = 1./mp/(1. + 4.*heabund) * (1. + 2.*heabund);
   Real theta = pmcb->tgas(i3,i2,i1)* kmec2;
   Real dens = pmcb->rho(i3,i2,i1);
   Real edim = energy / mec2;
@@ -132,9 +122,8 @@ Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
       sigma0 = sigmat;
     else
       sigma0 = KleinNishina(2.*edim) * sigmat;
-    return sigma0 * kappa0 * dens;
   } else if (edim <= MINE) {
-    return sigmat * kappa0 * dens;
+    sigma0 = sigmat;
   } else if ( (edim < MAXE) && (theta < MAXT) ) {
     Real le = log10(edim);
     Real lt = log10(theta);
@@ -156,7 +145,7 @@ Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
     sigma0 = sigmat;
   }
 
-  return sigma0 * kappa0 * dens;
+  return sigma0 * pmcb->nel(i3,i2,i1);
 
 }
 //----------------------------------------------------------------------------------------

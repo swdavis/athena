@@ -352,6 +352,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   if (nx2 > 1) ncells2 = nx2 + 2*(NGHOST);
   if (nx3 > 1) ncells3 = nx3 + 2*(NGHOST);
   rho.NewAthenaArray(ncells3,ncells2,ncells1);
+  nel.NewAthenaArray(ncells3,ncells2,ncells1);
+  nion.NewAthenaArray(ncells3,ncells2,ncells1);
   tgas.NewAthenaArray(ncells3,ncells2,ncells1);
   if (boosts || tetrads) {
     boost_cmv.NewAthenaArray(ncells3,ncells2,ncells1,4,4);
@@ -393,6 +395,8 @@ MonteCarloBlock::~MonteCarloBlock() {
   //delete ptraj;
 
   rho.DeleteAthenaArray();
+  nel.DeleteAthenaArray();
+  nion.DeleteAthenaArray();
   tgas.DeleteAthenaArray();
   if (boosts || tetrads) {
     boost_cmv.DeleteAthenaArray();
@@ -1675,6 +1679,33 @@ void MonteCarloBlock::GetDensity() {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::GetNumberDensity()
+//! \brief default function for computing number densities if no user function provided.
+
+void MonteCarloBlock::GetNumberDensity() {
+
+  if (pmy_mc->UserGetNumberDensity != nullptr) {
+    pmy_mc->UserGetNumberDensity(this);
+    return;
+  }
+
+  Real heabund = 0.09; //hardcode for now (should be parameter)
+  Real mp = 1.67262192369e-24;
+
+  for (int k=ks; k<=ke; ++k) {
+    for (int j=js; j<=je; ++j) {
+      for (int i=is; i<=ie; ++i) {
+        Real nh = rho(k,j,i) / (mp*(1.+4.*heabund));
+        Real nhe = nh*heabund;
+        nion(k,j,i) = nh + 4. * nhe;
+        nel(k,j,i) = nh + 2. * nhe;
+      }
+    }
+  }
+}
+
+
+//----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::GetScalars(MonteCarloBlock *pmcb)
 //! \brief Make a hard copy of scalars from MeshBlock to MonteCarloBlock.
 
@@ -1722,7 +1753,7 @@ void MonteCarloBlock::GetVelocity() {
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::GetTemperature()
 //! \brief default function for computing temperature if no user function provided.
-//  Assumes EOS of from P=RTd.
+//  Assumes EOS of the form P=RTd.
 
 void MonteCarloBlock::GetTemperature() {
 

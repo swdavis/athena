@@ -61,6 +61,7 @@ enum SourceTermFlag {MCRS0 = 0, MCRS1=1, MCRS2=2, MCRS3=3, MCRSP0=4, MCRSP1=5,
 // function pointer prototypes for user-defined modules set at runtime
 typedef Real (*EmisFunc_t)(MonteCarloBlock *pmcb, int k, int j, int i);
 typedef void (*TempFunc_t)(MonteCarloBlock *pmcb);
+typedef void (*NumbFunc_t)(MonteCarloBlock *pmcb);
 typedef void (*MCBValFunc_t)(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
 typedef Real (*OpacFunc_t)(MonteCarloBlock *pmcb,  Photon *pphot, int ip);
 typedef void (*ScatFunc_t)(MonteCarloBlock *pmcb, Photon *phot, int ips, int ipe);
@@ -226,6 +227,7 @@ public:
   UserMoveFunc_t UserWorkInMove;
   EmisFunc_t GetEmission;
   TempFunc_t UserGetTemperature;
+  NumbFunc_t UserGetNumberDensity;
   ScatFunc_t UserScattering;
   OpacFunc_t UserScatteringOpacity;
   OpacFunc_t UserAbsorptionOpacity;
@@ -243,6 +245,7 @@ public:
   void EnrollUserMCBoundaryFunction(enum BoundaryFace dir, MCBValFunc_t my_bc);
   void EnrollUserEmissionFunction(EmisFunc_t emissfunc);
   void EnrollUserGetTemperature(TempFunc_t tempfunc);
+  void EnrollUserGetNumberDensity(NumbFunc_t numbunc);
   void EnrollUserWorkInMove(UserMoveFunc_t userfunc);
   void EnrollUserOpacityFunction(OpacFunc_t opacfunc, bool abs);
   void AllocateUserMoments(int n);
@@ -341,6 +344,8 @@ public:
   AthenaArray<Real> sourceterms;
   AthenaArray<Real> scalars;
   AthenaArray<Real> rho;
+  AthenaArray<Real> nel;
+  AthenaArray<Real> nion;
   AthenaArray<Real> tgas;
   AthenaArray<Real> vel;
   AthenaArray<Real> boost_cmv;
@@ -375,6 +380,7 @@ public:
   void ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &emm_tot);
   void SetEmissionCellWeight(Photon *pphot, int ips, int ipe);
   void GetDensity();
+  void GetNumberDensity();
   void GetScalars();
   void GetVelocity();
   void GetTemperature();

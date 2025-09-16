@@ -20,8 +20,6 @@
 
 Real GetEmissionFreeFree(MonteCarloBlock *pmcb, int k, int j, int i) {
 
-  const Real heabund = 0.09; // Should have more general EOS functions
-  const Real kb = 1.380649e-16;
   const Real mp = 1.67262192369e-24;
   const Real eta0 = 1.032521e-11;
   const Real gaunt = 1.0; // Gaunt factor
@@ -29,11 +27,8 @@ Real GetEmissionFreeFree(MonteCarloBlock *pmcb, int k, int j, int i) {
   //eta0 *= 12.;  // Added to match the Athena++ prescription
 
   Real temp = pmcb->tgas(k,j,i);
-  Real nh = pmcb->rho(k,j,i)/mp/(1.+4.*heabund);
-  Real nhe = nh*heabund;
-  Real ne = nh + 2.*nhe;
 
-  return eta0 / sqrt(temp) * ne * (nh + 4. * nhe) * gaunt;
+  return eta0 / sqrt(temp) * pmcb->nel(k,j,i) * pmcb->nion(k,j,i) * gaunt;
 
 }
 

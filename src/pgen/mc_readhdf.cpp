@@ -38,6 +38,7 @@ namespace {
   AthenaArray<Real> temp_grid;
   AthenaArray<Real> rho_grid;
   AthenaArray<Real> ross_tab;
+  AthenaArray<Real> ross_gray_tab;
   AthenaArray<Real> plan_tab;
   AthenaArray<Real> emis_cum;
   AthenaArray<Real> emis_tot;
@@ -50,7 +51,7 @@ namespace {
   Real TableEmission(MonteCarloBlock *pmcb, int k, int j, int i);
   Real SampleEmissivity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
   Real FreeFreeOpacity(Real tgas, Real rho, Real energy);
-
+  void GetNel(MonteCarloBlock *pmcb);
 }
 
 std::vector<float> x1coord;
@@ -88,6 +89,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
   fre_grid.NewAthenaArray(nfre);
   temp_grid.NewAthenaArray(ntem);
   rho_grid.NewAthenaArray(nrho);
+  ross_gray_tab.NewAthenaArray(ntem,nrho);
   ross_tab.NewAthenaArray(nfre,ntem,nrho);
   plan_tab.NewAthenaArray(nfre,ntem,nrho);
 
@@ -136,7 +138,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
   Real buf;
   for(int j=0; j<ntem; ++j) {
     for(int i=0; i<nrho; ++i) {
-      fscanf(opac_file,"%lf",&buf);
+      fscanf(opac_file,"%lf",&(ross_gray_tab(j,i)));
     }
   }
 
@@ -203,6 +205,8 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
 
   EnrollUserEmissionFunction(TableEmission);
   EnrollUserOpacityFunction(TableOpacity,true);
+
+  EnrollUserGetNumberDensity(GetNel);
 
   int nx1 = pin->GetInteger("meshblock", "nx1");
   int nx2 = pin->GetInteger("meshblock", "nx2");
@@ -804,6 +808,65 @@ Real FreeFreeOpacity(Real tgas, Real rho, Real energy) {
   Real opac = ne * (nh + 4. * nhe) * aff * (1. - ehnu);
 
   return opac;
+}
+
+void GetNel(MonteCarloBlock *pmcb) {
+
+  Real heabund = 0.09; //hardcode for now (should be parameter)
+  Real mp = 1.67262192369e-24;
+
+  for (int k=pmcb->ks; k<=pmcb->ke; ++k) {
+    for (int j=pmcb->js; j<=pmcb->je; ++j) {
+      for (int i=pmcb->is; i<=pmcb->ie; ++i) {
+        Real rho = pmcb->rho(k,j,i);
+        Real nh = rho / (mp*(1.+4.*heabund));
+        Real nhe = nh*heabund;
+        //nion(k,j,i) = nh + 4. * nhe;
+        pmcb->nel(k,j,i) = nh + 2. * nhe;
+
+        Real tgas = pmcb->tgas(k,j,i);
+        Real ld = log10(rho);
+        Real lt = log10(tgas);
+        Real xi = (ld - lmind) / dld;
+        int ii = std::floor(xi);
+        if (ii < 0) {
+          ii = 0;
+        } else if (ii > nrho-2) {
+          ii = nrho-2;
+        }
+        xi -= static_cast<Real>(ii);
+        Real xj = (lt - lmint) / dlt;
+        int jj = std::floor(xj);
+        if (jj < 0)
+          jj = 0;
+        if (jj > ntem-2)
+          jj = ntem-2;
+        while ((jj<ntem-2) && (temp_grid(jj+1) < tgas)){
+          jj++;
+        }
+        while ((jj>0) && (temp_grid(jj) > tgas)){
+          jj--;
+        }
+        if(jj > ntem-2) {
+          jj = ntem-2; // above T grid, assume ionized
+          continue;
+        }
+        if(jj < 0) {
+          jj = 00;
+          pmcb->nel(k,j,i) = 0.; //below T grid, assume neutral
+          continue;
+        }
+        xj = (tgas-temp_grid(jj))/(temp_grid(jj+1)-temp_grid(jj));
+        Real ross = (1.-xi)*( (1.-xj)*ross_gray_tab(jj,ii)
+                +xj*ross_gray_tab(jj+1,ii) ) + xi*( (1.-xj)*ross_gray_tab(jj,ii+1)
+                +xj*ross_gray_tab(jj+1,ii+1) );
+        if ((tgas < 1.e5) && (ross < 0.34)) {
+          pmcb->nel(k,j,i) = 0.; // assume neutral
+          //printf("%d %d %g %g %g %g\n",jj,ii,tgas,rho,ross,ross_gray_tab(jj,ii));
+        }
+      } // loop over i
+    }
+  }
 }
 
 }
