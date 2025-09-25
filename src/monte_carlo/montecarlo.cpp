@@ -562,8 +562,6 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
     for(int nb=0; nb<nblocal; ++nb)
       my_blocks(nb)->pphot->ClearBoundary();
 
-    // initialize monte carlo counter
-    nphrun = 0;
     bool photons_remain = true; // True if photons on any process
     while(photons_remain) {
 
@@ -577,6 +575,7 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
     }
 
     // Report diagnostic results from all blocks
+    nphrun = 0;
     int64_t nesc = 0, nabs = 0, ndes = 0, nscat = 0;
     for(int nb=0; nb<nblocal; ++nb){
       MonteCarloBlock *pmcb = my_blocks(nb);

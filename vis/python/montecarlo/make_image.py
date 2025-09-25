@@ -10,7 +10,12 @@ import numpy as np
 
 # Athena++ modules
 import athena_mc as athenamc
-from athena_mc import photons
+from athena_mc import Photons
+
+try:
+    import screen
+except ModuleNotFoundError:
+    pass
 
 # Main function
 def main(**kwargs):
@@ -21,7 +26,7 @@ def main(**kwargs):
 
     # Read photon list
     phlist = athenamc.read_list(infile)
-    phots = photons(phlist)
+    phots = Photons(phlist)
 
     # Set parameters
     rcam = kwargs.pop('rcam')
@@ -39,13 +44,20 @@ def main(**kwargs):
     if (ymin is None):
         ymin = -ymax
     unit = kwargs.pop('unit')
-    nen = 1
-    emin = 0.1
-    emax = 1.
+    nen = kwargs.pop('nen')
+    emin = kwargs.pop('emin')
+    emax = kwargs.pop('emax')
 
-    mask = None
+    # check for screening function
+    screen_name = kwargs.pop('screen')
+    if screen_name != 'no_screen':
+        screen_function = getattr(screen, screen_name)
+        mask = screen_function(phots)
+    else:
+        mask = None
 
     # Create image
+    print(f"Generating image from list.")
     image = athenamc.make_image_mc(phots,rcam,ninc,imin,imax,
                                    nen,emin,emax,
                                    nx,xmin,xmax,
@@ -99,6 +111,21 @@ if __name__ == '__main__':
         type=float,
         default=None,
         help='minimum y')
+    parser.add_argument('--nen',
+        type=int,
+        default=1,
+        help='number of camera energy bins')
+    parser.add_argument('--emin',
+        type=float,
+        default=1.e-300,
+        help='minimum for energy variable')
+    parser.add_argument('--emax',
+        type=float,
+        default=1.e300,
+        help='maximum for energy variable')
+    parser.add_argument('--screen',
+        default = 'no_screen',
+        help = 'name of screen function in screen.py file')
     parser.add_argument('--outfile',
         default=None,
         help='output filename for spectrum')

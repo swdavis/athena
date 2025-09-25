@@ -140,7 +140,7 @@ if __name__ == '__main__':
     parser.add_argument('infile',
         help = 'input photon spectrum filename(s)')
     parser.add_argument('--imu',
-        default = None,
+        default = 'sum',
         help = 'index of angle bin to plot')
     parser.add_argument('--iphi',
         default = 'ave',

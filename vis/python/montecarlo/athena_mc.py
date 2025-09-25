@@ -5,11 +5,12 @@ Support for manipulating and plotting Monte Carlo outputs
 # standard python modules
 import struct
 import time
-import gc
+import gc # needed in old read_list
 import math
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import colors
+from io import BytesIO
 
 #SWD: Maybe photons be rewritten simply as dictionary
 #SWD: Add error control
@@ -57,6 +58,201 @@ class Photons:
                 self.user[:,i] = phlist['list'][:,i+self.npars]
 
 def read_list(filename, data=True, header=True):
+    """
+    Faster version of read_list. Read unformated list output and return list
+    as a dictionary
+    """
+
+    mxh_ = 1000
+
+    try:
+        with open(filename, 'rb') as data_file:
+            raw_data = data_file.read()
+        raw_data_ascii = raw_data[0:mxh_].decode('ascii', 'replace')
+    except:
+        print(f"Could not open {filename} for reading.")
+        return None
+
+    phlist = {}
+    current_index = 0
+
+    def skip_string(expected_string):
+        expected_string_len = len(expected_string)
+        if raw_data_ascii[current_index:current_index+expected_string_len] != \
+           expected_string:
+            raise RuntimeError('File not formatted as expected')
+        return current_index + expected_string_len
+
+    def parse_line_value(prefix, value_type=float):
+        nonlocal current_index
+        current_index = skip_string(prefix)
+        end_of_line_index = raw_data_ascii.find('\n', current_index)
+        if end_of_line_index == -1:
+            raise RuntimeError(f"Could not find end of line for {prefix}")
+
+        value_str = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
+        current_index = end_of_line_index + 1
+        return value_type(value_str)
+
+    if header:
+        try:
+            phlist['dt'] = parse_line_value("dt=", float)
+        except:
+            print("List file contains no dt entry. Setting to 1.")
+            phlist['dt'] = 1.
+
+        phlist['length'] = parse_line_value("length=", int)
+        phlist['npars'] = parse_line_value("npars=", int)
+        phlist['ntot'] = parse_line_value("ntot=", int)
+        phlist['polarized'] = bool(parse_line_value("polarized=", int))
+
+        # Handle coord separately as it's a string
+        current_index = skip_string("coord=")
+        end_of_line_index = raw_data_ascii.find('\n', current_index)
+        phlist['coord'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
+        current_index = end_of_line_index + 1
+
+    if data:
+        npars = phlist['npars']
+        length = phlist['length']
+
+        # Calculate optimal chunk size based on available memory
+        # Aim for ~100MB chunks
+        target_chunk_bytes = 100 * 1024 * 1024  # 100MB
+        samples_per_chunk = max(1, target_chunk_bytes // (8 * npars))
+        nchunk = int(length/samples_per_chunk)
+        if nchunk > 10:
+            print(f"Reading {filename}. Estimated chunks: {nchunk:d}.")
+        begin_index = current_index
+        remaining_samples = length
+        chunks = []
+
+        ti = time.time()
+        chunk_num = 0
+
+        while remaining_samples > 0:
+            chunk_size = min(samples_per_chunk, remaining_samples)
+            bytes_to_read = chunk_size * npars * 8
+            end_index = begin_index + bytes_to_read
+
+            # Check bounds
+            if end_index > len(raw_data):
+                deficit_bytes = end_index - len(raw_data)
+                deficit = math.ceil(deficit_bytes / (8 * npars))
+                print(f"Warning: raw_data smaller than expected by {deficit} samples.")
+                chunk_size -= deficit
+                end_index = len(raw_data)
+                remaining_samples = chunk_size  # This will be the last chunk
+                phlist['length'] = length - deficit + chunk_size
+
+            if chunk_size <= 0:
+                break
+
+            # Using frombuffer for faster reading
+            # dtype='>f8' big-endian double precision
+            chunk_data = np.frombuffer(raw_data[begin_index:end_index],
+                                       dtype='>f8').reshape(chunk_size, npars)
+
+            chunks.append(chunk_data)
+            begin_index = end_index
+            remaining_samples -= chunk_size
+            chunk_num += 1
+
+            # Report progress every 10 chunks
+            if (nchunk > 10) and (chunk_num % 10 == 0):
+                tf = time.time()
+                print(f" Processing chunk {chunk_num}, time: {tf-ti:.2f}s")
+                ti = tf
+
+        # Concatenate all chunks at once
+        if chunks:
+            phlist['list'] = np.concatenate(chunks, axis=0)
+        else:
+            phlist['list'] = np.array([]).reshape(0, npars)
+
+    return phlist
+
+
+def read_list_memory_mapped(filename, data=True, header=True):
+    """
+    Alternative version using memory mapping for very large files
+    """
+    import mmap
+
+    mxh_ = 1000
+
+    try:
+        with open(filename, 'rb') as f:
+            # Read header portion normally
+            header_data = f.read(mxh_)
+            file_size = f.seek(0, 2)  # Get file size
+            f.seek(0)
+
+            # Memory map the entire file
+            with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mmapped_file:
+                raw_data_ascii = header_data.decode('ascii', 'replace')
+
+                phlist = {}
+                current_index = 0
+
+                def skip_string(expected_string):
+                    expected_string_len = len(expected_string)
+                    if raw_data_ascii[current_index:current_index+expected_string_len] != expected_string:
+                        raise RuntimeError('File not formatted as expected')
+                    return current_index + expected_string_len
+
+                def parse_line_value(prefix, value_type=float):
+                    nonlocal current_index
+                    current_index = skip_string(prefix)
+                    end_of_line_index = raw_data_ascii.find('\n', current_index)
+                    value_str = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
+                    current_index = end_of_line_index + 1
+                    return value_type(value_str)
+
+                if header:
+                    try:
+                        phlist['dt'] = parse_line_value("dt=", float)
+                    except:
+                        print("List file contains no dt entry. Setting to 1.")
+                        phlist['dt'] = 1.
+
+                    phlist['length'] = parse_line_value("length=", int)
+                    phlist['npars'] = parse_line_value("npars=", int)
+                    phlist['ntot'] = parse_line_value("ntot=", int)
+                    phlist['polarized'] = bool(parse_line_value("polarized=", int))
+
+                    current_index = skip_string("coord=")
+                    end_of_line_index = raw_data_ascii.find('\n', current_index)
+                    phlist['coord'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
+                    current_index = end_of_line_index + 1
+
+                if data:
+                    npars = phlist['npars']
+                    length = phlist['length']
+
+                    # Calculate data start position
+                    data_start = current_index
+                    expected_data_size = length * npars * 8
+
+                    if data_start + expected_data_size > len(mmapped_file):
+                        deficit = (data_start + expected_data_size - len(mmapped_file)) // (8 * npars)
+                        print(f"Warning: File smaller than expected by {deficit} records")
+                        length -= deficit
+                        phlist['length'] = length
+
+                    # Use numpy.frombuffer directly on memory-mapped data
+                    phlist['list'] = np.frombuffer(
+                        mmapped_file[data_start:data_start + length * npars * 8],
+                        dtype='>f8'
+                    ).reshape(length, npars)
+
+                return phlist
+
+    except Exception as e:
+        print(f"Could not open {filename} for reading: {e}")
+        return None
+
+def read_list_old(filename, data=True, header=True):
     """
     Read unformated list output and return as a dictionary
     """
@@ -189,7 +385,28 @@ def read_list(filename, data=True, header=True):
     #return phlist, current_index
     return phlist
 
-def write_list(filename,phlist,header=True,length=None):
+def write_list(filename, phlist, header=True, length=None):
+    """
+    Faster version of write_list. Write photon list (dictionary) to file
+    """
+
+    if header:
+        # Write header in text mode for readable ASCII
+        with open(filename, 'w') as outfile:
+            outfile.write(f"dt={phlist['dt']:.8e}\n")
+            outfile.write(f"length={length if length is not None else phlist['length']:d}\n")
+            outfile.write(f"npars={phlist['npars']:d}\n")
+            outfile.write(f"ntot={phlist['ntot']:d}\n")
+            outfile.write(f"polarized={int(phlist['polarized']):d}\n")
+            outfile.write(f"coord={phlist['coord']}\n")
+
+    # Append binary data using numpy's tobytes() - faster than struct.pack
+    with open(filename, 'ab') as outfile:
+        data_array = phlist['list'].astype('>f8')  # big-endian double precision
+        outfile.write(data_array.tobytes())
+
+
+def write_list_old(filename, phlist, header=True, length=None):
     """
     Write photon list (dictionary) to file
     """
@@ -979,7 +1196,6 @@ def make_plot(x,y,yerr=None,ax=None,xmin=None,xmax=None,ymin=None,ymax=None,
         if ymax is not None:
             ax.set_ylim(ymin,ymax)
         else:
-            print(ymin)
             ax.set_ylim(bottom=ymin)
     elif ymax is not None:
         ax.set_ylim(top=ymax)
@@ -1017,12 +1233,9 @@ def get_luminosity(spec):
         #emid = 0.5*(1./xfaces[:-1]-1./xfaces[1:])*c*h/1.e8
 
     # compute sum over frequency and solid angle
-    lumin = 0.
-    for k in range(nx):
-        for j in range(nmu):
-            for i in range(nphi):
-                lumin += dnu[k]*mumid[j]*spec['intensity'][0,i,j,k]
-    lumin *= 2.*np.pi/nmu/nphi
+    lumin = (np.sum(dnu * mumid[:, np.newaxis] * spec['intensity'][0]) *
+             2. * np.pi / nmu / nphi)
+
     return lumin
 
 def build_bins(xmin, xmax, nx, logx):
@@ -1037,28 +1250,31 @@ def get_bins(xphots, xfaces, nx, uniform=True, log=True):
     """
     Returns the bin numbers corresponding photon samples
     """
-    xbins = np.zeros(len(xphots),dtype=int)-1
+    xbins = np.zeros(len(xphots), dtype=int)-1
     if uniform:
         if log:
             xlfaces = np.log10(xfaces)
-            xwidth = xlfaces[nx]-xlfaces[0]
-            for i,xphot in enumerate(xphots):
-                xbins[i] = int((np.log10(xphot)-xlfaces[0])/xwidth*float(nx))
-                if ((xbins[i] < 0) or (xbins[i] >= nx)):
-                    xbins[i] = -1
+            xwidth = xlfaces[nx] - xlfaces[0]
+
+            # get integer bin number
+            log_xphots = np.log10(xphots)
+            xbins = ((log_xphots - xlfaces[0]) / xwidth * nx).astype(int)
+
+            # catch out-of-bounds values
+            xbins = np.where((xbins < 0) | (xbins >= nx), -1, xbins)
         else:
-            xwidth = xfaces[nx]-xfaces[0]
-            for i,xphot in enumerate(xphots):
-                if np.isinf(xphot):
-                    xbins[i] = -1
-                else:
-                    xbins[i] = int((xphot-xfaces[0])/xwidth*float(nx))
-                if ((xbins[i] < 0) or (xbins[i] >= nx)):
-                    xbins[i] = -1
+            xwidth = xfaces[nx] - xfaces[0]
+
+            # get integer bin number
+            xbins = ((xphots - xfaces[0]) / xwidth * nx).astype(int)
+
+            # catch out-of-bounds values
+            xbins = np.where((xbins < 0) | (xbins >= nx), -1, xbins)
+
         return xbins
     else:
-        # use binary search for non uniform data
-        return get_bins_binary_search(xphots,xfaces,nx)
+        # use binary search for non uniform data (generally much slower)
+        return get_bins_binary_search(xphots, xfaces, nx)
 
 def get_bins_binary_search(xphots, xfaces, nx):
     """
@@ -1071,6 +1287,7 @@ def get_bins_binary_search(xphots, xfaces, nx):
     xbins = np.searchsorted(xfaces,xphots)-1
     xbins[indsp] = -1
     xbins[indsm] = -1
+
     return xbins
 
 def get_angle_bins_cartesian(photons,nmu, mufaces, nphi, phifaces):
@@ -1236,7 +1453,6 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
 
     # Create bins
     xfaces = build_bins(xmin,xmax,nx,logx)
-    print(xphots)
     spectrum['nx'] = nx
     spectrum['xfaces'] = xfaces
 
@@ -1275,23 +1491,37 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     if yerror:
         errors = np.zeros((nintens,nphi,nmu,nx))
 
+    # Apply the user define mask
     if mask is not None:
         xbins[mask] = -1
 
-    for i in range(phots.nphot):
-        if ((xbins[i] >= 0) and (mubins[i] >= 0) and (phibins[i] >= 0)):
+    # determine all valid indices
+    valid_phots = (xbins >= 0) & (mubins >= 0) & (phibins >= 0)
 
-            wght = phots.weight[i]*phots.energy[i]
-            count[phibins[i],mubins[i],xbins[i]] += 1.
-            intensity[0,phibins[i],mubins[i],xbins[i]] += wght
-            if phots.polarized:
-                intensity[1,phibins[i],mubins[i],xbins[i]] += wght*phots.q[i]
-                intensity[2,phibins[i],mubins[i],xbins[i]] += wght*phots.u[i]
-            if yerror:
-                errors[0,phibins[i],mubins[i],xbins[i]] += (wght)**2
-                if phots.polarized:
-                    errors[1,phibins[i],mubins[i],xbins[i]] += (wght*phots.q[i])**2
-                    errors[2,phibins[i],mubins[i],xbins[i]] += (wght*phots.u[i])**2
+    # determine corresponding bin values
+    valid_phi = phibins[valid_phots]
+    valid_mu = mubins[valid_phots]
+    valid_x = xbins[valid_phots]
+
+    valid_weights = phots.weight[valid_phots] * phots.energy[valid_phots]
+
+    # Use np.add.at for accumulation
+    np.add.at(count, (valid_phi, valid_mu, valid_x), 1.0)
+    np.add.at(intensity, (0, valid_phi, valid_mu, valid_x), valid_weights)
+
+    if phots.polarized:
+        np.add.at(intensity, (1, valid_phi, valid_mu, valid_x),
+                  valid_weights * phots.q[valid_phots])
+        np.add.at(intensity, (2, valid_phi, valid_mu, valid_x),
+                  valid_weights * phots.u[valid_phots])
+
+    if yerror:
+        np.add.at(errors, (0, valid_phi, valid_mu, valid_x), valid_weights**2)
+        if phots.polarized:
+            np.add.at(errors, (1, valid_phi, valid_mu, valid_x),
+                      (valid_weights * phots.q[valid_phots])**2)
+            np.add.at(errors, (2, valid_phi, valid_mu, valid_x),
+                      (valid_weights * phots.u[valid_phots])**2)
 
     # Compute frequency width and mean energy (in erg) of bins
     h = 6.62607015e-27
@@ -1316,30 +1546,35 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
 
     # Normalize intensities
     mumid = 0.5*(mufaces[1:]+mufaces[:-1])
-    for k in range(nintens):
-        for j in range(nphi):
-            for i in range(nmu):
-                #fac = nphi*nmu*emid/(mumid[i]*dnu*2.*np.pi*phots.dt)
-                fac = nphi*nmu/(mumid[i]*dnu*2.*np.pi*phots.dt)
-                intensity[k,j,i,:] *= fac
-                if yerror:
-                    errors[k,j,i,:] *= fac**2
+
+
+    # Compute factors with proper broadcasting
+    # mumid: (nmu,) -> (1, 1, nmu, 1)
+    # dnu: (nx,) -> (1, 1, 1, nx)
+    const_factor = nphi * nmu / (2. * np.pi * phots.dt)
+    fac = const_factor / (mumid[:, np.newaxis] * dnu[np.newaxis, :])  # Shape: (nmu, nx)
+
+    # Rescale intensity and errors
+    intensity *= fac
+
+    if yerror:
+        errors *= fac**2
+
     spectrum['intensity'] = intensity
 
     # Finish computing errors on intensities
     if yerror:
-        for k in range(nintens):
-            inds = np.where(count > 1.)
-            #for i in range(len(inds[0])):
-            #    etmp = errors[k,inds[0][i],inds[1][i],inds[2][i]]
-            #    itmp = intensity[k,inds[0][i],inds[1][i],inds[2][i]]
-            #    ctmp = count[inds[0][i],inds[1][i],inds[2][i]]
-            #    if (etmp-itmp**2/ctmp < 0.):
-            #        print(i,etmp,itmp,ctmp,etmp-itmp**2/ctmp)
-            errors[k,inds[0],inds[1],inds[2]] = np.sqrt(errors[k,inds[0],inds[1],inds[2]]
-              - intensity[k,inds[0],inds[1],inds[2]]**2 / count[inds[0],inds[1],inds[2]])
-            inds = np.where(count <= 1.)
-            errors[k,inds[0],inds[1],inds[2]] = 0.
+        # Compute masks once
+        inds_gt1 = count > 1.
+        inds_le1 = count <= 1.
+        inds_gt1 = inds_gt1[np.newaxis, :]
+        inds_le1 = inds_le1[np.newaxis, :]
+        count_bcast = count[np.newaxis, :]
+
+        # Vectorized operation
+        errors[inds_gt1] = np.sqrt(errors[inds_gt1] -
+                                   intensity[inds_gt1]**2 / count_bcast[inds_gt1])
+        errors[inds_le1] = 0.
 
         spectrum['errors'] = errors
 
@@ -1382,6 +1617,7 @@ def get_image_bins(phots, rcam, ifaces, xfaces, yfaces):
         kz = phots.k3
         kdx = xp*kx+yp*ky+zp*kz
 
+
     dl = np.sqrt(rcam**2-rp**2+kdx**2)-kdx
     xf = xp + dl * kx
     yf = yp + dl * ky
@@ -1409,7 +1645,7 @@ def get_image_bins(phots, rcam, ifaces, xfaces, yfaces):
     return ibins, xbins, ybins
 
 def make_image_mc(phots, rcam, ninc, imin, imax, nen, emin, emax,
-                  nx, xmin, xmax, ny, ymin, ymax, unit, mask=None,):
+                  nx, xmin, xmax, ny, ymin, ymax, unit, mask=None):
     """
     Create a binned image from photon list
     """
@@ -1446,7 +1682,10 @@ def make_image_mc(phots, rcam, ninc, imin, imax, nen, emin, emax,
 
     ibins, xbins, ybins = get_image_bins(phots, rcam, ifaces, xfaces, yfaces)
     #set ebins temporarily to 0
-    ebins = np.zeros(len(ibins),dtype=int)
+    everg = 1.6021772e-12
+    xphots = phots.energy/everg/1000.
+    ebins = get_bins(xphots, efaces, nen, True, True)
+    #ebins = np.zeros(len(ibins),dtype=int)
 
     # Create intensity grid and loop over photons to add contribution
     nintens = 1
@@ -1457,11 +1696,29 @@ def make_image_mc(phots, rcam, ninc, imin, imax, nen, emin, emax,
         image['polarized'] = False
     image['nintens'] = nintens
 
-
     if mask is not None:
         ibins[mask] = -1
 
     intensity = np.zeros((nintens,ninc,nen,ny,nx))
+
+    # Create mask for valid indices
+    valid_phots = (ibins >= 0) & (ebins >= 0) & (xbins >= 0) & (ybins >= 0)
+
+    # Extract valid indices and weights
+    valid_i = ibins[valid_phots]
+    valid_e = ebins[valid_phots]
+    valid_y = ybins[valid_phots]
+    valid_x = xbins[valid_phots]
+    valid_weights = phots.weight[valid_phots] * phots.energy[valid_phots]
+
+    np.add.at(intensity, (0, valid_i, valid_e, valid_y, valid_x), valid_weights)
+
+    if phots.polarized:
+        np.add.at(intensity, (1, valid_i, valid_e, valid_y, valid_x),
+                  valid_weights * phots.q[valid_phots])
+        np.add.at(intensity, (2, valid_i, valid_e, valid_y, valid_x),
+                  valid_weights * phots.u[valid_phots])
+    """
     for i in range(phots.nphot):
         if ((ibins[i] >= 0) and (ebins[i] >= 0) and (xbins[i] >= 0) and (ybins[i] >= 0)):
             # Weight includes energy -- slightly different from spectra
@@ -1470,7 +1727,7 @@ def make_image_mc(phots, rcam, ninc, imin, imax, nen, emin, emax,
             if phots.polarized:
                 intensity[1,ibins[i],ebins[i],ybins[i],xbins[i]] += wght*phots.q[i]
                 intensity[2,ibins[i],ebins[i],ybins[i],xbins[i]] += wght*phots.u[i]
-
+    """
     # Normalize intensities
     mumid = abs(0.5*(ifaces[1:]+ifaces[:-1]))
     dmu = ifaces[1:]-ifaces[:-1]
@@ -1529,7 +1786,7 @@ def subsample_polarization(q,u,x,y,step,average):
     return qp,up,xp,yp
 
 
-def plot_image(image, iinc, itype='intensity', pvec=False, average=False, step=4,
+def plot_image(image, iinc, ie, itype='intensity', pvec=False, average=False, step=4,
                ax=None, **kwargs):
     """
     Plot an image
@@ -1549,27 +1806,27 @@ def plot_image(image, iinc, itype='intensity', pvec=False, average=False, step=4
             raise RuntimeError("Polarization type requested ("+itype+
                                ") but image is unpolarized")
     if itype == 'intensity':
-        vals = image['intensity'][0,iinc,0,:,:]
+        vals = image['intensity'][0,iinc,ie,:,:]
         clabel=r"$I$"
         if vmin is None:
             vmin = 1.e-5*np.max(vals)
     elif itype == 'q':
-        vals = image['intensity'][1,iinc,0,:,:]
+        vals = image['intensity'][1,iinc,ie,:,:]
         clabel=r"$Q/I$"
     elif itype == 'u':
-        vals = image['intensity'][2,iinc,0,:,:]
+        vals = image['intensity'][2,iinc,ie,:,:]
         clabel=r"$U/I$"
     elif itype == 'polangle':
-        q = image['intensity'][1,iinc,0,:,:]
-        u = image['intensity'][2,iinc,0,:,:]
+        q = image['intensity'][1,iinc,ie,:,:]
+        u = image['intensity'][2,iinc,ie,:,:]
         vals = 90./np.pi*np.arctan2(u,q)
         vals[vals < 0.] += 360.
         if vmin is None:
             vmin = 0.
         clabel = r"$\rm Pol.\; Angle$"
     elif itype == 'polfrac':
-        q = image['intensity'][1,iinc,0,:,:]
-        u = image['intensity'][2,iinc,0,:,:]
+        q = image['intensity'][1,iinc,ie,:,:]
+        u = image['intensity'][2,iinc,ie,:,:]
         vals = np.sqrt(q**2+u**2)
         if vmin is None:
             vmin = 0.
@@ -1609,8 +1866,8 @@ def plot_image(image, iinc, itype='intensity', pvec=False, average=False, step=4
     plt.gca().set_aspect('equal')
     if pvec:
         if image['polarized']:
-            q = image['intensity'][1,iinc,0,:,:]
-            u = image['intensity'][2,iinc,0,:,:]
+            q = image['intensity'][1,iinc,ie,:,:]
+            u = image['intensity'][2,iinc,ie,:,:]
             q, u, x, y = subsample_polarization(q,u,x,y,step,average)
             x_pol, y_pol = np.meshgrid(x,y)
 

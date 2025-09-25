@@ -133,6 +133,7 @@ void CoordinateToTetrad(Real ucoord[4],Real utet[4],Real ecov[4][4]);
 void TetradToCoordinate(Real utet[4],Real ucoord[4],Real econ[4][4]);
 void StokesToTensor(Real stokes[4], std::complex<Real> tensor[4][4]);
 void TensorToStokes(std::complex<Real> tensor[4][4], Real stokes[4]);
+void LorentzBoostVector(Real vel[4], Real kold[4]);
 
 //---------------------- prototypes for setting flags ------------------------------------
 enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string);

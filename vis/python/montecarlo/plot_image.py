@@ -31,11 +31,12 @@ def main(**kwargs):
 
     # Set plot parameters
     iinc = kwargs.pop("iinc")
+    ie = kwargs.pop("ie")
 
     # Set axis to be reused
     fig = plt.figure()
     ax = fig.add_subplot(1,1,1)
-    athenamc.plot_image(image,iinc,ax=ax,**kwargs)
+    athenamc.plot_image(image,iinc,ie,ax=ax,**kwargs)
     #athenamc.plot_image_old(image,iinc,ax=ax)
 
     # save plot to outfile
@@ -54,6 +55,10 @@ if __name__ == '__main__':
                         default = 0,
                         type = int,
                         help='index of angle bin to plot')
+    parser.add_argument('--ie',
+                        default = 0,
+                        type = int,
+                        help='index of energy to plot')
     parser.add_argument('--xmin',
                         default = None,
                         type = float,

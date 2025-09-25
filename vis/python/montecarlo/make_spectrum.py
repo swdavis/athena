@@ -50,6 +50,7 @@ def main(**kwargs):
     xmax = kwargs.pop('xmax')
     logx = not kwargs.pop('linearx')
 
+    print("Generating spectrum from list.")
     spectrum = athenamc.make_spectrum(phots,nx,xmin,xmax,logx=logx,
                                       mask=mask,**kwargs)
 
@@ -107,7 +108,7 @@ if __name__ == '__main__':
         help = 'calculate luminosity directrly from list')
     parser.add_argument('--screen',
         default = 'no_screen',
-        help = 'name of screen function in screen.py filek')
+        help = 'name of screen function in screen.py file')
     parser.add_argument('--outfile',
         default = None,
         help = 'output filename for spectrum')
