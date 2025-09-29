@@ -77,21 +77,24 @@ if __name__ == '__main__':
     parser.add_argument('rcam',
         type=float,
         help='camera radius')
-    parser.add_argument('ninc',
-        type=int,
-        help='number of camera inclination bins')
-    parser.add_argument('imin',
-        type=float,
-        help='minimum for inclination variable')
-    parser.add_argument('imax',
-        type=float,
-        help='maximum for inclination variable')
     parser.add_argument('xmax',
         type=float,
         help='maximum x')
     parser.add_argument('ymax',
         type=float,
         help='maximum y')
+    parser.add_argument('--ninc',
+        default=16,
+        type=int,
+        help='number of camera inclination bins')
+    parser.add_argument('--imin',
+        default=-1.,
+        type=float,
+        help='minimum for inclination variable')
+    parser.add_argument('--imax',
+        default=1.,
+        type=float,
+        help='maximum for inclination variable')
     parser.add_argument('--nx',
         type=int,
         default=16,
