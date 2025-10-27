@@ -194,6 +194,7 @@ public:
   Real tmax;   // Maximum evolution time
   Real time_cgs; // conversion of time to cgs units
   Real weightratio; // used for setting minimum weight for absorption
+
   int64_t nsamp;  // total number of photons to integrate per timestep
   int64_t nphrun;  // number of photons completed
   int nblocal; // number of montecarloblocks on this process
@@ -201,7 +202,7 @@ public:
   int nout;  // number of outputs
   int64_t ncells; // total number of cells in mesh
   int iseed;  // seed to initialized random number generator(s)
-
+ 
   int list_size_init; // maximum number of photons run per output on any process
   int max_phots_init; // maximum number of photon elements
   int nuser_var, nuser_mom;
@@ -223,6 +224,7 @@ public:
   bool time_acc;  // use MRW acceleration with time limit
   bool raytrace_flag; // Will trace photons rather than scatter
   bool general_pusher_flag; // Use integration for photon movement
+  bool verbose; // print out more information during run
 
   // function pointers
   UserMoveFunc_t UserWorkInMove;
@@ -304,12 +306,14 @@ public:
   int nx1,nx2,nx3;
   int is,ie,js,je,ks,ke;
   int nsrc, nmom; // # of elements in sourcterm, moments arrays
+  int nf_scat;
 
   bool weighted_absorption; // flag controling how absorption is handled
   bool mom_flag_lab; // Compute/output moments
   bool mom_flag_com; // Compute moments in comoving frame
   bool mom_flag_src; // Compute source terms for output
   bool mom_flag_usr; // Compute user defined monte carlo moments
+  bool mom_flag_scat; // Compute scattering source terms
   bool call_moments;
   bool call_srcterms;
 
@@ -332,16 +336,19 @@ public:
   bool orthotet_flag; // use orthonormal tetrad for TransferPhotons()
   bool varystep_flag; // use variable (true) or constant (false) step
 
-  Real rho_cgs, vel_cgs, tgas_cgs, tfloor_cgs, l_cgs;
+  Real rho_cgs, vel_cgs, tgas_cgs, tfloor_cgs, tceiling_cgs, l_cgs;
   Real betamax;
   Real stepsize;
   Real minweight;
   Real emiss_to_weight; // used relate weight to emission array
+  Real emin_scat, emax_scat, dloge_scat; // min/max energy for scattering moments
 
   AthenaArray<Real> emission;
   AthenaArray<Real> moments;
   AthenaArray<Real> moments_com;
   AthenaArray<Real> moments_user;
+  AthenaArray<Real> moments_scat;
+  AthenaArray<Real> energy_scat;
   AthenaArray<Real> sourceterms;
   AthenaArray<Real> scalars;
   AthenaArray<Real> rho;

@@ -195,7 +195,8 @@ public:
   bool mom_flag_com;
   bool mom_flag_src;
   bool mom_flag_usr;
-
+  bool mom_flag_scat;
+  
   //functions
   void OutputSpectrum(bool wtflag);
   void SendMonteCarloSpectrum(Spectrum *spect, int dest);

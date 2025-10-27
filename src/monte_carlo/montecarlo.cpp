@@ -57,6 +57,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   polarized = pin->GetOrAddBoolean("montecarlo","polarized",false);
   acceleration = pin->GetOrAddBoolean("montecarlo","acceleration",false);
   time_acc = pin->GetOrAddBoolean("montecarlo","time_acc",false);
+  verbose = pin->GetOrAddBoolean("montecarlo", "verbose", true);
   raytrace_flag = pin->GetOrAddBoolean("montecarlo", "raytrace", false);
   if (raytrace_flag)
     general_pusher_flag = true;
@@ -603,7 +604,7 @@ void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
         std::cout << static_cast<Real>(nscat)/static_cast<Real>(ntot) << std::endl;
       else
         std::cout << 0. << std::endl;
-      std::cout << "nscat: " << nscat << std::endl;
+      //std::cout << "nscat: " << nscat << std::endl;
     }
 
     //Real norm_mom = static_cast<Real>(i+1);
@@ -655,8 +656,7 @@ bool MonteCarlo::CheckAndBroadCastPhotonsRemaining() {
         complete = false;
     }
   }
-  //if (Globals::my_rank == 0)
-  //    printf("here\n");
+
   // Clear Boundaries
   for(int nb=0; nb<nblocal; ++nb)
     my_blocks(nb)->pphot->ClearBoundary();

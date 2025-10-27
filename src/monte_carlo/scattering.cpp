@@ -360,7 +360,6 @@ void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
                              int ipe) {
 
   MCRandom *pran = pmcb->pran;
-  PhotonPusher *ppusher = pmcb->ppusher;
 
   for (int ip=ips; ip<=ipe; ip++) {
 
@@ -498,17 +497,28 @@ void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
 
     // Calculate new stokes vectors from rotation matrix.  Note that the
     // value of the overall intensity (stokes[0]=1) does not change
-    pphot->sqp[ip] = (r10+r11*stokes[1]+r12*stokes[2]) / norms;
-    pphot->sup[ip] = (r20+r21*stokes[1]+r22*stokes[2]) / norms;
+    pphot->sqp[ip] = norms*(r10+r11*stokes[1]+r12*stokes[2]) / norm;
+    pphot->sup[ip] = norms*(r20+r21*stokes[1]+r22*stokes[2]) / norm;
 
+    Real fnorm = sqrt(SQR(pphot->sqp[ip])+SQR(pphot->sup[ip]));
+    if (fnorm > 1.) {
+      pphot->sqp[ip] /= fnorm;
+      pphot->sup[ip] /= fnorm;
+      printf("stokes %g %g %g %g %g\n",stokes[1],stokes[2],norms,norm,fnorm); 
+      printf("%g %g %g %g %g %g\n",r10,r11,r12,r20,r21,r22);
+    }
+    if (pphot->IsNanPhoton(ip)) {
+      pphot->statp[ip] = DESTROYED;
+      pphot->PrintPhoton("Warning: Nan encounterd in ScatterComptonPolarized(),"
+                               " photon destroyed",ip);
+      printf("stokes %g %g\n",stokes[1],stokes[2]);
+    }
     // Calculate scattered energy and update k vector
     pphot->ep[ip] = xp / (2.0 * bgammap) * mec2;
     kx = k1p;
     ky = k2p;
     kz = k3p;
 
-    // SWD: move outside of scattering
-    //ppusher->CartesianToCurvalinear(pphot);
   } // end loop over ip
 }
 

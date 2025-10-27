@@ -139,6 +139,11 @@ Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 
     sigma0 = pow(10., lxsect);
   } else {
+    if (pmcb->pmy_mc->verbose) {
+      std::cout << "Warning: out of range parameter in Compton Opacity: "
+                << edim << " " << theta << std::endl
+                << "Assuming Thomson cross section." << std::endl;
+    }
     //std::cout << "Warning: out of range parameter in Compton Opacity: "
     //          << edim << " " << theta << std::endl
     //          << "Assuming Thomson cross section." << std::endl;

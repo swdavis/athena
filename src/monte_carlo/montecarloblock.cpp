@@ -22,10 +22,6 @@
 #include "../globals.hpp"
 #include "../scalars/scalars.hpp"
 
-// SWD: remove these
-static Real test;
-static bool first = true;
-
 //----------------------------------------------------------------------------------------
 //! MonteCarloBlock constructor, builds MonteCarloBlock from parameter input
 
@@ -75,6 +71,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   }
   mom_flag_src = pmy_mc->pmcout->mom_flag_src;
   mom_flag_usr = pmy_mc->pmcout->mom_flag_usr || (pmy_mc->nuser_mom > 0);
+  mom_flag_scat = pmy_mc->pmcout->mom_flag_scat;
 
   call_srcterms = coupled || mom_flag_src;
   call_moments = mom_flag_lab || mom_flag_com || call_srcterms || mom_flag_usr;
@@ -149,6 +146,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   vel_cgs = pin->GetOrAddReal("problem","vel_cgs",1.);
   tgas_cgs = pin->GetOrAddReal("problem","tgas_cgs",-1.);
   tfloor_cgs = pin->GetOrAddReal("problem","tfloor_cgs",0.);
+  tceiling_cgs = pin->GetOrAddReal("problem","tceiling_cgs",HUGE_NUMBER);
   l_cgs = pin->GetOrAddReal("problem","l_cgs",1.);
   betamax = pin->GetOrAddReal("problem","betamax",0.999);
 
@@ -369,6 +367,18 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     moments_user.NewAthenaArray(pmy_mc->nuser_mom,ncells3,ncells2,ncells1);
   nsrc = 8;
   if (call_srcterms) sourceterms.NewAthenaArray(nsrc,ncells3,ncells2,ncells1);
+  if (mom_flag_scat) {
+    nf_scat = pin->GetInteger("montecarlo","nf_scat");
+    Real everg = 1.602176634e-12;
+    emin_scat = pin->GetReal("montecarlo","emin_scat") * everg;
+    emax_scat = pin->GetReal("montecarlo","emax_scat") * everg;
+    moments_scat.NewAthenaArray(nf_scat,ncells3,ncells2,ncells1);
+    dloge_scat = (std::log10(emax_scat/emin_scat))/static_cast<Real>(nf_scat);
+    energy_scat.NewAthenaArray(nf_scat);
+    for (int i=0; i<nf_scat; i++) {
+      energy_scat(i) = std::log10(emin_scat) + (i+0.5)*dloge_scat; // keep log
+    }
+  }
   if (pmy_mc->emission_array) emission.NewAthenaArray(ncells3,ncells2,ncells1);
   if (acceleration && !(coherent_scattering) && !(scattering_meth == SCATRES)) {
     planck_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
@@ -513,6 +523,9 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
   int nnew = ntot - nold;
   // if photons remain to transfer, make space for new photons
 
+  if ((nnew + nold) == 0) // nothing to do
+    return;
+
   if (nnew > 0) {
     pphot->AllocatePhotons(ntot);
     nphremain -= nnew;
@@ -584,8 +597,10 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
         // Check for possible infinite loop due to NaN in photon
         if (pphot->IsNanPhoton(ip)) {
           pphot->statp[ip] = DESTROYED;
-          pphot->PrintPhoton("Warning: Nan encounterd in TransferPhotons(),"
-                             " photon destroyed",ip);
+          if (pmy_mc->verbose) {
+            pphot->PrintPhoton("Warning: Nan encounterd in TransferPhotons(),"
+                               " photon destroyed",ip);
+            }
         }
       }
 
@@ -927,15 +942,14 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   //}
 
   if (mom_flag_lab) {
-    if (std::isinf(weight) || std::isnan(weight)) {
+    if (std::isinf(weight) || std::isnan(weight) || std::isnan(k0) || std::isnan(k1) || 
+        std::isnan(k2) || std::isnan(k3)) {
       pphot->statp[ip] = DESTROYED;
-      pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
-                         " photon destroyed",ip);
-
+      if (pmy_mc->verbose) {
+        pphot->PrintPhoton ("Warning: Nan/Inf encountered in UpdateMoments(),"
+                            " photon destroyed",ip);
+      }
       return;
-    } else if (std::isnan(k1) || std::isnan(k2) || std::isnan(k3)) {
-      pphot->PrintPhoton("Warning: Nan in k in UpdateMoments(),"
-                         " photon destroyed",ip);
     } else {
       // Add contribution to corresponding moments
       // Energy density
@@ -951,6 +965,15 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
       moments(MCIPR12,i3,i2,i1) += weight * k1 * k2;
       moments(MCIPR13,i3,i2,i1) += weight * k1 * k3;
       moments(MCIPR23,i3,i2,i1) += weight * k2 * k3;
+    }
+  }
+
+  // add contribution to scattering source terms
+  if (mom_flag_scat) {
+    Real loge = std::log10(pphot->ep[ip]);
+    int n = std::floor((loge-energy_scat(0))/dloge_scat);
+    if (n >= 0 && n < nf_scat) {
+      moments_scat(n,i3,i2,i1) += weight * k0 * k0;
     }
   }
 
@@ -992,8 +1015,11 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
         std::isinf(k1c) || std::isnan(k1c) ||
         std::isinf(k2c) || std::isnan(k2c) ||
         std::isinf(k3c) || std::isnan(k3c) ) {
-      pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
-                         " comoving frame",ip);
+      pphot->statp[ip] = DESTROYED;
+      if (pmy_mc->verbose) {
+        pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
+                           " comoving frame",ip);
+      }
       return;
     } else {
       // Add contribution to corresponding moments
@@ -1103,8 +1129,10 @@ void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl,
 
   if ((std::isinf(weight)) || (std::isnan(weight))) {
     pphot->statp[ip] = DESTROYED;
-    pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
-                       " photon destroyed",ip);
+    if (pmy_mc->verbose) {
+      pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
+                         " photon destroyed",ip);
+    }
   } else {
     // Higher order moments are weighted by displacement direction vector k
     Real weight1 = weight * k1;
@@ -1223,9 +1251,11 @@ void MonteCarloBlock::UpdateMomentsOld(Photon *pphot, Real dl, Real pl, Real k1,
 
   if ((std::isinf(weight)) || (std::isnan(weight))) {
     pphot->statp[ip] = DESTROYED;
-    pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
-                       " photon destroyed",ip);
-  } else {
+    if (pmy_mc->verbose) {
+      pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
+                         " photon destroyed",ip);
+    }
+                        } else {
     // Higher order moments are weighted by displacement direction vector k
     Real weight1 = weight * k1;
     Real weight2 = weight * k2;
@@ -1282,99 +1312,89 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
 
   // Get integration time
   Real dt = pmy_mc->tint;
+  Real norm;
 
-  if (normalize) {
-
-    // Normalize remaining moments by volume and global norm (counts)
-    if (mom_flag_lab) {
-      for (int n=0; n<nmom-3; ++n) {
-        for (int k=ks; k<=ke; ++k) {
-          for (int j=js; j<=je; ++j) {
-            for (int i=is; i<=ie; ++i) {
-              moments(n,k,j,i) /= (dt * pcoord->vol(k,j,i));
-            }
-          }
-        }
-      }
-      // Copy normalized moments to symmetric elements
+  if (mom_flag_lab) {
+    for (int n=0; n<nmom-3; ++n) {
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
-            moments(MCIPR21,k,j,i) = moments(MCIPR12,k,j,i);
-            moments(MCIPR31,k,j,i) = moments(MCIPR13,k,j,i);
-            moments(MCIPR32,k,j,i) = moments(MCIPR23,k,j,i);
+            if (normalize)
+              norm = 1./ (dt * pcoord->vol(k,j,i));
+            else
+              norm = dt * pcoord->vol(k,j,i);
+            moments(n,k,j,i) *= norm;
           }
         }
       }
     }
-    if (mom_flag_com) {
-      for (int n=0; n<nmom-3; ++n) {
-        for (int k=ks; k<=ke; ++k) {
-          for (int j=js; j<=je; ++j) {
-            for (int i=is; i<=ie; ++i) {
-              moments_com(n,k,j,i) /= (dt * pcoord->vol(k,j,i));
-            }
-          }
+    // Copy normalized moments to symmetric elements
+    for (int k=ks; k<=ke; ++k) {
+      for (int j=js; j<=je; ++j) {
+        for (int i=is; i<=ie; ++i) {
+          moments(MCIPR21,k,j,i) = moments(MCIPR12,k,j,i);
+          moments(MCIPR31,k,j,i) = moments(MCIPR13,k,j,i);
+          moments(MCIPR32,k,j,i) = moments(MCIPR23,k,j,i);
         }
       }
-      // Copy normalized moments to symmetric elements
+    }
+  } // end if (mom_flag_lab)
+  if (mom_flag_com) {
+    for (int n=0; n<nmom-3; ++n) {
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
-            moments_com(MCIPR21,k,j,i) = moments_com(MCIPR12,k,j,i);
-            moments_com(MCIPR31,k,j,i) = moments_com(MCIPR13,k,j,i);
-            moments_com(MCIPR32,k,j,i) = moments_com(MCIPR23,k,j,i);
+            if (normalize)
+              norm = 1./ (dt * pcoord->vol(k,j,i));
+            else
+              norm = dt * pcoord->vol(k,j,i);
+            moments_com(n,k,j,i) *= norm;
           }
         }
       }
     }
-    if (mom_flag_usr) {
-      for (int n=0; n<pmy_mc->nuser_mom; ++n) {
-        for (int k=ks; k<=ke; ++k) {
-          for (int j=js; j<=je; ++j) {
-            for (int i=is; i<=ie; ++i) {
-              moments_user(n,k,j,i) /= (dt * pcoord->vol(k,j,i));
-            }
+    // Copy normalized moments to symmetric elements
+    for (int k=ks; k<=ke; ++k) {
+      for (int j=js; j<=je; ++j) {
+        for (int i=is; i<=ie; ++i) {
+          moments_com(MCIPR21,k,j,i) = moments_com(MCIPR12,k,j,i);
+          moments_com(MCIPR31,k,j,i) = moments_com(MCIPR13,k,j,i);
+          moments_com(MCIPR32,k,j,i) = moments_com(MCIPR23,k,j,i);
+        }
+      }
+    }
+  }
+  if (mom_flag_scat) {
+    for (int n=0; n<nf_scat; ++n) {
+      for (int k=ks; k<=ke; ++k) {
+        for (int j=js; j<=je; ++j) {
+          for (int i=is; i<=ie; ++i) {
+            if (normalize)
+              norm = 1./ (dt * pcoord->vol(k,j,i));
+            else
+              norm = dt * pcoord->vol(k,j,i);
+            moments_scat(n,k,j,i) *= norm;
           }
         }
       }
     }
-  } else {
-    // Undo normalization for continuing evolution
-    if (mom_flag_lab) {
-      for (int n=0; n<nmom-3; ++n) {
-        for (int k=ks; k<=ke; ++k) {
-          for (int j=js; j<=je; ++j) {
-            for (int i=is; i<=ie; ++i) {
-              moments(n,k,j,i) *= (dt * pcoord->vol(k,j,i));
-            }
+  }
+  if (mom_flag_usr) {
+    for (int n=0; n<pmy_mc->nuser_mom; ++n) {
+      for (int k=ks; k<=ke; ++k) {
+        for (int j=js; j<=je; ++j) {
+          for (int i=is; i<=ie; ++i) {
+            if (normalize)
+              norm = 1./ (dt * pcoord->vol(k,j,i));
+            else
+              norm = dt * pcoord->vol(k,j,i);
+            moments_user(n,k,j,i) *= norm;
           }
         }
       }
     }
-    if (mom_flag_com) {
-      for (int n=0; n<nmom-3; ++n) {
-        for (int k=ks; k<=ke; ++k) {
-          for (int j=js; j<=je; ++j) {
-            for (int i=is; i<=ie; ++i) {
-              moments_com(n,k,j,i) *= (dt * pcoord->vol(k,j,i));
-            }
-          }
-        }
-      }
-    }
-    if (mom_flag_usr) {
-      for (int n=0; n<pmy_mc->nuser_mom; ++n) {
-        for (int k=ks; k<=ke; ++k) {
-          for (int j=js; j<=je; ++j) {
-            for (int i=is; i<=ie; ++i) {
-              moments_user(n,k,j,i) *= (dt * pcoord->vol(k,j,i));
-            }
-          }
-        }
-      }
-    }
-  } // end else [if (normalize)]
+  }
+
 }
 
 //----------------------------------------------------------------------------------------
@@ -1736,14 +1756,20 @@ void MonteCarloBlock::GetVelocity() {
         vel(k,j,i,2) = vel_cgs * pmy_block->phydro->u(IM2,k,j,i) / (rho * c_cgs);
         vel(k,j,i,3) = vel_cgs * pmy_block->phydro->u(IM3,k,j,i) / (rho * c_cgs);
         Real beta0 = std::sqrt(SQR(vel(k,j,i,1))+SQR(vel(k,j,i,2))+SQR(vel(k,j,i,3)));
+        if (std::isnan(vel(k,j,i,1)))
+            printf("vel: %d %d %d %g\n",k,j,i,vel(k,j,i,1));
+        //if (beta0 >= 1.)
+        //  printf("beta > 1: %g", beta0);
         Real beta = (beta0 > betamax) ? betamax : beta0;
         Real gamma = 1. / std::sqrt(1. - beta*beta);
         vel(k,j,i,0) = gamma;
         //gamma = 1;
-        for (int l=1; l<4; ++l) {
-          vel(k,j,i,l) *= gamma * beta / beta0 ;
-          //if (Globals::my_rank == 0)
-          //  printf("v: %d %g\n",l,vel(k,j,i,l));
+        if (beta0 > 0.) {
+          for (int l=1; l<4; ++l) {
+            vel(k,j,i,l) *= gamma * beta / beta0 ;
+            if (std::isnan(vel(k,j,i,1)))
+              printf("vel2: %d %d %d %g %g %g\n",k,j,i,vel(k,j,i,1),beta,beta0);
+          }
         }
       }
     }
@@ -1778,6 +1804,7 @@ void MonteCarloBlock::GetTemperature() {
         Real temp = tconv * phydro->w(IEN,k,j,i) / phydro->w(IDN,k,j,i);
         // apply temperature floor
         tgas(k,j,i) = (temp > tfloor_cgs) ? temp : tfloor_cgs;
+        tgas(k,j,i) = (temp < tceiling_cgs) ? temp : tceiling_cgs;
       }
     }
   }
@@ -1797,6 +1824,8 @@ void MonteCarloBlock::ComputeTransformations() {
         boost_lab(k,j,i,0,0) = vel(k,j,i,0);
         for (int m=1; m<4; m++) {
           boost_cmv(k,j,i,0,m) = -vel(k,j,i,m);
+          //if (std::isnan(boost_cmv(k,j,i,0,m)))
+          //    printf("boost: %d %d %d %g\n",k,j,i,vel(k,j,i,m));
           boost_lab(k,j,i,0,m) = vel(k,j,i,m);
         }
         for (int l=1; l<4; l++) {
@@ -1882,10 +1911,29 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
 
     pphot->k0p[ip] = 1.;
     // SWD: maybe better to renormalize
-    pphot->k1p[ip] = kf[1]/kf[0];
-    pphot->k2p[ip] = kf[2]/kf[0];
-    pphot->k3p[ip] = kf[3]/kf[0];
-
+    if ((COORDINATE_SYSTEM == "spherical_polar") && pmy_mc->polarized) {
+      Real k3[3];
+      Real cth = cos(pphot->x2p[ip]);
+      Real sth = sin(pphot->x2p[ip]);
+      Real cph = cos(pphot->x3p[ip]);
+      Real sph = sin(pphot->x3p[ip]);
+      k3[0] = pphot->k1p[ip];
+      k3[1] = pphot->k2p[ip];
+      k3[2] = pphot->k3p[ip];
+      pphot->k1p[ip] = k3[0]*sth*cph + k3[1]*cth*cph - k3[2]*sph;
+      pphot->k2p[ip] = k3[0]*sth*sph + k3[1]*cth*sph + k3[2]*cph;
+      pphot->k3p[ip] = k3[0]*cth     - k3[1]*sth;
+      Real knorm = std::sqrt(SQR(pphot->k1p[ip])+SQR(pphot->k2p[ip])+SQR(pphot->k3p[ip]));
+      pphot->k1p[ip] /= knorm;
+      pphot->k2p[ip] /= knorm;
+      pphot->k3p[ip] /= knorm;
+    } else {
+      pphot->k1p[ip] = kf[1]/kf[0];
+      pphot->k2p[ip] = kf[2]/kf[0];
+      pphot->k3p[ip] = kf[3]/kf[0];
+    }
+    //if (std::isinf(nufact) || std::isnan(nufact))
+    //  pphot->PrintPhoton("to com: nan in boost",ip);
     pphot->ep[ip] *= nufact;
     pphot->acp[ip] /= nufact;
     pphot->scp[ip] /= nufact;
@@ -1910,6 +1958,23 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
       pphot->k1p[ip] *= pphot->ep[ip];
       pphot->k2p[ip] *= pphot->ep[ip];
       pphot->k3p[ip] *= pphot->ep[ip];
+    } else if ((pmy_mc->polarized) && (COORDINATE_SYSTEM == "spherical_polar")) {
+      // rotate cartesian to to spherical polar
+      Real k3[3];
+      Real cth = cos(pphot->x2p[ip]);
+      Real sth = sin(pphot->x2p[ip]);
+      Real cph = cos(pphot->x3p[ip]);
+      Real sph = sin(pphot->x3p[ip]);
+      k3[0] = pphot->k1p[ip];
+      k3[1] = pphot->k2p[ip];
+      k3[2] = pphot->k3p[ip];
+      pphot->k1p[ip] = k3[0]*sth*cph + k3[1]*sth*sph + k3[2]*cth;
+      pphot->k2p[ip] = k3[0]*cth*cph + k3[1]*cth*sph - k3[2]*sth;
+      pphot->k3p[ip] = -k3[0]*sph + k3[1]*cph;
+      Real knorm = std::sqrt(SQR(pphot->k1p[ip])+SQR(pphot->k2p[ip])+SQR(pphot->k3p[ip]));
+      pphot->k1p[ip] /= knorm;
+      pphot->k2p[ip] /= knorm;
+      pphot->k3p[ip] /= knorm;
     }
 
     Real k0init = pphot->k0p[ip];
@@ -1957,12 +2022,15 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
     } else {
       // spatial components of k are unit vectors
       nufact = pphot->k0p[ip]/k0init;
+
       Real knorm = std::sqrt(SQR(pphot->k1p[ip])+SQR(pphot->k2p[ip])+SQR(pphot->k3p[ip]));
       pphot->k0p[ip] = 1.;
       pphot->k1p[ip] /= knorm;
       pphot->k2p[ip] /= knorm;
       pphot->k3p[ip] /= knorm;
     }
+    //if (std::isinf(nufact) || std::isnan(nufact))
+    //  pphot->PrintPhoton("to cord: nan in boost",ip);
     // update energy and opacities
     pphot->ep[ip] *= nufact;
     pphot->acp[ip] /= nufact;
@@ -2012,6 +2080,13 @@ Real  MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip) {
     for (int i=0; i<4; i++) {
       k0f += boost_cmv(i3,i2,i1,0,i) * kf[i];
     }
+    Real nufact =k0f/k0init;
+    /*if (std::isinf(nufact) || std::isnan(nufact)) {
+      printf("%g %g %g %g\n",boost_cmv(i3,i2,i1,0,0),boost_cmv(i3,i2,i1,0,1),
+             boost_cmv(i3,i2,i1,0,2),boost_cmv(i3,i2,i1,0,3));
+      printf("%g %g %g %g %g %g\n",k0init,k0f,kf[0],kf[1],kf[2],kf[3]);
+      pphot->PrintPhoton("shift: nan in boost",ip);
+      }*/
     return k0f/k0init;
 
  }

@@ -985,6 +985,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
   mom_flag_src = false;
   mom_flag_usr = false;
   mom_flag_com = false;
+  mom_flag_scat = false;
   pspec = nullptr;
   pphlist = nullptr;
   ptraj = nullptr;
@@ -1156,7 +1157,9 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
                    var.compare("Frmc0") == 0 || var.compare("Prmc0") == 0) {
           mom_flag_com = true;
         } else if (var.compare("mcsrc") == 0) {
-            mom_flag_src = true;
+          mom_flag_src = true;
+        } else if (var.compare("mcscat") == 0) {
+          mom_flag_scat = true; 
         } else if (var.compare("uom") == 0) {
           if (pmy_mc->nuser_mom > 0) {
             mom_flag_usr = true;

@@ -5,7 +5,6 @@ Support for manipulating and plotting Monte Carlo outputs
 # standard python modules
 import struct
 import time
-import gc # needed in old read_list
 import math
 import numpy as np
 import matplotlib.pyplot as plt
@@ -34,7 +33,7 @@ class Photons:
 
         if ncol > self.npars:
             self.nuser = ncol - self.npars
-            self.user = np.zeros((self.nphot,self.nuser))
+            self.user = np.zeros((self.nphot, self.nuser))
         else:
             self.nuser = 0
 
@@ -172,218 +171,207 @@ def read_list(filename, data=True, header=True):
 
     return phlist
 
-
-def read_list_memory_mapped(filename, data=True, header=True):
+def read_list_generator(filename, chunk_size=None):
     """
-    Alternative version using memory mapping for very large files
+    Generator that yields chunks of data from the list file.
+    First yield returns the header dict, subsequent yields return data chunks.
     """
-    import mmap
-
-    mxh_ = 1000
-
+    mxh_ = 10000
+    
     try:
-        with open(filename, 'rb') as f:
-            # Read header portion normally
-            header_data = f.read(mxh_)
-            file_size = f.seek(0, 2)  # Get file size
-            f.seek(0)
-
-            # Memory map the entire file
-            with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mmapped_file:
-                raw_data_ascii = header_data.decode('ascii', 'replace')
-
-                phlist = {}
-                current_index = 0
-
-                def skip_string(expected_string):
-                    expected_string_len = len(expected_string)
-                    if raw_data_ascii[current_index:current_index+expected_string_len] != expected_string:
-                        raise RuntimeError('File not formatted as expected')
-                    return current_index + expected_string_len
-
-                def parse_line_value(prefix, value_type=float):
-                    nonlocal current_index
-                    current_index = skip_string(prefix)
-                    end_of_line_index = raw_data_ascii.find('\n', current_index)
-                    value_str = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
-                    current_index = end_of_line_index + 1
-                    return value_type(value_str)
-
-                if header:
-                    try:
-                        phlist['dt'] = parse_line_value("dt=", float)
-                    except:
-                        print("List file contains no dt entry. Setting to 1.")
-                        phlist['dt'] = 1.
-
-                    phlist['length'] = parse_line_value("length=", int)
-                    phlist['npars'] = parse_line_value("npars=", int)
-                    phlist['ntot'] = parse_line_value("ntot=", int)
-                    phlist['polarized'] = bool(parse_line_value("polarized=", int))
-
-                    current_index = skip_string("coord=")
-                    end_of_line_index = raw_data_ascii.find('\n', current_index)
-                    phlist['coord'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
-                    current_index = end_of_line_index + 1
-
-                if data:
-                    npars = phlist['npars']
-                    length = phlist['length']
-
-                    # Calculate data start position
-                    data_start = current_index
-                    expected_data_size = length * npars * 8
-
-                    if data_start + expected_data_size > len(mmapped_file):
-                        deficit = (data_start + expected_data_size - len(mmapped_file)) // (8 * npars)
-                        print(f"Warning: File smaller than expected by {deficit} records")
-                        length -= deficit
-                        phlist['length'] = length
-
-                    # Use numpy.frombuffer directly on memory-mapped data
-                    phlist['list'] = np.frombuffer(
-                        mmapped_file[data_start:data_start + length * npars * 8],
-                        dtype='>f8'
-                    ).reshape(length, npars)
-
-                return phlist
-
-    except Exception as e:
-        print(f"Could not open {filename} for reading: {e}")
-        return None
-
-def read_list_old(filename, data=True, header=True):
-    """
-    Read unformated list output and return as a dictionary
-    """
-
-    mxh_ = 1000
-    mxl_ = 1000000
-
+        data_file = open(filename, 'rb')
+    except:
+        print(f"Could not open {filename} for reading.")
+        return
+    
     try:
-        # Read raw data
+        # Read only the header portion
+        header_bytes = data_file.read(mxh_)
+        raw_data_ascii = header_bytes.decode('ascii', 'replace')
+    except:
+        data_file.close()
+        print(f"Could not read header from {filename}.")
+        return
+    
+    phlist = {}
+    current_index = 0
+    
+    def skip_string(expected_string):
+        nonlocal current_index
+        expected_string_len = len(expected_string)
+        if raw_data_ascii[current_index:current_index+expected_string_len] != \
+           expected_string:
+            data_file.close()
+            raise RuntimeError('File not formatted as expected')
+        current_index += expected_string_len
+    
+    def parse_line_value(prefix, value_type=float):
+        nonlocal current_index
+        skip_string(prefix)
+        end_of_line_index = raw_data_ascii.find('\n', current_index)
+        if end_of_line_index == -1:
+            data_file.close()
+            raise RuntimeError(f"Could not find end of line for {prefix}")
+        
+        value_str = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
+        current_index = end_of_line_index + 1
+        return value_type(value_str)
+    
+    # Parse header
+    try:
+        phlist['dt'] = parse_line_value("dt=", float)
+    except:
+        print("List file contains no dt entry. Setting to 1.")
+        phlist['dt'] = 1.
+    
+    phlist['length'] = parse_line_value("length=", int)
+    phlist['npars'] = parse_line_value("npars=", int)
+    phlist['ntot'] = parse_line_value("ntot=", int)
+    phlist['polarized'] = bool(parse_line_value("polarized=", int))
+    
+    skip_string("coord=")
+    end_of_line_index = raw_data_ascii.find('\n', current_index)
+    phlist['coord'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
+    current_index = end_of_line_index + 1
+    
+    # Yield header first
+    yield {'header': phlist, 'chunk': None, 'remaining': None, 'length': None, 'done': False}
+    
+    # Calculate chunk size
+    npars = phlist['npars']
+    length = phlist['length']
+    
+    if chunk_size is None:
+        target_chunk_bytes = 100 * 1024 * 1024
+        chunk_size = max(1, target_chunk_bytes // (8 * npars))
+    
+    # Move file pointer to start of binary data
+    data_file.seek(current_index)
+    
+    remaining_samples = length
+    
+    # Yield data chunks
+    try:
+        while remaining_samples > 0:
+            current_chunk_size = min(chunk_size, remaining_samples)
+            bytes_to_read = current_chunk_size * npars * 8
+            
+            # Read only the bytes needed for this chunk
+            chunk_bytes = data_file.read(bytes_to_read)
+            
+            # Check if we got all the data we expected
+            if len(chunk_bytes) < bytes_to_read:
+                deficit_bytes = bytes_to_read - len(chunk_bytes)
+                deficit = math.ceil(deficit_bytes / (8 * npars))
+                print(f"Warning: File smaller than expected by {deficit} samples.")
+                current_chunk_size = len(chunk_bytes) // (8 * npars)
+            
+            if current_chunk_size <= 0:
+                break
+            
+            chunk_data = np.frombuffer(chunk_bytes, dtype='>f8').reshape(current_chunk_size, npars)
+            
+            remaining_samples -= current_chunk_size
+            
+            yield {'header': phlist, 'chunk': chunk_data, 'remaining': remaining_samples,
+                   'length': current_chunk_size, 'done': remaining_samples <= 0}
+    
+    finally:
+        data_file.close()
+
+
+def read_list_generator_old(filename, chunk_size=None):
+    """
+    Generator that yields chunks of data from the list file.
+    First yield returns the header dict, subsequent yields return data chunks.
+    """
+    mxh_ = 1000
+    
+    try:
         with open(filename, 'rb') as data_file:
             raw_data = data_file.read()
         raw_data_ascii = raw_data[0:mxh_].decode('ascii', 'replace')
     except:
         print(f"Could not open {filename} for reading.")
-        return None
-
-    # Store in dictionary
+        return
+    
     phlist = {}
     current_index = 0
-
-    # Function for skipping though the file
+    
     def skip_string(expected_string):
         expected_string_len = len(expected_string)
         if raw_data_ascii[current_index:current_index+expected_string_len] != \
            expected_string:
             raise RuntimeError('File not formatted as expected')
-        return current_index+expected_string_len
-
-    if header:
-        try:
-            current_index = skip_string("dt=")
-            end_of_line_index = current_index + 1
-            while raw_data_ascii[end_of_line_index] != '\n':
-                end_of_line_index += 1
-            phlist['dt'] = list(map(float,
-                           raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
-            current_index = end_of_line_index + 1
-        except:
-            print("List file contains no dt entry. Setting to 1.")
-            phlist['dt'] = 1.
-
-        current_index = skip_string("length=")
-        end_of_line_index = current_index + 1
-        while raw_data_ascii[end_of_line_index] != '\n':
-            end_of_line_index += 1
-        phlist['length'] = list(map(int,
-                           raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
+        return current_index + expected_string_len
+    
+    def parse_line_value(prefix, value_type=float):
+        nonlocal current_index
+        current_index = skip_string(prefix)
+        end_of_line_index = raw_data_ascii.find('\n', current_index)
+        if end_of_line_index == -1:
+            raise RuntimeError(f"Could not find end of line for {prefix}")
+        
+        value_str = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
         current_index = end_of_line_index + 1
+        return value_type(value_str)
+    
+    # Parse header
+    try:
+        phlist['dt'] = parse_line_value("dt=", float)
+    except:
+        print("List file contains no dt entry. Setting to 1.")
+        phlist['dt'] = 1.
+    
+    phlist['length'] = parse_line_value("length=", int)
+    phlist['npars'] = parse_line_value("npars=", int)
+    phlist['ntot'] = parse_line_value("ntot=", int)
+    phlist['polarized'] = bool(parse_line_value("polarized=", int))
+    
+    current_index = skip_string("coord=")
+    end_of_line_index = raw_data_ascii.find('\n', current_index)
+    phlist['coord'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
+    current_index = end_of_line_index + 1
+    
+    # Yield header first
+    yield {'header': phlist, 'chunk': None,  'remaining': None, 'length': None, 'done': False}
+    
+    # Calculate chunk size
+    npars = phlist['npars']
+    length = phlist['length']
+    
+    if chunk_size is None:
+        target_chunk_bytes = 100 * 1024 * 1024
+        chunk_size = max(1, target_chunk_bytes // (8 * npars))
+    
+    begin_index = current_index
+    remaining_samples = length
+    
+    # Yield data chunks
+    while remaining_samples > 0:
+        current_chunk_size = min(chunk_size, remaining_samples)
+        bytes_to_read = current_chunk_size * npars * 8
+        end_index = begin_index + bytes_to_read
+        
+        if end_index > len(raw_data):
+            deficit_bytes = end_index - len(raw_data)
+            deficit = math.ceil(deficit_bytes / (8 * npars))
+            print(f"Warning: raw_data smaller than expected by {deficit} samples.")
+            current_chunk_size -= deficit
+            end_index = len(raw_data)
+        
+        if current_chunk_size <= 0:
+            break
+        
+        chunk_data = np.frombuffer(raw_data[begin_index:end_index],
+                                   dtype='>f8').reshape(current_chunk_size, npars)
+        
+        begin_index = end_index
+        remaining_samples -= current_chunk_size
+        
+        yield {'header': phlist, 'chunk': chunk_data, 'remaining': remaining_samples,
+               'length': current_chunk_size, 'done': remaining_samples <= 0}
 
-        current_index = skip_string("npars=")
-        end_of_line_index = current_index + 1
-        while raw_data_ascii[end_of_line_index] != '\n':
-            end_of_line_index += 1
-        phlist['npars'] = list(map(int,
-            raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
-        current_index = end_of_line_index + 1
-
-        current_index = skip_string("ntot=")
-        end_of_line_index = current_index + 1
-        while raw_data_ascii[end_of_line_index] != '\n':
-            end_of_line_index += 1
-        phlist['ntot'] = list(map(int,
-                         raw_data_ascii[current_index:end_of_line_index].split(' ')))[0]
-        current_index = end_of_line_index + 1
-
-        current_index = skip_string("polarized=")
-        end_of_line_index = current_index + 1
-        while raw_data_ascii[end_of_line_index] != '\n':
-            end_of_line_index += 1
-        phlist['polarized'] = bool(list(map(int,
-            raw_data_ascii[current_index:end_of_line_index].split(' ')))[0])
-        current_index = end_of_line_index + 1
-
-        current_index = skip_string("coord=")
-        end_of_line_index = current_index + 1
-        while raw_data_ascii[end_of_line_index] != '\n':
-            end_of_line_index += 1
-        phlist['coord'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
-        current_index = end_of_line_index + 1
-
-    #old = False
-    if data:
-        # Read in data
-        npars = phlist['npars']
-        length = phlist['length']
-        nelements = length * npars
-
-        begin_index = current_index
-        sizeloop = mxl_*npars
-        nloop = nelements // sizeloop
-        sizelast = nelements % sizeloop
-        # SWD: temporary to read broken list
-        #for i in range(nloop):
-        ti = time.time()
-        for i in range(nloop+1):
-            vals = ()
-            if i == nloop:
-                size = sizelast
-            else:
-                size = sizeloop
-            end_index = begin_index + 8*size
-            format_string = '>' + 'd'*size
-            if i > 0:
-                print(i,"/",nloop)
-                tf = time.time()
-                print(tf-ti)
-                ti = tf
-            # Check if end_index is larger than size of raw_data
-            # if so, resize list
-            lrd = len(raw_data)
-            if lrd < end_index:
-                deficit = math.ceil((end_index - lrd) / (8*npars))
-                print(f"Warning raw_data is smaller than expected by at least {deficit} samples.")
-                end_index -= deficit*npars*8
-                length -= deficit
-                phlist['length'] = length
-                format_string = '>' + 'd'*(size-deficit*npars)
-            vals = struct.unpack(format_string, raw_data[begin_index:end_index])
-            begin_index = end_index
-            if i == 0:
-                phlist['list'] = np.array(vals)
-            else:
-                phlist['list'] = np.append(phlist['list'],np.array(vals))
-            del vals
-            gc.collect()
-        phlist['list'] = phlist['list'].reshape((length,npars))
-        # SWD: temporary to read broken list
-        #phlist['length'] = nloop*mxl_
-        #phlist['list'] = phlist['list'].reshape((nloop*mxl_,npars))
-    #return phlist, current_index
-    return phlist
 
 def write_list(filename, phlist, header=True, length=None):
     """
@@ -404,34 +392,6 @@ def write_list(filename, phlist, header=True, length=None):
     with open(filename, 'ab') as outfile:
         data_array = phlist['list'].astype('>f8')  # big-endian double precision
         outfile.write(data_array.tobytes())
-
-
-def write_list_old(filename, phlist, header=True, length=None):
-    """
-    Write photon list (dictionary) to file
-    """
-    if header:
-        outfile = open(filename, 'w')
-        # Write header information
-        outfile.write("dt={:.8e}\n".format(phlist['dt']))
-        if length is None:
-            outfile.write("length={:d}\n".format(phlist['length']))
-        else:
-            outfile.write("length={:d}\n".format(length))
-        outfile.write("npars={:d}\n".format(phlist['npars']))
-        outfile.write("ntot={:d}\n".format(phlist['ntot']))
-        outfile.write("polarized={:d}\n".format(int(phlist['polarized'])))
-        outfile.write("coord="+phlist['coord']+"\n")
-        outfile.close()
-
-    # Write list data
-    outfile = open(filename, 'ab')
-    nelements = phlist['length']*phlist['npars']
-    phlist['list'] = phlist['list'].reshape(nelements)
-    myfmt='>'+'d'*nelements
-    data = struct.pack(myfmt,*(phlist['list']))
-    outfile.write(data)
-    outfile.close()
 
 def get_luminosity_list(phlist):
     """
@@ -628,7 +588,9 @@ def header_match(dict1, dict2, dict_type):
             match = False
         elif dict1['nintens'] != dict2['nintens']:
             match = False
-        elif dict1['units'] != dict2['units']:
+        elif dict1['xaxis'] != dict2['xaxis']:
+            match = False
+        elif dict1['polarized'] != dict2['polarized']:
             match = False
         elif dict1['yerror'] != dict2['yerror']:
             match = False
@@ -642,7 +604,11 @@ def add_spectra(spec1, spec2, method='statistical'):
     """
     Add two spectra to create single spectrum
     """
-    if not header_match(spec1,spec2,'spec'):
+
+    if spec1 == {}:
+        return spec2
+    
+    if not header_match(spec1, spec2, 'spec'):
         raise RuntimeError('[add_specta]: headers do not match')
 
     # copy spectra to new dictionaries to avoid modification of originals
@@ -653,39 +619,14 @@ def add_spectra(spec1, spec2, method='statistical'):
         if spec1c['dt'] != spec2c['dt']:
             raise RuntimeError('[add_specta]: statistical averaging requested' \
                                'but spectra have different integration times')
-        # undo normalization by photon count
-        spec1c['intensity'] *= spec1c['ntot']
-        spec2c['intensity'] *= spec2c['ntot']
-        if spec1c['yerror']:
-            spec1c['errors'] *= spec1c['ntot']
-            spec2c['errors'] *= spec2c['ntot']
-    #elif (method == 'temporal'):
-    #    if (spec1c['ntot'] != spec2c['ntot']):
-    #        raise RuntimeError('[add_specta]: temporal averaging requested' \
-    #                           'but spectra have different total counts')
-    #    # undo normalization by integration time
-    #    spec1c['intensity'] *= spec1c['dt']
-    #    spec2c['intensity'] *= spec2c['dt']
-    #    if (spec1c['yerror']):
-    #        spec1c['errors'] *= (spec1c['dt'])**2
-    #        spec1c['errors'] *= (spec2c['dt'])**2
-
+    
     # intialize spec_out as copy for simplicity
     spec_out = spec1c.copy()
 
     # sum unormalized intensity and error arrays
-    spec_out['intensity'] = np.add(spec1c['intensity'],spec2c['intensity'])
+    spec_out['intensity'] = spec1c['intensity'] + spec2c['intensity']
     if spec_out['yerror']:
-        spec_out['errors'] = np.add(spec1c['errors'],spec2c['errors'])
-
-    spec_out['ntot'] = spec1c['ntot']+ spec2['ntot']
-
-    if method == 'statistical':
-        # renormalization by photon number
-        spec_out['intensity'] /= spec_out['ntot']
-        if spec_out['yerror']:
-            spec_out['errors'] /= spec_out['ntot']
-
+        spec_out['errors'] = np.sqrt((spec1c['errors'])**2 + (spec2c['errors'])**2)
 
     return spec_out
 
@@ -859,8 +800,8 @@ def polarization_requested(yunit):
     else:
         return False
 
-def plot_frequency(spectrum,imu,iphi='ave',xunit='kev',yunit='nulnu',
-                   plterr=True,nu=None):
+def plot_frequency(spectrum, imu='sum', iphi='ave', xunit='kev', yunit='nulnu',
+                   plterr=True, nu=None, rebinx=None):
     """
     Generate plot versus frequency (or equivalent).
     """
@@ -927,6 +868,7 @@ def plot_frequency(spectrum,imu,iphi='ave',xunit='kev',yunit='nulnu',
         if plterr:
             errors = errors[:,imu,:]
 
+
     # Set y, yerr, and ylabel according to input units
     yerr = None
     ylabel = None
@@ -954,6 +896,16 @@ def plot_frequency(spectrum,imu,iphi='ave',xunit='kev',yunit='nulnu',
     else:
         print("Error: yunit ("+yunit+") not specified correctly")
         return None
+
+    # Rebin in frequency if requested
+    if rebinx is not None:
+        nbin = int(rebinx)
+        n_new = len(x) // nbin
+        x = x[:n_new * nbin].reshape(n_new, nbin).mean(axis=1)
+        y = y[:n_new * nbin].reshape(n_new, nbin).mean(axis=1)
+        y2 = yerr**2
+        y2 = y2[:n_new * nbin].reshape(n_new, nbin).mean(axis=1)
+        yerr = np.sqrt(y2)
 
     # Return x and y variables, their labels, and possible error on y
     return x,y,yerr,xlabel,ylabel
@@ -1486,7 +1438,7 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
         spectrum['polarized'] = 'false'
 
     spectrum['nintens'] = nintens
-    count = np.zeros((nphi,nmu,nx))
+    #count = np.zeros((nphi,nmu,nx))
     intensity = np.zeros((nintens,nphi,nmu,nx))
     if yerror:
         errors = np.zeros((nintens,nphi,nmu,nx))
@@ -1506,7 +1458,7 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     valid_weights = phots.weight[valid_phots] * phots.energy[valid_phots]
 
     # Use np.add.at for accumulation
-    np.add.at(count, (valid_phi, valid_mu, valid_x), 1.0)
+    #np.add.at(count, (valid_phi, valid_mu, valid_x), 1.0)
     np.add.at(intensity, (0, valid_phi, valid_mu, valid_x), valid_weights)
 
     if phots.polarized:
@@ -1564,6 +1516,7 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
 
     # Finish computing errors on intensities
     if yerror:
+        """
         # Compute masks once
         inds_gt1 = count > 1.
         inds_le1 = count <= 1.
@@ -1575,8 +1528,9 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
         errors[inds_gt1] = np.sqrt(errors[inds_gt1] -
                                    intensity[inds_gt1]**2 / count_bcast[inds_gt1])
         errors[inds_le1] = 0.
-
-        spectrum['errors'] = errors
+        """
+  
+        spectrum['errors'] = np.sqrt(errors)
 
     if yerror:
         spectrum['yerror'] = "true"
@@ -1589,6 +1543,7 @@ def get_image_bins(phots, rcam, ifaces, xfaces, yfaces):
     """
     Bin photons in image plane coordinates
     """
+ 
     ninc = ifaces.size - 1
     nx  = xfaces.size - 1
     ny = yfaces.size - 1
@@ -1628,8 +1583,9 @@ def get_image_bins(phots, rcam, ifaces, xfaces, yfaces):
     phf =  np.arctan2(yf,xf)
     cphf = np.cos(phf)
     sphf = np.sin(phf)
-    #np.set_printoptions(threshold=1000)
-
+    np.set_printoptions(threshold=1000)
+    print(len(np.where(kz > 0.95)[0]))
+    print(len(np.where(kz < -0.95)[0]))
     ibins = get_bins(cthf, ifaces, ninc, log=False)
 
     kth = kx*cthf*cphf + ky*cthf*sphf - kz*sthf

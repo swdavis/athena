@@ -292,14 +292,16 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
             on_grid = false;
           }
           if(jj < 0) {
-            jj = 00;
+            jj = 0;
             printf("Warning: %g is less than smallest temp in grid: %g.",
                    temp,temp_grid(0));
             on_grid = false;
           }
           xj = (temp-temp_grid(jj))/(temp_grid(jj+1)-temp_grid(jj));
-          if (xj > 1.)
-            xj = 1.;
+          if ((xj < 0.) || (xj > 1.))
+            on_grid = false;
+          if ((xi < 0.) || (xi> 1.))
+            on_grid = false;
           if (on_grid) {
             for(int l=0; l<nfre; ++l) {
               opact(lid,k,j,i,l) = (1.-xi)*( (1.-xj)*plan_tab(l,jj,ii)
@@ -345,6 +347,10 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
             emis_cum(lid,k,j,i,l) = emis_cum(lid,k,j,i,l-1) + 4.*PI/h_cgs*eta_ave*dlnu;
           }
           emis_tot(lid,k,j,i) = emis_cum(lid,k,j,i,nfre-1);
+          //if (emis_tot(lid,k,j,i) < 0.)
+          //  for(int l=1; l<nfre; ++l) {
+          //    printf("%d %g\n",l,emis_cum(lid,k,j,i,l));
+          //  }
           for(int l=1; l<nfre; ++l) {
             emis_cum(lid,k,j,i,l) /= emis_tot(lid,k,j,i);
           }

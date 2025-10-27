@@ -27,32 +27,51 @@ def main(**kwargs):
     # Filenames for io
     infile = kwargs.pop('infile')
     outfile = kwargs.pop('outfile')
-
-    # Read photon list
-    phlist = athenamc.read_list(infile)
-    get_lum = kwargs.pop('calclum')
-    if get_lum:
-        print(f"List luminosity: {athenamc.get_luminosity_list(phlist):e}")
-
-    phots = Photons(phlist)
-
-    # check for screening function
-    screen_name = kwargs.pop('screen')
-    if screen_name != 'no_screen':
-        screen_function = getattr(screen, screen_name)
-        mask = screen_function(phots)
-    else:
-        mask = None
-
-    # Generate spectrum from phots
+  
+    # spectrum parameters
     nx = kwargs.pop('nx')
     xmin = kwargs.pop('xmin')
     xmax = kwargs.pop('xmax')
     logx = not kwargs.pop('linearx')
 
-    print("Generating spectrum from list.")
-    spectrum = athenamc.make_spectrum(phots,nx,xmin,xmax,logx=logx,
-                                      mask=mask,**kwargs)
+    # check for screening function
+    screen_name = kwargs.pop('screen')
+    if screen_name != 'no_screen':
+        screen_function = getattr(screen, screen_name) 
+
+    # Read photon list
+    reader = athenamc.read_list_generator(infile)
+    result = next(reader)  # Get header
+    header = result['header']
+
+    spectrum = {}
+    nchunk = 0
+    for result in reader:
+    
+        phlist = header.copy()
+        phlist['list'] = result['chunk']
+        phlist['length'] = result['length']
+        
+        if (nchunk % 20) == 0:
+            print(f"Generating spectrum: {result['remaining']} samples remain.")
+        nchunk += 1
+        
+        # Creat photon object for current chunk
+        phots = Photons(phlist)
+
+        if screen_name != 'no_screen':
+            mask = screen_function(phots)
+        else:
+            mask = None
+
+        # Make spectrum from photon phots
+        spec = athenamc.make_spectrum(phots, nx,xmin, xmax,logx=logx,
+                                      mask=mask, **kwargs)
+
+        spectrum = athenamc.add_spectra(spectrum, spec)
+
+        if result['done']:
+            break
 
     # Write spectrum to file
     if outfile is None:
