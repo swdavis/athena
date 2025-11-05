@@ -544,6 +544,11 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
       //LorentzTransform(pphot,to_eulr,nold,pphot->nphot-1);
       TransformToCoordinate(pphot,nold,pphot->nphot-1);
     }
+    //for (int ip=nold; ip<pphot->nphot; ip++) {
+    //  pphot->PrintPhoton("After InitializePhoton",ip);
+    //}
+
+    // Update the absorption and scattering extinction coefficients
     if (call_srcterms) {
       // Update source terms to relect newly emitted samples
       for (int ip=nold; ip<pphot->nphot; ip++) {
@@ -925,14 +930,14 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     k2 = kf[2];
     k3 = kf[3];
     // Weight moments by time spent in domain
-    weight = pphot->wp[ip] * pphot->ep[ip] / k0 * dl / c_cgs;
+    weight = pphot->wp[ip] * pphot->ep[ip] / k0 * dl * l_cgs / c_cgs;
   } else {
     k0 = pphot->k0p[ip];
     k1 = pphot->k1p[ip];
     k2 = pphot->k2p[ip];
     k3 = pphot->k3p[ip];
     // Weight moments by time spent in domain
-    weight = pphot->wp[ip] * pphot->ep[ip] * dl / c_cgs;
+    weight = pphot->wp[ip] * pphot->ep[ip] * dl * l_cgs / c_cgs;
   }
 
   // Normalize k vector if using general pusher in spherical polar coords
@@ -998,13 +1003,13 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
       k1c = kc[1];
       k2c = kc[2];
       k3c = kc[3];
-      weight = pphot->wp[ip] * pphot->ep[ip] / k0c * dl / c_cgs;
+      weight = pphot->wp[ip] * pphot->ep[ip] / k0c * dl * l_cgs / c_cgs;
     } else {
       Real shift = kc[0]/k0;
       k1c = kc[1]/kc[0];
       k2c = kc[2]/kc[0];
       k3c = kc[3]/kc[0];
-      weight = pphot->wp[ip] * pphot->ep[ip] * dl * SQR(shift) / c_cgs;
+      weight = pphot->wp[ip] * pphot->ep[ip] * dl * SQR(shift) * l_cgs / c_cgs;
     }
 
     //Real dlcom = dl * shift;
@@ -1047,7 +1052,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
 
   if (call_srcterms) {
     // Radiative Acceleration from flux (always lab frame)
-    Real weight = pphot->wp[ip] * pphot->ep[ip] * dl / c_cgs;
+    Real weight = pphot->wp[ip] * pphot->ep[ip] * dl * l_cgs / c_cgs;
     Real abs_coef = pphot->acp[ip];
     Real sct_coef = pphot->scp[ip];
     sourceterms(MCRSP1,i3,i2,i1) += (sct_coef+abs_coef) * weight * k1;
@@ -1604,11 +1609,12 @@ void MonteCarloBlock::ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &e
     for (int j=js; j<=je; ++j) {
       for (int i=is; i<=ie; ++i) {
         Real vol = pcoord->vol(k,j,i);
-        // SWD remove ncells
         emission(k,j,i) = pmy_mc->GetEmission(this,k,j,i) * dt * vol;
         emm_tot += emission(k,j,i);
         if (emission(k,j,i) > emm_max) emm_max = emission(k,j,i);
         if (emission(k,j,i) < emm_min) emm_min = emission(k,j,i);
+        if (std::isnan(emission(k,j,i)))
+        printf("emission[%d %d %d]: %g %g %g\n",i,j,k,vol,emission(k,j,i),pmy_mc->GetEmission(this,k,j,i));
       }
     }
   }
@@ -1747,33 +1753,65 @@ void MonteCarloBlock::GetScalars() {
 
 void MonteCarloBlock::GetVelocity() {
 
-  Real c_cgs = 2.99792458e10;
-  for (int k=ks; k<=ke; ++k) {
-    for (int j=js; j<=je; ++j) {
-      for (int i=is; i<=ie; ++i) {
-        Real rho = pmy_block->phydro->u(IDN,k,j,i);
-        vel(k,j,i,1) = vel_cgs * pmy_block->phydro->u(IM1,k,j,i) / (rho * c_cgs);
-        vel(k,j,i,2) = vel_cgs * pmy_block->phydro->u(IM2,k,j,i) / (rho * c_cgs);
-        vel(k,j,i,3) = vel_cgs * pmy_block->phydro->u(IM3,k,j,i) / (rho * c_cgs);
-        Real beta0 = std::sqrt(SQR(vel(k,j,i,1))+SQR(vel(k,j,i,2))+SQR(vel(k,j,i,3)));
-        if (std::isnan(vel(k,j,i,1)))
-            printf("vel: %d %d %d %g\n",k,j,i,vel(k,j,i,1));
-        //if (beta0 >= 1.)
-        //  printf("beta > 1: %g", beta0);
-        Real beta = (beta0 > betamax) ? betamax : beta0;
-        Real gamma = 1. / std::sqrt(1. - beta*beta);
-        vel(k,j,i,0) = gamma;
-        //gamma = 1;
-        if (beta0 > 0.) {
-          for (int l=1; l<4; ++l) {
-            vel(k,j,i,l) *= gamma * beta / beta0 ;
-            if (std::isnan(vel(k,j,i,1)))
-              printf("vel2: %d %d %d %g %g %g\n",k,j,i,vel(k,j,i,1),beta,beta0);
+  if (GENERAL_RELATIVITY) {
+
+    AthenaArray<Real> g, gi;
+    g.NewAthenaArray(NMETRIC,ie+1);
+    gi.NewAthenaArray(NMETRIC,ie+1);
+    for (int k=ks; k<=ke; ++k) {
+      for (int j=js; j<=je; ++j) {
+        pmy_block->pcoord->CellMetric(k,j,is,ie,g,gi);
+        for (int i=is; i<=ie; ++i) {
+          Real alpha = 1.0/std::sqrt(-gi(I00,i));
+          Real uu1 = pmy_block->phydro->u(IVX,k,j,i); 
+          Real uu2 = pmy_block->phydro->u(IVY,k,j,i);
+          Real uu3 = pmy_block->phydro->u(IVZ,k,j,i);
+        
+          Real gamma2 = 1. + g(I11,i)*uu1*uu1 + g(I22,i)*uu2*uu2 + g(I33,i)*uu3*uu3 +
+                        2.0*g(I12,i)*uu1*uu2 + 2.*g(I13,i)*uu1*uu3 + 2.*g(I23,i)*uu2*uu3;
+          Real gamma = std::sqrt(gamma2);
+          
+          vel(k,j,i,0) = -gamma*alpha*gi(I00,i);
+          vel(k,j,i,1) = uu1 - gamma*alpha*gi(I01,i);
+          vel(k,j,i,2) = uu2 - gamma*alpha*gi(I02,i);
+          vel(k,j,i,3) = uu3 - gamma*alpha*gi(I03,i);
+          Real beta0 = std::sqrt(SQR(vel(k,j,i,1)/vel(k,j,i,0))+SQR(vel(k,j,i,2)/vel(k,j,i,0))+SQR(vel(k,j,i,3)/vel(k,j,i,0)));
+          if (beta0 >= betamax)
+            printf("beta > betamax: %g\n", beta0);
+          //printf("vel GR: %d %d %d %g %g %g %g\n",k,j,i,vel(k,j,i,0),vel(k,j,i,1)/vel(k,j,i,0),vel(k,j,i,2)/vel(k,j,i,0),
+          //vel(k,j,i,3)/vel(k,j,i,0) );
+        }
+      }
+    }
+  } else {
+    Real c_cgs = 2.99792458e10;
+    for (int k=ks; k<=ke; ++k) {
+      for (int j=js; j<=je; ++j) {
+        for (int i=is; i<=ie; ++i) {
+          Real rho = pmy_block->phydro->u(IDN,k,j,i);
+          vel(k,j,i,1) = vel_cgs * pmy_block->phydro->u(IM1,k,j,i) / (rho * c_cgs);
+          vel(k,j,i,2) = vel_cgs * pmy_block->phydro->u(IM2,k,j,i) / (rho * c_cgs);
+          vel(k,j,i,3) = vel_cgs * pmy_block->phydro->u(IM3,k,j,i) / (rho * c_cgs);
+          Real beta0 = std::sqrt(SQR(vel(k,j,i,1))+SQR(vel(k,j,i,2))+SQR(vel(k,j,i,3)));
+          //if (std::isnan(vel(k,j,i,1)))
+          //    printf("vel: %d %d %d %g\n",k,j,i,vel(k,j,i,1));
+          //if (beta0 >= 1.)
+          //  printf("beta > 1: %g", beta0);
+          Real beta = (beta0 > betamax) ? betamax : beta0;
+          Real gamma = 1. / std::sqrt(1. - beta*beta);
+          vel(k,j,i,0) = gamma;
+          //gamma = 1;
+          if (beta0 > 0.) {
+            for (int l=1; l<4; ++l) {
+              vel(k,j,i,l) *= gamma * beta / beta0 ;
+              //if (std::isnan(vel(k,j,i,1)))
+              //  printf("vel2: %d %d %d %g %g %g\n",k,j,i,vel(k,j,i,1),beta,beta0);
+            }
           }
         }
       }
     }
-  }
+  } // end if (GENERAL_RELATIVITY) else
 }
 
 //----------------------------------------------------------------------------------------
@@ -1858,87 +1896,130 @@ void MonteCarloBlock::ComputeTransformations() {
 
 void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
 
-  for(int ip=ips; ip<=ipe; ip++) {
+  if (GENERAL_RELATIVITY) {
+    for(int ip=ips; ip<=ipe; ip++) {
+      // Construct the tetrad
+      Real gcov[4][4];
+      Real x[4];
+      x[IMC0] = pphot->x0p[ip];
+      x[IMC1] = pphot->x1p[ip];
+      x[IMC2] = pphot->x2p[ip];
+      x[IMC3] = pphot->x3p[ip];
+      pcoord->Metric(x, gcov);
 
-    int i1 = pphot->i1p[ip];
-    int i2 = pphot->i2p[ip];
-    int i3 = pphot->i3p[ip];
+      // Create tetrad basis 
+      Real ucon[4];
+      ucon[IMC0] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],0);
+      ucon[IMC1] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],1);
+      ucon[IMC2] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],2);
+      ucon[IMC3] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],3);
+      Real econ[4][4], ecov[4][4];
+      ConstructTetrad(ucon, gcov, econ, ecov);
 
-    Real k0init = pphot->k0p[ip];
-    Real ki[4], kf[4];
-    if (pmy_mc->general_pusher_flag) {
-      ki[0] = pphot->k0p[ip];
-      ki[1] = pphot->k1p[ip];
-      ki[2] = pphot->k2p[ip];
-      ki[3] = pphot->k3p[ip];
+      Real k0init = pphot->k0p[ip];
+      // Transform to comoving tetrad
+      Real kcopy[4];
+      kcopy[IMC0] = pphot->k0p[ip];
+      kcopy[IMC1] = pphot->k1p[ip];
+      kcopy[IMC2] = pphot->k2p[ip];
+      kcopy[IMC3] = pphot->k3p[ip];
+      Real k[4];
+      CoordinateToTetrad(kcopy, k, ecov);
+      pphot->k0p[ip] = 1.;
+      pphot->k1p[ip] = k[IMC1]/k[IMC0];
+      pphot->k2p[ip] = k[IMC2]/k[IMC0];
+      pphot->k3p[ip] = k[IMC3]/k[IMC0];
 
-      Real x[4], invtet[4][4];
-      x[0] = pphot->x0p[ip];
-      x[1] = pphot->x1p[ip];
-      x[2] = pphot->x2p[ip];
-      x[3] = pphot->x3p[ip];
-      pcoord->InverseTetrad(x,invtet);
-      for (int j=0; j<4; j++) {
-        kf[j] = 0.;
-        for (int i=0; i<4; i++) {
-          kf[j] += invtet[j][i] * ki[i];
+      Real nufact = k[IMC0]/k0init;
+      //printf("com: %g %g %g %g %g\n",nufact,pphot->k0p[ip],pphot->k1p[ip],pphot->k2p[ip],pphot->k3p[ip]);
+      pphot->ep[ip] *= nufact;
+      pphot->acp[ip] /= nufact;
+      pphot->scp[ip] /= nufact;
+    }
+  } else {
+    for(int ip=ips; ip<=ipe; ip++) {
+
+      int i1 = pphot->i1p[ip];
+      int i2 = pphot->i2p[ip];
+      int i3 = pphot->i3p[ip];
+
+      Real k0init = pphot->k0p[ip];
+      Real ki[4], kf[4];
+      if (pmy_mc->general_pusher_flag) {
+        ki[0] = pphot->k0p[ip];
+        ki[1] = pphot->k1p[ip];
+        ki[2] = pphot->k2p[ip];
+        ki[3] = pphot->k3p[ip];
+
+        Real x[4], invtet[4][4];
+        x[0] = pphot->x0p[ip];
+        x[1] = pphot->x1p[ip];
+        x[2] = pphot->x2p[ip];
+        x[3] = pphot->x3p[ip];
+        pcoord->InverseTetrad(x,invtet);
+        for (int j=0; j<4; j++) {
+          kf[j] = 0.;
+          for (int i=0; i<4; i++) {
+            kf[j] += invtet[j][i] * ki[i];
+          }
         }
+        pphot->k0p[ip] = kf[0];
+        pphot->k1p[ip] = kf[1];
+        pphot->k2p[ip] = kf[2];
+        pphot->k3p[ip] = kf[3];
       }
-      pphot->k0p[ip] = kf[0];
-      pphot->k1p[ip] = kf[1];
-      pphot->k2p[ip] = kf[2];
-      pphot->k3p[ip] = kf[3];
-    }
-    if (boosts) {
-      ki[0] = pphot->k0p[ip];
-      ki[1] = pphot->k1p[ip];
-      ki[2] = pphot->k2p[ip];
-      ki[3] = pphot->k3p[ip];
-      for (int j=0; j<4; j++) {
-        kf[j] = 0.;
-        for (int i=0; i<4; i++) {
-          kf[j] += boost_cmv(i3,i2,i1,j,i) * ki[i];
+      if (boosts) {
+        ki[0] = pphot->k0p[ip];
+        ki[1] = pphot->k1p[ip];
+        ki[2] = pphot->k2p[ip];
+        ki[3] = pphot->k3p[ip];
+        for (int j=0; j<4; j++) {
+          kf[j] = 0.;
+          for (int i=0; i<4; i++) {
+            kf[j] += boost_cmv(i3,i2,i1,j,i) * ki[i];
+          }
         }
+        pphot->k0p[ip] = kf[0];
+        pphot->k1p[ip] = kf[1];
+        pphot->k2p[ip] = kf[2];
+        pphot->k3p[ip] = kf[3];
       }
-      pphot->k0p[ip] = kf[0];
-      pphot->k1p[ip] = kf[1];
-      pphot->k2p[ip] = kf[2];
-      pphot->k3p[ip] = kf[3];
-    }
 
-    //pphot->PrintPhoton("to com",ip);
-    Real nufact = pphot->k0p[ip]/k0init;
+      //pphot->PrintPhoton("to com",ip);
+      Real nufact = pphot->k0p[ip]/k0init;
 
-    pphot->k0p[ip] = 1.;
-    // SWD: maybe better to renormalize
-    if ((COORDINATE_SYSTEM == "spherical_polar") && pmy_mc->polarized) {
-      Real k3[3];
-      Real cth = cos(pphot->x2p[ip]);
-      Real sth = sin(pphot->x2p[ip]);
-      Real cph = cos(pphot->x3p[ip]);
-      Real sph = sin(pphot->x3p[ip]);
-      k3[0] = pphot->k1p[ip];
-      k3[1] = pphot->k2p[ip];
-      k3[2] = pphot->k3p[ip];
-      pphot->k1p[ip] = k3[0]*sth*cph + k3[1]*cth*cph - k3[2]*sph;
-      pphot->k2p[ip] = k3[0]*sth*sph + k3[1]*cth*sph + k3[2]*cph;
-      pphot->k3p[ip] = k3[0]*cth     - k3[1]*sth;
-      Real knorm = std::sqrt(SQR(pphot->k1p[ip])+SQR(pphot->k2p[ip])+SQR(pphot->k3p[ip]));
-      pphot->k1p[ip] /= knorm;
-      pphot->k2p[ip] /= knorm;
-      pphot->k3p[ip] /= knorm;
-    } else {
-      pphot->k1p[ip] = kf[1]/kf[0];
-      pphot->k2p[ip] = kf[2]/kf[0];
-      pphot->k3p[ip] = kf[3]/kf[0];
-    }
-    //if (std::isinf(nufact) || std::isnan(nufact))
-    //  pphot->PrintPhoton("to com: nan in boost",ip);
-    pphot->ep[ip] *= nufact;
-    pphot->acp[ip] /= nufact;
-    pphot->scp[ip] /= nufact;
+      pphot->k0p[ip] = 1.;
+      // SWD: maybe better to renormalize
+      if ((COORDINATE_SYSTEM == "spherical_polar") && pmy_mc->polarized) {
+        Real k3[3];
+        Real cth = cos(pphot->x2p[ip]);
+        Real sth = sin(pphot->x2p[ip]);
+        Real cph = cos(pphot->x3p[ip]);
+        Real sph = sin(pphot->x3p[ip]);
+        k3[0] = pphot->k1p[ip];
+        k3[1] = pphot->k2p[ip];
+        k3[2] = pphot->k3p[ip];
+        pphot->k1p[ip] = k3[0]*sth*cph + k3[1]*cth*cph - k3[2]*sph;
+        pphot->k2p[ip] = k3[0]*sth*sph + k3[1]*cth*sph + k3[2]*cph;
+        pphot->k3p[ip] = k3[0]*cth     - k3[1]*sth;
+        Real knorm = std::sqrt(SQR(pphot->k1p[ip])+SQR(pphot->k2p[ip])+SQR(pphot->k3p[ip]));
+        pphot->k1p[ip] /= knorm;
+        pphot->k2p[ip] /= knorm;
+        pphot->k3p[ip] /= knorm;
+      } else {
+        pphot->k1p[ip] = kf[1]/kf[0];
+        pphot->k2p[ip] = kf[2]/kf[0];
+        pphot->k3p[ip] = kf[3]/kf[0];
+      }
+      //if (std::isinf(nufact) || std::isnan(nufact))
+      //  pphot->PrintPhoton("to com: nan in boost",ip);
+      pphot->ep[ip] *= nufact;
+      pphot->acp[ip] /= nufact;
+      pphot->scp[ip] /= nufact;
 
-  }
+    } //end loop overip
+  } // end if GENERAL_RELATIVITY else
+
 }
 
 
@@ -1948,95 +2029,138 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
 
 void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
 
-  for(int ip=ips; ip<=ipe; ip++) {
-    int i1 = pphot->i1p[ip];
-    int i2 = pphot->i2p[ip];
-    int i3 = pphot->i3p[ip];
+  if (GENERAL_RELATIVITY) {
+    for(int ip=ips; ip<=ipe; ip++) {
+      Real gcov[4][4];
+      Real x[4];
+      x[IMC0] = pphot->x0p[ip];
+      x[IMC1] = pphot->x1p[ip];
+      x[IMC2] = pphot->x2p[ip];
+      x[IMC3] = pphot->x3p[ip];
+      pcoord->Metric(x, gcov);
 
-    if (pmy_mc->general_pusher_flag) {
-      pphot->k0p[ip] *= pphot->ep[ip];
-      pphot->k1p[ip] *= pphot->ep[ip];
-      pphot->k2p[ip] *= pphot->ep[ip];
-      pphot->k3p[ip] *= pphot->ep[ip];
-    } else if ((pmy_mc->polarized) && (COORDINATE_SYSTEM == "spherical_polar")) {
-      // rotate cartesian to to spherical polar
-      Real k3[3];
-      Real cth = cos(pphot->x2p[ip]);
-      Real sth = sin(pphot->x2p[ip]);
-      Real cph = cos(pphot->x3p[ip]);
-      Real sph = sin(pphot->x3p[ip]);
-      k3[0] = pphot->k1p[ip];
-      k3[1] = pphot->k2p[ip];
-      k3[2] = pphot->k3p[ip];
-      pphot->k1p[ip] = k3[0]*sth*cph + k3[1]*sth*sph + k3[2]*cth;
-      pphot->k2p[ip] = k3[0]*cth*cph + k3[1]*cth*sph - k3[2]*sth;
-      pphot->k3p[ip] = -k3[0]*sph + k3[1]*cph;
-      Real knorm = std::sqrt(SQR(pphot->k1p[ip])+SQR(pphot->k2p[ip])+SQR(pphot->k3p[ip]));
-      pphot->k1p[ip] /= knorm;
-      pphot->k2p[ip] /= knorm;
-      pphot->k3p[ip] /= knorm;
+      // Create tetrad basis 
+      Real ucon[4];
+      ucon[IMC0] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],0);
+      ucon[IMC1] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],1);
+      ucon[IMC2] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],2);
+      ucon[IMC3] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],3);
+      Real econ[4][4], ecov[4][4];
+      ConstructTetrad(ucon, gcov, econ, ecov);
+
+   
+      // Transform to comoving tetrad
+      Real kcopy[4];
+      kcopy[IMC0] = pphot->k0p[ip] * pphot->ep[ip];
+      kcopy[IMC1] = pphot->k1p[ip] * pphot->ep[ip];
+      kcopy[IMC2] = pphot->k2p[ip] * pphot->ep[ip];
+      kcopy[IMC3] = pphot->k3p[ip] * pphot->ep[ip];
+      Real k0init = kcopy[IMC0];
+
+      Real k[4];
+      TetradToCoordinate(kcopy, k, ecov);
+      pphot->k0p[ip] = k[IMC0];
+      pphot->k1p[ip] = k[IMC1];
+      pphot->k2p[ip] = k[IMC2];
+      pphot->k3p[ip] = k[IMC3];
+
+      Real nufact = pphot->k0p[ip]/k0init;
+      //printf("coord: %g %g %g %g %g\n",nufact,pphot->k0p[ip],pphot->k1p[ip],pphot->k2p[ip],pphot->k3p[ip]);
+      pphot->ep[ip] *= nufact;
+      pphot->acp[ip] /= nufact;
+      pphot->scp[ip] /= nufact;
     }
+  } else {
+    for(int ip=ips; ip<=ipe; ip++) {
+      int i1 = pphot->i1p[ip];
+      int i2 = pphot->i2p[ip];
+      int i3 = pphot->i3p[ip];
 
-    Real k0init = pphot->k0p[ip];
-    Real ki[4], kf[4];
-    if (boosts) {
-      ki[0] = pphot->k0p[ip];
-      ki[1] = pphot->k1p[ip];
-      ki[2] = pphot->k2p[ip];
-      ki[3] = pphot->k3p[ip];
-      for (int j=0; j<4; j++) {
-        kf[j] = 0.;
-        for (int i=0; i<4; i++) {
-          kf[j] += boost_lab(i3,i2,i1,j,i) * ki[i];
-        }
+      if (pmy_mc->general_pusher_flag) {
+        pphot->k0p[ip] *= pphot->ep[ip];
+        pphot->k1p[ip] *= pphot->ep[ip];
+        pphot->k2p[ip] *= pphot->ep[ip];
+        pphot->k3p[ip] *= pphot->ep[ip];
+      } else if ((pmy_mc->polarized) && (COORDINATE_SYSTEM == "spherical_polar")) {
+        // rotate cartesian to to spherical polar
+        Real k3[3];
+        Real cth = cos(pphot->x2p[ip]);
+        Real sth = sin(pphot->x2p[ip]);
+        Real cph = cos(pphot->x3p[ip]);
+        Real sph = sin(pphot->x3p[ip]);
+        k3[0] = pphot->k1p[ip];
+        k3[1] = pphot->k2p[ip];
+        k3[2] = pphot->k3p[ip];
+        pphot->k1p[ip] = k3[0]*sth*cph + k3[1]*sth*sph + k3[2]*cth;
+        pphot->k2p[ip] = k3[0]*cth*cph + k3[1]*cth*sph - k3[2]*sth;
+        pphot->k3p[ip] = -k3[0]*sph + k3[1]*cph;
+        Real knorm = std::sqrt(SQR(pphot->k1p[ip])+SQR(pphot->k2p[ip])+SQR(pphot->k3p[ip]));
+        pphot->k1p[ip] /= knorm;
+        pphot->k2p[ip] /= knorm;
+        pphot->k3p[ip] /= knorm;
       }
-      pphot->k0p[ip] = kf[0];
-      pphot->k1p[ip] = kf[1];
-      pphot->k2p[ip] = kf[2];
-      pphot->k3p[ip] = kf[3];
-    }
-    Real nufact;
-    if (pmy_mc->general_pusher_flag) {
-      ki[0] = pphot->k0p[ip];
-      ki[1] = pphot->k1p[ip];
-      ki[2] = pphot->k2p[ip];
-      ki[3] = pphot->k3p[ip];
 
-      Real x[4], tetrad[4][4];
-      x[0] = pphot->x0p[ip];
-      x[1] = pphot->x1p[ip];
-      x[2] = pphot->x2p[ip];
-      x[3] = pphot->x3p[ip];
-      pcoord->Tetrad(x,tetrad);
-      for (int j=0; j<4; j++) {
-        kf[j] = 0.;
-        for (int i=0; i<4; i++) {
-          kf[j] += tetrad[j][i] * ki[i];
+      Real k0init = pphot->k0p[ip];
+      Real ki[4], kf[4];
+      if (boosts) {
+        ki[0] = pphot->k0p[ip];
+        ki[1] = pphot->k1p[ip];
+        ki[2] = pphot->k2p[ip];
+        ki[3] = pphot->k3p[ip];
+        for (int j=0; j<4; j++) {
+          kf[j] = 0.;
+          for (int i=0; i<4; i++) {
+            kf[j] += boost_lab(i3,i2,i1,j,i) * ki[i];
+          }
         }
+        pphot->k0p[ip] = kf[0];
+        pphot->k1p[ip] = kf[1];
+        pphot->k2p[ip] = kf[2];
+        pphot->k3p[ip] = kf[3];
       }
-      pphot->k0p[ip] = kf[0];
-      pphot->k1p[ip] = kf[1];
-      pphot->k2p[ip] = kf[2];
-      pphot->k3p[ip] = kf[3];
-      nufact = kf[0]/k0init;
-    } else {
-      // spatial components of k are unit vectors
-      nufact = pphot->k0p[ip]/k0init;
+      Real nufact;
+      if (pmy_mc->general_pusher_flag) {
+        ki[0] = pphot->k0p[ip];
+        ki[1] = pphot->k1p[ip];
+        ki[2] = pphot->k2p[ip];
+        ki[3] = pphot->k3p[ip];
 
-      Real knorm = std::sqrt(SQR(pphot->k1p[ip])+SQR(pphot->k2p[ip])+SQR(pphot->k3p[ip]));
-      pphot->k0p[ip] = 1.;
-      pphot->k1p[ip] /= knorm;
-      pphot->k2p[ip] /= knorm;
-      pphot->k3p[ip] /= knorm;
-    }
-    //if (std::isinf(nufact) || std::isnan(nufact))
-    //  pphot->PrintPhoton("to cord: nan in boost",ip);
-    // update energy and opacities
-    pphot->ep[ip] *= nufact;
-    pphot->acp[ip] /= nufact;
-    pphot->scp[ip] /= nufact;
+        Real x[4], tetrad[4][4];
+        x[0] = pphot->x0p[ip];
+        x[1] = pphot->x1p[ip];
+        x[2] = pphot->x2p[ip];
+        x[3] = pphot->x3p[ip];
+        pcoord->Tetrad(x,tetrad);
+        for (int j=0; j<4; j++) {
+          kf[j] = 0.;
+          for (int i=0; i<4; i++) {
+            kf[j] += tetrad[j][i] * ki[i];
+          }
+        }
+        pphot->k0p[ip] = kf[0];
+        pphot->k1p[ip] = kf[1];
+        pphot->k2p[ip] = kf[2];
+        pphot->k3p[ip] = kf[3];
+        nufact = kf[0]/k0init;
+      } else {
+        // spatial components of k are unit vectors
+        nufact = pphot->k0p[ip]/k0init;
 
-  } // for ip loop
+        Real knorm = std::sqrt(SQR(pphot->k1p[ip])+SQR(pphot->k2p[ip])+SQR(pphot->k3p[ip]));
+        pphot->k0p[ip] = 1.;
+        pphot->k1p[ip] /= knorm;
+        pphot->k2p[ip] /= knorm;
+        pphot->k3p[ip] /= knorm;
+      }
+      //if (std::isinf(nufact) || std::isnan(nufact))
+      //  pphot->PrintPhoton("to cord: nan in boost",ip);
+      // update energy and opacities
+      pphot->ep[ip] *= nufact;
+      pphot->acp[ip] /= nufact;
+      pphot->scp[ip] /= nufact;
+
+    } // for ip loop
+  } // end if GENERAL_RELATIVITY else
 }
 
 //----------------------------------------------------------------------------------------
@@ -2045,6 +2169,37 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
 
 Real  MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip) {
 
+  if (GENERAL_RELATIVITY) {
+    Real gcov[4][4];
+    Real x[4];
+    x[IMC0] = pphot->x0p[ip];
+    x[IMC1] = pphot->x1p[ip];
+    x[IMC2] = pphot->x2p[ip];
+    x[IMC3] = pphot->x3p[ip];
+    pcoord->Metric(x, gcov);
+
+    // Create tetrad basis 
+    Real ucon[4];
+    ucon[IMC0] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],0);
+    ucon[IMC1] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],1);
+    ucon[IMC2] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],2);
+    ucon[IMC3] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],3);
+    Real econ[4][4], ecov[4][4];
+    ConstructTetrad(ucon, gcov, econ, ecov);
+
+    Real k0init = pphot->k0p[ip];
+    // Transform to comoving tetrad
+    Real kcopy[4];
+    kcopy[IMC0] = pphot->k0p[ip];
+    kcopy[IMC1] = pphot->k1p[ip];
+    kcopy[IMC2] = pphot->k2p[ip];
+    kcopy[IMC3] = pphot->k3p[ip];
+    Real k[4];
+    CoordinateToTetrad(kcopy, k, ecov);
+
+    Real nufact = k[IMC0]/k0init;
+    return nufact;
+  } else {
     int i1 = pphot->i1p[ip];
     int i2 = pphot->i2p[ip];
     int i3 = pphot->i3p[ip];
@@ -2083,11 +2238,12 @@ Real  MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip) {
     Real nufact =k0f/k0init;
     /*if (std::isinf(nufact) || std::isnan(nufact)) {
       printf("%g %g %g %g\n",boost_cmv(i3,i2,i1,0,0),boost_cmv(i3,i2,i1,0,1),
-             boost_cmv(i3,i2,i1,0,2),boost_cmv(i3,i2,i1,0,3));
+            boost_cmv(i3,i2,i1,0,2),boost_cmv(i3,i2,i1,0,3));
       printf("%g %g %g %g %g %g\n",k0init,k0f,kf[0],kf[1],kf[2],kf[3]);
       pphot->PrintPhoton("shift: nan in boost",ip);
       }*/
     return k0f/k0init;
+  }
 
  }
 

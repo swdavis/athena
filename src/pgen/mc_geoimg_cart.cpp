@@ -398,10 +398,10 @@ void TransformPhotonAtDisk(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   kcopy[IMC3] = pphot->k3p[ip];
   Real k[4];
   CoordinateToTetrad(kcopy, k, ecov);
-  k[IMC0] = pphot->k0p[ip];
-  k[IMC1] = pphot->k1p[ip];
-  k[IMC2] = pphot->k2p[ip];
-  k[IMC3] = pphot->k3p[ip];
+  pphot->k0p[ip] = k[IMC0];
+  pphot->k1p[ip] = k[IMC1];
+  pphot->k2p[ip] = k[IMC2];
+  pphot->k3p[ip] = k[IMC3];
   pphot->user[2][ip] = pphot->k0p[ip];
   // Get radius at disk crossing
   pphot->user[3][ip] = pphot->x1p[ip];

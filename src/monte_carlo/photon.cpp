@@ -464,12 +464,12 @@ void Photon::ApplyPeriodicBoundary(Real &x1, Real &x2, Real &x3, int k) {
   bool flag = false;
   RegionSize& mesh_size = pmy_mesh->mesh_size;
   //MCCoord *pcoord = pmy_mcb->pcoord;
-  Real l1cgs, l2cgs = 1., l3cgs = 1.;
-  l1cgs = pmy_mcb->l_cgs;
-  if ( (COORDINATE_SYSTEM == "cartesian") || (COORDINATE_SYSTEM == "minkowski") ) {
-    l2cgs *= pmy_mcb->l_cgs;
-    l3cgs *= pmy_mcb->l_cgs;
-  }
+  Real l1cgs = 1., l2cgs = 1., l3cgs = 1.;
+  //l1cgs = pmy_mcb->l_cgs;
+  //if ( (COORDINATE_SYSTEM == "cartesian") || (COORDINATE_SYSTEM == "minkowski") ) {
+  //  l2cgs *= pmy_mcb->l_cgs;
+  //  l3cgs *= pmy_mcb->l_cgs;
+  //}
   Real frac = 1.0e-8;
 
   // Apply periodic boundary conditions in X1.
@@ -659,12 +659,14 @@ void Photon::GetPositionIndices(int ibegin, int iend) {
   int js = pmy_mcb->js, je = pmy_mcb->je;
   int ks = pmy_mcb->ks, ke = pmy_mcb->ke;
 
-  Real l1cgs, l2cgs = 1., l3cgs = 1.;
-  l1cgs = pmy_mcb->l_cgs;
-  if ( (COORDINATE_SYSTEM == "cartesian") || (COORDINATE_SYSTEM == "minkowski") ) {
-    l2cgs *= pmy_mcb->l_cgs;
-    l3cgs *= pmy_mcb->l_cgs;
-  }
+  // SWD: set these somewhere else.
+  Real l1cgs = 1., l2cgs = 1., l3cgs = 1.;
+  //l1cgs = pmy_mcb->l_cgs;
+  //if ( (COORDINATE_SYSTEM == "cartesian") || (COORDINATE_SYSTEM == "minkowski") ||
+  //     (COORDINATE_SYSTEM == "gr_user") ) {
+  //  l2cgs *= pmy_mcb->l_cgs;
+  //  l3cgs *= pmy_mcb->l_cgs;
+  //}
 
   for (int k = ibegin; k <= iend; ++k) {
     // Convert to the index space.
@@ -674,7 +676,24 @@ void Photon::GetPositionIndices(int ibegin, int iend) {
     i1p[k] = static_cast<int>(xi1);
     i2p[k] = static_cast<int>(xi2);
     i3p[k] = static_cast<int>(xi3);
-
+    if ((i1p[k] < is) || (i1p[k] > ie)) {
+      printf("1: %d %g %g %g %g\n",i1p[k],xi1,x1p[k]/l1cgs,pmy_block->block_size.x1min,pmy_block->block_size.x1max);
+      PrintPhoton("Warning: [GetPostionIndicies], Photon not on block, destroyed",k);
+      statp[k] = DESTROYED;
+      continue;
+    }
+    if ((i2p[k] < js) || (i2p[k] > je)) {
+      printf("2: %d %g %g %g %g\n",i2p[k],xi2,x2p[k]/l2cgs,pmy_block->block_size.x2min,pmy_block->block_size.x2max);
+      PrintPhoton("Warning: [GetPostionIndicies], Photon not on block, destroyed",k);
+      statp[k] = DESTROYED;
+      continue;
+    }
+    if ((i3p[k] < ks) || (i3p[k] > ke)) {
+      printf("3: %d %g %g %g %g\n",i3p[k],xi3,x3p[k]/l3cgs,pmy_block->block_size.x3min,pmy_block->block_size.x3max);
+      PrintPhoton("Warning: [GetPostionIndicies], Photon not on block, destroyed",k);
+      statp[k] = DESTROYED;
+      continue;
+    }
     // MeshCoordsToIndicies can fail for refined grids so we make some checks
 
     // First check to make zone index is correct

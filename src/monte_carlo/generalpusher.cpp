@@ -50,6 +50,7 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
     // get number of mean free paths photon will travel
     Real tauremaining = GetOpticalDepth(pran);
     Real step = StepSize(pphot,ip);
+    //printf("step %g\n",step);
     Real path_length;
     Real k1, k2, k3;
     int iter = 0;
@@ -82,14 +83,16 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
         }
       }
       if (!accel_success) {// Acceleration not triggered - take standard step
-        if (tauremaining > chi * step) { // Photon hasn't yet reached tauremaining
+        if (tauremaining > chi * step * pphot->ep[ip]) { // Photon hasn't yet reached tauremaining
           //VerletStep(pphot,step,ip);
           RK4Step(pphot,step,ip);
           if (pmy_mcb->pmy_mc->polarized)
             PropogatePolarization(pphot,step,ip);
           tauremaining -= chi * step * pphot->ep[ip];
+          //printf("large: %g %g %g %g %g\n",tauremaining,chi,step,pphot->ep[ip],chi * step * pphot->ep[ip]);
         } else { // Photon has reached end of tauremaining - step to make it 0
           step = tauremaining / (chi * pphot->ep[ip]);
+          //printf("small: %g %g %g %g %g\n",tauremaining,chi,step,pphot->ep[ip],chi * step * pphot->ep[ip]);
           //VerletStep(pphot,step,ip);
           RK4Step(pphot,step,ip);
           if (pmy_mcb->pmy_mc->polarized)
@@ -466,5 +469,5 @@ Real GeneralPusher::StepSize(Photon *pphot, int ip) {
   Real step = (stepx1 < stepx2) ? stepx1 : stepx2;
   step = (step < stepx3) ? step : stepx3;
 
-  return step * step_par / pphot->ep[ip];
+  return step * step_par;
 }

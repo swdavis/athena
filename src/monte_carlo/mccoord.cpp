@@ -31,16 +31,17 @@ MCCoord::MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb) {
   x3f.NewAthenaArray(nx3);
 
   x1f = pcoord->x1f;
-  for (int i = 0; i < nx1; i++)
-    x1f(i) *= pmcb->l_cgs;
+  //for (int i = 0; i < nx1; i++)
+  //  x1f(i) *= pmcb->l_cgs;
   x2f = pcoord->x2f;
   x3f = pcoord->x3f;
-  if ( (COORDINATE_SYSTEM == "cartesian") || (COORDINATE_SYSTEM == "minkowski") ) {
-    for (int i = 0; i < nx2; i++)
-      x2f(i) *= pmcb->l_cgs;
-    for (int i = 0; i < nx3; i++)
-      x3f(i) *= pmcb->l_cgs;
-  }
+  //if ( (COORDINATE_SYSTEM == "cartesian") || (COORDINATE_SYSTEM == "minkowski")
+  //     || (COORDINATE_SYSTEM == "gr_user") ) {
+  //  for (int i = 0; i < nx2; i++)
+  //    x2f(i) *= pmcb->l_cgs;
+  //  for (int i = 0; i < nx3; i++)
+  //    x3f(i) *= pmcb->l_cgs;
+  //}
   // Needed for black hole coordinates
   if (GENERAL_RELATIVITY) {
     bh_mass_ = pcoord->GetMass();
@@ -61,7 +62,12 @@ MCCoord::MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb) {
   for (int k=pmcb->ks; k<=pmcb->ke; ++k) {
     for (int j=pmcb->js; j<=pmcb->je; ++j) {
       for (int i=pmcb->is; i<=pmcb->ie; ++i) {
+        // Volume in cgs units
         vol(k,j,i) = pcoord->GetCellVolume(k,j,i) * pow(pmcb->l_cgs,3);
+        if (std::isnan(vol(k,j,i)) && (COORDINATE_SYSTEM == "gr_user")) {
+          // at the singularity set volume to zero
+         vol(k,j,i) = 0.;
+        } 
       }}}
   computedmin = pmcb->computedmin;
   if (computedmin) {
@@ -70,14 +76,16 @@ MCCoord::MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb) {
     for (int k=pmcb->ks; k<=pmcb->ke; ++k) {
       for (int j=pmcb->js; j<=pmcb->je; ++j) {
         for (int i=pmcb->is; i<=pmcb->ie; ++i) {
-          dw3 = pcoord->dx3f(k) * pmcb->l_cgs;
+          dw3 = pcoord->dx3f(k);
           dw2 = pcoord->dx2f(j);
           dw1 = pcoord->dx1f(i);
-          if ( (COORDINATE_SYSTEM == "cartesian") ||
-               (COORDINATE_SYSTEM == "minkowski") ) {
-            dw2 *= pmcb->l_cgs;
-            dw3 *= pmcb->l_cgs;
-          }
+          //dw1 *= pmcb->l_cgs;
+          //if ( (COORDINATE_SYSTEM == "cartesian") ||
+          //     (COORDINATE_SYSTEM == "minkowski")
+          //     || (COORDINATE_SYSTEM == "gr_user") ) {
+          //  dw2 *= pmcb->l_cgs;
+          //  dw3 *= pmcb->l_cgs;
+          //}
           Real dmin0 = std::min(dw1,dw2);
           dmin(k,j,i) = std::min(dmin0,dw3);
         }

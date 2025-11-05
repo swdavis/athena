@@ -59,7 +59,7 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   Real tgas = pmcb->tgas(i3,i2,i1);
   Real ehnu = exp(-energy / (kb * tgas) );
 
-  Real aff = ffnrm/sqrt(tgas)/pow(nu,3);
+  Real aff = ffnrm/sqrt(tgas)/pow(nu,3)*pmcb->l_cgs;
 
   return pmcb->nel(i3,i2,i1) * pmcb->nion(i3,i2,i1) * aff * (1. - ehnu);
 
@@ -76,7 +76,7 @@ Real DustAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   int &i3 = pphot->i3p[ip];
   Real &energy = pphot->ep[ip];
   Real kapdust = kappad*1.5e13*(1.-albedo)/albedo;
-  return kapdust*pmcb->rho(i3,i2,i1);
+  return kapdust*pmcb->rho(i3,i2,i1)*pmcb->l_cgs;
 
 }
 
@@ -94,7 +94,7 @@ Real ThomsonOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   Real mp = 1.67262192369e-24;
   Real sigmat = 6.65248e-25;
 
-  return pmcb->nel(i3,i2,i1) * sigmat;
+  return pmcb->nel(i3,i2,i1) * sigmat * pmcb->l_cgs;
 }
 
 //----------------------------------------------------------------------------------------
@@ -150,7 +150,7 @@ Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
     sigma0 = sigmat;
   }
 
-  return sigma0 * pmcb->nel(i3,i2,i1);
+  return sigma0 * pmcb->nel(i3,i2,i1) * pmcb->l_cgs;
 
 }
 //----------------------------------------------------------------------------------------
@@ -177,7 +177,7 @@ Real ResonanceLineOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   Real nh = denscatterers / mass;
   //if (pmcb->pmy_block->pmy_mesh->ncycle > 1)
   //  printf("%g %g %g %g\n",nh, nh * XsecVoigt(energy / h, tgas),pmcb->rho(i3,i2,i1),pmcb->scalars(i3,i2,i1));
-  return nh * XsecVoigt(energy / h, tgas);
+  return nh * XsecVoigt(energy / h, tgas) * pmcb->l_cgs;
 }
 
 //----------------------------------------------------------------------------------------
@@ -192,7 +192,7 @@ Real DustScatteringOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   Real &energy = pphot->ep[ip];
   Real kapdust = kappad*1.5e13;
 
-  return kapdust*pmcb->rho(i3,i2,i1);
+  return kapdust*pmcb->rho(i3,i2,i1) * pmcb->l_cgs;
 
 }
 

@@ -366,6 +366,7 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 void Mesh::InitUserMeshData(ParameterInput *pin) {
 
   bool resampled = pin->GetOrAddBoolean("problem","resampled",false);
+  bool collective = pin->GetOrAddBoolean("problem","collective",false);
   if (resampled) {
     // Read in hdf5 file to initialize pgen
     std::string input_filename = pin->GetString("problem", "input_filename");
@@ -394,15 +395,15 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
     ruser_mesh_data[3].NewAthenaArray(mesh_nx3, mesh_nx2, mesh_nx1);
     ruser_mesh_data[4].NewAthenaArray(mesh_nx3, mesh_nx2, mesh_nx1);
     HDF5ReadRealArray(input_filename.c_str(), "prim/rho", 3, start_file, count_file,
-                      3, start_mem, count_mem, ruser_mesh_data[0], true);
+                      3, start_mem, count_mem, ruser_mesh_data[0], collective);
     HDF5ReadRealArray(input_filename.c_str(), "prim/vel1", 3, start_file, count_file,
-                      3, start_mem, count_mem, ruser_mesh_data[1], true);
+                      3, start_mem, count_mem, ruser_mesh_data[1], collective);
     HDF5ReadRealArray(input_filename.c_str(), "prim/vel2", 3, start_file, count_file,
-                      3, start_mem, count_mem, ruser_mesh_data[2], true);
+                      3, start_mem, count_mem, ruser_mesh_data[2], collective);
     HDF5ReadRealArray(input_filename.c_str(), "prim/vel3", 3, start_file, count_file,
-                      3, start_mem, count_mem, ruser_mesh_data[3], true);
+                      3, start_mem, count_mem, ruser_mesh_data[3], collective);
     HDF5ReadRealArray(input_filename.c_str(), "prim/press", 3, start_file, count_file,
-                      3, start_mem, count_mem, ruser_mesh_data[4], true);
+                      3, start_mem, count_mem, ruser_mesh_data[4], collective);
 
     //Real dx1 = (mesh_x1max - mesh_x1min)/mesh_nx1;
     Real dx2 = (mesh_x2max - mesh_x2min)/mesh_nx2;
@@ -443,7 +444,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   // Determine locations of initial values
   std::string input_filename = pin->GetString("problem", "input_filename");
   bool resampled = pin->GetOrAddBoolean("problem","resampled",false);
-  bool gr_input = pin->GetOrAddBoolean("problem","gr_input",false);
+  bool collective = pin->GetOrAddBoolean("problem","collective",false);
 
   if (resampled) {
     for (int k=ks; k<=ke; ++k) {
@@ -512,7 +513,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
       start_cons_mem[0] = n;
       HDF5ReadRealArray(input_filename.c_str(), dataset_cons.c_str(), 5, start_cons_file,
                         count_cons_file, 4, start_cons_mem,
-                        count_cons_mem, phydro->w, true);
+                        count_cons_mem, phydro->w, collective);
     }
 
     // Make no-op collective reads if using MPI and ranks have unequal numbers of blocks
@@ -533,7 +534,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
             HDF5ReadRealArray(input_filename.c_str(), dataset_cons.c_str(), 5,
                               start_cons_file, count_cons_file, 4,
                               start_cons_mem, count_cons_mem,
-                              phydro->w, true, true);
+                              phydro->w, collective, true);
           }
         }
       }
@@ -579,20 +580,6 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     }
     }
     }*/
-
-  if (gr_input) {
-    // For now, just assumes we are treating density, velocity as non-relativistic
-    // analogs
-    // primitive variable is internal energy rather than pressure
-    Real gamma = peos->GetGamma();
-    for (int k=ks; k<=ke; ++k) {
-      for (int j=js; j<=je; ++j) {
-        for (int i=is; i<=ie; ++i) {
-          phydro->w(IPR,k,j,i) *= (gamma-1.);
-        }
-      }
-    }
-  }
 
   // Initialize conserved
   peos->PrimitiveToConserved(phydro->w, pfield->bcc, phydro->u, pcoord, il, iu, jl, ju,
