@@ -280,99 +280,6 @@ def read_list_generator(filename, chunk_size=None):
         data_file.close()
 
 
-def read_list_generator_old(filename, chunk_size=None):
-    """
-    Generator that yields chunks of data from the list file.
-    First yield returns the header dict, subsequent yields return data chunks.
-    """
-    mxh_ = 1000
-    
-    try:
-        with open(filename, 'rb') as data_file:
-            raw_data = data_file.read()
-        raw_data_ascii = raw_data[0:mxh_].decode('ascii', 'replace')
-    except:
-        print(f"Could not open {filename} for reading.")
-        return
-    
-    phlist = {}
-    current_index = 0
-    
-    def skip_string(expected_string):
-        expected_string_len = len(expected_string)
-        if raw_data_ascii[current_index:current_index+expected_string_len] != \
-           expected_string:
-            raise RuntimeError('File not formatted as expected')
-        return current_index + expected_string_len
-    
-    def parse_line_value(prefix, value_type=float):
-        nonlocal current_index
-        current_index = skip_string(prefix)
-        end_of_line_index = raw_data_ascii.find('\n', current_index)
-        if end_of_line_index == -1:
-            raise RuntimeError(f"Could not find end of line for {prefix}")
-        
-        value_str = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
-        current_index = end_of_line_index + 1
-        return value_type(value_str)
-    
-    # Parse header
-    try:
-        phlist['dt'] = parse_line_value("dt=", float)
-    except:
-        print("List file contains no dt entry. Setting to 1.")
-        phlist['dt'] = 1.
-    
-    phlist['length'] = parse_line_value("length=", int)
-    phlist['npars'] = parse_line_value("npars=", int)
-    phlist['ntot'] = parse_line_value("ntot=", int)
-    phlist['polarized'] = bool(parse_line_value("polarized=", int))
-    
-    current_index = skip_string("coord=")
-    end_of_line_index = raw_data_ascii.find('\n', current_index)
-    phlist['coord'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
-    current_index = end_of_line_index + 1
-    
-    # Yield header first
-    yield {'header': phlist, 'chunk': None,  'remaining': None, 'length': None, 'done': False}
-    
-    # Calculate chunk size
-    npars = phlist['npars']
-    length = phlist['length']
-    
-    if chunk_size is None:
-        target_chunk_bytes = 100 * 1024 * 1024
-        chunk_size = max(1, target_chunk_bytes // (8 * npars))
-    
-    begin_index = current_index
-    remaining_samples = length
-    
-    # Yield data chunks
-    while remaining_samples > 0:
-        current_chunk_size = min(chunk_size, remaining_samples)
-        bytes_to_read = current_chunk_size * npars * 8
-        end_index = begin_index + bytes_to_read
-        
-        if end_index > len(raw_data):
-            deficit_bytes = end_index - len(raw_data)
-            deficit = math.ceil(deficit_bytes / (8 * npars))
-            print(f"Warning: raw_data smaller than expected by {deficit} samples.")
-            current_chunk_size -= deficit
-            end_index = len(raw_data)
-        
-        if current_chunk_size <= 0:
-            break
-        
-        chunk_data = np.frombuffer(raw_data[begin_index:end_index],
-                                   dtype='>f8').reshape(current_chunk_size, npars)
-        
-        begin_index = end_index
-        remaining_samples -= current_chunk_size
-        
-        yield {'header': phlist, 'chunk': chunk_data, 'remaining': remaining_samples,
-               'length': current_chunk_size, 'done': remaining_samples <= 0}
-
-
 def write_list(filename, phlist, header=True, length=None):
     """
     Faster version of write_list. Write photon list (dictionary) to file
@@ -607,6 +514,8 @@ def add_spectra(spec1, spec2, method='statistical'):
 
     if spec1 == {}:
         return spec2
+    elif spec2 == {}:
+        return spec1
     
     if not header_match(spec1, spec2, 'spec'):
         raise RuntimeError('[add_specta]: headers do not match')
@@ -623,10 +532,20 @@ def add_spectra(spec1, spec2, method='statistical'):
     # intialize spec_out as copy for simplicity
     spec_out = spec1c.copy()
 
-    # sum unormalized intensity and error arrays
-    spec_out['intensity'] = spec1c['intensity'] + spec2c['intensity']
-    if spec_out['yerror']:
-        spec_out['errors'] = np.sqrt((spec1c['errors'])**2 + (spec2c['errors'])**2)
+    if method == 'statistical':
+        # sum unormalized intensity and error arrays
+        spec_out['intensity'] = spec1c['intensity'] + spec2c['intensity']
+        if spec_out['yerror']:
+            spec_out['errors'] = np.sqrt((spec1c['errors'])**2 + (spec2c['errors'])**2)
+    elif method == 'time':
+        # weighted sum of intensities and errors
+        total_dt = spec1c['dt'] + spec2c['dt']
+        w1 = spec1c['dt']/total_dt
+        w2 = spec2c['dt']/total_dt
+        spec_out['intensity'] = w1*spec1c['intensity'] + w2*spec2c['intensity']
+        if spec_out['yerror']:
+            spec_out['errors'] = np.sqrt((w1*spec1c['errors'])**2 + (w2*spec2c['errors'])**2)
+        spec_out['dt'] = total_dt
 
     return spec_out
 
@@ -815,13 +734,13 @@ def plot_frequency(spectrum, imu='sum', iphi='ave', xunit='kev', yunit='nulnu',
     # Initialize x labels
     xlabel = None
     if xunit == 'kev':
-        xlabel = r"$E {\rm (keV)}$"
+        xlabel = r"$E~{\rm (keV)}$"
     if xunit == 'ev':
-        xlabel = r"$E {\rm (eV)}$"
+        xlabel = r"$E~{\rm (eV)}$"
     if xunit == 'nu':
-        xlabel = r"$\nu {\rm (Hz)}$"
+        xlabel = r"$\nu~{\rm (Hz)}$"
     if xunit == 'lambda':
-        xlabel = r"$\lambda {\rm (\AA)$"
+        xlabel = r"$\lambda~{\rm (\AA)$"
 
     # Check if error requested and stored
     if plterr:
@@ -873,13 +792,13 @@ def plot_frequency(spectrum, imu='sum', iphi='ave', xunit='kev', yunit='nulnu',
     yerr = None
     ylabel = None
     if yunit == 'nulnu':
-        ylabel = r"$\nu L_\nu {\rm (erg/s)}$"
+        ylabel = r"$\nu L_\nu~{\rm (erg/s)}$"
         y, yerr = compute_nulnu_error(intensity,nu,errors)
     elif yunit == 'lnu':
-        ylabel = r"$L_\nu {\rm (erg/s/Hz)}$"
+        ylabel = r"$L_\nu~{\rm (erg/s/Hz)}$"
         y, yerr = compute_lnu_error(intensity,errors)
     elif yunit == 'counts':
-        ylabel = r"$N_\nu {\rm (counts/s/Hz)}$"
+        ylabel = r"$N_\nu~{\rm (counts/s/Hz)}$"
         y, yerr = compute_counts_error(intensity,nu,errors)
     elif yunit == 'polfrac':
         ylabel = r"$\rm Pol.\; Fraction \; (\%)$"
@@ -1075,7 +994,7 @@ def plot_phi(spectrum, ix, imu='sum', xunit='phi', yunit='lnu',
     yerr = None
     ylabel = None
     if yunit == 'nulnu':
-        ylabel = r"$\nu L_\nu {\rm (erg/s)}$"
+        ylabel = r"$\nu L_\nu~{\rm (erg/s)}$"
         y, yerr = compute_nulnu_error(intensity,nu,errors)
     elif yunit == 'lnu':
         ylabel = r"$L_\nu {\rm (erg/s/Hz)}$"
