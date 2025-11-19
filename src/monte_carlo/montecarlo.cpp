@@ -8,7 +8,7 @@
 
 // C++ headers
 #include <stdexcept>  // runtime_error
-
+#include <random>
 // Athena++ headers
 #include "montecarlo.hpp"
 #include "../globals.hpp"
@@ -778,12 +778,12 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
 //! MCRandom constructor, builds Athena++ random number generator
 //  current implementation is wrapper for gsl function
 
-MCRandom::MCRandom(int iseed) {
-
+MCRandom::MCRandom(int iseed)
 #if RAN3
-  r3seed = static_cast<long>(-iseed);
-  ran3(&r3seed);
+  : gen(iseed), uniform_dist(0.0, 1.0)
+  {
 #else
+  {
   dev = gsl_rng_alloc(gsl_rng_mt19937);
   gsl_rng_set(dev, iseed);
 #endif
@@ -794,13 +794,16 @@ MCRandom::MCRandom(int iseed) {
 //! destructor
 
 MCRandom::~MCRandom() {
-
+#if RAN3 == 0
+  gsl_rng_free(dev);
+#endif
 }
 
 Real MCRandom::uniform() {
 
 #if RAN3
-  return ran3(&r3seed);
+  //return ran3(&r3seed);
+  return uniform_dist(gen);
 #else
   return static_cast<Real>(gsl_rng_uniform(dev));
 #endif
@@ -808,16 +811,19 @@ Real MCRandom::uniform() {
 
 Real MCRandom::chisquare(int n) {
 #if RAN3
-  std::stringstream msg;
-  msg << "### FATAL ERROR in MCRandom::chisquare" << std::endl
-      << "Not supported with RAN3 random number generator" << std::endl;
-  ATHENA_ERROR(msg);
+  std::chi_squared_distribution<Real> chi_dist(n);
+  return chi_dist(gen);
+  //std::stringstream msg;
+  //msg << "### FATAL ERROR in MCRandom::chisquare" << std::endl
+  //    << "Not supported with RAN3 random number generator" << std::endl;
+  //ATHENA_ERROR(msg);
 #else
   return static_cast<Real>(gsl_ran_chisq(dev,n));
 #endif
 
 }
 
+/*
 // Used by ran3
 #define MBIG 1000000000
 #define MSEED 161803398
@@ -864,3 +870,4 @@ Real MCRandom::ran3(long *idum) {
   ma[inext]=mj;              // Store it,
   return static_cast<Real>(mj*FAC);             // and output the derived uniform deviate.
 }
+*/

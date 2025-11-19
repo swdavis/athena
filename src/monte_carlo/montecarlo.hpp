@@ -13,7 +13,7 @@
 
 #include <sstream>
 #include <complex>
-
+#include <random>
 // Athena++ classes headers
 #include "../athena.hpp"
 #include "../coordinates/coordinates.hpp"
@@ -162,16 +162,18 @@ public:
   MCRandom(int iseed);
   ~MCRandom();
 
-
   Real uniform();
   Real chisquare(int n);
 
 private:
-  long r3seed;
+
+
 #if RAN3 == 0
   gsl_rng *dev;
 #endif
-  Real ran3(long *idum);
+  std::mt19937 gen;
+  std::uniform_real_distribution<Real> uniform_dist;
+
 };
 
 //----------------------------------------------------------------------------------------

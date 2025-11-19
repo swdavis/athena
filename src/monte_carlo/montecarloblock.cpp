@@ -48,7 +48,9 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 
   // get seed and intitialize randon number generator
   int rank = Globals::my_rank;
-  int iseed = pmy_mc->iseed+rank*10000+pmy_block->lid*10;  // temporary solution
+  int iseed = pmy_mc->iseed+pmy_block->gid*10;  // temporary solution
+  printf(" MonteCarloBlock gid %d rank %d iseed %d\n",pmy_block->gid,rank,iseed); 
+
   pran = new MCRandom(iseed);
 
   next=nullptr;
