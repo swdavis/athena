@@ -248,6 +248,7 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
     int lid = pmy_block->lid;
     // Compute opacity table corresponding to each cell and frequency
     //opact.NewAthenaArray(ncells3,ncells2,ncells1,nfre);
+    int nff = 0;
     for(int k=ks; k<=ke; ++k) {
       for(int j=js; j<=je; ++j) {
         for(int i=is; i<=ie; ++i) {
@@ -309,14 +310,17 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
                 +xj*plan_tab(l,jj+1,ii+1) );
             }
           } else {
-              printf(" Using free-free opacity\n");
+              nff++;
+ 
               for(int l=0; l<nfre; ++l) {
                 opact(lid,k,j,i,l) = FreeFreeOpacity(temp,rho(k,j,i),fre_grid(l));
               }
           }
-        }
-      }
-    }
+        } // end loop over i
+      } // end loop over j
+    } // end loop over k
+    if (nff > 0)
+      printf("Number of cells using free-free opacity on block %d: %d\n",pmy_block->gid,nff);
 
     // Compute emissivity table for each cell and frequncy
     AthenaArray<Real> eta_nu_tab;
@@ -347,10 +351,6 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
             emis_cum(lid,k,j,i,l) = emis_cum(lid,k,j,i,l-1) + 4.*PI/h_cgs*eta_ave*dlnu;
           }
           emis_tot(lid,k,j,i) = emis_cum(lid,k,j,i,nfre-1);
-          //if (emis_tot(lid,k,j,i) < 0.)
-          //  for(int l=1; l<nfre; ++l) {
-          //    printf("%d %g\n",l,emis_cum(lid,k,j,i,l));
-          //  }
           for(int l=1; l<nfre; ++l) {
             emis_cum(lid,k,j,i,l) /= emis_tot(lid,k,j,i);
           }
@@ -713,8 +713,8 @@ Real TableOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
     xk = 1.;
   }
   Real lid = pmcb->pmy_block->lid;
-  return (1.-xk) * opact(lid,i3,i2,i1,k) + xk * opact(lid,i3,i2,i1,k+1);
-
+  Real opac = (1.-xk) * opact(lid,i3,i2,i1,k) + xk * opact(lid,i3,i2,i1,k+1);
+  return opac * pmcb->l_cgs;
 }
 
 Real IntegrateEmission(Real temp, Real num, Real nup, Real am, Real ap) {

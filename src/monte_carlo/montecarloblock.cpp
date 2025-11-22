@@ -49,7 +49,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   // get seed and intitialize randon number generator
   int rank = Globals::my_rank;
   int iseed = pmy_mc->iseed+pmy_block->gid*10;  // temporary solution
-  printf(" MonteCarloBlock gid %d rank %d iseed %d\n",pmy_block->gid,rank,iseed); 
+  //printf(" MonteCarloBlock gid %d rank %d iseed %d\n",pmy_block->gid,rank,iseed); 
 
   pran = new MCRandom(iseed);
 
@@ -1435,8 +1435,6 @@ void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0,
 
   // Updates
   Real c_cgs = 2.99792458e10;
-  //printf("%d %d %d %g %g %g %g\n",pphot->i1p[ip],pphot->i2p[ip],pphot->i3p[ip],
-  //       energy0,weight0,pphot->wp[ip],pphot->ep[ip]);
   Real k1 = pphot->k1p[ip];
   Real k2 = pphot->k2p[ip];
   Real k3 = pphot->k3p[ip];
@@ -1460,10 +1458,6 @@ void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0,
     k2 /= norm;
     k3 /= norm;
   }
-  //norm0 = sqrt(SQR(k1p0) + SQR(k2p0) + SQR(k3p0));
-  //printf("norm0: %f\n", norm0);
-  //norm = sqrt(SQR(k1) + SQR(k2) + SQR(k3));
-  //printf("norm: %f\n", norm);
 
   // Components of momentum change --- assumes orthonormal basis
   Real dp1p = pphot->wp[ip] * k1 * pphot->ep[ip] / c_cgs
@@ -1474,8 +1468,6 @@ void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0,
               - weight0 * k3p0 * energy0 / c_cgs;
 
   Real cool = (pphot->wp[ip] * pphot->ep[ip]) - (weight0 * energy0);
-  //if (energy0 == 0.0)
-  //  printf("weight, cool: %g %g\n",pphot->weight,cool);
 
   if ((std::isinf(cool)) || (std::isnan(cool))) {
     std::cout << "Warning: UpdateSourceTerms cooling is : " << cool << std::endl;
@@ -1589,8 +1581,6 @@ void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
   else
     mcb_bcs[BoundaryFace::outer_x3] = input_bcs[BoundaryFace::outer_x3];
 
-  //printf("Bvals: %d %d %d %d %d %d\n",mcb_bcs[BoundaryFace::inner_x1],mcb_bcs[BoundaryFace::outer_x1],mcb_bcs[BoundaryFace::inner_x2],mcb_bcs[BoundaryFace::outer_x2],mcb_bcs[BoundaryFace::inner_x3],mcb_bcs[BoundaryFace::outer_x3]);
-
 }
 
 //----------------------------------------------------------------------------------------
@@ -1616,7 +1606,7 @@ void MonteCarloBlock::ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &e
         if (emission(k,j,i) > emm_max) emm_max = emission(k,j,i);
         if (emission(k,j,i) < emm_min) emm_min = emission(k,j,i);
         if (std::isnan(emission(k,j,i)))
-        printf("emission[%d %d %d]: %g %g %g\n",i,j,k,vol,emission(k,j,i),pmy_mc->GetEmission(this,k,j,i));
+          printf("emission[%d %d %d]: %g %g %g\n",i,j,k,vol,emission(k,j,i),pmy_mc->GetEmission(this,k,j,i));
       }
     }
   }
@@ -1668,7 +1658,7 @@ void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe) {
           }
           // set nemit_ for this zone
           nemit_ = emission(i3_+ks,i2_+js,i1_+is) / emiss_to_weight;
-          //printf("nemit: %g %d %d %d %g\n",nemit_,i3_,i2_,i1_,emission(i3_,i2_,i1_));
+
         }
       } // end while (!this_zone)
 
@@ -1780,8 +1770,6 @@ void MonteCarloBlock::GetVelocity() {
           Real beta0 = std::sqrt(SQR(vel(k,j,i,1)/vel(k,j,i,0))+SQR(vel(k,j,i,2)/vel(k,j,i,0))+SQR(vel(k,j,i,3)/vel(k,j,i,0)));
           if (beta0 >= betamax)
             printf("beta > betamax: %g\n", beta0);
-          //printf("vel GR: %d %d %d %g %g %g %g\n",k,j,i,vel(k,j,i,0),vel(k,j,i,1)/vel(k,j,i,0),vel(k,j,i,2)/vel(k,j,i,0),
-          //vel(k,j,i,3)/vel(k,j,i,0) );
         }
       }
     }
@@ -1795,10 +1783,6 @@ void MonteCarloBlock::GetVelocity() {
           vel(k,j,i,2) = vel_cgs * pmy_block->phydro->u(IM2,k,j,i) / (rho * c_cgs);
           vel(k,j,i,3) = vel_cgs * pmy_block->phydro->u(IM3,k,j,i) / (rho * c_cgs);
           Real beta0 = std::sqrt(SQR(vel(k,j,i,1))+SQR(vel(k,j,i,2))+SQR(vel(k,j,i,3)));
-          //if (std::isnan(vel(k,j,i,1)))
-          //    printf("vel: %d %d %d %g\n",k,j,i,vel(k,j,i,1));
-          //if (beta0 >= 1.)
-          //  printf("beta > 1: %g", beta0);
           Real beta = (beta0 > betamax) ? betamax : beta0;
           Real gamma = 1. / std::sqrt(1. - beta*beta);
           vel(k,j,i,0) = gamma;
@@ -1806,8 +1790,6 @@ void MonteCarloBlock::GetVelocity() {
           if (beta0 > 0.) {
             for (int l=1; l<4; ++l) {
               vel(k,j,i,l) *= gamma * beta / beta0 ;
-              //if (std::isnan(vel(k,j,i,1)))
-              //  printf("vel2: %d %d %d %g %g %g\n",k,j,i,vel(k,j,i,1),beta,beta0);
             }
           }
         }
@@ -1843,8 +1825,9 @@ void MonteCarloBlock::GetTemperature() {
       for (int i=is; i<=ie; ++i) {
         Real temp = tconv * phydro->w(IEN,k,j,i) / phydro->w(IDN,k,j,i);
         // apply temperature floor
-        tgas(k,j,i) = (temp > tfloor_cgs) ? temp : tfloor_cgs;
-        tgas(k,j,i) = (temp < tceiling_cgs) ? temp : tceiling_cgs;
+        temp = (temp > tfloor_cgs) ? temp : tfloor_cgs;
+        temp = (temp < tceiling_cgs) ? temp : tceiling_cgs;
+        tgas(k,j,i) = temp;
       }
     }
   }
