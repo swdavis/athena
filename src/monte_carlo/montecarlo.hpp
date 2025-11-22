@@ -163,8 +163,9 @@ public:
   ~MCRandom();
 
   Real uniform();
-  Real chisquare(int n);
-
+  Real chisquare(Real nu);
+  int binomial(unsigned int n, Real p);
+  void SampleMultinomial(int n, int m, Real *prob, int *counts);
 private:
 
 

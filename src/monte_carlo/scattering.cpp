@@ -907,13 +907,13 @@ Real ElectronDist(Real tgas, MCRandom *pran) {
     Real dev = pran->uniform();
     Real x;
     if (dev < pi3) {
-      x = pran->chisquare(3);
+      x = pran->chisquare(3.);
     } else if (dev < pi3 + pi4) {
-      x = pran->chisquare(4);
+      x = pran->chisquare(4.);
     } else if (dev < pi3 + pi4 + pi5) {
-      x = pran->chisquare(5);
+      x = pran->chisquare(5.);
     } else {
-      x = pran->chisquare(6);
+      x = pran->chisquare(6.);
     }
     // convert x to y
     y = sqrt(0.5 * x);
