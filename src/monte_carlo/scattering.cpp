@@ -274,9 +274,8 @@ void ScatterComptonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, in
 
   MCRandom *pran = pmcb->pran;
   Real mec2 = 8.18711e-7;
-  Real ethom = 1.602176634e-10;
+  Real ethom = 1.602176634e-11;
   for (int ip=ips; ip<=ipe; ip++) {
-
     if (pphot->ep[ip] < ethom) {
       ScatterThomsonUnpolarized(pmcb,pphot,ip,ip);
       continue;
@@ -888,10 +887,6 @@ Real ElectronDistPozdnyakov(Real tgas, MCRandom *pran) {
 //  Method is from Canfield et al. 1987, ApJ 323, 565
 
 Real ElectronDist(Real tgas, MCRandom *pran) {
-
-#if RAN3
-   return ElectronDistPozdnyakov(tgas,pran);
-#endif
 
   Real kmec2 = 1.68638e-10;
   Real ktgmec2 = kmec2 * tgas;

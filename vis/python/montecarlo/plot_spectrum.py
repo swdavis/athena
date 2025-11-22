@@ -66,7 +66,7 @@ def plot_one(spectrum, ax, xunit, yunit, imu, iphi, plterr, **kwargs):
             athenamc.make_plot(x, y, yerr=yerr, xlabel=xlabel, ylabel=ylabel, ax=ax, **kwargs)
 
 
-def plot_blackbody(spectrum, ax, xunit, yunit, bbtemp, bbnorm):
+def plot_blackbody(spectrum, ax, xunit, yunit, bbtemp, bbnorm, imu = None, iphi = None):
     """
     Plot blackbody for comparison
     """
@@ -85,6 +85,10 @@ def plot_blackbody(spectrum, ax, xunit, yunit, bbtemp, bbnorm):
     kb = 1.380649e-16
     h = 6.62607015e-27
     ybb = bbnorm*2*h/c**2*nu**3/(np.exp(h*nu/(kb*bbtemp)) - 1.0)
+    if iphi == 'sum':
+        ybb *= 2 * np.pi
+    if imu == 'sum':
+        ybb *= 0.5 # imu = sum return flux
     if yunit == 'nulnu':
         ax.plot(x, ybb*nu, linestyle='-')
     elif yunit == 'lnu':
@@ -136,7 +140,7 @@ def main(**kwargs):
         plot_one(spectrum, ax, xunit, yunit, imu, iphi, plterr, **kwargs)
 
         if bbtemp is not None:
-            plot_blackbody(spectrum, ax, xunit, yunit, bbtemp, bbnorm)
+            plot_blackbody(spectrum, ax, xunit, yunit, bbtemp, bbnorm, imu, iphi)
 
     # save plot to outfile
     plt.savefig(outfile)

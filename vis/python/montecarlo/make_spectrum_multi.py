@@ -72,7 +72,7 @@ def main(**kwargs):
     xmin = kwargs.pop('xmin')
     xmax = kwargs.pop('xmax')
     logx = not kwargs.pop('linearx')
-
+    print(nx, xmin, xmax)
     # check for screening function
     screen_name = kwargs.pop('screen')
     if screen_name != 'no_screen':
@@ -178,9 +178,6 @@ def main(**kwargs):
 # Execute main function
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('infiles',
-        nargs='+',  # Accept one or more files
-        help='input photon list filename(s) - supports wildcards like "*.list"')
     parser.add_argument('nx',
         type=int,
         help='number of x bins')
@@ -190,6 +187,9 @@ if __name__ == '__main__':
     parser.add_argument('xmax',
         type=float,
         help='maximum for x variable')
+    parser.add_argument('infiles',
+        nargs='+',  # Accept one or more files
+        help='input photon list filename(s) - supports wildcards like "*.list"')
     parser.add_argument('--nouts',
         type=int,
         default=None,

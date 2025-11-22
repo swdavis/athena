@@ -51,8 +51,8 @@
 // enable monte carlo? default=0 (false)
 #define MONTE_CARLO_ENABLED @MONTE_CARLO_ENABLED@
 
-// usre ran3 for random numbers? default=0 (false)
-#define RAN3 @RAN3@
+// use gsl for random numbers? default=0 (false)
+#define GSL @GSL@
 
 // enable special or general relativity? default=0 (false)
 #define RELATIVISTIC_DYNAMICS @RELATIVISTIC_DYNAMICS@

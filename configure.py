@@ -20,7 +20,7 @@
 #   -g                enable general relativity
 #   -t                enable interface frame transformations for GR
 #   -mc               enable a monte carlo radiation tranfer calculation
-#   -ran3             use ran3 (rather than default gsl) for random numbers
+#   -gsl              use GSL (rather than default <random>) for random numbers
 #   -p                enable particles
 #   -debug            enable debug flags (-g -O0); override other compiler options
 #   -coverage         enable compiler-dependent code coverage flags
@@ -307,12 +307,12 @@ parser.add_argument(
     default=False,
     help='enable monte carlo calculations')
 
-# -ran3 argument
+# -gsl argument
 parser.add_argument(
-    '-ran3',
+    '-gsl',
     action='store_true',
     default=False,
-    help='use ran3 for random number generation')
+    help='use gsl for random number generation')
 
 # Parse command-line inputs
 args = vars(parser.parse_args())
@@ -798,12 +798,12 @@ if args['mc']:
 else:
     definitions['MONTE_CARLO_ENABLED'] = '0'
 
-# -ran3 argument
-if args['ran3']:
-    definitions['RAN3'] = '1'
-else:
-    definitions['RAN3'] = '0'
+# -gsl argument
+if args['gsl']:
+    definitions['GSL'] = '1'
     makefile_options['LIBRARY_FLAGS'] += ' -lgsl -lgslcblas'
+else:
+    definitions['GSL'] = '0'
 
 # Assemble all flags of any sort given to compiler
 definitions['COMPILER_FLAGS'] = ' '.join(
@@ -858,7 +858,7 @@ print('  Particles:                  ' + ('ON' if args['p'] else 'OFF'))
 print('  Self-Gravity:               ' + self_grav_string)
 print('  Super-Time-Stepping:        ' + ('ON' if args['sts'] else 'OFF'))
 print('  Monte Carlo:                ' + ('ON' if args['mc'] else 'OFF'))
-print('  Using ran3:                 ' + ('ON' if args['ran3'] else 'OFF'))
+print('  Using gsl:                 ' + ('ON' if args['gsl'] else 'OFF'))
 print('  Debug flags:                ' + ('ON' if args['debug'] else 'OFF'))
 print('  Code coverage flags:        ' + ('ON' if args['coverage'] else 'OFF'))
 print('  Linker flags:               ' + makefile_options['LINKER_FLAGS'] + ' '

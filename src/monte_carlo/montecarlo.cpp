@@ -17,7 +17,7 @@
 #include "../hydro/hydro.hpp"
 
 // GSL library
-#if RAN3 == 0
+#if GSL
 #include <gsl/gsl_randist.h>
 #endif
 
@@ -779,13 +779,13 @@ void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
 //  current implementation is wrapper for gsl function
 
 MCRandom::MCRandom(int iseed)
-#if RAN3
-  : gen(iseed), uniform_dist(0.0, 1.0)
-  {
-#else
+#if GSL
   {
   dev = gsl_rng_alloc(gsl_rng_mt19937);
   gsl_rng_set(dev, iseed);
+#else
+  : gen(iseed), uniform_dist(0.0, 1.0)
+  {
 #endif
 
 }
@@ -794,80 +794,26 @@ MCRandom::MCRandom(int iseed)
 //! destructor
 
 MCRandom::~MCRandom() {
-#if RAN3 == 0
+#if GSL
   gsl_rng_free(dev);
 #endif
 }
 
 Real MCRandom::uniform() {
 
-#if RAN3
-  //return ran3(&r3seed);
-  return uniform_dist(gen);
-#else
+#if GSL
   return static_cast<Real>(gsl_rng_uniform(dev));
+#else
+  return uniform_dist(gen);
 #endif
 }
 
 Real MCRandom::chisquare(int n) {
-#if RAN3
+#if GSL
+  return static_cast<Real>(gsl_ran_chisq(dev,n));
+#else
   std::chi_squared_distribution<Real> chi_dist(n);
   return chi_dist(gen);
-  //std::stringstream msg;
-  //msg << "### FATAL ERROR in MCRandom::chisquare" << std::endl
-  //    << "Not supported with RAN3 random number generator" << std::endl;
-  //ATHENA_ERROR(msg);
-#else
-  return static_cast<Real>(gsl_ran_chisq(dev,n));
 #endif
-
 }
 
-/*
-// Used by ran3
-#define MBIG 1000000000
-#define MSEED 161803398
-#define MZ 0
-#define FAC (1.0/MBIG)
-
-Real MCRandom::ran3(long *idum) {
-
-  static int inext,inextp;
-  static long ma[56];       // The value 56 (range ma[1..55]) is special and
-  static int iff=0;         // should not be modified; see Knuth.
-
-  long mj,mk;
-  int i,ii,k;
-
-  if (*idum < 0 || iff == 0) {    //Initialization.
-    iff=1;
-    mj=labs(MSEED-labs(*idum));   // Initialize ma[55] using the seed idum
-    mj %= MBIG;                   // and the large number MSEED.
-    ma[55]=mj;
-    mk=1;
-    for (i=1;i<=54;i++) {         //  Now initialize the rest of the table,
-      ii=(21*i) % 55;             //  in a slightly random order,with
-      ma[ii]=mk;                  //  numbers that are not especially random.
-      mk=mj-mk;
-      if (mk < MZ) mk += MBIG;
-      mj=ma[ii];
-    }
-    for (k=1;k<=4;k++)    // We randomize them by "warming up the generator."
-      for (i=1;i<=55;i++) {
-        ma[i] -= ma[1+(i+30) % 55];
-        if (ma[i] < MZ) ma[i] += MBIG;
-      }
-    inext=0;     // Prepare indices for our first generated number.
-    inextp=31;   //  The constant 31 is special; see Knuth.
-    *idum=1;
-  }
-  // Here is where we start, except on initialization.
-  if (++inext == 56) inext=1;     // Increment inext and inextp, wrapping
-  if (++inextp == 56) inextp=1;   // around  56 to 1.
-
-  mj=ma[inext]-ma[inextp];   // Generate a new random number subtractively.
-  if (mj < MZ) mj += MBIG;   // Be sure that it is in range.
-  ma[inext]=mj;              // Store it,
-  return static_cast<Real>(mj*FAC);             // and output the derived uniform deviate.
-}
-*/

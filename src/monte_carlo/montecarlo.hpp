@@ -24,7 +24,7 @@
 #include "mccoord.hpp"
 
 // GSL library
-#if RAN3 == 0
+#if GSL
 #include <gsl/gsl_randist.h>
 #endif
 
@@ -168,7 +168,7 @@ public:
 private:
 
 
-#if RAN3 == 0
+#if GSL
   gsl_rng *dev;
 #endif
   std::mt19937 gen;
