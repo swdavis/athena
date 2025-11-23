@@ -386,8 +386,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     planck_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
     planck_inv_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
   }
-
-  // Create user monte carlo block data
+ 
+ // Create user monte carlo block data
   InitUserMonteCarloBlockData(pin);
 
 }
@@ -1612,6 +1612,7 @@ void MonteCarloBlock::ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &e
   }
   // if using equal weight scheme, intialize variables for SetEmissionCellWeight
   i1_ = -1; i2_= -1; i3_ = -1;
+
   nemit_ = 0;
 }
 

@@ -474,31 +474,65 @@ void MonteCarlo::ComputeEmission() {
   }
 
   // compute emission properties over all blocks on this process
-  Real emm_min = SQR(HUGE_NUMBER), emm_max = -HUGE_NUMBER, emm_tot = 0.;
+  Real em_min = SQR(HUGE_NUMBER), em_max = -HUGE_NUMBER, em_tot = 0.;
   Real *tot_block = new Real[nblocal];
 
   for (int nb=0; nb<nblocal; nb++) {
     Real min_block, max_block;
     my_blocks(nb)->ComputeEmissionArray(min_block,max_block,tot_block[nb]);
-    emm_tot += tot_block[nb];
-    emm_min = (emm_min < min_block) ? emm_min : min_block;
-    emm_max = (emm_max > max_block) ? emm_max : max_block;
+    em_tot += tot_block[nb];
+    em_min = (em_min < min_block) ? em_min : min_block;
+    em_max = (em_max > max_block) ? em_max : max_block;
   }
-
+  Real em_proc = em_tot;
   // Compute emmision properties over all processes
 #ifdef MPI_PARALLEL
-  MPI_Allreduce(MPI_IN_PLACE,&emm_min,1,MPI_ATHENA_REAL,MPI_MIN,MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE,&emm_max,1,MPI_ATHENA_REAL,MPI_MAX,MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE,&emm_tot,1,MPI_ATHENA_REAL,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&em_min,1,MPI_ATHENA_REAL,MPI_MIN,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&em_max,1,MPI_ATHENA_REAL,MPI_MAX,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,&em_tot,1,MPI_ATHENA_REAL,MPI_SUM,MPI_COMM_WORLD);
 #endif
 
   if (emission_eqwt) {
-    // emmision weights are all equal
-    Real ave_weight = emm_tot/static_cast<Real>(nsamp);
+    // emmision weights are all equal 
+
+    // First, each process sends its its own block totals to rank 0
+    Real emiss_proc[Globals::nranks];
+    MPI_Gather(&em_proc,1,MPI_ATHENA_REAL,emiss_proc,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+    int count[Globals::nranks];
+    // Rank 0 compute the distribution of photons accross all processes and brodcasts
+    if (Globals::my_rank == 0) {
+      Real prob[Globals::nranks];
+      for (int irank=0; irank<Globals::nranks; irank++) 
+        prob[irank] = emiss_proc[irank]/em_tot;
+      my_blocks(0)->pran->SampleMultinomial(nsamp,Globals::nranks,prob,count);
+    }
+    int my_count;
+    MPI_Scatter(count,1,MPI_INT,&my_count,1,MPI_INT,0,MPI_COMM_WORLD);
+    // Now distribute the photons across all blocks on this process
+    int count_b[nblocal];
+    Real prob_b[nblocal];
+    for (int nb=0; nb<nblocal; nb++)
+      prob_b[nb] = tot_block[nb]/em_proc;
+    my_blocks(0)->pran->SampleMultinomial(my_count,nblocal,prob_b,count_b);
+    Real ave_weight = em_tot/static_cast<Real>(nsamp);
+    for (int nb=0; nb<nblocal; nb++) {
+      my_blocks(nb)->nphremain = count_b[nb];
+      my_blocks(nb)->nphrun = 0;
+      my_blocks(nb)->minweight = weightratio * ave_weight;
+      if (count_b[nb] > 0) {
+        my_blocks(nb)->emiss_to_weight = tot_block[nb] / static_cast<Real>(count_b[nb]);
+      } else {
+        my_blocks(nb)->emiss_to_weight = 0.;
+      }
+    }
+
+    /* old method
+    Real ave_weight = em_tot/static_cast<Real>(nsamp);
     int nsampnew = 0;
     for (int nb=0; nb<nblocal; nb++) {
       Real ntarget = tot_block[nb] / ave_weight;
       int nsblock = static_cast<int>(ntarget);
+      //printf("comp: %d %d %d\n",nb,nsblock,count_b[nb]);
       Real diff = ntarget - static_cast<Real>(nsblock);
       if (my_blocks(nb)->pran->uniform() < diff)
         nsblock += 1;
@@ -520,6 +554,7 @@ void MonteCarlo::ComputeEmission() {
         std::cout << "Updating nsample to " << nsampnew << std::endl;
       nsamp = nsampnew;
     }
+      */
   } else {
     // emission weights will just be equal to emmisivity
     // Determine number of photons per block per step assuming each block is equal
@@ -533,12 +568,9 @@ void MonteCarlo::ComputeEmission() {
       for (int irank=0; irank<Globals::nranks; irank++)
         prob[irank] = static_cast<Real>(pmy_mesh->nblist[irank])/static_cast<Real>(nbtotal);
       my_blocks(0)->pran->SampleMultinomial(nsamp,Globals::nranks,prob,count);
-      for (int irank=0; irank<Globals::nranks; irank++)
-        printf("counts: %d %d %g\n", irank, count[irank], prob[irank]);
     }
     int my_count;
     MPI_Scatter(count,1,MPI_INT,&my_count,1,MPI_INT,0,MPI_COMM_WORLD);
-    printf("my_count: %d %d\n", Globals::my_rank, my_count);
     
     // Now distribute the photons across all blocks on this process
     int count_b[nblocal];
@@ -549,9 +581,8 @@ void MonteCarlo::ComputeEmission() {
     for (int nb=0; nb<nblocal; nb++) {
       my_blocks(nb)->nphremain = count_b[nb];
       my_blocks(nb)->nphrun = 0;
-      my_blocks(nb)->minweight = weightratio * emm_min;
+      my_blocks(nb)->minweight = weightratio * em_min;
       my_blocks(nb)->emiss_to_weight = static_cast<Real>(ncells)/static_cast<Real>(nsamp);
-      printf("count_block: %d %d %g\n", nb, count_b[nb], prob_b[nb]);
     }
 
     /* old method
@@ -563,15 +594,15 @@ void MonteCarlo::ComputeEmission() {
     for (int nb=0; nb<nblocal; nb++) {
       my_blocks(nb)->nphremain = nphblock;
       my_blocks(nb)->nphrun = 0;
-      my_blocks(nb)->minweight = weightratio * emm_min;
+      my_blocks(nb)->minweight = weightratio * em_min;
       my_blocks(nb)->emiss_to_weight = static_cast<Real>(ncells)/static_cast<Real>(nsamp);
     }
     */
   }
   // Report emissivity ranges
   if (Globals::my_rank == 0) {
-    std::cout << "Emission array range (min, max), total: " << emm_min << " "
-              << emm_max << " " << emm_tot << std::endl;
+    std::cout << "Emission array range (min, max), total: " << em_min << " "
+              << em_max << " " << em_tot << std::endl;
   }
 
 
@@ -862,13 +893,15 @@ void MCRandom::SampleMultinomial(int n, int m, Real *prob, int *counts) {
    
   int remain = n;
   Real prob_sum = 1.;
-
+  // initialize counts to zero
+  for (int i=0; i < m; i++) {
+    counts[i] = 0;
+  }
   for (int i=0; i < m-1; i++) {
     Real p = prob[i] / prob_sum;
     counts[i] = binomial(remain,p);
     remain -= counts[i];
     prob_sum -= prob[i];
-      
     if (remain == 0) break;
   }
   counts[m-1] = remain;

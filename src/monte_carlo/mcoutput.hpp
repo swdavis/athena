@@ -54,7 +54,6 @@ public:
   Real last_time;
 
   AthenaArray<Real> energies;
-  AthenaArray<Real> count;
   AthenaArray<Real> intensity;
   AthenaArray<Real> intensity_sq;
   AthenaArray<Real> stokesq;

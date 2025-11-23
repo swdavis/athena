@@ -66,7 +66,6 @@ Spectrum::Spectrum(MomentumRange input_range, bool pol, bool xlog) {
   BuildEnergyGrid(range.emin,range.emax,range.ne,logarithmic);
 
   // Allocate arrays for intensities
-  count.NewAthenaArray(range.nphi,range.ncth,range.ne);
   intensity.NewAthenaArray(range.nphi,range.ncth,range.ne);
   intensity_sq.NewAthenaArray(range.nphi,range.ncth,range.ne);
   if (polarized) {
@@ -111,7 +110,6 @@ Spectrum::Spectrum(Spectrum *pspec) {
   BuildEnergyGrid(range.emin,range.emax,range.ne,logarithmic);
 
   // Allocate arrays for intensities
-  count.NewAthenaArray(range.nphi,range.ncth,range.ne);
   intensity.NewAthenaArray(range.nphi,range.ncth,range.ne);
   intensity_sq.NewAthenaArray(range.nphi,range.ncth,range.ne);
   if (polarized) {
@@ -128,7 +126,6 @@ Spectrum::Spectrum(Spectrum *pspec) {
 Spectrum::~Spectrum() {
 
   energies.DeleteAthenaArray();
-  count.DeleteAthenaArray();
   intensity.DeleteAthenaArray();
   intensity_sq.DeleteAthenaArray();
   if (polarized) {
@@ -518,7 +515,6 @@ void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
       }
     } // if (polar_axis) else
 
-    count(phibin,mubin,ebin) += 1.;
     intensity(phibin,mubin,ebin) += weight;
     intensity_sq(phibin,mubin,ebin) += weight * weight;
     //intensity(phibin,mubin,ebin) += pphot->sip[ip] * weight;
@@ -598,7 +594,6 @@ void Spectrum::ResetSpectrum() {
   for(int i=0; i<range.nphi; ++i) {
     for(int j=0; j<range.ncth; ++j) {
       for(int k=0; k<range.ne; ++k) {
-        count(i,j,k) = 0.;
         intensity(i,j,k) = 0.;
         intensity_sq(i,j,k) = 0.;
         if (polarized) {
@@ -630,7 +625,6 @@ void Spectrum::AddSpectrum(Spectrum *pspec) {
     for(int i=0; i<range.nphi; ++i) {
       for(int j=0; j<range.ncth; ++j) {
         for(int k=0; k<range.ne; ++k) {
-          count(i,j,k) += pspec->count(i,j,k);
           intensity(i,j,k) += pspec->intensity(i,j,k);
           intensity_sq(i,j,k) += pspec->intensity_sq(i,j,k);
           if (pspec->polarized) {
@@ -1276,14 +1270,7 @@ void Spectrum::WriteSpectrum(std::string fname) {
       for(int i=0; i<ne; ++i) {
         Real fac2 = fac1*emid[i]/(mumid*dnu[i]*tint);
         intens(0,k,j,i) = static_cast<double>(intensity(k,j,i)*fac2);
-        if (count(k,j,i) > 1.) {
-          errors(0,k,j,i) = sqrt(intensity_sq(k,j,i)*SQR(fac2)-
-                                 SQR(intens(0,k,j,i))/count(k,j,i));
-          if (errors(0,k,j,i) == 0.)
-            errors(0,k,j,i) = intens(0,k,j,i)/sqrt(count(k,j,i));
-        } else {
-          errors(0,k,j,i) = 0.;
-        }
+        errors(0,k,j,i) = sqrt(intensity_sq(k,j,i)*SQR(fac2));
       }
     }
   }
@@ -1294,14 +1281,7 @@ void Spectrum::WriteSpectrum(std::string fname) {
         for(int i=0; i<ne; ++i) {
           Real fac2 = fac1*emid[i]/(mumid*dnu[i]);
           intens(1,k,j,i) = static_cast<double>(stokesq(k,j,i)*fac2);
-          if (count(k,j,i) > 0.) {
-            errors(1,k,j,i) = sqrt(stokesq_sq(k,j,i)*SQR(fac2)-
-                                   SQR(intens(1,k,j,i))/count(k,j,i));
-            if (errors(1,k,j,i) == 0.)
-              errors(1,k,j,i) = intens(1,k,j,i)/sqrt(count(k,j,i));
-          } else {
-            errors(1,k,j,i) = 0.1;
-          }
+          errors(1,k,j,i) = sqrt(stokesq_sq(k,j,i)*SQR(fac2));
         }
       }
     }
@@ -1311,14 +1291,7 @@ void Spectrum::WriteSpectrum(std::string fname) {
         for(int i=0; i<ne; ++i) {
           Real fac2 = fac1*emid[i]/(mumid*dnu[i]);
           intens(2,k,j,i) = static_cast<double>(stokesu(k,j,i)*fac2);
-          if (count(k,j,i) > 0.) {
-            errors(2,k,j,i) = sqrt(stokesu_sq(k,j,i)*SQR(fac2)-
-                                   SQR(intens(2,k,j,i))/count(k,j,i));
-            if (errors(2,k,j,i) == 0.)
-              errors(2,k,j,i) = intens(2,k,j,i)/sqrt(count(k,j,i));
-          } else {
-            errors(2,k,j,i) = 0.;
-          }
+          errors(2,k,j,i) = sqrt(stokesu_sq(k,j,i)*SQR(fac2));
         }
       }
     }
@@ -1423,7 +1396,7 @@ void MCOutput::SendMonteCarloSpectrum(Spectrum *pspect, int dest) {
   int ne = pspect->range.ne;
   int ncth = pspect->range.ncth;
   int nphi = pspect->range.nphi;
-  int size = 3;
+  int size = 2;
   if (pspect->polarized) {
     size += 4;
   }
@@ -1438,7 +1411,6 @@ void MCOutput::SendMonteCarloSpectrum(Spectrum *pspect, int dest) {
   ne--; ncth--; nphi--;
   MPI_Isend(&pspect->nsrun,1,MPI_INT,dest,tag++,MPI_COMM_WORLD,&send_rq);
   MPI_Wait(&send_rq, MPI_STATUS_IGNORE);
-  BufferUtility::PackData(pspect->count,send_buf,0,ne,0,ncth,0,nphi,p);
   BufferUtility::PackData(pspect->intensity,send_buf,0,ne,0,ncth,0,nphi,p);
   BufferUtility::PackData(pspect->intensity_sq,send_buf,0,ne,0,ncth,0,nphi,p);
   if (pspec->polarized) {
@@ -1465,7 +1437,7 @@ void MCOutput::ReceiveMonteCarloSpectrum(Spectrum *pspect, bool add) {
   int ne = pspect->range.ne;
   int ncth = pspect->range.ncth;
   int nphi = pspect->range.nphi;
-  int size = 3;
+  int size = 2;
   if (pspect->polarized)
     size += 4;
   size *= (ne*ncth*nphi);
@@ -1492,7 +1464,6 @@ void MCOutput::ReceiveMonteCarloSpectrum(Spectrum *pspect, bool add) {
   ptemp->nsrun += nsrun;
 
   int p=0;
-  BufferUtility::UnpackData(recv_buf,ptemp->count,0,ne,0,ncth,0,nphi,p);
   BufferUtility::UnpackData(recv_buf,ptemp->intensity,0,ne,0,ncth,0,nphi,p);
   BufferUtility::UnpackData(recv_buf,ptemp->intensity_sq,0,ne,0,ncth,0,nphi,p);
   if (pspect->polarized) {
