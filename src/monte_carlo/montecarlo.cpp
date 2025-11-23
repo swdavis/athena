@@ -515,46 +515,15 @@ void MonteCarlo::ComputeEmission() {
       prob_b[nb] = tot_block[nb]/em_proc;
     my_blocks(0)->pran->SampleMultinomial(my_count,nblocal,prob_b,count_b);
     Real ave_weight = em_tot/static_cast<Real>(nsamp);
+
     for (int nb=0; nb<nblocal; nb++) {
       my_blocks(nb)->nphremain = count_b[nb];
       my_blocks(nb)->nphrun = 0;
       my_blocks(nb)->minweight = weightratio * ave_weight;
-      if (count_b[nb] > 0) {
-        my_blocks(nb)->emiss_to_weight = tot_block[nb] / static_cast<Real>(count_b[nb]);
-      } else {
-        my_blocks(nb)->emiss_to_weight = 0.;
-      }
+      my_blocks(nb)->emiss_to_weight = ave_weight;
+      my_blocks(nb)->ComputeEmissionSampleArray();
     }
 
-    /* old method
-    Real ave_weight = em_tot/static_cast<Real>(nsamp);
-    int nsampnew = 0;
-    for (int nb=0; nb<nblocal; nb++) {
-      Real ntarget = tot_block[nb] / ave_weight;
-      int nsblock = static_cast<int>(ntarget);
-      //printf("comp: %d %d %d\n",nb,nsblock,count_b[nb]);
-      Real diff = ntarget - static_cast<Real>(nsblock);
-      if (my_blocks(nb)->pran->uniform() < diff)
-        nsblock += 1;
-      if (nsblock > 0) {
-        my_blocks(nb)->emiss_to_weight = tot_block[nb] / static_cast<Real>(nsblock);
-      } else {
-        my_blocks(nb)->emiss_to_weight = 0.;
-      }
-      my_blocks(nb)->minweight = weightratio * ave_weight;
-      my_blocks(nb)->nphremain = nsblock;
-      my_blocks(nb)->nphrun = 0;
-      nsampnew += nsblock;
-    }
-#ifdef MPI_PARALLEL
-    MPI_Allreduce(MPI_IN_PLACE,&nsampnew,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-#endif
-    if (nsamp != nsampnew) {
-      if (Globals::my_rank == 0)
-        std::cout << "Updating nsample to " << nsampnew << std::endl;
-      nsamp = nsampnew;
-    }
-      */
   } else {
     // emission weights will just be equal to emmisivity
     // Determine number of photons per block per step assuming each block is equal
@@ -584,20 +553,6 @@ void MonteCarlo::ComputeEmission() {
       my_blocks(nb)->minweight = weightratio * em_min;
       my_blocks(nb)->emiss_to_weight = static_cast<Real>(ncells)/static_cast<Real>(nsamp);
     }
-
-    /* old method
-    int nphblock = nsamp / nbtotal;
-    if ((nphblock * nbtotal != nsamp) && (Globals::my_rank == 0))
-      std::cout << "Updating nsample to " << nphblock * nbtotal << std::endl;
-    nsamp = nphblock * nbtotal; // adjust nsamp if needed
-
-    for (int nb=0; nb<nblocal; nb++) {
-      my_blocks(nb)->nphremain = nphblock;
-      my_blocks(nb)->nphrun = 0;
-      my_blocks(nb)->minweight = weightratio * em_min;
-      my_blocks(nb)->emiss_to_weight = static_cast<Real>(ncells)/static_cast<Real>(nsamp);
-    }
-    */
   }
   // Report emissivity ranges
   if (Globals::my_rank == 0) {

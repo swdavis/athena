@@ -166,8 +166,8 @@ public:
   Real chisquare(Real nu);
   int binomial(unsigned int n, Real p);
   void SampleMultinomial(int n, int m, Real *prob, int *counts);
-private:
 
+private:
 
 #if GSL
   gsl_rng *dev;
@@ -389,6 +389,7 @@ public:
   void ResetSourceTerms();
   // Functions for handling distributed emission over cells
   void ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &emm_tot);
+  void ComputeEmissionSampleArray();
   void SetEmissionCellWeight(Photon *pphot, int ips, int ipe);
   void GetDensity();
   void GetNumberDensity();
@@ -406,7 +407,7 @@ public:
 private:
   int i1_, i2_, i3_; // used for emission
   Real nemit_; // used for emission
-
+  AthenaArray<int> emit_count_; // used for emission
   void SetBoundaryValues(enum MCBoundaryFlag *input_bcs);
 };
 

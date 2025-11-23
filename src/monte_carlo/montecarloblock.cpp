@@ -382,6 +382,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     }
   }
   if (pmy_mc->emission_array) emission.NewAthenaArray(ncells3,ncells2,ncells1);
+  if (pmy_mc->emission_eqwt) emit_count_.NewAthenaArray(ncells3,ncells2,ncells1);
   if (acceleration && !(coherent_scattering) && !(scattering_meth == SCATRES)) {
     planck_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
     planck_inv_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
@@ -1612,8 +1613,49 @@ void MonteCarloBlock::ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &e
   }
   // if using equal weight scheme, intialize variables for SetEmissionCellWeight
   i1_ = -1; i2_= -1; i3_ = -1;
-
   nemit_ = 0;
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::ComputeEmissionSampleArray()
+//! \brief compute emission array for equal weight scheme
+
+void MonteCarloBlock::ComputeEmissionSampleArray() {
+
+  int ncells = nx1 * nx2 * nx3;
+  Real prob[ncells];
+  int count[ncells];
+
+  // contruct probability array
+  Real total_emission = 0.;
+  for (int k=ks; k<=ke; ++k) {
+    for (int j=js; j<=je; ++j) {
+      for (int i=is; i<=ie; ++i) {
+        int n = (k-ks)*nx2*nx1 + (j-js)*nx1 + i-is;
+        prob[n] = emission(k,j,i);
+        total_emission += emission(k,j,i);
+      }
+    }
+  }
+
+  for (int i=0; i<ncells; ++i) {
+    prob[i] /= total_emission;
+  }
+  // sample multinomial distribution
+  pran->SampleMultinomial(nphremain,ncells,prob,count);
+  // set counts in emit_count_ array
+  for (int k=ks; k<=ke; ++k) {
+    int sum =0;
+    for (int j=js; j<=je; ++j) {
+      for (int i=is; i<=ie; ++i) {
+        int n = (k-ks)*nx2*nx1 + (j-js)*nx1 + i-is;
+        emit_count_(k,j,i) = count[n];
+        sum += count[n];
+      }
+    }
+  }
+
 }
 
 //----------------------------------------------------------------------------------------
@@ -1624,7 +1666,40 @@ void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe) {
 
   if (pmy_mc->emission_eqwt) {
     // Set intial zone based on probability within zone
+    
     for (int ip=ips; ip<=ipe; ip++) {
+      ///*
+      bool this_zone = false;
+      while (!this_zone) {
+        int i = i1_ + is;
+        int j = i2_ + js;
+        int k = i3_ + ks;
+        if (emit_count_(k,j,i) > 0) {
+          pphot->i1p[ip] = i;
+          pphot->i2p[ip] = j;
+          pphot->i3p[ip] = k;
+          this_zone = true;
+          emit_count_(k,j,i) -= 1;
+        } else {
+          // Update zone
+          this_zone = false;
+          i3_++;
+          if (i3_ >= nx3) {
+            i3_ = 0;
+            i2_++;
+            if (i2_ >= nx2) {
+              i2_ = 0;
+              i1_++;
+              if (i1_ >= nx1)
+                i1_ = 0;
+            }
+          }
+        }
+      } // end while (!this_zone)
+      // Set weight to constant value for all photons
+      pphot->wp[ip] = emiss_to_weight;
+      //*/
+      /*
       bool this_zone = false;
       while (!this_zone) {
         if (nemit_ > 1.) {
@@ -1633,7 +1708,7 @@ void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe) {
           pphot->i2p[ip] = i2_ + js;
           pphot->i3p[ip] = i3_ + ks;
           this_zone = true;
-          nemit_ -= 1.;
+          nemit_ -= 1.;)
         } else if (nemit_ > 0.) {
           // set this zone based on remaining probability
           if (pran->uniform() < nemit_) {
@@ -1665,6 +1740,7 @@ void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe) {
 
       // Set weight to constant value for all photons
       pphot->wp[ip] = emiss_to_weight;
+      */
     } // end loop over ip
   } else {
     for (int ip=ips; ip<=ipe; ip++) {
