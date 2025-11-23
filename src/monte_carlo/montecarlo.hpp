@@ -406,7 +406,6 @@ public:
 
 private:
   int i1_, i2_, i3_; // used for emission
-  Real nemit_; // used for emission
   AthenaArray<int> emit_count_; // used for emission
   void SetBoundaryValues(enum MCBoundaryFlag *input_bcs);
 };

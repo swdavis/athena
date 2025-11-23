@@ -422,6 +422,7 @@ MonteCarloBlock::~MonteCarloBlock() {
   if (pmy_mc->nuser_mom > 0) moments_user.DeleteAthenaArray();
   if (call_srcterms) sourceterms.DeleteAthenaArray();
   if (pmy_mc->emission_array) emission.DeleteAthenaArray();
+  if (pmy_mc->emission_eqwt) emit_count_.DeleteAthenaArray();
   if (acceleration && !(coherent_scattering) && !(scattering_meth == SCATRES)) {
     planck_opacity.DeleteAthenaArray();
     planck_inv_opacity.DeleteAthenaArray();
@@ -1613,7 +1614,6 @@ void MonteCarloBlock::ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &e
   }
   // if using equal weight scheme, intialize variables for SetEmissionCellWeight
   i1_ = -1; i2_= -1; i3_ = -1;
-  nemit_ = 0;
 
 }
 
@@ -1668,7 +1668,6 @@ void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe) {
     // Set intial zone based on probability within zone
     
     for (int ip=ips; ip<=ipe; ip++) {
-      ///*
       bool this_zone = false;
       while (!this_zone) {
         int i = i1_ + is;
@@ -1698,49 +1697,7 @@ void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe) {
       } // end while (!this_zone)
       // Set weight to constant value for all photons
       pphot->wp[ip] = emiss_to_weight;
-      //*/
-      /*
-      bool this_zone = false;
-      while (!this_zone) {
-        if (nemit_ > 1.) {
-          // always set this zone for emission
-          pphot->i1p[ip] = i1_ + is;
-          pphot->i2p[ip] = i2_ + js;
-          pphot->i3p[ip] = i3_ + ks;
-          this_zone = true;
-          nemit_ -= 1.;)
-        } else if (nemit_ > 0.) {
-          // set this zone based on remaining probability
-          if (pran->uniform() < nemit_) {
-            pphot->i1p[ip] = i1_ + is;
-            pphot->i2p[ip] = i2_ + js;
-            pphot->i3p[ip] = i3_ + ks;
-            this_zone = true;
-          }
-          nemit_ -= 1.;
-        } else {
-          // Update zone
-          this_zone = false;
-          i3_++;
-          if (i3_ >= nx3) {
-            i3_ = 0;
-            i2_++;
-            if (i2_ >= nx2) {
-              i2_ = 0;
-              i1_++;
-              if (i1_ >= nx1)
-                i1_ = 0;
-            }
-          }
-          // set nemit_ for this zone
-          nemit_ = emission(i3_+ks,i2_+js,i1_+is) / emiss_to_weight;
-
-        }
-      } // end while (!this_zone)
-
-      // Set weight to constant value for all photons
-      pphot->wp[ip] = emiss_to_weight;
-      */
+      
     } // end loop over ip
   } else {
     for (int ip=ips; ip<=ipe; ip++) {
