@@ -451,19 +451,7 @@ void MonteCarlo::ComputeEmission() {
 
   if (emission_flag == EMISNONE) {
     // Do nothing.  nphremain needs to be set in the problem generator
-
-    // Don't compute emission array -- just set nphremain on meshblocks
-    // to all be the same value, resetting nsamp if needed
-    /*
-    int nphblock = nsamp / nbtotal;
-    nsamp = nphblock * nbtotal; // adjust nsamp if needed
-
-    for (int nb=0; nb<nblocal; nb++) {
-      my_blocks(nb)->nphremain = nphblock;
-      my_blocks(nb)->nphrun = 0;
-    }
-    */
-
+    // based on the user's criteria
     return;
   } else if (GetEmission == nullptr) {
     std::stringstream msg;
@@ -497,7 +485,11 @@ void MonteCarlo::ComputeEmission() {
 
     // First, each process sends its its own block totals to rank 0
     Real emiss_proc[Globals::nranks];
+#ifdef MPI_PARALLEL
     MPI_Gather(&em_proc,1,MPI_ATHENA_REAL,emiss_proc,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+#else
+    emis_proc[0] = em_proc;
+#endif
     int count[Globals::nranks];
     // Rank 0 compute the distribution of photons accross all processes and brodcasts
     if (Globals::my_rank == 0) {
@@ -507,7 +499,11 @@ void MonteCarlo::ComputeEmission() {
       my_blocks(0)->pran->SampleMultinomial(nsamp,Globals::nranks,prob,count);
     }
     int my_count;
+#ifdef MPI_PARALLEL
     MPI_Scatter(count,1,MPI_INT,&my_count,1,MPI_INT,0,MPI_COMM_WORLD);
+#else
+    my_count = count[0];
+#endif
     // Now distribute the photons across all blocks on this process
     int count_b[nblocal];
     Real prob_b[nblocal];
@@ -521,6 +517,7 @@ void MonteCarlo::ComputeEmission() {
       my_blocks(nb)->nphrun = 0;
       my_blocks(nb)->minweight = weightratio * ave_weight;
       my_blocks(nb)->emiss_to_weight = ave_weight;
+      // distribute photons within each block
       my_blocks(nb)->ComputeEmissionSampleArray();
     }
 
@@ -528,30 +525,59 @@ void MonteCarlo::ComputeEmission() {
     // emission weights will just be equal to emmisivity
     // Determine number of photons per block per step assuming each block is equal
 
+    // First determine the active number of cells. A meshblock is inactive if it has
+    // zero emission
+    int nb_active = 0;
+    for (int nb=0; nb<nblocal; nb++) {
+      if (tot_block[nb] > 0.) {
+        nb_active++;
+      }
+    }
+    int active_proc[Globals::nranks];
+#ifdef MPI_PARALLEL
+    MPI_Gather(&nb_active,1,MPI_INT,active_proc,1,MPI_INT,0,MPI_COMM_WORLD);
+#else
+    active_proc[0] = nb_active;
+#endif
     // Rank 0 compute the distribution of photons accross all processes and brodcasts
     // to all processes
     int count[Globals::nranks];
+    int nb_active_total = 0;
     if (Globals::my_rank == 0) {
-
       Real prob[Globals::nranks];
-      for (int irank=0; irank<Globals::nranks; irank++)
-        prob[irank] = static_cast<Real>(pmy_mesh->nblist[irank])/static_cast<Real>(nbtotal);
+      for (int irank=0; irank<Globals::nranks; irank++) {
+        nb_active_total += active_proc[irank];
+      }
+      for (int irank=0; irank<Globals::nranks; irank++) {
+        prob[irank] = static_cast<Real>(active_proc[irank])/static_cast<Real>(nb_active_total);
+      }
       my_blocks(0)->pran->SampleMultinomial(nsamp,Globals::nranks,prob,count);
     }
     int my_count;
+#ifdef MPI_PARALLEL
     MPI_Scatter(count,1,MPI_INT,&my_count,1,MPI_INT,0,MPI_COMM_WORLD);
-    
-    // Now distribute the photons across all blocks on this process
+    MPI_Bcast(&nb_active_total, 1, MPI_INT, 0, MPI_COMM_WORLD);
+#else
+    my_count = count[0];
+#endif
+    // Now distribute the photons across all active blocks on this process
     int count_b[nblocal];
     Real prob_b[nblocal];
     for (int nb=0; nb<nblocal; nb++)
-      prob_b[nb] = 1./static_cast<Real>(nblocal);
+      if (tot_block[nb] > 0.)
+        prob_b[nb] = 1./static_cast<Real>(nb_active);
+      else
+        prob_b[nb] = 0.;
     my_blocks(0)->pran->SampleMultinomial(my_count,nblocal,prob_b,count_b);
+    //printf("Rank %d: nb_active=%d, nb_active_total=%d\n", Globals::my_rank, nb_active, nb_active_total);  
+    // Acount for inactive blocks in weighting
+    int block_size = ncells / pmy_mesh->nbtotal;
+    int ncells_active = nb_active_total * block_size;
     for (int nb=0; nb<nblocal; nb++) {
       my_blocks(nb)->nphremain = count_b[nb];
       my_blocks(nb)->nphrun = 0;
       my_blocks(nb)->minweight = weightratio * em_min;
-      my_blocks(nb)->emiss_to_weight = static_cast<Real>(ncells)/static_cast<Real>(nsamp);
+      my_blocks(nb)->emiss_to_weight = static_cast<Real>(ncells_active)/static_cast<Real>(nsamp);
     }
   }
   // Report emissivity ranges
@@ -559,7 +585,7 @@ void MonteCarlo::ComputeEmission() {
     std::cout << "Emission array range (min, max), total: " << em_min << " "
               << em_max << " " << em_tot << std::endl;
   }
-
+  free(tot_block);
 
 }
 

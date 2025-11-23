@@ -1603,7 +1603,7 @@ void MonteCarloBlock::ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &e
     for (int j=js; j<=je; ++j) {
       for (int i=is; i<=ie; ++i) {
         Real vol = pcoord->vol(k,j,i);
-        emission(k,j,i) = pmy_mc->GetEmission(this,k,j,i) * dt * vol;
+          emission(k,j,i) = pmy_mc->GetEmission(this,k,j,i) * dt * vol;
         emm_tot += emission(k,j,i);
         if (emission(k,j,i) > emm_max) emm_max = emission(k,j,i);
         if (emission(k,j,i) < emm_min) emm_min = emission(k,j,i);
