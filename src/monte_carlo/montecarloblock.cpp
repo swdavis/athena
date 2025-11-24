@@ -1320,7 +1320,9 @@ void MonteCarloBlock::UpdateMomentsOld(Photon *pphot, Real dl, Real pl, Real k1,
 void MonteCarloBlock::NormalizeMoments(bool normalize) {
 
   // Get integration time
-  Real dt = pmy_mc->tint;
+  // Fix for dynamic MC
+  //Real dt = pmy_mc->tint;
+  Real dt = pmy_mc->pmy_mesh->time;
   Real norm;
 
   if (mom_flag_lab) {
@@ -1328,10 +1330,11 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
-            if (normalize)
+            if (normalize) {
               norm = 1./ (dt * pcoord->vol(k,j,i));
-            else
+            } else {
               norm = dt * pcoord->vol(k,j,i);
+            }
             moments(n,k,j,i) *= norm;
           }
         }

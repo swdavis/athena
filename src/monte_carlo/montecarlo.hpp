@@ -260,7 +260,7 @@ public:
   void Initialize(ParameterInput *pinput);
   void InitializeEmissionFlags(ParameterInput *pinput);
   void ComputeEmission();
-
+  void NormalizeDomainOutputs(bool normalize);
 private:
 
   // functions

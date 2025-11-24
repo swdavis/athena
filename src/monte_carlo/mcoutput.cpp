@@ -1088,7 +1088,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         if (pmc->dynamic) {
           pphlist->dt = pin->GetReal(pib->block_name,"dt");
         } else {
-          pphlist->dt = pin->GetOrAddReal("montecarlo","dt",1.);
+          pphlist->dt = pin->GetOrAddReal("montecarlo","tint",1.);
         }
         pphlist->last_time = pmy_mc->pmy_mesh->time;
         pphlist->nsrun = 0;
@@ -1337,7 +1337,7 @@ void MCOutput::OutputSpectrum(bool wtflag) {
 
   if (pspec == nullptr) //no spectra requested
     return;
-
+  
   Spectrum *pspect = pspec;
   Spectrum *pspecout = nullptr;
   // Check if any spectra are ready to be output
@@ -1345,7 +1345,6 @@ void MCOutput::OutputSpectrum(bool wtflag) {
   Real tstart = pmy_mc->pmy_mesh->start_time;
   Real tlim = pmy_mc->pmy_mesh->tlim;
   while (pspect != nullptr) {
-
     if ( (time >= pspect->last_time+pspect->dt) || (time == tstart) || (time >= tlim)
          || wtflag ) {
       if (Globals::my_rank == 0) {

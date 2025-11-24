@@ -475,9 +475,11 @@ int main(int argc, char *argv[]) {
   double omp_start_time = omp_get_wtime();
 #endif
   if (MONTE_CARLO_ENABLED) {
-    // Simple method for turning off main loop
-    if (!pmc->dynamic)
-      pmesh->time = pmesh->tlim;
+    // Simple method for modifying main loop
+    if (!pmc->dynamic) {
+      pmesh->tlim = static_cast<Real>(pmc->nout)*pmc->tint;
+      pmesh->dt = pmc->tint;
+    }
   }
   while ((pmesh->time < pmesh->tlim) &&
          (pmesh->nlim < 0 || pmesh->ncycle < pmesh->nlim)) {
@@ -509,18 +511,22 @@ int main(int argc, char *argv[]) {
 
     if (pmesh->turb_flag > 1) pmesh->ptrbd->Driving(); // driven turbulence
 
-    if ( (MONTE_CARLO_ENABLED) && pmc->dynamic)
+    if ( !(MONTE_CARLO_ENABLED) || pmc->dynamic) {
       pmc->RunDynamicMonteCarlo(pouts,pmesh,pinput);
 
-    for (int stage=1; stage<=ptlist->nstages; ++stage) {
-      ptlist->DoTaskListOneStage(pmesh, stage);
-      if (ptlist->CheckNextMainStage(stage)) {
-        if (SELF_GRAVITY_ENABLED == 1) // fft (0: discrete kernel, 1: continuous kernel)
-          pmesh->pfgrd->Solve(stage, 0);
-        else if (SELF_GRAVITY_ENABLED == 2) // multigrid
-          pmesh->pmgrd->Solve(stage);
+      for (int stage=1; stage<=ptlist->nstages; ++stage) {
+        ptlist->DoTaskListOneStage(pmesh, stage);
+        if (ptlist->CheckNextMainStage(stage)) {
+          if (SELF_GRAVITY_ENABLED == 1) // fft (0: discrete kernel, 1: continuous kernel)
+            pmesh->pfgrd->Solve(stage, 0);
+          else if (SELF_GRAVITY_ENABLED == 2) // multigrid
+            pmesh->pmgrd->Solve(stage);
+        }
       }
-    }
+    } else {
+      pmc->RunStaticMonteCarlo(pouts,pmesh,pinput);
+      pmesh->dt = pmc->tint;
+    } // end not MONTE_CARLO_ENABLED or dynamic MC
 
     if (STS_ENABLED && pmesh->sts_integrator == "rkl2") {
       pmesh->sts_loc = TaskType::op_split_after;
@@ -545,9 +551,9 @@ int main(int argc, char *argv[]) {
 #endif
       if (pmesh->time < pmesh->tlim) // skip the final output as it happens later
         if (MONTE_CARLO_ENABLED) {
-          if (pmc->dynamic) {
+          //if (pmc->dynamic) {
             pouts->MakeOutputs(pmesh,pmc,pinput);
-          }
+          //}
         } else {
           pouts->MakeOutputs(pmesh,pinput);
         }
@@ -578,10 +584,10 @@ int main(int argc, char *argv[]) {
   // Make final outputs, print diagnostics, clean up and terminate
 
   // Perform Monte Carlo radiation tranfer
-  if (MONTE_CARLO_ENABLED) {
-    if (!pmc->dynamic)
-      pmc->RunStaticMonteCarlo(pouts,pmesh,pinput);
-  }
+  //if (MONTE_CARLO_ENABLED) {
+  //  if (!pmc->dynamic)
+  //    pmc->RunStaticMonteCarlo(pouts,pmesh,pinput);
+  //}
 
   if (Globals::my_rank == 0 && wtlim > 0)
     SignalHandler::CancelWallTimeAlarm();
@@ -599,7 +605,7 @@ int main(int argc, char *argv[]) {
   try {
 #endif
     if (MONTE_CARLO_ENABLED) {
-      if (pmc->dynamic)
+      //if (pmc->dynamic)
         pouts->MakeOutputs(pmesh,pmc,pinput,true);
     } else {
       pouts->MakeOutputs(pmesh,pinput,true);
@@ -627,9 +633,9 @@ int main(int argc, char *argv[]) {
   // Print diagnostic messages related to the end of the simulation
 
   bool write_fluid_diagnostics = true;
-  if (MONTE_CARLO_ENABLED)
-    if (!pmc->dynamic)
-      write_fluid_diagnostics = false;
+  if ((MONTE_CARLO_ENABLED) && !(pmc->dynamic))
+    write_fluid_diagnostics = false;
+
   if (Globals::my_rank == 0) {
     if (write_fluid_diagnostics) {
       if (SignalHandler::GetSignalFlag(SIGTERM) != 0) {

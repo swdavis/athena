@@ -49,6 +49,7 @@
 #include "../reconstruct/reconstruction.hpp"
 #include "../scalars/scalars.hpp"
 #include "../utils/buffer_utils.hpp"
+#include "../monte_carlo/montecarlo.hpp"
 #include "mesh.hpp"
 #include "mesh_refinement.hpp"
 #include "meshblock_tree.hpp"
@@ -1151,6 +1152,11 @@ void Mesh::OutputMeshStructure(int ndim) {
 //!        this assumes that phydro->NewBlockTimeStep is already called
 
 void Mesh::NewTimeStep() {
+  if (MONTE_CARLO_ENABLED) {
+    bool dynamic = my_blocks(0)->pmy_mcb->pmy_mc->dynamic; // SWD: ugly, fix
+    if (!dynamic)
+      return;
+  }
   if (Globals::my_rank >= nrankmx) {
     dt = HUGE_NUMBER;
     dt_hyperbolic = HUGE_NUMBER;

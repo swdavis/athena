@@ -1044,7 +1044,10 @@ void Outputs::MakeOutputs(Mesh *pm, ParameterInput *pin, bool wtflag) {
 //!        overloaded to includ MonteCarlo outputs
 void Outputs::MakeOutputs(Mesh *pm, MonteCarlo *pmc, ParameterInput *pin, bool wtflag) {
 
+  pmc->NormalizeDomainOutputs(true); // normalize MC outputs
   MakeOutputs(pm,pin,wtflag);
+  if (!pmc->dynamic)
+    pmc->NormalizeDomainOutputs(false); // un-normalize
   pmc->pmcout->MakeOutputs(false);
 }
 
