@@ -352,6 +352,7 @@ public:
   AthenaArray<Real> moments_user;
   AthenaArray<Real> moments_scat;
   AthenaArray<Real> energy_scat;
+  AthenaArray<Real> freq_scat_mid;
   AthenaArray<Real> sourceterms;
   AthenaArray<Real> scalars;
   AthenaArray<Real> rho;

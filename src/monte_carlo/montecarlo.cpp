@@ -185,7 +185,7 @@ enum AbsorptionMethodFlag GetAbsorptionMethodFlag(std::string input_string) {
 
 //----------------------------------------------------------------------------------------
 //! \fn enum ScatteringFlag GetScatteringFlag(std::string input_string)
-//! \brief set scatering flag
+//! \brief set scattering flag
 
 enum ScatteringFlag GetScatteringFlag(std::string input_string) {
   if (input_string == "user") {
@@ -752,7 +752,8 @@ void MonteCarlo::NormalizeDomainOutputs(bool normalize) {
     // normalize moments for output
     for(int nb=0; nb<nblocal; ++nb) {
       MonteCarloBlock *pmcb = my_blocks(nb);
-      if (pmcb->mom_flag_lab)
+      if (pmcb->mom_flag_lab || pmcb->mom_flag_com ||
+          pmcb->mom_flag_scat || pmcb->mom_flag_usr)
         pmcb->NormalizeMoments(true);
       // SWD: Not sure this is needed
       if (pmcb->call_srcterms)
@@ -762,7 +763,8 @@ void MonteCarlo::NormalizeDomainOutputs(bool normalize) {
     // unnormalize moments after output
     for(int nb=0; nb<nblocal; ++nb) {
       MonteCarloBlock *pmcb = my_blocks(nb);
-      if (pmcb->mom_flag_lab)
+      if (pmcb->mom_flag_lab || pmcb->mom_flag_com ||
+          pmcb->mom_flag_scat || pmcb->mom_flag_usr)
         pmcb->NormalizeMoments(false);
       if (pmcb->call_srcterms)
         pmcb->NormalizeSourceTerms(false);

@@ -376,9 +376,29 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     emax_scat = pin->GetReal("montecarlo","emax_scat") * everg;
     moments_scat.NewAthenaArray(nf_scat,ncells3,ncells2,ncells1);
     dloge_scat = (std::log10(emax_scat/emin_scat))/static_cast<Real>(nf_scat);
-    energy_scat.NewAthenaArray(nf_scat);
-    for (int i=0; i<nf_scat; i++) {
-      energy_scat(i) = std::log10(emin_scat) + (i+0.5)*dloge_scat; // keep log
+    energy_scat.NewAthenaArray(nf_scat+1);
+    freq_scat_mid.NewAthenaArray(nf_scat);
+    Real h_cgs = 6.62607015e-27;
+    for (int i=0; i<=nf_scat; i++) {
+      energy_scat(i) = std::log10(emin_scat) + static_cast<Real>(i)*dloge_scat; // keep log
+      if (i > 0)
+        freq_scat_mid(i-1) = 0.5*( pow(10.,energy_scat(i-1)) + pow(10.,energy_scat(i)) )/h_cgs;
+;
+    }
+    if ((Globals::my_rank ==0) && (pmy_block->lid == 0)) {
+      FILE *pfile;
+      std::stringstream msg;
+      if ((pfile = fopen("sourceterm_frequencies.txt","w")) == NULL) {
+        msg << "### FATAL ERROR in MonteCarloBlock Constructor" << std::endl
+            << "Output file sourceterm_frequencies.txt could not be opened";
+        throw std::runtime_error(msg.str().c_str());
+      }
+      fprintf(pfile,"%d\n", nf_scat);
+      for (int i=0; i< nf_scat; i++) {
+        fprintf(pfile,"%d %e %e %e\n",i,freq_scat_mid(i),pow(10.,energy_scat(i))/h_cgs,
+                pow(10.,energy_scat(i+1))/h_cgs);
+      }
+      fclose(pfile);
     }
   }
   if (pmy_mc->emission_array) emission.NewAthenaArray(ncells3,ncells2,ncells1);
@@ -958,11 +978,14 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   }
 
   // add contribution to scattering source terms
+  // SWD: Ultimately want comoving frame values
   if (mom_flag_scat) {
     Real loge = std::log10(pphot->ep[ip]);
+    Real log10 = 2.302585092994046;
     int n = std::floor((loge-energy_scat(0))/dloge_scat);
     if (n >= 0 && n < nf_scat) {
-      moments_scat(n,i3,i2,i1) += weight * k0 * k0;
+      Real norm = c_cgs/(4.*PI*freq_scat_mid(n)*dloge_scat*log10);
+      moments_scat(n,i3,i2,i1) += norm * pphot->scp[ip] * weight * k0 * k0;
     }
   }
 
