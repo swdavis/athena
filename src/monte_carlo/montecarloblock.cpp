@@ -382,7 +382,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     }
   }
   if (pmy_mc->emission_array) emission.NewAthenaArray(ncells3,ncells2,ncells1);
-  if (pmy_mc->emission_eqwt) emit_count_.NewAthenaArray(ncells3,ncells2,ncells1);
+  if (pmy_mc->emission_eqwt[0]) emit_count_.NewAthenaArray(ncells3,ncells2,ncells1);
   if (acceleration && !(coherent_scattering) && !(scattering_meth == SCATRES)) {
     planck_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
     planck_inv_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
@@ -422,7 +422,7 @@ MonteCarloBlock::~MonteCarloBlock() {
   if (pmy_mc->nuser_mom > 0) moments_user.DeleteAthenaArray();
   if (call_srcterms) sourceterms.DeleteAthenaArray();
   if (pmy_mc->emission_array) emission.DeleteAthenaArray();
-  if (pmy_mc->emission_eqwt) emit_count_.DeleteAthenaArray();
+  if (pmy_mc->emission_eqwt[0]) emit_count_.DeleteAthenaArray();
   if (acceleration && !(coherent_scattering) && !(scattering_meth == SCATRES)) {
     planck_opacity.DeleteAthenaArray();
     planck_inv_opacity.DeleteAthenaArray();
@@ -514,22 +514,20 @@ void MonteCarloBlock::RayTracePhotonsOnBlock() {
 
 void MonteCarloBlock::TransferPhotonsOnBlock() {
 
-  Real const to_comv = 1.0;
-  Real const to_eulr = -1.0;
-  int nbuf = 0;
-
+  //int nbuf = 0;
   int nold = pphot->nphot;
   int ntot = nold + nphremain;
+
   // Emit photons to replace those that left meshblock or were terminated
   // limit ntot < loop_max_size unless nold is larger than loop_max_size
   ntot = (loop_max_size > ntot) ? ntot : loop_max_size;
   ntot = (nold > ntot) ? nold : ntot;
   int nnew = ntot - nold;
-  // if photons remain to transfer, make space for new photons
 
-  if ((nnew + nold) == 0) // nothing to do
+  if (ntot == 0) // nothing to do
     return;
 
+  // if photons remain to transfer, make space for new photons
   if (nnew > 0) {
     pphot->AllocatePhotons(ntot);
     nphremain -= nnew;
@@ -537,24 +535,16 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
 
     // user definied photon initialization
     InitializePhoton(pphot,nold,pphot->nphot-1);
-    //if (ptraj != nullptr) {
-    //  for (int ip=nold; ip < pphot->nphot; ip++)
-    //    ptraj->InitializeTrajectory(pphot->trp[ip]);
-    //}
 
     // Lorentz transform E, k to Eulerian frame and update opacities
     // only for newly emitted samples
     if (boosts || tetrads) {
-      //LorentzTransform(pphot,to_eulr,nold,pphot->nphot-1);
       TransformToCoordinate(pphot,nold,pphot->nphot-1);
     }
-    //for (int ip=nold; ip<pphot->nphot; ip++) {
-    //  pphot->PrintPhoton("After InitializePhoton",ip);
-    //}
-
+  
     // Update the absorption and scattering extinction coefficients
     if (call_srcterms) {
-      // Update source terms to relect newly emitted samples
+      // Update source terms to reflect newly emitted samples
       for (int ip=nold; ip<pphot->nphot; ip++) {
         UpdateSourceTerms(pphot,0.,0.,0.,0.,0.,ip);
       }
@@ -596,7 +586,6 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
       // Lorentz transform to comoving frame for scattering
       if (boosts || tetrads) {
         TransformToComoving(pphot,ip,ip);
-        //LorentzTransform(pphot,to_comv,ip,ip);
       }
       // call scattering function and update counters
       Scatter(this,pphot,ip,ip);
@@ -622,7 +611,6 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
       // Lorentz transform to Eulerian frame and shift opacities
       if (boosts || tetrads) {
         TransformToCoordinate(pphot,ip,ip);
-        //LorentzTransform(pphot,to_eulr,ip,ip);
       }
       // Update moments that compute radiation force and net heating/cooling
       if (call_srcterms) {
@@ -640,9 +628,6 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
       if (pphot->statp[ip] != BUFFERED) {
         // User defined completion work
         FinalizePhoton(pphot,ip);
-        //if (ptraj != nullptr) {
-        //  ptraj->CompleteTrajectory(pphot->trp[ip]);
-        //}
       }
 
       if (pphot->statp[ip] == ESCAPED) {
@@ -663,16 +648,11 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
       } else if (pphot->statp[ip] == DESTROYED) {
         pphot->RemoveOneParticle(ip);
         ndes++;
-      } else if (pphot->statp[ip] == BUFFERED) {
-        nbuf++;
+      //} else if (pphot->statp[ip] == BUFFERED) {
+      //  nbuf++;
       }
     }
   } // End loop over ip
-
-  /*std::cout  << "rank, ntot, nnew, nesc, nabs, ndes, nbuf, nscat: " << Globals::my_rank
-             << ' ' << ntot << ' ' << nnew << ' ' << nesc
-             << ' ' << nabs << ' ' << ndes << ' ' << nbuf
-             << ' ' << nscat << std::endl;*/
 
 }
 
@@ -1667,7 +1647,7 @@ void MonteCarloBlock::ComputeEmissionSampleArray() {
 
 void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe) {
 
-  if (pmy_mc->emission_eqwt) {
+  if (pmy_mc->emission_eqwt[0]) {
     // Set intial zone based on probability within zone
     
     for (int ip=ips; ip<=ipe; ip++) {

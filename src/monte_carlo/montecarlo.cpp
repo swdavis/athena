@@ -71,10 +71,15 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   // Set mininmum weight if using weighting for absorption
   weightratio = pin->GetOrAddReal("montecarlo","minweight",1.0e-20);
 
-  // Set photon integration totals
-  nsamp = pin->GetInteger("montecarlo","nphot");
+  // Specify photon integration parameters
   nout = pin->GetOrAddInteger("montecarlo","nout",1);
-
+  ntype = pin->GetOrAddInteger("montecarlo","ntype",1);
+  nsamptype = new int64_t[ntype];
+  emission_eqwt = new bool[ntype];
+  if (ntype == 1) {
+    nsamptype[0] = nsamp = pin->GetInteger("montecarlo","nphot");
+    emission_eqwt[0] = pin->GetOrAddBoolean("montecarlo","equal_weight",false);
+  }
   // Set default size parameters
   max_phots_init = pin->GetOrAddInteger("montecarlo","max_phots_init",10000);
   list_size_init = pin->GetOrAddInteger("montecarlo","list_size_init",10000);
@@ -398,7 +403,7 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
 
     // initialize counters to zero
     pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
-    pmcb->loop_max_size = pin->GetOrAddInteger("montecarlo","loop_max_size",1000);
+    pmcb->loop_max_size = pin->GetOrAddInteger("montecarlo","loop_max_size",10000);
 
     // Call problem generators for Monte Carlo
     pmcb->MonteCarloProblemGenerator(pin);
@@ -431,24 +436,18 @@ void MonteCarlo::InitializeEmissionFlags(ParameterInput *pin) {
     GetEmission = GetEmissionFreeFree;
     emission_array = true; // allocate memory for array
   }
-
-  // In addition the user has a choice of how this emission array will be utilized
-  // either it will determine number of photon per zone with constant initial weights
-  // or it will be used to set the initial weight
-  emission_eqwt = pin->GetOrAddBoolean("montecarlo","equal_weight",false);
-
 }
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarlo::ComputeEmission()
-//! \brief compute the emission on all blocks
+//! \fn void MonteCarlo::DistributeSamples(int ntot, bool equal_weight)
+//! \brief Distribute the samples across blocks based on emission functions
 
-void MonteCarlo::ComputeEmission() {
+void MonteCarlo::DistributeSamples(int ntot, bool equal_weight) {
 
   if (emission_flag == EMISNONE) {
-    // Do nothing.  nphremain needs to be set in the problem generator
-    // based on the user's criteria
+    // Do nothing.  nphremain for each block needs to be set in the
+    // problem generator based on the user's criteria
     return;
   } else if (GetEmission == nullptr) {
     std::stringstream msg;
@@ -477,7 +476,7 @@ void MonteCarlo::ComputeEmission() {
   MPI_Allreduce(MPI_IN_PLACE,&em_tot,1,MPI_ATHENA_REAL,MPI_SUM,MPI_COMM_WORLD);
 #endif
 
-  if (emission_eqwt) {
+  if (equal_weight) {
     // emmision weights are all equal 
 
     // First, each process sends its its own block totals to rank 0
@@ -493,7 +492,7 @@ void MonteCarlo::ComputeEmission() {
       Real prob[Globals::nranks];
       for (int irank=0; irank<Globals::nranks; irank++) 
         prob[irank] = emiss_proc[irank]/em_tot;
-      my_blocks(0)->pran->SampleMultinomial(nsamp,Globals::nranks,prob,count);
+      my_blocks(0)->pran->SampleMultinomial(ntot,Globals::nranks,prob,count);
     }
     int my_count;
 #ifdef MPI_PARALLEL
@@ -507,7 +506,7 @@ void MonteCarlo::ComputeEmission() {
     for (int nb=0; nb<nblocal; nb++)
       prob_b[nb] = tot_block[nb]/em_proc;
     my_blocks(0)->pran->SampleMultinomial(my_count,nblocal,prob_b,count_b);
-    Real ave_weight = em_tot/static_cast<Real>(nsamp);
+    Real ave_weight = em_tot/static_cast<Real>(ntot);
 
     for (int nb=0; nb<nblocal; nb++) {
       my_blocks(nb)->nphremain = count_b[nb];
@@ -548,7 +547,7 @@ void MonteCarlo::ComputeEmission() {
       for (int irank=0; irank<Globals::nranks; irank++) {
         prob[irank] = static_cast<Real>(active_proc[irank])/static_cast<Real>(nb_active_total);
       }
-      my_blocks(0)->pran->SampleMultinomial(nsamp,Globals::nranks,prob,count);
+      my_blocks(0)->pran->SampleMultinomial(ntot,Globals::nranks,prob,count);
     }
     int my_count;
 #ifdef MPI_PARALLEL
@@ -574,7 +573,7 @@ void MonteCarlo::ComputeEmission() {
       my_blocks(nb)->nphremain = count_b[nb];
       my_blocks(nb)->nphrun = 0;
       my_blocks(nb)->minweight = weightratio * em_min;
-      my_blocks(nb)->emiss_to_weight = static_cast<Real>(ncells_active)/static_cast<Real>(nsamp);
+      my_blocks(nb)->emiss_to_weight = static_cast<Real>(ncells_active)/static_cast<Real>(ntot);
     }
   }
   // Report emissivity ranges
@@ -587,98 +586,109 @@ void MonteCarlo::ComputeEmission() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
+//! \fn void MonteCarlo::RunMonteCarlo(Outputs *pouts, Mesh *pmesh,
 //!                                          ParameterInput *pinput)
 //! \brief Finish Initialization of MonteCarloBlocks and run steady-state MC calculation
 
-void MonteCarlo::RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh,
+void MonteCarlo::RunMonteCarlo(Outputs *pouts, Mesh *pmesh,
                                      ParameterInput *pinput) {
 
-  // SWD: fix normalization for multiple outputs
-  //tint /= static_cast<Real>(nout);
-  //for (int i=0; i<nout; i++) {
-
-  // Compute emission on all blocks -- sets nphremain and parameters for
-  // determining initial photon weights
-  ComputeEmission();
-
-  // Clear Boundary buffers for photons
-  for(int nb=0; nb<nblocal; ++nb)
-    my_blocks(nb)->pphot->ClearBoundary();
-
-  bool photons_remain = true; // True if photons on any process
-  while(photons_remain) {
-
-    for(int nb=0; nb<nblocal; ++nb){
-      if (raytrace_flag)
-        my_blocks(nb)->RayTracePhotonsOnBlock();
-      else
-        my_blocks(nb)->TransferPhotonsOnBlock();
-    }
-    photons_remain = CheckAndBroadCastPhotonsRemaining();
+  if (dynamic) {
+    tmax = pinput->GetOrAddReal("montecarlo","tmax",-1.);
+    if (tmax < 0.)
+      tmax = pmy_mesh->dt;
+    tint = pmy_mesh->dt;
   }
 
-  // Report diagnostic results from all blocks
-  nphrun = 0;
-  int64_t nesc = 0, nabs = 0, ndes = 0, nscat = 0;
-  for(int nb=0; nb<nblocal; ++nb){
+  // Update MC blocks if needed
+  for (int nb=0; nb<nblocal; nb++) {
     MonteCarloBlock *pmcb = my_blocks(nb);
-    nesc += pmcb->nesc;
-    nabs += pmcb->nabs;
-    ndes += pmcb->ndes;
-    nscat += pmcb->nscat;
-    nphrun += pmcb->nphrun;
-  }
-  pmcout->UpdateOutputCount(nphrun);
-
-  int ntot = nphrun;
-#ifdef MPI_PARALLEL
-  MPI_Allreduce(MPI_IN_PLACE,&nesc,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE,&nabs,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE,&ndes,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE,&nscat,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE,&ntot,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-#endif
-  if (Globals::my_rank == 0) {
-    std::cout  << "ntot, nesc, nabs, ndes, nscat/ntot: "
-                << ' ' << ntot << ' ' << nesc
-                << ' ' << nabs << ' ' << ndes << ' ';
-    if (ntot > 0)
-      std::cout << static_cast<Real>(nscat)/static_cast<Real>(ntot) << std::endl;
-    else
-      std::cout << 0. << std::endl;
-    //std::cout << "nscat: " << nscat << std::endl;
+    if (dynamic) { // dynamic MC
+      // (Re)Initialize/update variables over all blocks
+      pmcb->GetDensity();
+      pmcb->GetTemperature();
+      pmcb->GetNumberDensity();
+      if (boosts) pmcb->GetVelocity();
+      if (boosts) pmcb->ComputeTransformations();
+      if (NSCALARS > 0) pmcb->GetScalars(); //scalars
+    } else { // static MC
+      // Clear Boundary buffers for photons
+      pmcb->pphot->ClearBoundary();
+    }
+    // reset counters
+    pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
   }
 
-    //Real norm_mom = static_cast<Real>(i+1);
-    // normalize moments for output
-    // for(int nb=0; nb<nblocal; ++nb) {
-    //   MonteCarloBlock *pmcb = my_blocks(nb);
-    //   if (pmcb->mom_flag_lab)
-    //     pmcb->NormalizeMoments(true);
-    //   // SWD: Not sure this is needed
-    //   if (pmcb->call_srcterms)
-    //     pmcb->NormalizeSourceTerms(true);
-    // }
+   // reset moments/sourcterms for start of new timestep
+  if (dynamic) {
+    for(int nb=0; nb<nblocal; ++nb) {
+      MonteCarloBlock *pmcb = my_blocks(nb);
+      if (pmcb->call_moments)
+        pmcb->ResetMoments();
+      if (pmcb->call_srcterms)
+        pmcb->ResetSourceTerms();
+    }
+  }
 
-    // Write outputs
-   // pouts->MakeOutputs(pmesh,this,pinput,true);
+  for (int itype=0; itype < ntype; itype++) {
+    // Distribute samples to all blocks based on emission properties
+    // Sets nphremain and parameters for determining initial photon weights
+    DistributeSamples(nsamptype[itype],emission_eqwt[itype]);
 
-    // unnormalize moments after output
-    // for(int nb=0; nb<nblocal; ++nb) {
-    //   MonteCarloBlock *pmcb = my_blocks(nb);
-    //   if (pmcb->mom_flag_lab)
-    //     pmcb->NormalizeMoments(false);
-    //   if (pmcb->call_srcterms)
-    //     pmcb->NormalizeSourceTerms(false);
-    // }
+    // Run Monte Carlo until all photons have escaped/been absorbed
+    bool photons_remain = true; // True if photons on any process
+    while(photons_remain) {
 
-  //} // end loop over nout
+      for(int nb=0; nb<nblocal; ++nb){
+        if (raytrace_flag)
+          my_blocks(nb)->RayTracePhotonsOnBlock();
+        else
+          my_blocks(nb)->TransferPhotonsOnBlock();
+      }
+      photons_remain = CheckAndBroadCastPhotonsRemaining();
+    }
+
+    // Report diagnostic results from all blocks
+    int ntot = 0;
+    int64_t nesc = 0, nabs = 0, ndes = 0, nscat = 0;
+    for(int nb=0; nb<nblocal; ++nb) {
+      MonteCarloBlock *pmcb = my_blocks(nb);
+      nesc += pmcb->nesc;
+      nabs += pmcb->nabs;
+      ndes += pmcb->ndes;
+      nscat += pmcb->nscat;
+      ntot += pmcb->nphrun;
+    }
+    pmcout->UpdateOutputCount(ntot);
+
+  #ifdef MPI_PARALLEL
+    MPI_Allreduce(MPI_IN_PLACE,&nesc,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE,&nabs,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE,&ndes,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE,&nscat,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE,&ntot,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  #endif
+    if (Globals::my_rank == 0) {
+      std::cout  << "ntot: " << ntot
+                << " nesc: " << nesc
+                << " nabs: " << nabs
+                << " ndes: " << ndes;
+      if (ntot > 0)
+        std::cout << " nscat/ntot: "
+                  << static_cast<Real>(nscat)/static_cast<Real>(ntot) << std::endl;
+      else
+          std::cout << std::endl;
+    }
+
+    for(int nb=0; nb<nblocal; ++nb) {
+      my_blocks(nb)->UserWorkAfterTransfer();
+    }
+  } // end loop over ntype
 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarlo::RunStaticMonteCarlo()
+//! \fn bool MonteCarlo::CheckAndBroadCastPhotonsRemaining() 
 //! \brief Checks if photons remain on any process and sends message to rank 0
 //!        process if none remaining.
 
@@ -723,97 +733,6 @@ bool MonteCarlo::CheckAndBroadCastPhotonsRemaining() {
     active = false;
   }
   return active;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
-//!                                          ParameterInput *pinput)
-//! \brief Run one step in dynamic MC calculation
-
-void MonteCarlo::RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh,
-                                     ParameterInput *pin) {
-
-  // initialize counter
-  nphrun = 0;
-  tmax = pin->GetOrAddReal("montecarlo","tmax",-1.);
-  if (tmax < 0.)
-    tmax = pmy_mesh->dt;
-  tint = pmy_mesh->dt;
-
-
-  // Reset monte carlo blocks
-  for (int i=0; i<nblocal; i++) {
-    MonteCarloBlock *pmcb = my_blocks(i);
-    // Initialize variables over all blocks
-    pmcb->GetDensity();
-    pmcb->GetTemperature();
-    pmcb->GetNumberDensity();
-    if (boosts) pmcb->GetVelocity();
-    if (boosts) pmcb->ComputeTransformations();
-    if (NSCALARS > 0) pmcb->GetScalars(); //scalars
-    // reset counters
-    pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
-  }
-
-  // update emission arrays, if needed
-  ComputeEmission();
-
-  // reset moments/sourcterms for start of new timestep
-  for(int nb=0; nb<nblocal; ++nb) {
-    MonteCarloBlock *pmcb = my_blocks(nb);
-    if (pmcb->call_moments)
-      pmcb->ResetMoments();
-    if (pmcb->call_srcterms)
-      pmcb->ResetSourceTerms();
-  }
-
-  bool photons_remain = true; // True if photons on any process
-  while(photons_remain) {
-
-    for(int nb=0; nb<nblocal; ++nb){
-      my_blocks(nb)->TransferPhotonsOnBlock();
-    }
-    photons_remain = CheckAndBroadCastPhotonsRemaining();
-  }
-
-  // Report diagnostic results from all blocks
-  int64_t nesc = 0, nabs = 0, ndes = 0, nscat = 0;
-  for(int nb=0; nb<nblocal; ++nb){
-    MonteCarloBlock *pmcb = my_blocks(nb);
-    nesc += pmcb->nesc;
-    nabs += pmcb->nabs;
-    ndes += pmcb->ndes;
-    nscat += pmcb->nscat;
-    nphrun += pmcb->nphrun;
-  }
-  pmcout->UpdateOutputCount(nphrun);
-
-  int ntot = nphrun;
-#ifdef MPI_PARALLEL
-  MPI_Allreduce(MPI_IN_PLACE,&nesc,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE,&nabs,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE,&ndes,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE,&nscat,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE,&ntot,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-#endif
-  if (Globals::my_rank == 0) {
-    std::cout  << "ntot, nesc, nabs, ndes, nscat: "
-               << ' ' << ntot << ' ' << nesc
-               << ' ' << nabs << ' ' << ndes << ' ' << nscat << ' ';
-    if (ntot > 0)
-      std::cout << static_cast<Real>(nscat)/static_cast<Real>(ntot) << std::endl;
-    else
-      std::cout << 0. << std::endl;
-  }
-
-  // Will be accounted for in NormalizeDomainOutputs()
-  // for(int nb=0; nb<nblocal; ++nb) {
-  //   MonteCarloBlock *pmcb = my_blocks(nb);
-  //   if (pmcb->mom_flag_lab)
-  //     pmcb->NormalizeMoments(true);
-  //   if (pmcb->call_srcterms)
-  //     pmcb->NormalizeSourceTerms(true);
-  // }
 }
 
 //----------------------------------------------------------------------------------------

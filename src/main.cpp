@@ -512,7 +512,7 @@ int main(int argc, char *argv[]) {
     if (pmesh->turb_flag > 1) pmesh->ptrbd->Driving(); // driven turbulence
 
     if ( !(MONTE_CARLO_ENABLED) || pmc->dynamic) {
-      pmc->RunDynamicMonteCarlo(pouts,pmesh,pinput);
+      pmc->RunMonteCarlo(pouts,pmesh,pinput);
 
       for (int stage=1; stage<=ptlist->nstages; ++stage) {
         ptlist->DoTaskListOneStage(pmesh, stage);
@@ -524,7 +524,7 @@ int main(int argc, char *argv[]) {
         }
       }
     } else {
-      pmc->RunStaticMonteCarlo(pouts,pmesh,pinput);
+      pmc->RunMonteCarlo(pouts,pmesh,pinput);
       pmesh->dt = pmc->tint;
     } // end not MONTE_CARLO_ENABLED or dynamic MC
 
@@ -582,12 +582,6 @@ int main(int argc, char *argv[]) {
     }
   } // END OF MAIN INTEGRATION LOOP ======================================================
   // Make final outputs, print diagnostics, clean up and terminate
-
-  // Perform Monte Carlo radiation tranfer
-  //if (MONTE_CARLO_ENABLED) {
-  //  if (!pmc->dynamic)
-  //    pmc->RunStaticMonteCarlo(pouts,pmesh,pinput);
-  //}
 
   if (Globals::my_rank == 0 && wtlim > 0)
     SignalHandler::CancelWallTimeAlarm();
@@ -670,14 +664,14 @@ int main(int argc, char *argv[]) {
     std::uint64_t zonecycles = mbcnt
       *static_cast<std::uint64_t> (pmesh->my_blocks(0)->GetNumberOfMeshBlockCells());
     double zc_cpus = static_cast<double> (zonecycles) / cpu_time;
-    if (!write_fluid_diagnostics) {
-      float phot_cpus = static_cast<float> (pmc->nsamp)/cpu_time;
-      std::cout << std::endl << "cpu time used  = " << cpu_time << std::endl;
-      std::cout << "samples/cpu_second = " << phot_cpus << std::endl;
-    } else {
+    if (write_fluid_diagnostics) {
       std::cout << std::endl << "zone-cycles = " << zonecycles << std::endl;
       std::cout << "cpu time used  = " << cpu_time << std::endl;
       std::cout << "zone-cycles/cpu_second = " << zc_cpus << std::endl;
+    } else { // Static Monte Carlo output
+      float phot_cpus = static_cast<float> (pmc->nsamp*pmc->nout)/cpu_time;
+      std::cout << std::endl << "cpu time used  = " << cpu_time << std::endl;
+      std::cout << "samples/cpu_second = " << phot_cpus << std::endl;
     }
 #ifdef OPENMP_PARALLEL
     double zc_omps = static_cast<double> (zonecycles) / omp_time;

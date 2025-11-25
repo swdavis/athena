@@ -193,13 +193,14 @@ public:
   MCOutput *pmcout;
   AthenaArray<MonteCarloBlock*> my_blocks;
 
-  Real tint;     // Monte Carlo timestep
+  Real tint;   // Monte Carlo timestep
   Real tmax;   // Maximum evolution time
   Real time_cgs; // conversion of time to cgs units
   Real weightratio; // used for setting minimum weight for absorption
 
-  int64_t nsamp;  // total number of photons to integrate per timestep
-  int64_t nphrun;  // number of photons completed
+  int ntype; // number of emission types 
+  int64_t nsamp;  // total number of photons to integrate per timestep/output
+  int64_t *nsamptype; // number of sample per type
   int nblocal; // number of montecarloblocks on this process
   int nbtotal; // total number of montecarloblocks
   int nout;  // number of outputs
@@ -220,7 +221,7 @@ public:
   bool boosts;  // Compute lorentz transformations
   bool tetrads; // convert from coordinate frame
   bool emission_array;  // Compute and save zone emissivities
-  bool emission_eqwt; // Set initial weights equal
+  bool *emission_eqwt; // Set initial weights equal
   bool polarized;// track photon polarization
   bool acceleration;  // use MRW acceleration
   bool computedmin;
@@ -243,8 +244,7 @@ public:
 
   // functions
   // SWD: some of these functions could/should be private
-  void RunStaticMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput *pinput);
-  void RunDynamicMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput *pinput);
+  void RunMonteCarlo(Outputs *pouts, Mesh *pmesh, ParameterInput *pinput);
   bool CheckAndBroadCastPhotonsRemaining();
   void InitUserMonteCarloData(ParameterInput *pin);
   // Enroll User functions
@@ -259,7 +259,7 @@ public:
   void EnrollUserScatteringFunction(ScatFunc_t scatfunc);
   void Initialize(ParameterInput *pinput);
   void InitializeEmissionFlags(ParameterInput *pinput);
-  void ComputeEmission();
+  void DistributeSamples(int ntot, bool equql_weight);
   void NormalizeDomainOutputs(bool normalize);
 private:
 
@@ -302,9 +302,9 @@ public:
   OpacFunc_t ScatteringOpacity;
   ScatFunc_t Scatter;
 
-  int nphrun; // Photons initialized thus far
-  int nphremain; // total number of photons to integrate
-  int64_t nabs, nesc, ndes, nscat;
+  int64_t nphrun; // Photons initialized thus far
+  int64_t nphremain; // total number of photons to integrate
+  int64_t nabs, nesc, ndes, nscat; // counters
   int loop_max_size;
   int nx1,nx2,nx3;
   int is,ie,js,je,ks,ke;
@@ -403,6 +403,7 @@ public:
   void  FrequencyAngleShiftComoving(Photon *pphot, int ip, Real &shift,
                                     Real &k1, Real &k2, Real &k3);
   Real FrequencyShiftCoordinate(Photon *pphot, int ips);
+  void UserWorkAfterTransfer();
 
 private:
   int i1_, i2_, i3_; // used for emission
