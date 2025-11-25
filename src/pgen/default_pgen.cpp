@@ -157,10 +157,10 @@ void __attribute__((weak)) MonteCarloBlock::FinalizePhoton(Photon *pphot, int ip
 }
 
 //========================================================================================
-//! \fn void MonteCarloBlock::UserWorkAfterTransfer()
+//! \fn void MonteCarloBlock::UserWorkAfterTransfer(int etype)
 //! \brief Do work after each stage of photon transfer (multiple emission types)
 //========================================================================================
 
-void __attribute__((weak)) MonteCarloBlock::UserWorkAfterTransfer() {
+void __attribute__((weak)) MonteCarloBlock::UserWorkAfterTransfer(int etype) {
 
 }

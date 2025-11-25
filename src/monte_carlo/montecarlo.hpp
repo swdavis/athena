@@ -259,7 +259,7 @@ public:
   void EnrollUserScatteringFunction(ScatFunc_t scatfunc);
   void Initialize(ParameterInput *pinput);
   void InitializeEmissionFlags(ParameterInput *pinput);
-  void DistributeSamples(int ntot, bool equql_weight);
+  void DistributeSamples(int etype);
   void NormalizeDomainOutputs(bool normalize);
 private:
 
@@ -403,7 +403,7 @@ public:
   void  FrequencyAngleShiftComoving(Photon *pphot, int ip, Real &shift,
                                     Real &k1, Real &k2, Real &k3);
   Real FrequencyShiftCoordinate(Photon *pphot, int ips);
-  void UserWorkAfterTransfer();
+  void UserWorkAfterTransfer(int etype);
 
 private:
   int i1_, i2_, i3_; // used for emission

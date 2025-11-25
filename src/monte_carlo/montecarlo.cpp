@@ -73,12 +73,16 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
 
   // Specify photon integration parameters
   nout = pin->GetOrAddInteger("montecarlo","nout",1);
-  ntype = pin->GetOrAddInteger("montecarlo","ntype",1);
-  nsamptype = new int64_t[ntype];
-  emission_eqwt = new bool[ntype];
-  if (ntype == 1) {
+  ntype = pin->GetOrAddInteger("montecarlo","ntype",-1);
+  if (ntype < 0) {
+    ntype = 1;
+    nsamptype = new int64_t[ntype];
+    emission_eqwt = new bool[ntype];
     nsamptype[0] = nsamp = pin->GetInteger("montecarlo","nphot");
     emission_eqwt[0] = pin->GetOrAddBoolean("montecarlo","equal_weight",false);
+  } else { // set parameters in problem generator
+    nsamptype = new int64_t[ntype];
+    emission_eqwt = new bool[ntype];
   }
   // Set default size parameters
   max_phots_init = pin->GetOrAddInteger("montecarlo","max_phots_init",10000);
@@ -440,10 +444,10 @@ void MonteCarlo::InitializeEmissionFlags(ParameterInput *pin) {
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarlo::DistributeSamples(int ntot, bool equal_weight)
+//! \fn void MonteCarlo::DistributeSamples(int etype)
 //! \brief Distribute the samples across blocks based on emission functions
 
-void MonteCarlo::DistributeSamples(int ntot, bool equal_weight) {
+void MonteCarlo::DistributeSamples(int etype) {
 
   if (emission_flag == EMISNONE) {
     // Do nothing.  nphremain for each block needs to be set in the
@@ -456,7 +460,10 @@ void MonteCarlo::DistributeSamples(int ntot, bool equal_weight) {
         << std::endl;
     ATHENA_ERROR(msg);
   }
-
+  // Set methods, numbers for this emission type
+  int ntot = nsamptype[etype];
+  bool equal_weight = emission_eqwt[etype];
+  
   // compute emission properties over all blocks on this process
   Real em_min = SQR(HUGE_NUMBER), em_max = -HUGE_NUMBER, em_tot = 0.;
   Real *tot_block = new Real[nblocal];
@@ -630,10 +637,10 @@ void MonteCarlo::RunMonteCarlo(Outputs *pouts, Mesh *pmesh,
     }
   }
 
-  for (int itype=0; itype < ntype; itype++) {
+  for (int etype=0; etype < ntype; etype++) {
     // Distribute samples to all blocks based on emission properties
     // Sets nphremain and parameters for determining initial photon weights
-    DistributeSamples(nsamptype[itype],emission_eqwt[itype]);
+    DistributeSamples(etype);
 
     // Run Monte Carlo until all photons have escaped/been absorbed
     bool photons_remain = true; // True if photons on any process
@@ -681,7 +688,7 @@ void MonteCarlo::RunMonteCarlo(Outputs *pouts, Mesh *pmesh,
     }
 
     for(int nb=0; nb<nblocal; ++nb) {
-      my_blocks(nb)->UserWorkAfterTransfer();
+      my_blocks(nb)->UserWorkAfterTransfer(etype);
     }
   } // end loop over ntype
 
