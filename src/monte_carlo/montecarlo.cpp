@@ -603,13 +603,19 @@ void MonteCarlo::DistributeSamples(int etype) {
     my_blocks(0)->pran->SampleMultinomial(my_count,nblocal,prob_b,count_b);
     Real ave_weight = em_tot/static_cast<Real>(ntot);
 
+
     for (int nb=0; nb<nblocal; nb++) {
       my_blocks(nb)->nphremain = count_b[nb];
       my_blocks(nb)->nphrun = 0;
       my_blocks(nb)->minweight = weightratio * ave_weight;
       my_blocks(nb)->emiss_to_weight = ave_weight;
       // distribute photons within each block
-      my_blocks(nb)->ComputeEmissionSampleArray();
+      //if (pmy_mc->emission_geometry[etype] == EMISVOL) {
+        my_blocks(nb)->ComputeEmissionSampleArray();
+      //} else if (pmy_mc->emission_geometry[etype] == EMISAREA) {
+      //  BoundaryFace face = pmy_mc->emission_face[etype];
+      //  my_blocks(nb)->ComputeEmissionSampleArray(face);
+      //}
     }
 
   } else {

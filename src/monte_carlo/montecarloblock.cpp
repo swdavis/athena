@@ -1786,6 +1786,7 @@ void MonteCarloBlock::ComputeEmissionSampleArray() {
 
 }
 
+
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe)
 //! \brief set emission cell and weight for photon via emission array
@@ -1852,7 +1853,6 @@ void MonteCarloBlock::SetEmissionCellWeightArea(Photon *pphot, BoundaryFace face
 
   if (pmy_mc->emission_eqwt[0]) {
     // Set intial zone based on probability within zone
-    
     for (int ip=ips; ip<=ipe; ip++) {
       bool i1flag = true;
       bool i2flag = true;
@@ -1894,6 +1894,7 @@ void MonteCarloBlock::SetEmissionCellWeightArea(Photon *pphot, BoundaryFace face
         int i = i1_ + is;
         int j = i2_ + js;
         int k = i3_ + ks;
+ 
         if (emit_count_(k,j,i) > 0) {
           pphot->i1p[ip] = i;
           pphot->i2p[ip] = j;
@@ -1903,15 +1904,30 @@ void MonteCarloBlock::SetEmissionCellWeightArea(Photon *pphot, BoundaryFace face
         } else {
           // Update zone
           this_zone = false;
-          if (i3flag) i3_++;
-          if (i3_ >= nx3) {
-            i3_ = 0;
-            if (i2flag) i2_++;
+          if (!i3flag) {
+            i2_++;
             if (i2_ >= nx2) {
               i2_ = 0;
-              if (i1flag) i1_++;
+              i1_++;
               if (i1_ >= nx1)
                 i1_ = 0;
+            }
+          } else if (!i2flag) {
+            i3_++;
+            if (i3_ >= nx3) {
+              i3_ = 0;
+              i1_++;
+              if (i1_ >= nx1)
+                i1_ = 0;
+            }
+          } else if (!i1flag) {
+            i3_++;
+            if (i3_ >= nx3) {
+              i3_ = 0;
+              i2_++;
+              if (i2_ >= nx2) {
+                i2_ = 0;
+              }
             }
           }
         }

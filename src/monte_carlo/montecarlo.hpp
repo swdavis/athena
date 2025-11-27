@@ -401,6 +401,7 @@ public:
   // Functions for handling distributed emission over cells
   void ComputeEmissionArray(int etype, Real &emm_min, Real &emm_max, Real &emm_tot);
   void ComputeEmissionSampleArray();
+  //void ComputeEmissionSampleArray(BoundaryFace face);
   void SetEmissionCellWeight(Photon *pphot, int ips, int ipe);
   void SetEmissionCellWeightArea(Photon *pphot, BoundaryFace face, int ips, int ipe);
   void GetDensity();
