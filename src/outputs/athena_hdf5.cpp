@@ -171,7 +171,7 @@ void ATHDF5Output::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
     num_datasets = 1;
     num_variables = new int[num_datasets];
     int n_dataset = 0;
-    num_variables[n_dataset] = 7;
+    num_variables[n_dataset] = 8;
   } else if (variable.compare("mcscat") == 0) {
     num_datasets = 1;
     num_variables = new int[num_datasets];

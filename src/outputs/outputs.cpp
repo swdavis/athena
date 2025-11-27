@@ -873,7 +873,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       pod = new OutputData;
       pod->type = "VECTORS";
       pod->name = "RadforceF";
-      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->sourceterms,4,MCRS1,3);
+      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->sourceterms,4,MCRF1,3);
       AppendOutputDataNode(pod);
       num_vars_+=3;
     }
@@ -883,9 +883,19 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
       pod = new OutputData;
       pod->type = "VECTORS";
       pod->name = "RadforceS";
-      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->sourceterms,4,MCRSP1,3);
+      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->sourceterms,4,MCRS1,3);
       AppendOutputDataNode(pod);
       num_vars_+=3;
+    }
+    // monte carlo netcooling
+    if (output_params.variable.compare("mcsrc") == 0 ||
+        output_params.variable.compare("AbsWeight") == 0) {
+      pod = new OutputData;
+      pod->type = "SCALARS";
+      pod->name = "AbsWeight";
+      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->sourceterms,4,MCNABS,1);
+      AppendOutputDataNode(pod);
+      num_vars_++;
     }
     MonteCarlo *pmc = pmcb->pmy_mc;
     if (pmc->nuser_mom > 0) {

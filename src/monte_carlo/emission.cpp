@@ -15,12 +15,11 @@
 #include "../globals.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn Real GetEmissionFreefree(MonteCarloBlock *pmcb, int k, int j, int i)
+//! \fn Real GetEmissionFreefree(MonteCarloBlock *pmcb, int k, int j, int i, int etype)
 //! \brief compute free-free emissivity
 
-Real GetEmissionFreeFree(MonteCarloBlock *pmcb, int k, int j, int i) {
+Real GetEmissionFreeFree(MonteCarloBlock *pmcb, int k, int j, int i, int etype) {
 
-  const Real mp = 1.67262192369e-24;
   const Real eta0 = 1.032521e-11;
   const Real gaunt = 1.0; // Gaunt factor
 
@@ -34,20 +33,20 @@ Real GetEmissionFreeFree(MonteCarloBlock *pmcb, int k, int j, int i) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void PhotonInitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin,
-//!                             Real lemax, int ips, int ipe))
+//!                             Real lemax, int ip))
 //! \brief initialize photon consistent with free-free emission
 
 void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real lemax,
                         int ip)
 {
-  Real kb = 1.380649e-16;
+  Real kb_cgs = 1.380649e-16;
   MCRandom *pran = pmcb->pran;
 
   // Scheme in which packets are drawn from a uniform distribution in log E
   // requires weight = exp(-x) note log(10)=2.30258509299
   Real dev = exp((lemax-lemin)*pran->uniform()+lemin);
   pphot->ep[ip] = dev;
-  Real x = dev / (kb * pmcb->tgas(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]));
+  Real x = dev / (kb_cgs * pmcb->tgas(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]));
 
   // Initialize weight
   pphot->wp[ip] *= exp(-x) * (lemax-lemin);
@@ -65,7 +64,7 @@ void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real l
   Real cphi = cos(phi);
   Real sphi = sin(phi);
   Real cth = 2. * pran->uniform() - 1.;
-  Real sth = sqrt(1. - SQR(cth));
+  Real sth = std::sqrt(1. - SQR(cth));
 
   // Initialize wave vector with isotropic distribution
   pphot->k0p[ip] = 1.;
@@ -75,6 +74,114 @@ void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real l
 
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn Real GetEmissionBlackbody(MonteCarloBlock *pmcb, int k, int j, int i, int etype)
+//! \brief compute blackbody emission
+
+Real GetEmissionBlackbody(MonteCarloBlock *pmcb, int k, int j, int i, int etype) {
+
+  Real temp = pmcb->tgas(k,j,i);
+  Real c_cgs = 2.99792458e10;
+  Real h_cgs = 6.62607015e-27;
+  Real kb_cgs = 1.380649e-16;  
+  return 4.*PI*1.20206/SQR(c_cgs)*pow(kb_cgs*temp/h_cgs,3); // zeta(3)
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void PhotonInitBlackbody(MonteCarloBlock *pmcb, Photon *pphot, BoundaryFace face,
+//!       int ip))
+//!
+//! \brief initialize photon consistent with black body emission
+
+void PhotonEmitBlackbody(MonteCarloBlock *pmcb, Photon *pphot, BoundaryFace face,
+                         int ip) {
+
+  // Initialize energy
+  MCRandom *pran = pmcb->pran;
+  Real temp = pmcb->tgas(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]);
+  pphot->ep[ip] = PlanckDist(temp,pran);
+
+  if (pmcb->pmy_mc->polarized) {
+    // Initialize Stokes vector
+    pphot->sip[ip] = 1.0;
+    pphot->sup[ip] = 0.0;
+    pphot->sqp[ip] = 0.0;
+    pphot->svp[ip] = 0.0;
+  }
+
+  // Generate initial angle parameters
+  Real phi = 2. * PI * pran->uniform();
+  Real cphi = cos(phi);
+  Real sphi = sin(phi);
+  // isotropic from surface
+  Real cth = std::sqrt(pran->uniform()); 
+  Real sth = std::sqrt(1. - SQR(cth));
+
+  // Align to appropriate face, assuming emmision
+  // points into domain
+  Real kx,ky,kz;
+  pphot->k0p[ip] = 1.;
+  switch(face) {
+    case BoundaryFace::inner_x1:
+      pphot->k1p[ip] = cth;
+      pphot->k2p[ip] = sth*cphi;
+      pphot->k3p[ip] = sth*sphi;
+      break;
+    case BoundaryFace::outer_x1:
+      pphot->k1p[ip] = -cth;
+      pphot->k2p[ip] = sth*cphi;
+      pphot->k3p[ip] = sth*sphi;
+      break;
+    case BoundaryFace::inner_x2:
+      pphot->k1p[ip] = sth*sphi;
+      pphot->k2p[ip] = cth;
+      pphot->k3p[ip] = sth*cphi;
+      break;
+    case BoundaryFace::outer_x2:
+      pphot->k1p[ip] = sth*sphi;
+      pphot->k2p[ip] = -cth;
+      pphot->k3p[ip] = sth*cphi;
+      break;
+    case BoundaryFace::inner_x3:
+      pphot->k1p[ip] = sth*cphi;
+      pphot->k2p[ip] = sth*sphi;
+      pphot->k3p[ip] = cth;
+      break;
+    case BoundaryFace::outer_x3:
+      pphot->k1p[ip] = sth*cphi;
+      pphot->k2p[ip] = sth*sphi;
+      pphot->k3p[ip] = -cth;
+      break;
+  }
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Real PlanckDist(Real temp, MCRandom *pran)
+//! \brief returns energy distributed according to Planck function
+
+Real PlanckDist(Real temp, MCRandom *pran)
+{
+  // Method of choosing the energy of the initial photon which a Planck spectrum
+  // distribution. See Pozdnyakov et al. sec 9.4.  Originally, Fleck and Cumming (1971)
+
+  Real x1 = 1.20206 * pran->uniform(); // zeta(3)
+  Real x2 = pran->uniform();
+  Real x3 = pran->uniform();
+  Real x4 = pran->uniform();
+
+  Real sum = 1.0;
+  int alpha = 1;
+  while (x1 >= sum) {
+    alpha++;
+    sum +=  1. / (alpha * alpha * alpha);
+  }
+
+  Real kb_cgs = 1.380649e-16;
+  return -kb_cgs * temp * log(x2 * x3 * x4) / static_cast<Real>(alpha);
+
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pcoord,
@@ -87,7 +194,6 @@ void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pcoord, in
   Real yl = pcoord->x2f(pphot->i2p[ip]); Real dy = pcoord->x2f(pphot->i2p[ip]+1)-yl;
   Real zl = pcoord->x3f(pphot->i3p[ip]); Real dz = pcoord->x3f(pphot->i3p[ip]+1)-zl;
 
-  pphot->x0p[ip] = 1.;
   pphot->x1p[ip] = xl+pran->uniform()*dx;
   pphot->x2p[ip] = yl+pran->uniform()*dy;
   pphot->x3p[ip] = zl+pran->uniform()*dz;
@@ -133,27 +239,48 @@ void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pcoor
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real PlanckDist(Real temp, MCRandom *pran)
-//! \brief returns energy distributed according to Planck function
+//! \fn void GetZonePositionCartesianFace(Photon *pphot, MCRandom *pran, MCCoord *pcoord,
+//!                                   BoundaryFace face, int ip)
+//! \brief choose random position within cartesian cell
 
-Real PlanckDist(Real temp, MCRandom *pran)
-{
-  // Method of choosing the energy of the initial photon which a Planck spectrum
-  // distribution. See Pozdnyakov et al. sec 9.4.  Originally, Fleck and Cumming (1971)
+void GetZonePositionCartesianFace(Photon *pphot, MCRandom *pran, MCCoord *pcoord,
+                                  BoundaryFace face, int ip) {
 
-  Real x1 = 1.202 * pran->uniform();
-  Real x2 = pran->uniform();
-  Real x3 = pran->uniform();
-  Real x4 = pran->uniform();
+  Real xl = pcoord->x1f(pphot->i1p[ip]); Real dx = pcoord->x1f(pphot->i1p[ip]+1)-xl;
+  Real yl = pcoord->x2f(pphot->i2p[ip]); Real dy = pcoord->x2f(pphot->i2p[ip]+1)-yl;
+  Real zl = pcoord->x3f(pphot->i3p[ip]); Real dz = pcoord->x3f(pphot->i3p[ip]+1)-zl;
 
-  Real sum = 1.0;
-  int alpha = 1;
-  while (x1 >= sum) {
-    alpha++;
-    sum = sum + 1.0 / (alpha * alpha * alpha);
+  switch(face) {
+    case BoundaryFace::inner_x1:
+      pphot->x1p[ip] = xl;
+      pphot->x2p[ip] = yl+pran->uniform()*dy;
+      pphot->x3p[ip] = zl+pran->uniform()*dz;
+      break;
+    case BoundaryFace::outer_x1:
+      pphot->x1p[ip] = xl+dx;
+      pphot->x2p[ip] = yl+pran->uniform()*dy;
+      pphot->x3p[ip] = zl+pran->uniform()*dz;
+      break;
+    case BoundaryFace::inner_x2:
+      pphot->x1p[ip] = xl+pran->uniform()*dx;
+      pphot->x2p[ip] = yl;
+      pphot->x3p[ip] = zl+pran->uniform()*dz;
+      break;
+    case BoundaryFace::outer_x2:
+      pphot->x1p[ip] = xl+pran->uniform()*dx;
+      pphot->x2p[ip] = yl+dy;
+      pphot->x3p[ip] = zl+pran->uniform()*dz;
+      break;
+    case BoundaryFace::inner_x3:
+      pphot->x1p[ip] = xl+pran->uniform()*dx;
+      pphot->x2p[ip] = yl+pran->uniform()*dy;
+      pphot->x3p[ip] = zl;
+      break;
+    case BoundaryFace::outer_x3:
+      pphot->x1p[ip] = xl+pran->uniform()*dx;
+      pphot->x2p[ip] = yl+pran->uniform()*dy;
+      pphot->x3p[ip] = zl+dz;
+      break;
   }
-
-  Real kb = 1.380649e-16;
-  return -kb * temp * log(x2 * x3 * x4) / ((Real)alpha);
 
 }

@@ -149,25 +149,38 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
   // Set initial cells and emission weights for all photon samples
-  SetEmissionCellWeight(pphot,ips,ipe);
+  BoundaryFace face;
+  if (pmy_mc->emission_flag == EMISFF) {
+      SetEmissionCellWeight(pphot,ips,ipe);
+  } else if (pmy_mc->emission_flag == EMISBB) {
+    face = pmy_mc->emission_face[0];
+    SetEmissionCellWeightArea(pphot,face,ips,ipe); 
+  }
 
   for (int ip=ips; ip<=ipe; ip++) {
-
-    // Obtain initial position within zone
-    GetZonePosition(pphot,pran,pcoord,ip);
 
     // Set maximum integration time
     pphot->dtp[ip] = pphot->pmy_mcb->pmy_mc->tmax;
 
-    // Obtain intitial energy, polarization, direction and weight
-    // Utilize free-free emission function in emission.cpp
-    if(tnorm) {
-      Real logtg = log(tgas(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]));
-      PhotonEmitFreeFree(this,pphot,logemin+logtg,logemax+logtg,ip);
-    } else{
-      PhotonEmitFreeFree(this,pphot,logemin,logemax,ip);
-    }
+    if (pmy_mc->emission_flag == EMISFF) {
+      // Obtain initial position within zone
+        GetZonePosition(pphot,pran,pcoord,ip);
 
+      // Obtain intitial energy, polarization, direction and weight
+      // Utilize free-free emission function in emission.cpp
+      if(tnorm) {
+        Real logtg = log(tgas(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]));
+        PhotonEmitFreeFree(this,pphot,logemin+logtg,logemax+logtg,ip);
+      } else{
+        PhotonEmitFreeFree(this,pphot,logemin,logemax,ip);
+      }
+    } else if (pmy_mc->emission_flag == EMISBB) {
+      // Obtain initial position within zone on surface
+       GetZonePositionCartesianFace(pphot,pran,pcoord,face,ip);
+
+      PhotonEmitBlackbody(this,pphot,face,ip);
+    }
+   
     // Convert k unit vector to k^\alpha
     /*if (pmy_mc->general_pusher_flag) {
       pphot->k0p[ip] = 1.;
@@ -188,7 +201,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
     // initialize scattering number
     pphot->nscp[ip] = 0;
-
+    
     // Initialize the absorption and scattering extinction coefficients
     // to the values appropriate in the emitted zone
     pphot->acp[ip] = AbsorptionOpacity(this,pphot,ip);
