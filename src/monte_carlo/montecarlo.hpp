@@ -44,7 +44,8 @@ class MCCoord;
 #define NMOM 15
 
 // Flags for controlling monte carlo emission, scattering, absorption, bcs
-enum EmissionFlag {EMISUSER = 0, EMISNONE = 1, EMISFF = 2};
+enum EmissionFlag {EMISUSER = 0, EMISNONE = 1, EMISFF = 2, EMISBB = 3, MULTI = 4};
+enum EmissionGeometry {EMISVOL = 0, EMISAREA = 1, EMISGNONE = 2};
 enum AbsorptionOpacityFlag {ABSUSER = 0, ABSNONE = 1, ABSFF = 2, ABSDUST =3};
 enum AbsorptionMethodFlag {ABSWEIGHT = 0, ABSPROB = 1, ABSTAU = 2};
 enum ScatteringFlag {SCATUSER = 0, SCATNONE =1, SCATISO = 2, SCATTHOM = 3, SCATCOMP =4,
@@ -55,11 +56,11 @@ enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY
 // Array indices for monte carlo radiation moments
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
       MCIPR12=7, MCIPR13=8, MCIPR23=9, MCIPR21=10, MCIPR31=11, MCIPR32=12};
-enum SourceTermFlag {MCRS0 = 0, MCRS1=1, MCRS2=2, MCRS3=3, MCRSP0=4, MCRSP1=5,
-                     MCRSP2=6, MCRSP3=7};
+enum SourceTermFlag {MCRS0 = 0, MCRS1=1, MCRS2=2, MCRS3=3, MCRF0=4, MCRF1=5,
+                     MCRF2=6, MCRF3=7, MCNABS=9, NSRC=10};
 //----------------------------------------------------------------------------------------
 // function pointer prototypes for user-defined modules set at runtime
-typedef Real (*EmisFunc_t)(MonteCarloBlock *pmcb, int k, int j, int i);
+typedef Real (*EmisFunc_t)(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
 typedef void (*TempFunc_t)(MonteCarloBlock *pmcb);
 typedef void (*NumbFunc_t)(MonteCarloBlock *pmcb);
 typedef void (*MCBValFunc_t)(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
@@ -104,14 +105,17 @@ void SampleDipole(Real theta_in, Real phi_in, Real &theta_out, Real &phi_out,
                   MCRandom *pran);
 Real SampleVelocityParallel(Real a, Real x_in, MCRandom *pran);
 //--------------------- prototypes for emission.cpp functions ----------------------------
-Real GetEmissionFreeFree(MonteCarloBlock *pmcb, int k, int j, int i);
+Real GetEmissionFreeFree(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
 void PhotonEmitFreeFree(MonteCarloBlock *pmcb, Photon *pphot, Real lemin, Real lemax,
                         int ip);
-Real PlanckDist(Real temp,MCRandom *pran);
+Real GetEmissionBlackbody(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
+void PhotonEmitBlackbody(MonteCarloBlock *pmcb, Photon *pphot, BoundaryFace face, int ip);
+Real PlanckDist(Real temp, MCRandom *pran);
 void GetZonePositionCartesian(Photon *pphot, MCRandom *pran, MCCoord *pco, int ip);
 void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pco, int ip);
 void GetZonePositionCylindrical(Photon *pphot, MCRandom *pran, MCCoord *pco, int ip);
-
+void GetZonePositionCartesianFace(Photon *pphot, MCRandom *pran, MCCoord *pcoord,
+                                  BoundaryFace face, int ip);
 //------------------ prototypes for frame_transformations.cpp functions ------------------
 // SWD:  Add these to MCCoord class, utils, keep here?
 void ConstructTetrad(Real ucon[4], Real gcov[4][4],
@@ -138,10 +142,11 @@ void LorentzBoostVector(Real vel[4], Real kold[4]);
 //---------------------- prototypes for setting flags ------------------------------------
 enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string);
 enum EmissionFlag GetEmissionFlag(std::string input_string);
+enum EmissionGeometry GetEmissionGeometry(std::string input_string);
+enum BoundaryFace SetEmissionSurface(std::string input_face);
 enum AbsorptionOpacityFlag GetAbsorptionOpacityFlag(std::string input_string);
 enum AbsorptionMethodFlag GetAbsorptionMethodFlag(std::string input_string);
 enum ScatteringFlag GetScatteringFlag(std::string input_string);
-
 
 //----------------------------------------------------------------------------------------
 //! \struct MCBlockSize
@@ -211,8 +216,12 @@ public:
   int max_phots_init; // maximum number of photon elements
   int nuser_var, nuser_mom;
   int checkmove,checkscat;
+  int emission_method;
+  int *emission_geometry;
+  BoundaryFace *emission_face;
 
   enum EmissionFlag emission_flag;
+
   enum MCBoundaryFlag mc_bcs[6];
   enum ScatteringFlag scattering_meth;
 
@@ -232,7 +241,7 @@ public:
 
   // function pointers
   UserMoveFunc_t UserWorkInMove;
-  EmisFunc_t GetEmission;
+  EmisFunc_t *GetEmission; // array of function pointers
   TempFunc_t UserGetTemperature;
   NumbFunc_t UserGetNumberDensity;
   ScatFunc_t UserScattering;
@@ -250,6 +259,7 @@ public:
   // Enroll User functions
   void EnrollUserMCBoundaryFunction(enum BoundaryFace dir, MCBValFunc_t my_bc);
   void EnrollUserEmissionFunction(EmisFunc_t emissfunc);
+  void EnrollUserEmissionFunction(EmisFunc_t emissfunc, int etype);
   void EnrollUserGetTemperature(TempFunc_t tempfunc);
   void EnrollUserGetNumberDensity(NumbFunc_t numbunc);
   void EnrollUserWorkInMove(UserMoveFunc_t userfunc);
@@ -258,7 +268,7 @@ public:
   void EnrollUserMoment(int i, UserMomentFunc_t my_func, const char *name);
   void EnrollUserScatteringFunction(ScatFunc_t scatfunc);
   void Initialize(ParameterInput *pinput);
-  void InitializeEmissionFlags(ParameterInput *pinput);
+  void InitializeEmission(ParameterInput *pin);
   void DistributeSamples(int etype);
   void NormalizeDomainOutputs(bool normalize);
 private:
@@ -389,9 +399,11 @@ public:
   void NormalizeSourceTerms(bool normalize);
   void ResetSourceTerms();
   // Functions for handling distributed emission over cells
-  void ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &emm_tot);
+  void ComputeEmissionArray(int etype, Real &emm_min, Real &emm_max, Real &emm_tot);
   void ComputeEmissionSampleArray();
+  //void ComputeEmissionSampleArray(BoundaryFace face);
   void SetEmissionCellWeight(Photon *pphot, int ips, int ipe);
+  void SetEmissionCellWeightArea(Photon *pphot, BoundaryFace face, int ips, int ipe);
   void GetDensity();
   void GetNumberDensity();
   void GetScalars();

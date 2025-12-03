@@ -35,9 +35,6 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   UserGetTemperature=nullptr;
   UserGetNumberDensity=nullptr;
 
-  // Set flags that control emission, absorption and scattering
-  InitializeEmissionFlags(pin);
-
   // read bc flags for each of the 6 physical boundaries.
   mc_bcs[BoundaryFace::inner_x1] = GetMCBoundaryFlag(pin->GetString("mesh","ix1_mc_bc"));
   mc_bcs[BoundaryFace::outer_x1] = GetMCBoundaryFlag(pin->GetString("mesh","ox1_mc_bc"));
@@ -71,19 +68,12 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   // Set mininmum weight if using weighting for absorption
   weightratio = pin->GetOrAddReal("montecarlo","minweight",1.0e-20);
 
-  // Specify photon integration parameters
+  // Number of outputs for static monte carlo
   nout = pin->GetOrAddInteger("montecarlo","nout",1);
-  ntype = pin->GetOrAddInteger("montecarlo","ntype",-1);
-  if (ntype < 0) {
-    ntype = 1;
-    nsamptype = new int64_t[ntype];
-    emission_eqwt = new bool[ntype];
-    nsamptype[0] = nsamp = pin->GetInteger("montecarlo","nphot");
-    emission_eqwt[0] = pin->GetOrAddBoolean("montecarlo","equal_weight",false);
-  } else { // set parameters in problem generator
-    nsamptype = new int64_t[ntype];
-    emission_eqwt = new bool[ntype];
-  }
+
+  // Initialize Emmision parameters and methods
+  InitializeEmission(pin);
+
   // Set default size parameters
   max_phots_init = pin->GetOrAddInteger("montecarlo","max_phots_init",10000);
   list_size_init = pin->GetOrAddInteger("montecarlo","list_size_init",10000);
@@ -223,6 +213,10 @@ enum EmissionFlag GetEmissionFlag(std::string input_string) {
     return EMISUSER;
   } else if (input_string == "freefree") {
     return EMISFF;
+  } else if (input_string == "blackbody") {
+    return EMISBB;
+  } else if (input_string == "multi") {
+    return MULTI;
   } else {
     std::stringstream msg;
     msg << "### FATAL ERROR in GetEmissionFlag" << std::endl
@@ -230,6 +224,55 @@ enum EmissionFlag GetEmissionFlag(std::string input_string) {
     ATHENA_ERROR(msg);
   }
 
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn enum EmissionGeometery GetEmissionGeometry(std::string input_string)
+//! \brief set emission flag
+
+enum EmissionGeometry GetEmissionGeometry(std::string input_string) {
+
+  if (input_string == "volume") {
+    return EMISVOL;
+  } else if (input_string == "area") {
+    return EMISAREA;
+  } else if (input_string == "none") {
+    return EMISGNONE;
+  } else {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in GetEmissionGeometry" << std::endl
+        << "Input string=" << input_string << " not valid emission geometry" << std::endl;
+    ATHENA_ERROR(msg);
+  }
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn enum BoundaryFace SetEmissionSurface(std::string input_face)
+//! \brief set emission surface
+
+enum BoundaryFace SetEmissionSurface(std::string input_face) {
+
+  if (input_face == "inner_x1") {
+    return BoundaryFace::inner_x1;
+  } else if (input_face == "outer_x1") {
+    return BoundaryFace::outer_x1;
+  } else if (input_face == "inner_x2") {
+    return BoundaryFace::inner_x2;
+  } else if (input_face == "outer_x2") {
+    return BoundaryFace::outer_x2;
+  } else if (input_face == "inner_x3") {
+    return BoundaryFace::inner_x3;
+  } else if (input_face == "outer_x3") {
+    return BoundaryFace::outer_x3;
+  } else if (input_face == "none") {
+    return BoundaryFace::undef;
+  } else {
+    std::stringstream msg;
+      msg << "### FATAL ERROR in function [SetEmissionSurface]" << std::endl
+          << "Face not recognized in input." << std::endl;
+      throw std::runtime_error(msg.str().c_str());
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -260,7 +303,16 @@ void MonteCarlo::EnrollUserMCBoundaryFunction(enum BoundaryFace dir, MCBValFunc_
 
 void MonteCarlo::EnrollUserEmissionFunction(EmisFunc_t emissfunc) {
 
-  GetEmission = emissfunc;
+  EnrollUserEmissionFunction(emissfunc,0);
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::EnrollUserEmissionFunction(EmisFunc_t emissfunc, int etype)
+//! \brief Enroll a user-defined function for computing emission array
+
+void MonteCarlo::EnrollUserEmissionFunction(EmisFunc_t emissfunc, int etype) {
+
+  GetEmission[etype] = emissfunc;
 }
 
 //----------------------------------------------------------------------------------------
@@ -416,30 +468,65 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void void MonteCarlo::InitializeEmissionFlags(ParameterInput *pin)
-//! \brief initialize flags that control emission
+//! \fn void void MonteCarlo::InitializeEmission(ParameterInput *pin)
+//! \brief initialize flags that control emission, called for single emission type
 
-void MonteCarlo::InitializeEmissionFlags(ParameterInput *pin) {
-  // This function sets flags that determine how emission will be handled
+void MonteCarlo::InitializeEmission(ParameterInput *pin) {
+
   // Options currently include none, user, and free-free
   // "none" means that no arrays are set up to assist photon initialization
   // "user" means that meshblock arrays will be set up but the user will provide the
   //        emissivity function
   // "freefree" mean that the default freefree emissivity function will be used for
   //            the emission array
+  // "multi" means that there are multiple emission methods to be considered
+
   emission_flag = GetEmissionFlag(pin->GetOrAddString("montecarlo","emission","none"));
 
+  if (emission_flag != MULTI) {
+    ntype = 1;
+  } else {
+    ntype = pin->GetInteger("montecarlo","ntype"); // must be set for multi
+  }
+  nsamptype = new int64_t[ntype];
+  emission_eqwt = new bool[ntype];
+  GetEmission = new EmisFunc_t[ntype];
+  emission_geometry = new int[ntype];
+  emission_face = new BoundaryFace[ntype];
   // Set emmisivity functions and flag for determining emission array
   if (emission_flag == EMISNONE) {
-    GetEmission = nullptr; // left unset
-    emission_array = false; // do not allocate memory for array
+    GetEmission[0] = nullptr; // left unset
+    nsamptype[0] = nsamp = pin->GetInteger("montecarlo","nphot");
+    emission_eqwt[0] = pin->GetOrAddBoolean("montecarlo","equal_weight",false);
+    emission_geometry[0] = GetEmissionGeometry(pin->GetOrAddString("montecarlo","emission_geometry","none"));
+    emission_array = false; // do not allocate memory for array;
   } else if (emission_flag ==  EMISUSER) {
-    GetEmission = nullptr; // must be set in InitUserMonteCarloData
+    GetEmission[0] = nullptr; // must be set in InitUserMonteCarloData
+    nsamptype[0] = nsamp = pin->GetInteger("montecarlo","nphot");
+    emission_eqwt[0] = pin->GetOrAddBoolean("montecarlo","equal_weight",false);
+    emission_geometry[0] = GetEmissionGeometry(pin->GetOrAddString("montecarlo","emission_geometry","volume"));
+    if (emission_geometry[0] == EMISAREA)
+      emission_face[0] = SetEmissionSurface(pin->GetOrAddString("montecarlo","emission_face","none"));
     emission_array = true; // allocate memory for array
   } else if (emission_flag ==  EMISFF) {
-    GetEmission = GetEmissionFreeFree;
+    GetEmission[0] = GetEmissionFreeFree;
+    nsamptype[0] = nsamp = pin->GetInteger("montecarlo","nphot");
+    emission_eqwt[0] = pin->GetOrAddBoolean("montecarlo","equal_weight",false);
+    emission_geometry[0] = EMISVOL; // Must be volumetric
     emission_array = true; // allocate memory for array
+  } else if (emission_flag ==  EMISBB) {
+    GetEmission[0] = GetEmissionBlackbody;
+    nsamptype[0] = nsamp = pin->GetInteger("montecarlo","nphot");
+    emission_eqwt[0] = pin->GetOrAddBoolean("montecarlo","equal_weight",false);
+    emission_geometry[0] = EMISAREA; // Must be areal
+    emission_face[0] = SetEmissionSurface(pin->GetString("montecarlo","emission_face"));
+    emission_array = true; // allocate memory for array
+  } else if (emission_flag ==  MULTI) {
+    // GetEmission and other arrays must be set in InitUserMonteCarloDatea
+    emission_array = pin->GetOrAddBoolean("montecarlo","emission_array",true);
   }
+
+
 }
 
 
@@ -455,7 +542,7 @@ void MonteCarlo::DistributeSamples(int etype) {
     return;
   } else if (GetEmission == nullptr) {
     std::stringstream msg;
-    msg << "### FATAL ERROR in ComputeEmission" << std::endl
+    msg << "### FATAL ERROR in DistributeSamples" << std::endl
         << "emission method is not none, but GetEmission is not set."
         << std::endl;
     ATHENA_ERROR(msg);
@@ -470,11 +557,12 @@ void MonteCarlo::DistributeSamples(int etype) {
 
   for (int nb=0; nb<nblocal; nb++) {
     Real min_block, max_block;
-    my_blocks(nb)->ComputeEmissionArray(min_block,max_block,tot_block[nb]);
+    my_blocks(nb)->ComputeEmissionArray(etype,min_block,max_block,tot_block[nb]);
     em_tot += tot_block[nb];
     em_min = (em_min < min_block) ? em_min : min_block;
     em_max = (em_max > max_block) ? em_max : max_block;
   }
+  //printf("em: %d %g %g %g\n",Globals::my_rank,em_min,em_max,em_tot);
   Real em_proc = em_tot;
   // Compute emmision properties over all processes
 #ifdef MPI_PARALLEL
@@ -515,17 +603,23 @@ void MonteCarlo::DistributeSamples(int etype) {
     my_blocks(0)->pran->SampleMultinomial(my_count,nblocal,prob_b,count_b);
     Real ave_weight = em_tot/static_cast<Real>(ntot);
 
+
     for (int nb=0; nb<nblocal; nb++) {
       my_blocks(nb)->nphremain = count_b[nb];
       my_blocks(nb)->nphrun = 0;
       my_blocks(nb)->minweight = weightratio * ave_weight;
       my_blocks(nb)->emiss_to_weight = ave_weight;
       // distribute photons within each block
-      my_blocks(nb)->ComputeEmissionSampleArray();
+      //if (pmy_mc->emission_geometry[etype] == EMISVOL) {
+        my_blocks(nb)->ComputeEmissionSampleArray();
+      //} else if (pmy_mc->emission_geometry[etype] == EMISAREA) {
+      //  BoundaryFace face = pmy_mc->emission_face[etype];
+      //  my_blocks(nb)->ComputeEmissionSampleArray(face);
+      //}
     }
 
   } else {
-    // emission weights will just be equal to emmisivity
+    // emission weights will just be proportional to emmisivity
     // Determine number of photons per block per step assuming each block is equal
 
     // First determine the active number of cells. A meshblock is inactive if it has
@@ -580,6 +674,8 @@ void MonteCarlo::DistributeSamples(int etype) {
       my_blocks(nb)->nphremain = count_b[nb];
       my_blocks(nb)->nphrun = 0;
       my_blocks(nb)->minweight = weightratio * em_min;
+      // following assumes all cells on block emit. Correct for volumetric but needs
+      // to be corrected for areal
       my_blocks(nb)->emiss_to_weight = static_cast<Real>(ncells_active)/static_cast<Real>(ntot);
     }
   }
@@ -641,6 +737,7 @@ void MonteCarlo::RunMonteCarlo(Outputs *pouts, Mesh *pmesh,
     // Distribute samples to all blocks based on emission properties
     // Sets nphremain and parameters for determining initial photon weights
     DistributeSamples(etype);
+    emission_method = etype;
 
     // Run Monte Carlo until all photons have escaped/been absorbed
     bool photons_remain = true; // True if photons on any process

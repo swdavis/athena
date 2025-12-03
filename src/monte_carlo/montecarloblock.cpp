@@ -693,11 +693,11 @@ void MonteCarloBlock::CoupleMonteCarloToFluid(Real dt) {
 #pragma omp simd
         for (int i=pmb->is; i<=pmb->ie; ++i) {
           pmb->phydro->u(IEN,k,j,i) += dt * edot_cgs * sourceterms(MCRS0,k,j,i);
-          pmb->phydro->u(IM1,k,j,i) += dt * pdot_cgs * sourceterms(MCRSP1,k,j,i)
+          pmb->phydro->u(IM1,k,j,i) += dt * pdot_cgs * sourceterms(MCRF1,k,j,i)
                                           * pmb->phydro->u(IDN,k,j,i);
-          pmb->phydro->u(IM2,k,j,i) += dt * pdot_cgs * sourceterms(MCRSP2,k,j,i)
+          pmb->phydro->u(IM2,k,j,i) += dt * pdot_cgs * sourceterms(MCRF2,k,j,i)
                                           * pmb->phydro->u(IDN,k,j,i);
-          pmb->phydro->u(IM3,k,j,i) += dt * pdot_cgs * sourceterms(MCRSP3,k,j,i)
+          pmb->phydro->u(IM3,k,j,i) += dt * pdot_cgs * sourceterms(MCRF3,k,j,i)
                                           * pmb->phydro->u(IDN,k,j,i);
         }
       }
@@ -1062,9 +1062,9 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     Real weight = pphot->wp[ip] * pphot->ep[ip] * dl * l_cgs / c_cgs;
     Real abs_coef = pphot->acp[ip];
     Real sct_coef = pphot->scp[ip];
-    sourceterms(MCRSP1,i3,i2,i1) += (sct_coef+abs_coef) * weight * k1;
-    sourceterms(MCRSP2,i3,i2,i1) += (sct_coef+abs_coef) * weight * k2;
-    sourceterms(MCRSP3,i3,i2,i1) += (sct_coef+abs_coef) * weight * k3;
+    sourceterms(MCRF1,i3,i2,i1) += (sct_coef+abs_coef) * weight * k1;
+    sourceterms(MCRF2,i3,i2,i1) += (sct_coef+abs_coef) * weight * k2;
+    sourceterms(MCRF3,i3,i2,i1) += (sct_coef+abs_coef) * weight * k3;
   }
 
 
@@ -1185,9 +1185,9 @@ void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl,
 
     if (call_srcterms) {
       // Radiative Acceleration from flux
-      sourceterms(MCRSP1,k,j,i) += (sct_coef+abs_coef) * weight1;
-      sourceterms(MCRSP2,k,j,i) += (sct_coef+abs_coef) * weight2;
-      sourceterms(MCRSP3,k,j,i) += (sct_coef+abs_coef) * weight3;
+      sourceterms(MCRF1,k,j,i) += (sct_coef+abs_coef) * weight1;
+      sourceterms(MCRF2,k,j,i) += (sct_coef+abs_coef) * weight2;
+      sourceterms(MCRF3,k,j,i) += (sct_coef+abs_coef) * weight3;
     }
   }
 
@@ -1196,7 +1196,7 @@ void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl,
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::UpdateMomentsOld(Photon *pphot, Real dl, Real etau, int ip)
 //! \brief add contribution to radiation moments in current zone
-
+// SWD: remove this!
 void MonteCarloBlock::UpdateMomentsOld(Photon *pphot, Real dl, Real pl, Real k1, Real k2,
                                     Real k3, Real etau, int ip) {
 
@@ -1308,9 +1308,9 @@ void MonteCarloBlock::UpdateMomentsOld(Photon *pphot, Real dl, Real pl, Real k1,
 
     if (call_srcterms) {
       // Radiative Acceleration from flux
-      sourceterms(MCRSP1,k,j,i) += (sct_coef+abs_coef) * weight1;
-      sourceterms(MCRSP2,k,j,i) += (sct_coef+abs_coef) * weight2;
-      sourceterms(MCRSP3,k,j,i) += (sct_coef+abs_coef) * weight3;
+      sourceterms(MCRF1,k,j,i) += (sct_coef+abs_coef) * weight1;
+      sourceterms(MCRF2,k,j,i) += (sct_coef+abs_coef) * weight2;
+      sourceterms(MCRF3,k,j,i) += (sct_coef+abs_coef) * weight3;
     }
   }
 
@@ -1592,32 +1592,154 @@ void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::ComputeEmissionArray(Real &emm_min, Real &emm_max, Real
-//!                                                &emm_tot)
+//! \fn void MonteCarloBlock::ComputeEmissionArray(int etype, Real &em_min, Real &em_max, Real
+//!                                                &em_tot)
 //! \brief compute emission array
 
-void MonteCarloBlock::ComputeEmissionArray(Real &emm_min, Real &emm_max, Real &emm_tot) {
+void MonteCarloBlock::ComputeEmissionArray(int etype, Real &em_min, Real &em_max, Real &em_tot) {
 
 
   Real dt = pmy_mc->tint;
+  em_min = SQR(HUGE_NUMBER);
+  em_max = -HUGE_NUMBER;
+  em_tot = 0.;
 
-  emm_min = SQR(HUGE_NUMBER);
-  emm_max = -HUGE_NUMBER;
-  emm_tot = 0.;
-
-  for (int k=ks; k<=ke; ++k) {
-    for (int j=js; j<=je; ++j) {
-      for (int i=is; i<=ie; ++i) {
-        Real vol = pcoord->vol(k,j,i);
-          emission(k,j,i) = pmy_mc->GetEmission(this,k,j,i) * dt * vol;
-        emm_tot += emission(k,j,i);
-        if (emission(k,j,i) > emm_max) emm_max = emission(k,j,i);
-        if (emission(k,j,i) < emm_min) emm_min = emission(k,j,i);
-        if (std::isnan(emission(k,j,i)))
-          printf("emission[%d %d %d]: %g %g %g\n",i,j,k,vol,emission(k,j,i),pmy_mc->GetEmission(this,k,j,i));
+  EmisFunc_t GetEmission = pmy_mc->GetEmission[etype];
+  if (pmy_mc->emission_geometry[etype] == EMISVOL) {
+    for (int k=ks; k<=ke; ++k) {
+      for (int j=js; j<=je; ++j) {
+        for (int i=is; i<=ie; ++i) {
+          Real vol = pcoord->vol(k,j,i);
+          emission(k,j,i) = GetEmission(this,k,j,i,etype) * dt * vol;
+          em_tot += emission(k,j,i);
+          if (emission(k,j,i) > em_max) em_max = emission(k,j,i);
+          if (emission(k,j,i) < em_min) em_min = emission(k,j,i);
+          if (std::isnan(emission(k,j,i)))
+            printf("emission[%d %d %d]: %g %g %g\n",i,j,k,vol,emission(k,j,i),pmy_mc->GetEmission[etype](this,k,j,i,etype));
+        }
       }
     }
-  }
+  } else if (pmy_mc->emission_geometry[etype] == EMISAREA) {
+    // emmision array is reused so loop over block and reset to zero
+    for (int k=ks; k<=ke; ++k) {
+      for (int j=js; j<=je; ++j) {
+        for (int i=is; i<=ie; ++i) {
+          emission(k,j,i) = 0.;
+        }
+      }
+    }
+    int il=is, iu=ie, jl=js, ju=je, kl=ks, ku=ke;
+    int ip=0, jp=0, kp=0;
+    int iface;
+    BoundaryFace face = pmy_mc->emission_face[etype];
+    // Check if we are on a physical boundary corresponding to emission face
+    // Could use the mesh information, but this will generalize to arbitrary
+    // surface in future
+    Mesh *pm = pmy_block->pmy_mesh;
+    Real tol = 0.001;
+    bool physical_boundary = false;
+    switch(face) {
+      case BoundaryFace::inner_x1: {
+        Real diff = std::fabs(pm->mesh_size.x1min-pcoord->x1f(is));
+        Real dx = std::fabs(pcoord->x1f(is+1)-pcoord->x1f(is));
+        if (diff < tol*dx) {
+          physical_boundary = true;
+          il = iu = is;
+          iface = 0;
+        } 
+        break;
+      }
+      case BoundaryFace::outer_x1: {
+        Real diff = std::fabs(pm->mesh_size.x1max-pcoord->x1f(ie+1));
+        Real dx = std::fabs(pcoord->x1f(ie+1)-pcoord->x1f(ie));
+        if (diff < tol*dx) {
+          physical_boundary = true;
+          il = iu = ie;
+          iface = 3;
+        }
+        break;
+      }
+      case BoundaryFace::inner_x2: {
+        Real diff = std::fabs(pm->mesh_size.x2min-pcoord->x2f(js));
+        Real dx = std::fabs(pcoord->x2f(js+1)-pcoord->x2f(js));
+        if (diff < tol*dx) {
+          physical_boundary = true;
+          jl = ju = js;
+          iface = 1;
+        }
+        break;
+      }
+      case BoundaryFace::outer_x2: {
+        Real diff = std::fabs(pm->mesh_size.x2max-pcoord->x2f(je+1));
+        Real dx = std::fabs(pcoord->x2f(je+1)-pcoord->x2f(je));
+        if (diff < tol*dx) {
+          physical_boundary = true;
+          jl = ju = je;
+          iface = 4;
+        }
+        break;
+      }
+      case BoundaryFace::inner_x3: {
+        Real diff = std::fabs(pm->mesh_size.x3min-pcoord->x3f(ks));
+        Real dx = std::fabs(pcoord->x3f(ks+1)-pcoord->x3f(ks));
+        if (diff < tol*dx) {
+          physical_boundary = true;
+          kl = ku = ks;
+          iface = 2;
+        }
+        break;
+      }
+      case BoundaryFace::outer_x3: {
+        Real diff = std::fabs(pm->mesh_size.x3max-pcoord->x3f(ke+1));
+        Real dx = std::fabs(pcoord->x3f(ke+1)-pcoord->x3f(ke));
+        if (diff < tol*dx) {
+          physical_boundary = true;
+          kl = iu = ke;
+          iface = 5;
+        }
+        break;
+      }
+      default:
+        std::stringstream msg;
+        msg << "### FATAL ERROR in function [MonteCarloBlock::SetEmissionCellWeightArea]"
+            << std::endl << "Face not valid" << std::endl;
+        throw std::runtime_error(msg.str().c_str());
+        break;
+    }
+    if (physical_boundary) {
+      Coordinates *pbcoord = pmy_block->pcoord; // SWD: Maybe should improve this
+      for (int k=kl; k<=ku; ++k) {
+        for (int j=jl; j<=ju; ++j) {
+          for (int i=il; i<=iu; ++i) {
+            Real area;
+            if (iface == 0)
+              area = pbcoord->GetFace1Area(k,j,i);
+            else if (iface == 1)
+              area = pbcoord->GetFace2Area(k,j,i);
+            else if (iface == 2)
+              area = pbcoord->GetFace3Area(k,j,i);
+            else if (iface == 3)
+              area = pbcoord->GetFace1Area(k,j,i+1);
+            else if (iface == 4)
+              area = pbcoord->GetFace2Area(k,j+1,i);
+            else if (iface == 5)
+              area = pbcoord->GetFace3Area(k+1,j,i);
+            area *= l_cgs*l_cgs;
+            emission(k,j,i) = GetEmission(this,k,j,i,etype) * dt * area;
+            em_tot += emission(k,j,i);
+            if (emission(k,j,i) > em_max) em_max = emission(k,j,i);
+            if (emission(k,j,i) < em_min) em_min = emission(k,j,i);
+            if (std::isnan(emission(k,j,i)))
+              printf("emission[%d %d %d]: %g %g %g\n",i,j,k,area,emission(k,j,i),
+                     GetEmission(this,k,j,i,etype));
+          }
+        }
+      }
+    } else {
+      // not a physical boundary so there is emission
+      em_tot = em_max = em_min = 0.;
+    }
+  } // end if EMISAREA
   // if using equal weight scheme, intialize variables for SetEmissionCellWeight
   i1_ = -1; i2_= -1; i3_ = -1;
 
@@ -1663,6 +1785,7 @@ void MonteCarloBlock::ComputeEmissionSampleArray() {
   }
 
 }
+
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe)
@@ -1716,6 +1839,159 @@ void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe) {
       // photons emitted in each cell
       pphot->wp[ip] = emission(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip])
         * emiss_to_weight;
+    } // end loop over ip
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::SetEmissionCellWeightArea(Photon *pphot, BoundaryFace face,
+//        int ips, int ipe)
+//! \brief set emission cell and weight for photon via emission array
+
+void MonteCarloBlock::SetEmissionCellWeightArea(Photon *pphot, BoundaryFace face, int ips,
+                                                int ipe) {
+
+  if (pmy_mc->emission_eqwt[0]) {
+    // Set intial zone based on probability within zone
+    for (int ip=ips; ip<=ipe; ip++) {
+      bool i1flag = true;
+      bool i2flag = true;
+      bool i3flag = true;
+      switch(face) {
+        case BoundaryFace::inner_x1:
+          i1_ = 0;
+          i1flag = false;
+          break;
+        case BoundaryFace::outer_x1:
+          i1_ = nx1-1;
+          i1flag = false;
+          break;
+        case BoundaryFace::inner_x2:
+          i2_ = 0;
+          i2flag = false;
+          break;
+        case BoundaryFace::outer_x2:
+          i2_ = nx2-1;
+          i2flag = false;
+          break;
+        case BoundaryFace::inner_x3:
+          i3_ = 0;
+          i3flag = false;
+          break;
+        case BoundaryFace::outer_x3:
+          i3_ = nx3-1;
+          i3flag = false;
+          break;
+        default:
+          std::stringstream msg;
+          msg << "### FATAL ERROR in function [MonteCarloBlock::SetEmissionCellWeightArea]"
+              << std::endl << "Face not valid" << std::endl;
+          throw std::runtime_error(msg.str().c_str());
+          break;
+      }
+      bool this_zone = false;
+      while (!this_zone) {
+        int i = i1_ + is;
+        int j = i2_ + js;
+        int k = i3_ + ks;
+ 
+        if (emit_count_(k,j,i) > 0) {
+          pphot->i1p[ip] = i;
+          pphot->i2p[ip] = j;
+          pphot->i3p[ip] = k;
+          this_zone = true;
+          emit_count_(k,j,i) -= 1;
+        } else {
+          // Update zone
+          this_zone = false;
+          if (!i3flag) {
+            i2_++;
+            if (i2_ >= nx2) {
+              i2_ = 0;
+              i1_++;
+              if (i1_ >= nx1)
+                i1_ = 0;
+            }
+          } else if (!i2flag) {
+            i3_++;
+            if (i3_ >= nx3) {
+              i3_ = 0;
+              i1_++;
+              if (i1_ >= nx1)
+                i1_ = 0;
+            }
+          } else if (!i1flag) {
+            i3_++;
+            if (i3_ >= nx3) {
+              i3_ = 0;
+              i2_++;
+              if (i2_ >= nx2) {
+                i2_ = 0;
+              }
+            }
+          }
+        }
+      } // end while (!this_zone)
+      // Set weight to constant value for all photons
+      pphot->wp[ip] = emiss_to_weight;
+      
+    } // end loop over ip
+  } else {
+
+    for (int ip=ips; ip<=ipe; ip++) {
+      // Randomly assign emission zone
+      Real weight_reduce;
+      switch(face) {
+        case BoundaryFace::inner_x1:
+          pphot->i1p[ip] = is;
+          pphot->i2p[ip] = static_cast<int>(pran->uniform()*nx2)+js;
+          pphot->i3p[ip] = static_cast<int>(pran->uniform()*nx3)+ks;
+          weight_reduce = 1./static_cast<Real>(nx1);
+          break;
+        case BoundaryFace::outer_x1:
+          pphot->i1p[ip] = ie;
+          pphot->i2p[ip] = static_cast<int>(pran->uniform()*nx2)+js;
+          pphot->i3p[ip] = static_cast<int>(pran->uniform()*nx3)+ks;
+          weight_reduce = 1./static_cast<Real>(nx1);
+          break;
+        case BoundaryFace::inner_x2:
+          pphot->i1p[ip] = static_cast<int>(pran->uniform()*nx1)+is;
+          pphot->i2p[ip] = js;
+          pphot->i3p[ip] = static_cast<int>(pran->uniform()*nx3)+ks;
+          weight_reduce = 1./static_cast<Real>(nx2);
+          break;
+        case BoundaryFace::outer_x2:
+          pphot->i1p[ip] = static_cast<int>(pran->uniform()*nx1)+is;
+          pphot->i2p[ip] = je;
+          pphot->i3p[ip] = static_cast<int>(pran->uniform()*nx3)+ks;
+          weight_reduce = 1./static_cast<Real>(nx2);
+          break;
+        case BoundaryFace::inner_x3:
+          pphot->i1p[ip] = static_cast<int>(pran->uniform()*nx1)+is;
+          pphot->i2p[ip] = static_cast<int>(pran->uniform()*nx2)+js;
+          pphot->i3p[ip] = ks;
+          weight_reduce = 1./static_cast<Real>(nx3);
+          break;
+        case BoundaryFace::outer_x3:
+          pphot->i1p[ip] = static_cast<int>(pran->uniform()*nx1)+is;
+          pphot->i2p[ip] = static_cast<int>(pran->uniform()*nx2)+js;
+          pphot->i3p[ip] = ke;
+          weight_reduce = 1./static_cast<Real>(nx3);
+          break;
+        default:
+          std::stringstream msg;
+          msg << "### FATAL ERROR in function [MonteCarloBlock::SetEmissionCellWeightArea]"
+              << std::endl << "Face not valid" << std::endl;
+          throw std::runtime_error(msg.str().c_str());
+          break;
+      }
+
+      // Set weight according to the emission array, which is the relative number of
+      // photons emitted in each cell. Note that emiss_to_weight assumes all cells
+      // in block contribute so needs to be receduced by number of cell in direction
+      // normal to the face
+      pphot->wp[ip] = emission(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip])
+        * emiss_to_weight * weight_reduce;
     } // end loop over ip
   }
 }
