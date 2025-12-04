@@ -49,7 +49,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   // get seed and intitialize randon number generator
   int rank = Globals::my_rank;
   int iseed = pmy_mc->iseed+pmy_block->gid*10;  // temporary solution
-  //printf(" MonteCarloBlock gid %d rank %d iseed %d\n",pmy_block->gid,rank,iseed); 
+  //printf(" MonteCarloBlock gid %d rank %d iseed %d\n",pmy_block->gid,rank,iseed);
 
   pran = new MCRandom(iseed);
 
@@ -407,7 +407,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     planck_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
     planck_inv_opacity.NewAthenaArray(ncells3,ncells2,ncells1);
   }
- 
+
  // Create user monte carlo block data
   InitUserMonteCarloBlockData(pin);
 
@@ -561,7 +561,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
     if (boosts || tetrads) {
       TransformToCoordinate(pphot,nold,pphot->nphot-1);
     }
-  
+
     // Update the absorption and scattering extinction coefficients
     if (call_srcterms) {
       // Update source terms to reflect newly emitted samples
@@ -951,7 +951,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   //}
 
   if (mom_flag_lab) {
-    if (std::isinf(weight) || std::isnan(weight) || std::isnan(k0) || std::isnan(k1) || 
+    if (std::isinf(weight) || std::isnan(weight) || std::isnan(k0) || std::isnan(k1) ||
         std::isnan(k2) || std::isnan(k3)) {
       pphot->statp[ip] = DESTROYED;
       if (pmy_mc->verbose) {
@@ -1646,7 +1646,7 @@ void MonteCarloBlock::ComputeEmissionArray(int etype, Real &em_min, Real &em_max
           physical_boundary = true;
           il = iu = is;
           iface = 0;
-        } 
+        }
         break;
       }
       case BoundaryFace::outer_x1: {
@@ -1795,7 +1795,7 @@ void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe) {
 
   if (pmy_mc->emission_eqwt[0]) {
     // Set intial zone based on probability within zone
-    
+
     for (int ip=ips; ip<=ipe; ip++) {
       bool this_zone = false;
       while (!this_zone) {
@@ -1826,7 +1826,7 @@ void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe) {
       } // end while (!this_zone)
       // Set weight to constant value for all photons
       pphot->wp[ip] = emiss_to_weight;
-      
+
     } // end loop over ip
   } else {
     for (int ip=ips; ip<=ipe; ip++) {
@@ -1894,7 +1894,7 @@ void MonteCarloBlock::SetEmissionCellWeightArea(Photon *pphot, BoundaryFace face
         int i = i1_ + is;
         int j = i2_ + js;
         int k = i3_ + ks;
- 
+
         if (emit_count_(k,j,i) > 0) {
           pphot->i1p[ip] = i;
           pphot->i2p[ip] = j;
@@ -1934,7 +1934,7 @@ void MonteCarloBlock::SetEmissionCellWeightArea(Photon *pphot, BoundaryFace face
       } // end while (!this_zone)
       // Set weight to constant value for all photons
       pphot->wp[ip] = emiss_to_weight;
-      
+
     } // end loop over ip
   } else {
 
@@ -2071,14 +2071,14 @@ void MonteCarloBlock::GetVelocity() {
         pmy_block->pcoord->CellMetric(k,j,is,ie,g,gi);
         for (int i=is; i<=ie; ++i) {
           Real alpha = 1.0/std::sqrt(-gi(I00,i));
-          Real uu1 = pmy_block->phydro->u(IVX,k,j,i); 
+          Real uu1 = pmy_block->phydro->u(IVX,k,j,i);
           Real uu2 = pmy_block->phydro->u(IVY,k,j,i);
           Real uu3 = pmy_block->phydro->u(IVZ,k,j,i);
-        
+
           Real gamma2 = 1. + g(I11,i)*uu1*uu1 + g(I22,i)*uu2*uu2 + g(I33,i)*uu3*uu3 +
                         2.0*g(I12,i)*uu1*uu2 + 2.*g(I13,i)*uu1*uu3 + 2.*g(I23,i)*uu2*uu3;
           Real gamma = std::sqrt(gamma2);
-          
+
           vel(k,j,i,0) = -gamma*alpha*gi(I00,i);
           vel(k,j,i,1) = uu1 - gamma*alpha*gi(I01,i);
           vel(k,j,i,2) = uu2 - gamma*alpha*gi(I02,i);
@@ -2208,7 +2208,7 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
       x[IMC3] = pphot->x3p[ip];
       pcoord->Metric(x, gcov);
 
-      // Create tetrad basis 
+      // Create tetrad basis
       Real ucon[4];
       ucon[IMC0] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],0);
       ucon[IMC1] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],1);
@@ -2340,7 +2340,7 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
       x[IMC3] = pphot->x3p[ip];
       pcoord->Metric(x, gcov);
 
-      // Create tetrad basis 
+      // Create tetrad basis
       Real ucon[4];
       ucon[IMC0] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],0);
       ucon[IMC1] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],1);
@@ -2349,7 +2349,6 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
       Real econ[4][4], ecov[4][4];
       ConstructTetrad(ucon, gcov, econ, ecov);
 
-   
       // Transform to comoving tetrad
       Real kcopy[4];
       kcopy[IMC0] = pphot->k0p[ip] * pphot->ep[ip];
@@ -2479,7 +2478,7 @@ Real  MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip) {
     x[IMC3] = pphot->x3p[ip];
     pcoord->Metric(x, gcov);
 
-    // Create tetrad basis 
+    // Create tetrad basis
     Real ucon[4];
     ucon[IMC0] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],0);
     ucon[IMC1] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],1);

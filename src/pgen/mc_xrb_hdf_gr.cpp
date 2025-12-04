@@ -46,7 +46,7 @@ namespace {
   AthenaArray<Real> opact;
 
   //functions
-  void InsideHorizon(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher,int ip); 
+  void InsideHorizon(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher,int ip);
   Real TableOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
   Real IntegrateEmission(Real temp, Real num, Real nup, Real am, Real ap);
   Real Planck(Real temp, Real nu);
@@ -73,7 +73,7 @@ int getindex(std::vector<float> vec, float val){
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
 
   nuser_var = 3;
- 
+
   abh = pin->GetReal("coord","a");
   // assumes mbh = 1 in code units
   r_hor = 1.0 + sqrt(1.0 - SQR(abh));
@@ -725,7 +725,7 @@ void InsideHorizon(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher, 
   Real x1 = pphot->x1p[ip];
   Real x2 = pphot->x2p[ip];
   Real x3 = pphot->x3p[ip];
-  
+
   Real rad = std::sqrt(SQR(x1) + SQR(x2) + SQR(x3));
   Real r = sqrt((SQR(rad)-SQR(abh)+sqrt(SQR(SQR(rad)-SQR(abh))+4.0*SQR(abh)*SQR(x3)))/2.);
 
@@ -924,7 +924,7 @@ Real UserScatteringOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   Real kappa_s = 0.39;
   // Match Lizhong's scattering reduction
   Real wdn_opacity = fmax(wdn-dfloor, dfloor_op);
- 
+
   Real dx1 = pmcb->pmy_block->pcoord->dx1f(i1);
   Real dx2 = pmcb->pmy_block->pcoord->dx2f(i2);
   Real dx3 = pmcb->pmy_block->pcoord->dx3f(i3);
