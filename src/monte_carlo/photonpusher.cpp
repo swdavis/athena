@@ -29,7 +29,8 @@ PhotonPusher::PhotonPusher(MonteCarloBlock *pmcb) {
   acceleration = pmcb->acceleration;
   boosts = pmcb->boosts;
   resonance = (pmcb->scattering_meth == SCATRES);
-  compton = (!pmcb->coherent_scattering) && (!resonance);
+  compton = (pmcb->scattering_meth == SCATCOMP);
+  //compton = (!pmcb->coherent_scattering) && (!resonance);
   time_acc = pmcb->time_acc;
 
   if (acceleration) {

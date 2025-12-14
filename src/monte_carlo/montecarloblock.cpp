@@ -367,7 +367,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   if (mom_flag_com) moments_com.NewAthenaArray(nmom,ncells3,ncells2,ncells1);
   if (pmy_mc->nuser_mom > 0)
     moments_user.NewAthenaArray(pmy_mc->nuser_mom,ncells3,ncells2,ncells1);
-  nsrc = 8;
+  nsrc = 10;
   if (call_srcterms) sourceterms.NewAthenaArray(nsrc,ncells3,ncells2,ncells1);
   if (mom_flag_scat) {
     nf_scat = pin->GetInteger("montecarlo","nf_scat");
@@ -450,10 +450,10 @@ MonteCarloBlock::~MonteCarloBlock() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::RayTracePhotonsOnBlock()
+//! \fn void MonteCarloBlock::RayTracePhotonsOnBlock(int etype)
 //! \brief Integrate photons to termination condtion without scattering
 
-void MonteCarloBlock::RayTracePhotonsOnBlock() {
+void MonteCarloBlock::RayTracePhotonsOnBlock(int etype) {
 
   Real const to_comv = 1.0;
   Real const to_eulr = -1.0;
@@ -472,7 +472,7 @@ void MonteCarloBlock::RayTracePhotonsOnBlock() {
     nphrun += ntodo;
 
     // user definied photon initialization
-    InitializePhoton(pphot,nold,pphot->nphot-1);
+    InitializePhoton(pphot,nold,pphot->nphot-1,etype);
     if (ptraj != nullptr) {
       for (int ip=nold; ip < pphot->nphot; ip++)
         ptraj->InitializeTrajectory(pphot->trp[ip]);
@@ -529,10 +529,10 @@ void MonteCarloBlock::RayTracePhotonsOnBlock() {
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::TransferPhotonsOnBlock()
+//! \fn void MonteCarloBlock::TransferPhotonsOnBlock(int etype)
 //! \brief perform radiation transfer
 
-void MonteCarloBlock::TransferPhotonsOnBlock() {
+void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
 
   //int nbuf = 0;
   int nold = pphot->nphot;
@@ -554,7 +554,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
     nphrun += nnew;
 
     // user definied photon initialization
-    InitializePhoton(pphot,nold,pphot->nphot-1);
+    InitializePhoton(pphot,nold,pphot->nphot-1,etype);
 
     // Lorentz transform E, k to Eulerian frame and update opacities
     // only for newly emitted samples
@@ -578,6 +578,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
   for (int ip=0; ip<pphot->nphot; ip++) {
     // record initial weight and direction
     Real weight0 = pphot->wp[ip];
+    Real e_pre_scat = pphot->ep[ip];
     Real k1p0 = pphot->k1p[ip];
     Real k2p0 = pphot->k2p[ip];
     Real k3p0 = pphot->k3p[ip];
@@ -600,9 +601,8 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
       }
     } // status == evolving
 
-    // account for scattering
+    // account for scattering if not absorbed
     if (pphot->statp[ip] == EVOLVING) {
-      Real e_pre_scat = pphot->ep[ip];
       // Lorentz transform to comoving frame for scattering
       if (boosts || tetrads) {
         TransformToComoving(pphot,ip,ip);
@@ -632,11 +632,11 @@ void MonteCarloBlock::TransferPhotonsOnBlock() {
       if (boosts || tetrads) {
         TransformToCoordinate(pphot,ip,ip);
       }
-      // Update moments that compute radiation force and net heating/cooling
-      if (call_srcterms) {
-        UpdateSourceTerms(pphot,e_pre_scat,weight0,k1p0,k2p0,k3p0,ip);
-      }
     } // status == evolving
+      // Update moments that compute radiation force and net heating/cooling
+    if (call_srcterms) {
+      UpdateSourceTerms(pphot,e_pre_scat,weight0,k1p0,k2p0,k3p0,ip);
+    }
 
   } // End loop over ip
 
@@ -687,6 +687,8 @@ void MonteCarloBlock::CoupleMonteCarloToFluid(Real dt) {
   Real edot_cgs = pmy_mc->time_cgs / (rho_cgs * SQR(vel_cgs));
   Real pdot_cgs = pmy_mc->time_cgs / (rho_cgs * vel_cgs);
 
+  NormalizeSourceTerms(true);
+
   MeshBlock *pmb = pmy_block;
   for (int k=pmb->ks; k<=pmb->ke; ++k) {
       for (int j=pmb->js; j<=pmb->je; ++j) {
@@ -702,6 +704,7 @@ void MonteCarloBlock::CoupleMonteCarloToFluid(Real dt) {
         }
       }
   }
+  NormalizeSourceTerms(false);
 }
 
 //----------------------------------------------------------------------------------------
@@ -904,6 +907,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   // tetrad frame  (currently lab frame)
   // coordinate frame
 
+  dl *= pphot->ep[ip];
   int i1 = pphot->i1p[ip];
   int i2 = pphot->i2p[ip];
   int i3 = pphot->i3p[ip];
@@ -929,10 +933,12 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
         kf[j] += invtet[j][i] * ki[i];
       }
     }
-    k0 = kf[0];
-    k1 = kf[1];
-    k2 = kf[2];
-    k3 = kf[3];
+    Real ep = pphot->ep[ip];
+    k0 = kf[0]/ep;
+    k1 = kf[1]/ep;
+    k2 = kf[2]/ep;
+    k3 = kf[3]/ep;
+   
     // Weight moments by time spent in domain
     weight = pphot->wp[ip] * pphot->ep[ip] / k0 * dl * l_cgs / c_cgs;
   } else {
@@ -963,6 +969,9 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
       // Add contribution to corresponding moments
       // Energy density
       moments(MCIER,i3,i2,i1) += weight * k0 * k0;
+      if (std::isnan(moments(MCIER,i3,i2,i1))) {
+        printf("k0: %e weight: %e dl: %e %g\n",k0,weight,dl,moments(MCIER,i3,i2,i1));
+      }
       // Flux
       moments(MCIFR1,i3,i2,i1) += weight * k0 * k1 * c_cgs;
       moments(MCIFR2,i3,i2,i1) += weight * k0 * k2 * c_cgs;
@@ -1324,8 +1333,8 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
 
   // Get integration time
   // Fix for dynamic MC
-  //Real dt = pmy_mc->tint;
-  Real dt = pmy_mc->pmy_mesh->time;
+  Real dt = pmy_mc->tint;
+  //Real dt = pmy_mc->pmy_mesh->time;
   Real norm;
 
   if (mom_flag_lab) {
@@ -1440,6 +1449,12 @@ void MonteCarloBlock::ResetMoments() {
 void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0,
                                         Real weight0, Real k1p0,
                                         Real k2p0, Real k3p0, int ip) {
+
+  if (pmy_mc->UserSourcetermFunc != nullptr) {
+    pmy_mc->UserSourcetermFunc(this,pphot,energy0,weight0,
+                              k1p0,k2p0,k3p0,ip);
+    return; // SWD: should give option to still do standard updates?
+  }
 
   // Updates
   Real c_cgs = 2.99792458e10;
@@ -1611,6 +1626,7 @@ void MonteCarloBlock::ComputeEmissionArray(int etype, Real &em_min, Real &em_max
         for (int i=is; i<=ie; ++i) {
           Real vol = pcoord->vol(k,j,i);
           emission(k,j,i) = GetEmission(this,k,j,i,etype) * dt * vol;
+          //printf("emission[%d %d %d]: %g %g %g %g\n",i,j,k,dt,vol,emission(k,j,i),pmy_mc->GetEmission[etype](this,k,j,i,etype));
           em_tot += emission(k,j,i);
           if (emission(k,j,i) > em_max) em_max = emission(k,j,i);
           if (emission(k,j,i) < em_min) em_min = emission(k,j,i);
@@ -1726,6 +1742,7 @@ void MonteCarloBlock::ComputeEmissionArray(int etype, Real &em_min, Real &em_max
               area = pbcoord->GetFace3Area(k+1,j,i);
             area *= l_cgs*l_cgs;
             emission(k,j,i) = GetEmission(this,k,j,i,etype) * dt * area;
+            //printf("emission[%d %d %d %d]: %g %g %g %g\n",pmy_block->gid,i,j,k,dt,area,emission(k,j,i),pmy_mc->GetEmission[etype](this,k,j,i,etype));
             em_tot += emission(k,j,i);
             if (emission(k,j,i) > em_max) em_max = emission(k,j,i);
             if (emission(k,j,i) < em_min) em_min = emission(k,j,i);

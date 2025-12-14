@@ -143,7 +143,7 @@ void __attribute__((weak)) MonteCarloBlock::MonteCarloProblemGenerator(Parameter
 //========================================================================================
 
 void __attribute__((weak)) MonteCarloBlock::InitializePhoton(Photon *pphot, int ips,
-                                                             int ipe) {
+                                                             int ipe, int etype) {
 
 }
 
