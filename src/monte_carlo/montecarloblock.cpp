@@ -572,8 +572,9 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
   }
 
   // move all samples to next interaction or boundary
+  //printf("%d %d\n",pmy_block->gid, pphot->nphot);
   ppusher->Move(pphot,0,pphot->nphot-1);
-
+  //printf("%d done\n",pmy_block->gid);
   // perform all absorption and scattering related tasks for all samples
   for (int ip=0; ip<pphot->nphot; ip++) {
     // record initial weight and direction
