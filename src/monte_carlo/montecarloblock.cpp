@@ -2369,6 +2369,7 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
       pphot->ep[ip] *= nufact;
       pphot->acp[ip] /= nufact;
       pphot->scp[ip] /= nufact;
+      //pphot->PrintPhoton("to cord",ip);
     }
   } else {
     for(int ip=ips; ip<=ipe; ip++) {

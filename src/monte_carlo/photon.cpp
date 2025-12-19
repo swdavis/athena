@@ -113,7 +113,7 @@ void Photon::PrintPhoton(int ip) {
         }
     }
   }
-  std::cout << "opacity: " << scp[ip] << " " << acp[ip] << std::endl;
+  std::cout << "opacity [sc] [abs]: " << scp[ip] << " " << acp[ip] << std::endl;
   std::cout << "dt: " << dtp[ip] << " ";
   if (statp[ip] == EVOLVING)
     std::cout << "EVOLVING" << std::endl;
@@ -465,11 +465,7 @@ void Photon::ApplyPeriodicBoundary(Real &x1, Real &x2, Real &x3, int k) {
   RegionSize& mesh_size = pmy_mesh->mesh_size;
   //MCCoord *pcoord = pmy_mcb->pcoord;
   Real l1cgs = 1., l2cgs = 1., l3cgs = 1.;
-  //l1cgs = pmy_mcb->l_cgs;
-  //if ( (COORDINATE_SYSTEM == "cartesian") || (COORDINATE_SYSTEM == "minkowski") ) {
-  //  l2cgs *= pmy_mcb->l_cgs;
-  //  l3cgs *= pmy_mcb->l_cgs;
-  //}
+
   Real frac = 1.0e-8;
 
   // Apply periodic boundary conditions in X1.

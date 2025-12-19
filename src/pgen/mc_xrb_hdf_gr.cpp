@@ -50,7 +50,7 @@ namespace {
   Real TableOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
   Real IntegrateEmission(Real temp, Real num, Real nup, Real am, Real ap);
   Real Planck(Real temp, Real nu);
-  Real TableEmission(MonteCarloBlock *pmcb, int k, int j, int i);
+  Real TableEmission(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
   Real SampleEmissivity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
   Real FreeFreeOpacity(Real tgas, Real rho, Real energy);
   void GetNel(MonteCarloBlock *pmcb);
@@ -78,7 +78,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
   // assumes mbh = 1 in code units
   r_hor = 1.0 + sqrt(1.0 - SQR(abh));
   EnrollUserWorkInMove(InsideHorizon);
-
+  
   emission_type = pin->GetOrAddString("montecarlo","emission","none");
   if (emission_type == "freefree")
     return;
@@ -792,7 +792,7 @@ Real Planck(Real temp, Real nu) {
 
 }
 
-Real TableEmission(MonteCarloBlock *pmcb, int i3, int i2, int i1) {
+Real TableEmission(MonteCarloBlock *pmcb, int i3, int i2, int i1, int etype) {
 
   //Real comp =GetEmissionFreeFree(pmcb,i3,i2,i1);
   int lid = pmcb->pmy_block->lid;
