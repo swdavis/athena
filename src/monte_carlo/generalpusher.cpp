@@ -49,6 +49,7 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
   for (int ip=ips; ip<=ipe; ip++) {
     // get number of mean free paths photon will travel
     Real tauremaining = GetOpticalDepth(pran);
+    CheckZone(pphot,ip);
     Real step = StepSize(pphot,ip);
     //printf("step %g\n",step);
     Real path_length;
