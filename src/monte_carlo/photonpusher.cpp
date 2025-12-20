@@ -29,7 +29,8 @@ PhotonPusher::PhotonPusher(MonteCarloBlock *pmcb) {
   acceleration = pmcb->acceleration;
   boosts = pmcb->boosts;
   resonance = (pmcb->scattering_meth == SCATRES);
-  compton = (!pmcb->coherent_scattering) && (!resonance);
+  compton = (pmcb->scattering_meth == SCATCOMP);
+  //compton = (!pmcb->coherent_scattering) && (!resonance);
   time_acc = pmcb->time_acc;
 
   if (acceleration) {
@@ -762,7 +763,32 @@ bool PhotonPusher::UpdateZone(Photon *pphot, int ip) {
 
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void PhotonPusher::CheckZone(photon *pphot, int ip)
+//! \brief Confirm photon is on block
 
+void PhotonPusher::CheckZone(Photon *pphot, int ip) {
+
+  bool on_block = true;
+  if (pphot->i1p[ip] < pmy_mcb->is) {
+    on_block = false;
+  } else if (pphot->i1p[ip] > pmy_mcb->ie) {
+    on_block = false;
+  } else if (pphot->i2p[ip] < pmy_mcb->js) {
+    on_block = false;
+  } else if (pphot->i2p[ip] > pmy_mcb->je) {
+    on_block = false;
+  } else if (pphot->i3p[ip] < pmy_mcb->ks) {
+    on_block = false;
+  } else if (pphot->i3p[ip] > pmy_mcb->ke) {
+    on_block = false;
+  }
+  if (!on_block) {
+    pphot->statp[ip] = DESTROYED;
+    pphot->PrintPhoton("Warning: [CheckZone], Photon not on block, destoryed",ip);
+  }
+
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn void PhotonPusher::InitializeMWDist(void)

@@ -37,6 +37,9 @@
 #include "../scalars/scalars.hpp"
 #include "../inputs/hdf5_reader.hpp"
 
+#if NSCALARS < 1
+#error "This problem generator requires scalars to track neutral hydrogen fraction"
+#endif
 
 namespace {
 
@@ -81,7 +84,7 @@ bool flag_wind = false;
 bool flag_pow_law = false;
 
 enum PhotonType {NO_TYPE=0, LYA=1, IONIZING=2};
-enum EmissionGeometry {NO_GEOMETRY=0, VOLUME=1, SURFACE=2};
+enum EmissionGeometryLya {NO_GEOMETRY=0, VOLUME=1, SURFACE=2};
 
 // Function for sampling photon frequencies
 void gasdev(MeshBlock *pmb, Real mean, Real stddev, Real &samp);
@@ -93,9 +96,9 @@ Real GetIsowindVelocity(Real x);
 // Function to calculate the emission array for Lya emitted from recombinations
 // and from electron impact excitation
 //Real MultipleEmissivities(MonteCarloBlock *pmcb, int k, int j, int i);
-Real VolumeEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i);
-Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i);
-Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i);
+Real VolumeEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
+Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
+Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
 
 void F1pos(MonteCarloBlock *pmcb, Photon *pphot, Real dl, int ip, int imom);
 void F1neg(MonteCarloBlock *pmcb, Photon *pphot, Real dl, int ip, int imom);
@@ -137,6 +140,9 @@ Real ConstantTimestep(MeshBlock *pmb) {
 }
 void GetIonizationTemperature(MonteCarloBlock *pmcb);
 //void EscapeCoords(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover, int ip);
+
+void UpdateSourceTerms(MonteCarloBlock *pmcb, Photon *pphot,Real energy0, Real weight0,
+                  Real k1p0, Real k2p0, Real k3p0, int ip);
 
 } // end namespace
 
@@ -291,17 +297,24 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
   nsamp = nsamptype[0] = pin->GetInteger("problem", "nion");
   emission_eqwt[0] = pin->GetOrAddBoolean("problem", "ion_eqwt",false);
   EnrollUserEmissionFunction(SurfaceEmissivityIonizing,0);
+  emission_geometry[0] = EMISAREA;
+  emission_face[0] = SetEmissionSurface("outer_x1");
   if (ntype > 1) {
     nsamp += nsamptype[1] = pin->GetInteger("problem", "nlyarec");
     emission_eqwt[1] = pin->GetOrAddBoolean("problem", "lys_eqwt",false);
+    emission_geometry[1] = EMISAREA;
     EnrollUserEmissionFunction(SurfaceEmissivityLya,1);
+    emission_face[1] = SetEmissionSurface("outer_x1");
   }
   if (ntype == 3) {
     nsamp += nsamptype[2] = pin->GetInteger("problem", "nlyastar");
     emission_eqwt[2] = pin->GetOrAddBoolean("problem", "lyr_eqwt",false);
+    emission_geometry[2] = EMISVOL;
     EnrollUserEmissionFunction(VolumeEmissivityLya,2);
+    emission_face[2] = SetEmissionSurface("none");
   } 
 
+  EnrollUserSourcetermUpdate(UpdateSourceTerms);
   // Photon user variables for incident and outgoing direction vector and position
   nuser_var = 1;
 
@@ -541,13 +554,13 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 	chromo_temp = pin->GetReal("problem", "chromo_temp");
 }
 
-void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
+void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etype) {
   // Function called each time a photon is initialized
 
   std::stringstream msg;
   AthenaArray<Real> emis = pmy_block->ruser_meshblock_data[0];
   PhotonType phot_type = NO_TYPE;
-  EmissionGeometry emis_geometry = NO_GEOMETRY;
+  EmissionGeometryLya emis_geometry = NO_GEOMETRY;
 
   // 1. Determine from which cell the photon is emitted
   // --------------------------------------------------
@@ -558,7 +571,14 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
   // Note: on the RunPhotoionization pass, the emissivity array will contain
   // only the emissivity from the ionizing radiation source
-  SetEmissionCellWeight(pphot,ips,ipe);
+  if (etype == ION_STR) {
+    SetEmissionCellWeightArea(pphot,pmy_mc->emission_face[0],ips,ipe);
+  } else if (etype == LYA_STR) {
+    SetEmissionCellWeightArea(pphot,pmy_mc->emission_face[1],ips,ipe);
+  } else if (etype == LYA_REC) {
+    SetEmissionCellWeight(pphot,ips,ipe);
+  }
+  
 
   // Calculate numerical prefactors for sampling so we don't repeat math operations
   Real numinpow = std::pow(numin, 1.0-powa);
@@ -643,10 +663,10 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
         pphot->k3p[ip] = mu;
 
         // Resize direction vector to sphpol code coords
-        if (pphot->general_pusher_flag) {
-          pphot->k2p[ip] /= pphot->x1p[ip];
-          pphot->k3p[ip] /= pphot->x1p[ip] * sin(pphot->x2p[ip]);
-        }
+        //if (pphot->general_pusher_flag) {
+        //  pphot->k2p[ip] /= pphot->x1p[ip];
+        //  pphot->k3p[ip] /= pphot->x1p[ip] * sin(pphot->x2p[ip]);
+        //}
 
         break;
       } // END CASE VOLUME
@@ -691,7 +711,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
           pphot->x3p[ip] = ph_samp;
 
           // Set direction vector - parallel to star-planet separation vector
-          pphot->k0p[ip] = 1. / c_cgs;
+          pphot->k0p[ip] = 1.;
           pphot->k1p[ip] = -std::cos(th);
           pphot->k2p[ip] = std::sin(th);
           pphot->k3p[ip] = 0.0;
@@ -791,7 +811,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
           Real cphm = std::cos(ph - psi);
 
           // Set direction vector - parallel to star-planet separation vector
-          pphot->k0p[ip] = 1. / c_cgs;
+          pphot->k0p[ip] = 1.;
           pphot->k1p[ip] = sth*cphm;
           pphot->k2p[ip] = cth*cphm;
           pphot->k3p[ip] = -sphm;
@@ -806,10 +826,10 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
         } // END IF INCIDENT_FROM_Z
 
         // Resize direction vector to sphpol code coords
-        if (pphot->general_pusher_flag) {
-          pphot->k2p[ip] /= pphot->x1p[ip];
-          pphot->k3p[ip] /= pphot->x1p[ip] * sin(pphot->x2p[ip]);
-        }
+        //if (pphot->general_pusher_flag) {
+        //  pphot->k2p[ip] /= pphot->x1p[ip];
+        //  pphot->k3p[ip] /= pphot->x1p[ip] * sin(pphot->x2p[ip]);
+        //}
 
         // Set photon position indices
         //Real xi1, xi2, xi3;
@@ -891,21 +911,22 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
     // to the values in the emitted zone
     pphot->acp[ip] = AbsorptionOpacity(this,pphot,ip);
     pphot->scp[ip] = ScatteringOpacity(this,pphot,ip);
+
   } // end loop over ip
 }
 
 
 // Function called each time a Lya photon escapes
-void MonteCarloBlock::FinalizePhoton(Photon *pphot, int ip) {
+/*void MonteCarloBlock::FinalizePhoton(Photon *pphot, int ip) {
   // For the pure absorption test, set user variable to be the cross section
   int i = pphot->i1p[ip];
   int j = pphot->i2p[ip];
   int k = pphot->i3p[ip];
-  Real nH = pphot->pmy_mcb->pmy_block->pscalars->s(0,k,j,i)/mp_cgs;
+  Real nH = pmy_block->pscalars->s(0,k,j,i)/mp_cgs;
   Real sigma = pphot->scp[ip] / nH;
   pphot->user[0][ip] = sigma;
   return;
-}
+}*/
 
 
 /*
@@ -1308,7 +1329,7 @@ void HillTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
 // }
 
 
-Real VolumeEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i) {
+Real VolumeEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype) {
 // Sets the value of the emission array which determines where Lya photons are
 // likely to be emitted. The associated cooling of the gas is handled in
 // UpdateSourceTerms, not here - this is just where the emissivity is calculated
@@ -1372,7 +1393,7 @@ Real VolumeEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i) {
 }
 
 
-Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i) {
+Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype) {
 
   Coordinates *pco = pmcb->pmy_block->pcoord;
 
@@ -1434,9 +1455,10 @@ Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i) {
 }
 
 
-Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i) {
+Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i, int etype) {
   Coordinates *pco = pmcb->pmy_block->pcoord;
 
+  
   Real emis = 0.0;
   if (pco->x1f(i+1) >= rout) {
     if (flag_incident_from_z) {
@@ -1444,35 +1466,18 @@ Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i) {
         return 0.0;
       Real cthm = std::cos(pco->x2f(j));
       Real cthp = std::cos(pco->x2f(j+1));
-      emis = 0.5*edot_ion/PI*(pco->x3f(k+1)-pco->x3f(k))*(SQR(cthm)-SQR(cthp))/(h_cgs*mean_nu);
+      Real r2 = pco->x1f(i+1)*pco->x1f(i+1);
+      Real nflux = r2 * ion_flux/(h_cgs*mean_nu)/pco->GetFace1Area(k,j,i+1);
+      emis = 0.5*nflux*(pco->x3f(k+1)-pco->x3f(k))*(SQR(cthm)-SQR(cthp));
+  
     } else {
-      Real thm = pco->x2f(j);
-      Real thp = pco->x2f(j+1);
       Real phm = pco->x3f(k);
       Real php = pco->x3f(k+1);
-
-     // if (phm < 0.) {
-     //   phm += 2.0 * PI;
-     // } else if (phm >= 2.0 * PI) {
-     //   phm -= 2.0 * PI;
-     // }
-
-     // if (php < 0) {
-     //   php += 2.0 * PI;
-     // } else if (php >= 2.0 * PI) {
-     //   php -= 2.0 * PI;
-     // }
-
-     // bool dayside = true;
-     // if ((phm < PI/2.) || (php > 3.*PI/2.)) {
-     //   dayside = false;
-     // }
-
-      //printf("k=%d  j=%d  i=%d     phm=%g     php=%g    dayside=%d\n", k,j,i,phm,php,dayside);
-      // Zero emissivity if phi coordinate does not fall within dayside bounds
       if ((phm < PI/2.) || (php > 3.*PI/2.)) {
         return 0.0;
       }
+      Real thm = pco->x2f(j);
+      Real thp = pco->x2f(j+1);
 
       Real sthm = std::sin(thm);
       Real cthm = std::cos(thm);
@@ -1480,19 +1485,17 @@ Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i) {
       Real cthp = std::cos(thp);
       Real sphm = std::sin(phm);
       Real sphp = std::sin(php);
-
-      emis = -0.5*edot_ion/PI*(thp-thm-(std::sin(thp - thm)*std::cos(thp + thm)))*(sphp-sphm)/(h_cgs*mean_nu);
+      Real r2 = pco->x1f(i+1)*pco->x1f(i+1);
+      Real nflux = r2*ion_flux/(h_cgs*mean_nu) / pco->GetFace1Area(k,j,i+1);
+      emis = -0.5*nflux*(thp-thm-(std::sin(thp - thm)*std::cos(thp + thm)))*(sphp-sphm);
     }
   }
 
-  Real vol = pco->GetCellVolume(k,j,i);
-//	if (emis > 0.)
-//	printf("ion emis, i, j, k: %g, %d, %d, %d\n", emis/vol, i, j, k);
 
 	// CMF note: currently no user_out_var space for EUV only?
-  pmcb->pmy_block->ruser_meshblock_data[0](3,k,j,i) = emis/vol;
-  //printf("emiss_vol: %d %d %d %g %g %g\n",k,j,i,emis,vol,edot_ion);
-  return emis/vol;
+  pmcb->pmy_block->ruser_meshblock_data[0](3,k,j,i) = emis;
+
+  return emis;
 }
 
 
@@ -1627,7 +1630,101 @@ void ExplicitEUVHeating(MeshBlock *pmb, const Real time, const Real dt,
   return;
 }
 
+void UpdateSourceTerms(MonteCarloBlock *pmcb, Photon *pphot, Real energy0, Real weight0,
+                  Real k1p0, Real k2p0, Real k3p0, int ip) {
 
+  Real hplanck = 6.62607015e-27;
+  Real threshold = 3.28808816e+15 * hplanck;
+
+  // Update soucterms for ionizing radiation
+	if (energy0 > threshold) {
+    Real heat = weight0 * (energy0 - threshold);
+    //printf("energy0, weight0: %g %g %g\n", energy0, weight0);
+    if ((std::isinf(heat)) || (std::isnan(heat))) {
+      std::cout << "Warning: UpdateSourceTerms heating is : " << heat << std::endl;
+      pphot->PrintPhoton(ip);
+      pphot->statp[ip] = DESTROYED;
+    } else if (heat >= TINY_NUMBER) {
+      int &i = pphot->i1p[ip];
+      int &j = pphot->i2p[ip];
+      int &k = pphot->i3p[ip];
+      pmcb->sourceterms(MCRS0,k,j,i) += heat;
+      pmcb->sourceterms(MCNABS,k,j,i) += weight0;
+    }
+  }
+
+  // update momentum source terms as usual
+  Real k1 = pphot->k1p[ip];
+  Real k2 = pphot->k2p[ip];
+  Real k3 = pphot->k3p[ip];
+
+  // Normalize k vector if using general mover in spherical polar coords
+  if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_pusher_flag)) {
+    k2 *= pphot->x1p[ip];
+    k3 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
+    k2p0 *= pphot->x1p[ip];
+    k3p0 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
+  }
+  Real norm0 = sqrt(SQR(k1p0) + SQR(k2p0) + SQR(k3p0));
+  if ((fabs(norm0-1.) > 1.0e-8) && (norm0 > 1.0e-8)) {
+    k1p0 /= norm0;
+    k2p0 /= norm0;
+    k3p0 /= norm0;
+  }
+  Real norm = sqrt(SQR(k1) + SQR(k2) + SQR(k3));
+  if ((fabs(norm-1.) > 1.0e-8) && (norm > 1.0e-8)) {
+    k1 /= norm;
+    k2 /= norm;
+    k3 /= norm;
+  }
+  //norm0 = sqrt(SQR(k1p0) + SQR(k2p0) + SQR(k3p0));
+  //printf("norm0: %f\n", norm0);
+  //norm = sqrt(SQR(k1) + SQR(k2) + SQR(k3));
+  //printf("norm: %f\n", norm);
+
+  Real c_cgs = 2.99792458e10;
+  // Components of momentum change --- assumes orthonormal basis
+  Real dp1p = pphot->wp[ip] * k1 * pphot->ep[ip] / c_cgs
+              - weight0 * k1p0 * energy0 / c_cgs;
+  Real dp2p = pphot->wp[ip] * k2 * pphot->ep[ip] / c_cgs
+              - weight0 * k2p0 * energy0 / c_cgs;
+  Real dp3p = pphot->wp[ip] * k3 * pphot->ep[ip] / c_cgs
+              - weight0 * k3p0 * energy0 / c_cgs;
+
+  Real cool = (pphot->wp[ip] * pphot->ep[ip]) - (weight0 * energy0);
+  //if (energy0 == 0.0)
+  //  printf("weight, cool: %g %g\n",pphot->weight,cool);
+
+  if ((std::isinf(cool)) || (std::isnan(cool))) {
+    std::cout << "Warning: UpdateSourceTerms cooling is : " << cool << std::endl;
+    pphot->PrintPhoton(ip);
+    pphot->statp[ip] = DESTROYED;
+  } else if ((std::isinf(dp1p)) || (std::isnan(dp1p))) {
+    std::cout << "Warning: UpdateSourceTerms momentum change (k1p) is : "
+              << dp1p << std::endl;
+    pphot->PrintPhoton(ip);
+  } else if ((std::isinf(dp2p)) || (std::isnan(dp2p))) {
+    std::cout << "Warning: UpdateSourceTerms momentum change (k2p) is : "
+              << dp2p << std::endl;
+    pphot->PrintPhoton(ip);
+  } else if ((std::isinf(dp3p)) || (std::isnan(dp3p))) {
+    std::cout << "Warning: UpdateSourceTerms momentum change (k3p) is : "
+              << dp3p << std::endl;
+    pphot->PrintPhoton(ip);
+    pphot->statp[ip] = DESTROYED;
+    std::cout << "Warning: UpdateCooling cooling is : " << cool << std::endl;
+  } else {
+    int &i = pphot->i1p[ip];
+    int &j = pphot->i2p[ip];
+    int &k = pphot->i3p[ip];
+    //sourceterms(MCRS0,k,j,i) -= cool; // BCM: We do not want the photons to cool here - handle cooling separately via explicit source terms
+    pmcb->sourceterms(MCRS1,k,j,i) -= dp1p;
+    pmcb->sourceterms(MCRS2,k,j,i) -= dp2p;
+    pmcb->sourceterms(MCRS3,k,j,i) -= dp3p;
+  }
+
+
+}
 //void EscapeCoords(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover, int ip) {
 //  if (pphot->statp[ip] == ESCAPED || pphot->statp[ip] == ABSORBED) {
 //    pphot->user[6][ip] = pphot->x1p[ip];

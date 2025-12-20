@@ -49,6 +49,7 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
   for (int ip=ips; ip<=ipe; ip++) {
     // get number of mean free paths photon will travel
     Real tauremaining = GetOpticalDepth(pran);
+    CheckZone(pphot,ip);
     Real step = StepSize(pphot,ip);
     //printf("step %g\n",step);
     Real path_length;
@@ -99,7 +100,6 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
             PropogatePolarization(pphot,step,ip);
           tauremaining = 0.;
         }
-        //pphot->PrintPhoton(ip);
         pphot->dtp[ip] -= pphot->ep[ip]*step/c_cgs;
         // Update moments
         if (pmcb->call_moments) {
@@ -132,9 +132,8 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
       // SWD: put here for now, may need additional flag
       if (ptraj != NULL) ptraj->AddToTrajectory(pphot,ip);
 
-
     } // end of photon integration
-
+    //printf("it: %d\n",iter);
     /*if (pphot->statp[ip] == ESCAPED) {
       pphot->ep[ip] *= pphot->k0p[ip];
       //pphot->PrintPhoton(ip);
@@ -335,7 +334,6 @@ void GeneralPusher::RK4Step(Photon *pphot, Real step, int ip) {
     k[i] += step / 6. * dl[i+4];
   }
 
-
   Real gcon[4][4];
   pcoord->InverseMetric(x, gcon);
   for (int j = 0; j < 4; j++) {
@@ -456,7 +454,7 @@ Real GeneralPusher::StepSize(Photon *pphot, int ip) {
     return step_par; // keep step constant
   }
 
-  Real small = 1.e-20;
+  Real small = 1.e-30;
   Real kx1 = (fabs(pphot->k1p[ip]) > small) ? fabs(pphot->k1p[ip]) : small;
   Real kx2 = (fabs(pphot->k2p[ip]) > small) ? fabs(pphot->k2p[ip]) : small;
   Real kx3 = (fabs(pphot->k3p[ip]) > small) ? fabs(pphot->k3p[ip]) : small;

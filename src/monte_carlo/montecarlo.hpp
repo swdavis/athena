@@ -57,7 +57,7 @@ enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
       MCIPR12=7, MCIPR13=8, MCIPR23=9, MCIPR21=10, MCIPR31=11, MCIPR32=12};
 enum SourceTermFlag {MCRS0 = 0, MCRS1=1, MCRS2=2, MCRS3=3, MCRF0=4, MCRF1=5,
-                     MCRF2=6, MCRF3=7, MCNABS=9, NSRC=10};
+                     MCRF2=6, MCRF3=7, MCNABS=8};
 //----------------------------------------------------------------------------------------
 // function pointer prototypes for user-defined modules set at runtime
 typedef Real (*EmisFunc_t)(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
@@ -71,6 +71,9 @@ typedef void (*UserMoveFunc_t)(MonteCarloBlock *pmcb, Photon *phot, PhotonPusher
 typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, MCCoord *pco, int ip);
 typedef void (*UserMomentFunc_t)(MonteCarloBlock *pmcb, Photon *phot, Real dl, int ip,
                                  int imom);
+typedef void (*UserSourcetermFunc_t)(MonteCarloBlock *pmcb, Photon *pphot,
+                                    Real energy0, Real weight0, Real k1p0,
+                                    Real k2p0, Real k3p0, int ip);
 //--------------------- prototypes for opacity.cpp functions -----------------------------
 Real NoOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
 Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
@@ -231,6 +234,7 @@ public:
   bool tetrads; // convert from coordinate frame
   bool emission_array;  // Compute and save zone emissivities
   bool *emission_eqwt; // Set initial weights equal
+  
   bool polarized;// track photon polarization
   bool acceleration;  // use MRW acceleration
   bool computedmin;
@@ -247,9 +251,9 @@ public:
   ScatFunc_t UserScattering;
   OpacFunc_t UserScatteringOpacity;
   OpacFunc_t UserAbsorptionOpacity;
-
   std::string *user_moment_names;
   UserMomentFunc_t *user_moment_func;
+  UserSourcetermFunc_t UserSourcetermFunc;
 
   // functions
   // SWD: some of these functions could/should be private
@@ -266,6 +270,7 @@ public:
   void EnrollUserOpacityFunction(OpacFunc_t opacfunc, bool abs);
   void AllocateUserMoments(int n);
   void EnrollUserMoment(int i, UserMomentFunc_t my_func, const char *name);
+  void EnrollUserSourcetermUpdate(UserSourcetermFunc_t my_func);
   void EnrollUserScatteringFunction(ScatFunc_t scatfunc);
   void Initialize(ParameterInput *pinput);
   void InitializeEmission(ParameterInput *pin);
@@ -378,13 +383,13 @@ public:
   // functions
   void InitUserMonteCarloBlockData(ParameterInput *pin);
   void MonteCarloProblemGenerator(ParameterInput *pin);
-  void RayTracePhotonsOnBlock(); // Ray trace photon on this block
-  void TransferPhotonsOnBlock(); // Transfer photons on this block
+  void RayTracePhotonsOnBlock(int etype); // Ray trace photon on this block
+  void TransferPhotonsOnBlock(int etype); // Transfer photons on this block
   void CoupleMonteCarloToFluid(Real dt);  // couple monte carlo to mesh
   void LorentzTransform(Photon *pphot, const Real sign, int ips, int ipe);
   Real LorentzTransformFrequencyShift(Photon *pphot, int ip);
   void TetradTransform(Photon *pphot, const Real sign, int ips, int ipe);
-  void InitializePhoton(Photon *pphot, int ips, int ipe);
+  void InitializePhoton(Photon *pphot, int ips, int ipe, int etype);
   void FinalizePhoton(Photon *pphot, int ip);
   void UpdateMoments(Photon *pphot, Real dl, Real etau, int ip);
   void UpdateMoments(Photon *pphot, Real dl, int ip);

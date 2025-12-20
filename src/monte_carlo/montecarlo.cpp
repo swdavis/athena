@@ -393,7 +393,15 @@ void MonteCarlo::EnrollUserMoment(int i, UserMomentFunc_t my_func, const char *n
 
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::EnrollUserSourcetermUpdate(UserSourctermFunc_t my_func)
+//! \brief Enroll a user-defined source term function
 
+void MonteCarlo::EnrollUserSourcetermUpdate(UserSourcetermFunc_t my_func) {
+
+  UserSourcetermFunc = my_func;
+
+}
 //----------------------------------------------------------------------------------------
 //! \fn enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string)
 //! \brief set boundary flag
@@ -684,7 +692,7 @@ void MonteCarlo::DistributeSamples(int etype) {
     std::cout << "Emission array range (min, max), total: " << em_min << " "
               << em_max << " " << em_tot << std::endl;
   }
-  free(tot_block);
+  delete[] tot_block;
 
 }
 
@@ -745,9 +753,9 @@ void MonteCarlo::RunMonteCarlo(Outputs *pouts, Mesh *pmesh,
 
       for(int nb=0; nb<nblocal; ++nb){
         if (raytrace_flag)
-          my_blocks(nb)->RayTracePhotonsOnBlock();
+          my_blocks(nb)->RayTracePhotonsOnBlock(etype);
         else
-          my_blocks(nb)->TransferPhotonsOnBlock();
+          my_blocks(nb)->TransferPhotonsOnBlock(etype);
       }
       photons_remain = CheckAndBroadCastPhotonsRemaining();
     }
@@ -805,6 +813,7 @@ bool MonteCarlo::CheckAndBroadCastPhotonsRemaining() {
 
   // Receive photons from all blocks
   bool complete = false;
+  //int count = 0;
   while(!complete) {
     complete = true;
     for(int nb=0; nb<nblocal; ++nb) {
@@ -812,6 +821,9 @@ bool MonteCarlo::CheckAndBroadCastPhotonsRemaining() {
       if (!success)
         complete = false;
     }
+    //count++;
+    //if (count % 100000 == 0)
+    //printf("here %d %d \n",count, Globals::my_rank);
   }
 
   // Clear Boundaries
@@ -824,6 +836,8 @@ bool MonteCarlo::CheckAndBroadCastPhotonsRemaining() {
     MonteCarloBlock *pmcb = my_blocks(nb);
     nremain += pmcb->nphremain;
     nprop += pmcb->pphot->nphot;
+    //if (pmcb->nphremain > 0)
+    //  printf("rem: %d %d \n",pmcb->pmy_block->gid,pmcb->nphremain);
   }
 #ifdef MPI_PARALLEL
   MPI_Allreduce(MPI_IN_PLACE,&nprop,1,MPI_INT,MPI_MAX,MPI_COMM_WORLD);
@@ -836,6 +850,9 @@ bool MonteCarlo::CheckAndBroadCastPhotonsRemaining() {
   } else {
     active = false;
   }
+  //if (Globals::my_rank == 0) {
+  //  printf("nremain: %d nprop: %d active: %d\n",nremain,nprop,active);
+  //}
   return active;
 }
 

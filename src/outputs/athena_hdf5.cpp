@@ -166,12 +166,12 @@ void ATHDF5Output::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
     num_datasets = 1;
     num_variables = new int[num_datasets];
     int n_dataset = 0;
-    num_variables[n_dataset] = NMOM+2;
+    num_variables[n_dataset] = NMOM+2; // nmom+2
   } else if (variable.compare("mcsrc") == 0) {
     num_datasets = 1;
     num_variables = new int[num_datasets];
     int n_dataset = 0;
-    num_variables[n_dataset] = 8;
+    num_variables[n_dataset] = 8; // nsrc-1
   } else if (variable.compare("mcscat") == 0) {
     num_datasets = 1;
     num_variables = new int[num_datasets];
