@@ -635,7 +635,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
       }
     } // status == evolving
       // Update moments that compute radiation force and net heating/cooling
-    if (call_srcterms) {
+    if (call_srcterms && ((pphot->statp[ip] == EVOLVING) || (pphot->statp[ip] == ABSORBED))) {
       UpdateSourceTerms(pphot,e_pre_scat,weight0,k1p0,k2p0,k3p0,ip);
     }
 
