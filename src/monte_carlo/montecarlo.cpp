@@ -34,6 +34,13 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   GetEmission=nullptr;
   UserGetTemperature=nullptr;
   UserGetNumberDensity=nullptr;
+  UserScattering=nullptr;
+  UserScatteringOpacity=nullptr;
+  user_moment_names=nullptr;
+  user_moment_func=nullptr;
+  UserAbsorptionOpacity=nullptr;
+  UserSourcetermFunc=nullptr;
+
 
   // read bc flags for each of the 6 physical boundaries.
   mc_bcs[BoundaryFace::inner_x1] = GetMCBoundaryFlag(pin->GetString("mesh","ix1_mc_bc"));

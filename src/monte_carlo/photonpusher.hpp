@@ -75,7 +75,7 @@ public:
   virtual void MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
                MonteCarloBlock *pmcb, int face, bool ascend[3], int ip);
   virtual bool UpdateZone(Photon *pphot, int ip);
-  virtual void CheckZone(Photon *pphot, int ip);
+  virtual bool IsOnBlock(Photon *pphot, int ip);
 //  virtual bool UpdateSingleZone(Photon *pphot, int ip, bool *multizone);
   virtual void InitializeMRWDist(void);
   // Acceleration methods

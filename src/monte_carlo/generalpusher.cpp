@@ -49,7 +49,7 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
   for (int ip=ips; ip<=ipe; ip++) {
     // get number of mean free paths photon will travel
     Real tauremaining = GetOpticalDepth(pran);
-    CheckZone(pphot,ip);
+    if (!IsOnBlock(pphot,ip)) continue;
     Real step = StepSize(pphot,ip);
     //printf("step %g\n",step);
     Real path_length;
@@ -124,6 +124,7 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
       if (pphot->IsNanPhoton(ip)) {
         pphot->statp[ip] = DESTROYED;
         pphot->PrintPhoton("Photon returned Nan in general pusher",ip);
+        break;
       }
       step = StepSize(pphot,ip);
 

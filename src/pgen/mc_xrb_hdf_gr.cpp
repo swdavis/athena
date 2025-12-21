@@ -625,7 +625,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 //! \brief Initializes Photon packets before integration
 //========================================================================================
 
-void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
+void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etype) {
 
   // Set initial cells and emission weights for all photon samples
   SetEmissionCellWeight(pphot,ips,ipe);
@@ -731,7 +731,7 @@ void InsideHorizon(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher, 
 
   if (r < r_hor) {
     pphot->statp[ip] = ABSORBED;
-    printf("Photon absorbed inside horizon at r=%g\n",r);
+    //printf("Photon absorbed inside horizon at r=%g\n",r);
   }
   return;
 }

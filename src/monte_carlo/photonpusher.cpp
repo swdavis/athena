@@ -764,10 +764,10 @@ bool PhotonPusher::UpdateZone(Photon *pphot, int ip) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PhotonPusher::CheckZone(photon *pphot, int ip)
+//! \fn bool PhotonPusher::IsOnBlock(photon *pphot, int ip)
 //! \brief Confirm photon is on block
 
-void PhotonPusher::CheckZone(Photon *pphot, int ip) {
+bool PhotonPusher::IsOnBlock(Photon *pphot, int ip) {
 
   bool on_block = true;
   if (pphot->i1p[ip] < pmy_mcb->is) {
@@ -787,7 +787,7 @@ void PhotonPusher::CheckZone(Photon *pphot, int ip) {
     pphot->statp[ip] = DESTROYED;
     pphot->PrintPhoton("Warning: [CheckZone], Photon not on block, destoryed",ip);
   }
-
+  return on_block;
 }
 
 //----------------------------------------------------------------------------------------
