@@ -32,6 +32,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
 
   UserWorkInMove=nullptr;
   GetEmission=nullptr;
+  UserGetDensity=nullptr;
   UserGetTemperature=nullptr;
   UserGetNumberDensity=nullptr;
   UserScattering=nullptr;
@@ -55,6 +56,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
     BoundaryFunction_[dir]=nullptr;
 
   // SWD: replace dynamic/coupled with single method flag?
+  using_bfield = pin->GetOrAddBoolean("montecarlo","bfields",false);
   dynamic = pin->GetOrAddBoolean("montecarlo","dynamic",false);
   coupled = pin->GetOrAddBoolean("montecarlo","coupled",false);
   boosts = pin->GetOrAddBoolean("montecarlo","boosts",false);
@@ -323,6 +325,15 @@ void MonteCarlo::EnrollUserEmissionFunction(EmisFunc_t emissfunc, int etype) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::EnrollUserGetDensity(DensFunc_t densfunc)
+//! \brief Enroll a user-defined function for computing density
+
+void MonteCarlo::EnrollUserGetDensity(DensFunc_t densfunc) {
+
+  UserGetDensity = densfunc;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::EnrollUserGetTemperature(TempFunc_t tempfunc)
 //! \brief Enroll a user-defined function for computing temperature
 
@@ -471,7 +482,8 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
     if (boosts) pmcb->GetVelocity();
     if (boosts) pmcb->ComputeTransformations();
     if (NSCALARS > 0) pmcb->GetScalars();
-
+    if (using_bfield) pmcb->GetBField();
+ 
     // initialize counters to zero
     pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
     pmcb->loop_max_size = pin->GetOrAddInteger("montecarlo","loop_max_size",10000);
@@ -579,6 +591,7 @@ void MonteCarlo::DistributeSamples(int etype) {
   }
   //printf("em: %d %g %g %g\n",Globals::my_rank,em_min,em_max,em_tot);
   Real em_proc = em_tot;
+
   // Compute emmision properties over all processes
 #ifdef MPI_PARALLEL
   MPI_Allreduce(MPI_IN_PLACE,&em_min,1,MPI_ATHENA_REAL,MPI_MIN,MPI_COMM_WORLD);
@@ -688,7 +701,7 @@ void MonteCarlo::DistributeSamples(int etype) {
     for (int nb=0; nb<nblocal; nb++) {
       my_blocks(nb)->nphremain = count_b[nb];
       my_blocks(nb)->nphrun = 0;
-      my_blocks(nb)->minweight = weightratio * em_min;
+      my_blocks(nb)->minweight = weightratio * em_max;
       // following assumes all cells on block emit. Correct for volumetric but needs
       // to be corrected for areal
       my_blocks(nb)->emiss_to_weight = static_cast<Real>(ncells_active)/static_cast<Real>(ntot);
@@ -698,6 +711,7 @@ void MonteCarlo::DistributeSamples(int etype) {
   if (Globals::my_rank == 0) {
     std::cout << "Emission array range (min, max), total: " << em_min << " "
               << em_max << " " << em_tot << std::endl;
+    std::cout << "Minimum weight: " << my_blocks(0)->minweight << std::endl;
   }
   delete[] tot_block;
 
@@ -729,6 +743,7 @@ void MonteCarlo::RunMonteCarlo(Outputs *pouts, Mesh *pmesh,
       if (boosts) pmcb->GetVelocity();
       if (boosts) pmcb->ComputeTransformations();
       if (NSCALARS > 0) pmcb->GetScalars(); //scalars
+      if (using_bfield) pmcb->GetBField();
     } else { // static MC
       // Clear Boundary buffers for photons
       pmcb->pphot->ClearBoundary();

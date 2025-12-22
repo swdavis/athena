@@ -54,6 +54,7 @@ namespace {
   Real SampleEmissivity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
   Real FreeFreeOpacity(Real tgas, Real rho, Real energy);
   void GetNel(MonteCarloBlock *pmcb);
+  void GetNelFloor(MonteCarloBlock *pmcb);
   Real UserScatteringOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
   void CartesianKerrSchild(Real x1, Real x2, Real x3, ParameterInput *pin,
     AthenaArray<Real> &g, AthenaArray<Real> &g_inv, AthenaArray<Real> &dg_dx1,
@@ -80,9 +81,10 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
   EnrollUserWorkInMove(InsideHorizon);
   
   emission_type = pin->GetOrAddString("montecarlo","emission","none");
-  if (emission_type == "freefree")
+  if (emission_type == "freefree") {
+    EnrollUserGetNumberDensity(GetNelFloor);
     return;
-
+  }
   // Read in opacity table
   FILE  *opac_file;
   std::string opacity_filename = pin->GetString("problem", "opacity_filename");
@@ -493,7 +495,10 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     int index_mom2 = pin->GetInteger("problem", "index_mom2");
     int index_mom3 = pin->GetInteger("problem", "index_mom3");
     int index_etot = pin->GetInteger("problem", "index_etot");
-
+    std::string dataset_b1 = pin->GetString("problem", "dataset_b1");
+    std::string dataset_b2 = pin->GetString("problem", "dataset_b2");
+    std::string dataset_b3 = pin->GetString("problem", "dataset_b3");
+  
     // Set conserved array selections
     int start_cons_file[5];
     start_cons_file[1] = gid;
@@ -522,13 +527,63 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     count_cons_mem[2] = block_size.nx2;
     count_cons_mem[3] = block_size.nx1;
 
-    // Set conserved values from file
+    // Set conserved values from file SWD: setting prims for now
     for (int n = 0; n < NHYDRO; ++n) {
       start_cons_file[0] = start_cons_indices[n];
       start_cons_mem[0] = n;
       HDF5ReadRealArray(input_filename.c_str(), dataset_cons.c_str(), 5, start_cons_file,
                         count_cons_file, 4, start_cons_mem,
                         count_cons_mem, phydro->w, collective);
+    }
+
+    // Set field array selections
+    int start_field_file[4];
+    start_field_file[0] = gid;
+    start_field_file[1] = 0;
+    start_field_file[2] = 0;
+    start_field_file[3] = 0;
+    int count_field_file[4];
+    count_field_file[0] = 1;
+    int start_field_mem[3];
+    start_field_mem[0] = ks;
+    start_field_mem[1] = js;
+    start_field_mem[2] = is;
+    int count_field_mem[3];
+
+    // Set magnetic field values from file
+    if (MAGNETIC_FIELDS_ENABLED) {
+      // Set B1
+      count_field_file[1] = block_size.nx3;
+      count_field_file[2] = block_size.nx2;
+      count_field_file[3] = block_size.nx1 + 1;
+      count_field_mem[0] = block_size.nx3;
+      count_field_mem[1] = block_size.nx2;
+      count_field_mem[2] = block_size.nx1 + 1;
+      HDF5ReadRealArray(input_filename.c_str(), dataset_b1.c_str(), 4, start_field_file,
+                        count_field_file, 3, start_field_mem,
+                        count_field_mem, pfield->b.x1f, collective);
+
+      // Set B2
+      count_field_file[1] = block_size.nx3;
+      count_field_file[2] = block_size.nx2 + 1;
+      count_field_file[3] = block_size.nx1;
+      count_field_mem[0] = block_size.nx3;
+      count_field_mem[1] = block_size.nx2 + 1;
+      count_field_mem[2] = block_size.nx1;
+      HDF5ReadRealArray(input_filename.c_str(), dataset_b2.c_str(), 4, start_field_file,
+                        count_field_file, 3, start_field_mem,
+                        count_field_mem, pfield->b.x2f, collective);
+
+      // Set B3
+      count_field_file[1] = block_size.nx3 + 1;
+      count_field_file[2] = block_size.nx2;
+      count_field_file[3] = block_size.nx1;
+      count_field_mem[0] = block_size.nx3 + 1;
+      count_field_mem[1] = block_size.nx2;
+      count_field_mem[2] = block_size.nx1;
+      HDF5ReadRealArray(input_filename.c_str(), dataset_b3.c_str(), 4, start_field_file,
+                        count_field_file, 3, start_field_mem,
+                        count_field_mem, pfield->b.x3f, collective);
     }
 
     // Make no-op collective reads if using MPI and ranks have unequal numbers of blocks
@@ -551,6 +606,38 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
                               start_cons_mem, count_cons_mem,
                               phydro->w, collective, true);
           }
+	  if (MAGNETIC_FIELDS_ENABLED) {
+	    count_field_file[1] = block_size.nx3;
+	    count_field_file[2] = block_size.nx2;
+	    count_field_file[3] = block_size.nx1 + 1;
+	    count_field_mem[0] = block_size.nx3;
+	    count_field_mem[1] = block_size.nx2;
+	    count_field_mem[2] = block_size.nx1 + 1;
+	    HDF5ReadRealArray(input_filename.c_str(), dataset_b1.c_str(), 4,
+                              start_field_file, count_field_file, 3,
+                              start_field_mem, count_field_mem,
+                              pfield->b.x1f, collective, true);
+	    count_field_file[1] = block_size.nx3;
+	    count_field_file[2] = block_size.nx2 + 1;
+	    count_field_file[3] = block_size.nx1;
+	    count_field_mem[0] = block_size.nx3;
+	    count_field_mem[1] = block_size.nx2 + 1;
+	    count_field_mem[2] = block_size.nx1;
+	    HDF5ReadRealArray(input_filename.c_str(), dataset_b2.c_str(), 4,
+                              start_field_file, count_field_file, 3,
+                              start_field_mem, count_field_mem,
+                              pfield->b.x2f, collective, true);
+	    count_field_file[1] = block_size.nx3 + 1;
+	    count_field_file[2] = block_size.nx2;
+	    count_field_file[3] = block_size.nx1;
+	    count_field_mem[0] = block_size.nx3 + 1;
+	    count_field_mem[1] = block_size.nx2;
+	    count_field_mem[2] = block_size.nx1;
+	    HDF5ReadRealArray(input_filename.c_str(), dataset_b3.c_str(), 4,
+			      start_field_file, count_field_file, 3,
+			      start_field_mem, count_field_mem,
+			      pfield->b.x3f, collective, true);
+	  }	  
         }
       }
     }
@@ -573,6 +660,15 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     ku += NGHOST;
   }
   // for testing
+  //if (gid == 61) {
+  //for (int k=ks; k<=ke; ++k) {
+  //  for (int j=js; j<=je; ++j) {
+  //    for (int i=is; i<=ie; ++i) {
+  //	printf("%d %d %d %d %g %g\n",gid,k,j,i,phydro->w(IEN,k,j,i),phydro->w(IDN,k,j,i));
+  //    }
+  //  }
+  //}
+  //}
   /*Real rho_const = pin->GetOrAddReal("problem", "rho_const", 0.);
     if (rho_const > 0.) {
     for (int k=ks; k<=ke; ++k) {
@@ -612,6 +708,16 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   peos->PrimitiveToConserved(phydro->w, pfield->bcc, phydro->u, pcoord, il, iu, jl, ju,
                              kl, ku);
 
+  if (gid == 61) {
+    for (int k=ks; k<=ke; ++k) {
+      for (int j=js; j<=je; ++j) {
+	for (int i=is; i<=ie; ++i) {
+	  printf("%d %d %d %d %g %g\n",gid,k,j,i,phydro->w(IEN,k,j,i),phydro->w(IDN,k,j,i));
+	}
+      }
+    }
+  }
+  
 }
 
 //========================================================================================
@@ -733,6 +839,9 @@ void InsideHorizon(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher, 
     pphot->statp[ip] = ABSORBED;
     //printf("Photon absorbed inside horizon at r=%g\n",r);
   }
+  Real keverg = 1.602176634e-9;
+  if (pphot->ep[ip] > 2.e3*keverg)
+    pphot->statp[ip] = DESTROYED;
   return;
 }
 
@@ -848,6 +957,30 @@ Real FreeFreeOpacity(Real tgas, Real rho, Real energy) {
   return opac;
 }
 
+void GetNelFloor(MonteCarloBlock *pmcb) {
+
+  Real heabund = 0.09; //hardcode for now (should be parameter)
+  Real mp = 1.67262192369e-24;
+  Real dcut = 1.e-8*pmcb->rho_cgs; // 100 dfloor
+  
+  for (int k=pmcb->ks; k<=pmcb->ke; ++k) {
+    for (int j=pmcb->js; j<=pmcb->je; ++j) {
+      for (int i=pmcb->is; i<=pmcb->ie; ++i) {
+        Real rho = pmcb->rho(k,j,i);
+	
+	if (rho < dcut) {
+	  //printf("rho: %d %d %d %d %g\n",pmcb->pmy_block->gid,k,j,i,rho);
+	  rho = 1.e-30;
+	}
+        Real nh = rho / (mp*(1.+4.*heabund));
+        Real nhe = nh*heabund;
+	pmcb->nion(k,j,i) = nh + 4. * nhe;
+        pmcb->nel(k,j,i) = nh + 2. * nhe;
+      }
+    }
+  }
+}
+  
 void GetNel(MonteCarloBlock *pmcb) {
 
   Real heabund = 0.09; //hardcode for now (should be parameter)
@@ -907,43 +1040,48 @@ void GetNel(MonteCarloBlock *pmcb) {
   }
 }
 
-Real UserScatteringOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
+Real UserGetDensity(MonteCarloBlock *pmcb) {
 
-  int i1 = pphot->i1p[ip];
-  int i2 = pphot->i2p[ip];
-  int i3 = pphot->i3p[ip];
-
-  Real wdn = pmcb->rho(i3,i2,i1);
+  Real l_cgs = pmcb->l_cgs;
+  Real rho_cgs = pmcb->rho_cgs;
+  Real kappa_s = 0.39/(rho_cgs*l_cgs);
   Real dfloor_op = 1.e-14;
   Real tau_trunc = 1.e-4;
   Real dtrunc_max = 1.e-5;
   Real sigmoid_res = 1.e-2;
-
-  Real sigma_cold = 0.;
   Real dfloor = 1.e-8;
-  Real kappa_s = 0.39;
-  // Match Lizhong's scattering reduction
-  Real wdn_opacity = fmax(wdn-dfloor, dfloor_op);
+  for (int k=pmcb->ks; k<=pmcb->ke; ++k) {
+    for (int j=pmcb->js; j<=pmcb->je; ++j) {
+      for (int i=pmcb->is; i<=pmcb->ie; ++i) {
+	Real wdn = pmcb->pmy_block->phydro->u(IDN,k,j,i);
 
-  Real dx1 = pmcb->pmy_block->pcoord->dx1f(i1);
-  Real dx2 = pmcb->pmy_block->pcoord->dx2f(i2);
-  Real dx3 = pmcb->pmy_block->pcoord->dx3f(i3);
-  Real delta_l = fmax(fmax(dx1, dx2), dx3);
-  Real dtrunc = fmax(0.0, sigma_cold)*tau_trunc / (kappa_s*delta_l);
-  dtrunc = fmin(dtrunc_max, fmax(dfloor, dtrunc)); // dfloor <= dtrunc <= dtrunc_max
-  Real fac_trunc = dtrunc / dfloor;
-  Real wid_trunc = 0.5*std::log10(fac_trunc) / log(1./sigmoid_res - 1.);
-  Real wdn_real = fmax(wdn-dfloor, dfloor_op);
-  Real del_reduce = std::log10(dfloor) - std::log10(dfloor_op);
+	Real sigma_cold = 0.;
+	// Match Lizhong's scattering reduction
+	Real wdn_opacity = fmax(wdn-dfloor, dfloor_op);
+	
+	Real dx1 = pmcb->pmy_block->pcoord->dx1f(i);
+	Real dx2 = pmcb->pmy_block->pcoord->dx2f(k);
+	Real dx3 = pmcb->pmy_block->pcoord->dx3f(j);
+	Real delta_l = fmax(fmax(dx1, dx2), dx3);
+	Real dtrunc = fmax(0.0, sigma_cold)*tau_trunc / (kappa_s*delta_l);
+	dtrunc = fmin(dtrunc_max, fmax(dfloor, dtrunc)); // dfloor <= dtrunc <= dtrunc_max
+	Real fac_trunc = dtrunc / dfloor;
+	Real wid_trunc = 0.5*std::log10(fac_trunc) / log(1./sigmoid_res - 1.);
+	Real wdn_real = fmax(wdn-dfloor, dfloor_op);
+	Real del_reduce = std::log10(dfloor) - std::log10(dfloor_op);
 
-  Real fac_inv = 1.0;
-  if (fabs(fac_trunc-1) > 1e-12) {
-    fac_inv = 1.0 + exp( -1./wid_trunc * (std::log10(wdn_real) - (std::log10(dfloor) + 0.5*std::log10(fac_trunc)) ) );
+	Real fac_inv = 1.0;
+	if (fabs(fac_trunc-1) > 1e-12) {
+	  fac_inv = 1.0 + exp( -1./wid_trunc * (std::log10(wdn_real) - (std::log10(dfloor) + 0.5*std::log10(fac_trunc)) ) );
+	}
+
+	Real lg_rho_op = std::log10(wdn_real) - (1.-1./fac_inv) * del_reduce;
+	wdn_opacity = pow(10.0, lg_rho_op);
+
+	pmcb->rho(k,j,i) = wdn_opacity;
+      }
+    }
   }
-
-  Real lg_rho_op = std::log10(wdn_real) - (1.-1./fac_inv) * del_reduce;
-  wdn_opacity = pow(10.0, lg_rho_op);
-
 }
 
 //----------------------------------------------------------------------------------------

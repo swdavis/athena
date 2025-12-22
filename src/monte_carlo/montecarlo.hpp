@@ -18,6 +18,7 @@
 #include "../athena.hpp"
 #include "../coordinates/coordinates.hpp"
 #include "../outputs/outputs.hpp"
+#include "../field/field.hpp"
 #include "photon.hpp"
 #include "mcbvals.hpp"
 #include "mcoutput.hpp"
@@ -61,6 +62,7 @@ enum SourceTermFlag {MCRS0 = 0, MCRS1=1, MCRS2=2, MCRS3=3, MCRF0=4, MCRF1=5,
 //----------------------------------------------------------------------------------------
 // function pointer prototypes for user-defined modules set at runtime
 typedef Real (*EmisFunc_t)(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
+typedef void (*DensFunc_t)(MonteCarloBlock *pmcb);
 typedef void (*TempFunc_t)(MonteCarloBlock *pmcb);
 typedef void (*NumbFunc_t)(MonteCarloBlock *pmcb);
 typedef void (*MCBValFunc_t)(MonteCarloBlock *pmcb, MCCoord *pco, Photon *pphot, int ip);
@@ -231,6 +233,7 @@ public:
   bool dynamic; // is monte carlo evolving with time
   bool coupled; // is monte carlo evolution coupled to hydro
   bool boosts;  // Compute lorentz transformations
+  bool using_bfield; // set magnetic fields
   bool tetrads; // convert from coordinate frame
   bool emission_array;  // Compute and save zone emissivities
   bool *emission_eqwt; // Set initial weights equal
@@ -246,6 +249,7 @@ public:
   // function pointers
   UserMoveFunc_t UserWorkInMove;
   EmisFunc_t *GetEmission; // array of function pointers
+  DensFunc_t UserGetDensity;
   TempFunc_t UserGetTemperature;
   NumbFunc_t UserGetNumberDensity;
   ScatFunc_t UserScattering;
@@ -264,6 +268,7 @@ public:
   void EnrollUserMCBoundaryFunction(enum BoundaryFace dir, MCBValFunc_t my_bc);
   void EnrollUserEmissionFunction(EmisFunc_t emissfunc);
   void EnrollUserEmissionFunction(EmisFunc_t emissfunc, int etype);
+  void EnrollUserGetDensity(DensFunc_t densfunc);
   void EnrollUserGetTemperature(TempFunc_t tempfunc);
   void EnrollUserGetNumberDensity(NumbFunc_t numbunc);
   void EnrollUserWorkInMove(UserMoveFunc_t userfunc);
@@ -375,6 +380,7 @@ public:
   AthenaArray<Real> nion;
   AthenaArray<Real> tgas;
   AthenaArray<Real> vel;
+  AthenaArray<Real> bcc;
   AthenaArray<Real> boost_cmv;
   AthenaArray<Real> boost_lab;
   AthenaArray<Real> planck_opacity; // for acceleration
@@ -413,6 +419,7 @@ public:
   void GetNumberDensity();
   void GetScalars();
   void GetVelocity();
+  void GetBField();
   void GetTemperature();
   void ComputeTransformations();
   void TransformToComoving(Photon *pphot, int ips, int ipe);

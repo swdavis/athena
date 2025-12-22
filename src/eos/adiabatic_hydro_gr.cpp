@@ -147,6 +147,13 @@ void EquationOfState::ConservedToPrimitive(
           fixed = true;
         }
 
+	if (pmy_block_->gid == 61) {
+	  printf("%d %d %d %g %g ",k,j,i,normal_dd_(i),normal_ee_(i));
+	  if (fixed)
+	    printf("fixed\n");
+	  else
+	    printf("\n");
+	}
         // Set primitives
         Real gamma;
         bool success = ConservedToPrimitiveNormal(normal_dd_, normal_ee_, normal_mm_,
@@ -235,6 +242,9 @@ void EquationOfState::ConservedToPrimitive(
           uu1 = uu2 = uu3 = 0.0;
         }
 
+	if ( (pmy_block_->gid == 61)&&(k==5)&&(j==37)&&(i==5) ) {
+	  print("ac2p: %g %g \n",prim(IDN,k,j,i),prim(IPR,k,j,i));
+	}
         // Ensure conserved variables match primitives
         if (fixed) {
           PrimitiveToConservedSingle(prim, gamma_adi, g_, g_inv_, k, j, i, cons, pco);

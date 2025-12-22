@@ -612,7 +612,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
       Scatter(this,pphot,ip,ip);
       nscat++;
       pphot->nscp[ip]++;
-      if (pphot->nscp[ip] %  pmy_mc->checkscat == 0) {
+      if (pphot->nscp[ip] % pmy_mc->checkscat == 0) {
         // Check for possible infinite loop due to NaN in photon
         if (pphot->IsNanPhoton(ip)) {
           pphot->statp[ip] = DESTROYED;
@@ -621,6 +621,10 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
                                " photon destroyed",ip);
             }
         }
+	pphot->statp[ip] = DESTROYED;
+	if (pmy_mc->verbose) {
+	  pphot->PrintPhoton("Scattering Check",ip);
+	}
       }
 
       // Update the absorption and scattering extinction coefficients
@@ -2021,10 +2025,14 @@ void MonteCarloBlock::SetEmissionCellWeightArea(Photon *pphot, BoundaryFace face
 
 void MonteCarloBlock::GetDensity() {
 
+  if (pmy_mc->UserGetDensity != nullptr) {
+    pmy_mc->UserGetDensity(this);
+    return;
+  }
   for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je; ++j) {
       for (int i=is; i<=ie; ++i) {
-        rho(k,j,i) = rho_cgs * pmy_block->phydro->u(IDN,k,j,i);
+        rho(k,j,i) = rho_cgs * pmy_block->phydro->w(IDN,k,j,i);
       }
     }
   }
@@ -2089,9 +2097,9 @@ void MonteCarloBlock::GetVelocity() {
         pmy_block->pcoord->CellMetric(k,j,is,ie,g,gi);
         for (int i=is; i<=ie; ++i) {
           Real alpha = 1.0/std::sqrt(-gi(I00,i));
-          Real uu1 = pmy_block->phydro->u(IVX,k,j,i);
-          Real uu2 = pmy_block->phydro->u(IVY,k,j,i);
-          Real uu3 = pmy_block->phydro->u(IVZ,k,j,i);
+          Real uu1 = pmy_block->phydro->w(IVX,k,j,i);
+          Real uu2 = pmy_block->phydro->w(IVY,k,j,i);
+          Real uu3 = pmy_block->phydro->w(IVZ,k,j,i);
 
           Real gamma2 = 1. + g(I11,i)*uu1*uu1 + g(I22,i)*uu2*uu2 + g(I33,i)*uu3*uu3 +
                         2.0*g(I12,i)*uu1*uu2 + 2.*g(I13,i)*uu1*uu3 + 2.*g(I23,i)*uu2*uu3;
@@ -2133,6 +2141,16 @@ void MonteCarloBlock::GetVelocity() {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::GetBField()
+//! \brief Make copy of magnetic fields from MeshBlock to MonteCarloBlock.
+
+void MonteCarloBlock::GetBField() {
+
+  Field *pfld = pmy_block->pfield;
+  bcc.InitWithShallowSlice(pfld->bcc, 4, IB1, 3);
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::GetTemperature()
 //! \brief default function for computing temperature if no user function provided.
 //  Assumes EOS of the form P=RTd.
@@ -2157,6 +2175,9 @@ void MonteCarloBlock::GetTemperature() {
   for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je; ++j) {
       for (int i=is; i<=ie; ++i) {
+	//if (pmy_block->gid == 61) {
+	//  printf("%d %d %d %g %g\n",k,j,i,phydro->w(IEN,k,j,i),phydro->w(IDN,k,j,i));
+	//}
         Real temp = tconv * phydro->w(IEN,k,j,i) / phydro->w(IDN,k,j,i);
         // apply temperature floor
         temp = (temp > tfloor_cgs) ? temp : tfloor_cgs;

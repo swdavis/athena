@@ -90,8 +90,10 @@ void Photon::PrintPhoton(const std::string &msg, int ip) {
 
 void Photon::PrintPhoton(int ip) {
 
+  Real keverg = 1.602176634e-9;
   std::cout << "----------------------------" << std::endl
-            << "Energy, weight: " << ep[ip] << " " << wp[ip] << std::endl
+            << "Energy [erg] [kev], weight: " << ep[ip] << " " << ep[ip]/keverg << " "
+	    << wp[ip] << std::endl
             << "i: " << i1p[ip] << " " << i2p[ip] << " " << i3p[ip] <<std::endl
             << "x: " << x0p[ip] << " " << x1p[ip] << " " << x2p[ip] << " " << x3p[ip]
             << std::endl
@@ -125,6 +127,7 @@ void Photon::PrintPhoton(int ip) {
     std::cout << "BUFFERED" << std::endl;
   else
     std::cout << std::endl;
+  std::cout << "nscat: " << nscp[ip] << std::endl;
   if (nuser_var > 0)
     std::cout << nuser_var << " user vars:";
   for (int i=0; i<nuser_var; i++)

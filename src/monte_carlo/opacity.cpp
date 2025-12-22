@@ -139,6 +139,9 @@ Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 
     sigma0 = pow(10., lxsect);
   } else {
+    if (edim >= MAXE) {
+      pphot->statp[ip] = DESTROYED;
+    }
     if (pmcb->pmy_mc->verbose) {
       std::cout << "Warning: out of range parameter in Compton Opacity: "
                 << edim << " " << theta << std::endl
