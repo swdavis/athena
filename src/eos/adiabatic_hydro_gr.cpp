@@ -146,26 +146,29 @@ void EquationOfState::ConservedToPrimitive(
           normal_mm_(3,i) *= factor;
           fixed = true;
         }
-
-	if (pmy_block_->gid == 61) {
-	  printf("%d %d %d %g %g ",k,j,i,normal_dd_(i),normal_ee_(i));
-	  if (fixed)
-	    printf("fixed\n");
-	  else
-	    printf("\n");
-	}
+        if ( (pmy_block_->gid == 61)&&(k==5)&&(j==37)&&(i==5) ) {
+          printf("h: %d %d %d %g %g ",k,j,i,normal_dd_(i),normal_ee_(i));
+          printf("h2: %d %d %d %g %g ",k,j,i,prim_old(IPR,k,j,i),prim_old(IDN,k,j,i));
+        }
         // Set primitives
         Real gamma;
         bool success = ConservedToPrimitiveNormal(normal_dd_, normal_ee_, normal_mm_,
                                                   gamma_adi, prim_old(IPR,k,j,i), k, j, i,
                                                   prim, &gamma);
 
+        if ( (pmy_block_->gid == 61)&&(k==5)&&(j==37)&&(i==5) ) {
+          printf("g: %g %g \n",prim(IDN,k,j,i),prim(IPR,k,j,i));
+          printf("g2: %g %g \n",prim_old(IDN,k,j,i),prim_old(IPR,k,j,i));
+        }
         // Handle failures
         if (!success) {
           for (int n = 0; n < NHYDRO; ++n) {
             prim(n,k,j,i) = prim_old(n,k,j,i);
           }
           fixed = true;
+          if ( (pmy_block_->gid == 61)&&(k==5)&&(j==37)&&(i==5) ) {
+            printf("q: %g %g \n",prim(IDN,k,j,i),prim(IPR,k,j,i));
+          }
         }
 
         // Apply density and gas pressure floors in normal frame
@@ -174,6 +177,9 @@ void EquationOfState::ConservedToPrimitive(
         Real pgas_add = std::max(pressure_floor_local-prim(IPR,k,j,i),
                                                 static_cast<Real>(0.0));
         if (success && (rho_add > 0.0 || pgas_add > 0.0)) {
+          if ( (pmy_block_->gid == 61)&&(k==5)&&(j==37)&&(i==5) ) {
+            printf("p: %g %g \n",prim(IDN,k,j,i),prim(IPR,k,j,i));
+          }
           // Adjust conserved density and energy
           Real wgas_add = rho_add + gamma_adi/(gamma_adi-1.0) * pgas_add;
           normal_dd_(i) += rho_add * gamma;
@@ -243,7 +249,7 @@ void EquationOfState::ConservedToPrimitive(
         }
 
 	if ( (pmy_block_->gid == 61)&&(k==5)&&(j==37)&&(i==5) ) {
-	  print("ac2p: %g %g \n",prim(IDN,k,j,i),prim(IPR,k,j,i));
+	  printf("ac2p: %g %g \n",prim(IDN,k,j,i),prim(IPR,k,j,i));
 	}
         // Ensure conserved variables match primitives
         if (fixed) {
