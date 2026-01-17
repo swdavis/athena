@@ -312,7 +312,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
     emission_geometry[2] = EMISVOL;
     EnrollUserEmissionFunction(VolumeEmissivityLya,2);
     emission_face[2] = SetEmissionSurface("none");
-  } 
+  }
 
   EnrollUserSourcetermUpdate(UpdateSourceTerms);
   // Photon user variables for incident and outgoing direction vector and position
@@ -418,7 +418,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   //  printf("Input data (%d, 4, 4, 4): %g\n", n, ruser_meshblock_data[2](n,4,4,4));
   //}
   //printf("\n");
-	
+
 	// density and pressure floors
   Real float_min = std::numeric_limits<float>::min();
   dfloor = pin->GetOrAddReal("hydro", "dfloor", (1024*(float_min)));
@@ -578,7 +578,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
   } else if (etype == LYA_REC) {
     SetEmissionCellWeight(pphot,ips,ipe);
   }
-  
+
 
   // Calculate numerical prefactors for sampling so we don't repeat math operations
   Real numinpow = std::pow(numin, 1.0-powa);
@@ -608,7 +608,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
     if (!flag_lya_volume_emis) vol_lya = 0.0;
     if (!flag_lya_surface_emis) sur_lya = 0.0;
     if (!flag_ion_surface_emis) sur_ion = 0.0;
- 
+
     // 3. Sample emission probabilities to determine photon type
     // ---------------------------------------------------------
     // Sample random numbers, compare with probability of photon belonging to each
@@ -672,7 +672,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
       } // END CASE VOLUME
 
       case SURFACE: {
-   
+
         // Set initial position on the outer radial surface of this zone
         // Use a rejection method for theta and phi within the zone's bounds
 
@@ -1058,24 +1058,13 @@ void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
         Real np = (rho/mass) - nh;
         Real na = nh + np;
 
-        // Check neutral fraction to make sure its within (0.0, 1.0)
-        //if (frac > 1.0) {
-        //  if ((k==ks)&&(j==js)&&(i==14))
-        //    printf("(Block %d) UpdateIonizationFraction before: neutral fraction %g in cell (%d, %d, %d) is greater than 1.0\n", nb, k, j, i, frac);
-        //  frac = 1.0;
-        //} else if (frac < 0.0) {
-        //  if ((k==ks)&&(j==js)&&(i==14))
-        //    printf("(Block %d) UpdateIonizationFraction before: neutral fraction %g in cell (%d, %d, %d) is less than 0.0\n", nb, k, j, i, frac);
-        //  frac = 0.0;
-        //}
-        //Real nh = neutral_frac * n;
-        //Real np = (n - nh)/2;
-
-        // Calculate the photoionization rate, Gamma, from the number of photons absorbed per cell per time
+        // Calculate the photoionization rate, Gamma, from the number of photons absorbed
+        // per cell per time
+        // absweight already normalized by (vol*dt) in NormalizeSourceTerms
         Real absweight = sourceterms(MCNABS,k,j,i);
         Real vol = pcoord->vol(k,j,i);
-        Real Gamma = absweight / nh; // absweight already normalized by (vol*dt) in NormalizeSourceTerms
-        //Real Gamma = absweight / vol / dt / nh; // absweight already normalized by (vol*dt) in NormalizeSourceTerms
+        Real Gamma = absweight / nh;
+
 
         // Calculate the recombination rate, alpha, from the temperature of this cell
         Real alpha = 2.54e-13 * std::pow(tempo1e4K, -0.8164-0.0208*std::log(tempo1e4K));
@@ -1085,8 +1074,16 @@ void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
         nC = Gamma / alpha;
 
         // Calculate the update to the neutral H number density
-        Real discriminant = SQR(nR) + 4*na*(nR+nC) + 2*nR*nC + SQR(nC) - 4*nh*nR;
-        Real update = na + 0.5*(nR + nC - std::sqrt(discriminant));
+        //Real discriminant = SQR(nR) + 4*na*(nR+nC) + 2*nR*nC + SQR(nC) - 4*nh*nR;
+        //Real update = na + 0.5*(nR + nC - std::sqrt(discriminant));
+        //Real update = 0.5*(nR+2*na+nC) - 0.5*std::sqrt(discriminant);
+
+        //CMF: see numerical recipes 5.6
+        Real bb = 2*na + nC + nR;
+        Real cc = nh*nR + SQR(na);
+        Real dd = SQR(bb) - 4*cc;
+        Real qq = 0.5*(bb + std::sqrt(dd));
+        Real update = cc/qq;
 
         // Double-check that the implicit update gives a neutral fraction between 0 and 1 --- NOT guaranteed if dt is large
         Real neutral_frac = update/na;
@@ -1315,7 +1312,7 @@ void HillTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
 //   Real emis_vol_recomb = VolumeEmissivityLya(pmcb, k, j, i);
 //   Real emis_surf_lya = SurfaceEmissivityLya(pmcb, k, j, i);
 //   Real emis_surf_ionizing = SurfaceEmissivityIonizing(pmcb, k, j, i);
-  
+
 //   if (!flag_lya_volume_emis) emis_vol_recomb = 0.0;
 //   if (!flag_lya_surface_emis) emis_surf_lya = 0.0;
 //   if (!flag_ion_surface_emis) emis_surf_ionizing = 0.0;
@@ -1458,7 +1455,7 @@ Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype)
 Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i, int etype) {
   Coordinates *pco = pmcb->pmy_block->pcoord;
 
-  
+
   Real emis = 0.0;
   if (pco->x1f(i+1) >= rout) {
     if (flag_incident_from_z) {
@@ -1469,7 +1466,7 @@ Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i, int e
       Real r2 = pco->x1f(i+1)*pco->x1f(i+1);
       Real nflux = r2 * ion_flux/(h_cgs*mean_nu)/pco->GetFace1Area(k,j,i+1);
       emis = 0.5*nflux*(pco->x3f(k+1)-pco->x3f(k))*(SQR(cthm)-SQR(cthp));
-  
+
     } else {
       Real phm = pco->x3f(k);
       Real php = pco->x3f(k+1);
