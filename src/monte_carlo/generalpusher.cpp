@@ -103,7 +103,14 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
         pphot->dtp[ip] -= pphot->ep[ip]*step/c_cgs;
         // Update moments
         if (pmcb->call_moments) {
-          pmcb->UpdateMoments(pphot,step,ip);
+          if (pmcb->absorption_meth == ABSTAU) {
+            Real dl = step*pphot->ep[ip];
+            Real etaua = ExpTauAbsorption(pphot->acp[ip],dl);
+            pmcb->UpdateMoments(pphot,dl,etaua,ip);
+            pphot->wp[ip] *= etaua;
+          } else {
+            pmcb->UpdateMoments(pphot,step*pphot->ep[ip],ip);
+          }
         }
       } else {
         // Photon has been given a new position on sphere of radius dl

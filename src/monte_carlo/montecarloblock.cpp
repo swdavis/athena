@@ -912,7 +912,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   // tetrad frame  (currently lab frame)
   // coordinate frame
 
-  dl *= pphot->ep[ip];
+  //dl *= pphot->ep[ip];
   int i1 = pphot->i1p[ip];
   int i2 = pphot->i2p[ip];
   int i3 = pphot->i3p[ip];
@@ -943,7 +943,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     k1 = kf[1]/ep;
     k2 = kf[2]/ep;
     k3 = kf[3]/ep;
-   
+
     // Weight moments by time spent in domain
     weight = pphot->wp[ip] * pphot->ep[ip] / k0 * dl * l_cgs / c_cgs;
   } else {
@@ -1079,6 +1079,18 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     sourceterms(MCRF1,i3,i2,i1) += (sct_coef+abs_coef) * weight * k1;
     sourceterms(MCRF2,i3,i2,i1) += (sct_coef+abs_coef) * weight * k2;
     sourceterms(MCRF3,i3,i2,i1) += (sct_coef+abs_coef) * weight * k3;
+
+    if (absorption_meth == ABSTAU) {
+        Real hplanck = 6.62607015e-27;
+        Real threshold = 3.28808816e+15 * hplanck;
+        // Update soucterms for ionizing radiation
+        if (pphot->ep[ip] > threshold) {
+          Real weight = pphot->wp[ip] * dl * abs_coef;
+          Real heat = weight * (pphot->ep[ip] - threshold);
+          sourceterms(MCRS0,i3,i2,i1) += heat;
+          sourceterms(MCNABS,i3,i2,i1) += weight;
+        }
+    }
   }
 
 

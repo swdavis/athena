@@ -1630,11 +1630,15 @@ void ExplicitEUVHeating(MeshBlock *pmb, const Real time, const Real dt,
 void UpdateSourceTerms(MonteCarloBlock *pmcb, Photon *pphot, Real energy0, Real weight0,
                   Real k1p0, Real k2p0, Real k3p0, int ip) {
 
+  // if continuous absorptioin, handle source terms in UpdateMoments()
+  if (pmcb->absorption_meth == ABSTAU)
+    return;
+
   Real hplanck = 6.62607015e-27;
   Real threshold = 3.28808816e+15 * hplanck;
 
   // Update soucterms for ionizing radiation
-	if (energy0 > threshold) {
+  if (energy0 > threshold) {
     Real heat = weight0 * (energy0 - threshold);
     //printf("energy0, weight0: %g %g %g\n", energy0, weight0);
     if ((std::isinf(heat)) || (std::isnan(heat))) {
