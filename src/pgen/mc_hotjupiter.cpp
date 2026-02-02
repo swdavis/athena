@@ -1039,11 +1039,12 @@ void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
     return;
 
   Real dt = pmy_block->pmy_mesh->dt;
-
+  Real tint = pmy_mc->tint;
   for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je; ++j) {
       for (int i=is; i<=ie; ++i) {
 
+        Real norm = 1./ (tint * pcoord->vol(k,j,i));
         // Get temperatures to calculate recombination and impact excitation terms
         Real tempo1e4K = tgas(k,j,i) / 1.e4;
         Real invtemp = 1/tempo1e4K;
@@ -1061,7 +1062,7 @@ void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
         // Calculate the photoionization rate, Gamma, from the number of photons absorbed
         // per cell per time
         // absweight already normalized by (vol*dt) in NormalizeSourceTerms
-        Real absweight = sourceterms(MCNABS,k,j,i);
+        Real absweight = sourceterms(MCNABS,k,j,i) *= norm;
         Real vol = pcoord->vol(k,j,i);
         Real Gamma = absweight / nh;
 
