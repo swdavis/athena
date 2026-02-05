@@ -1039,6 +1039,8 @@ void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
     return;
 
   Real dt = pmy_block->pmy_mesh->dt;
+  // for checking ionization
+  dt = 1.e10;
   Real tint = pmy_mc->tint;
   for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je; ++j) {
@@ -1097,6 +1099,12 @@ void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
             printf("(Block %d) UpdateIonizationFraction: neutral fraction %g is less than 0.0\n", pmy_block->lid, neutral_frac);
           neutral_frac = 0.0;
         }
+
+        // check result
+        if (absweight > 0.0) {
+          printf("nh'=%g, na=%g, nh0=%g, alpha=%g, Gamma=%g, dt=%g\n", update, na, nh, alpha, Gamma, dt);
+        }
+
         nh = neutral_frac * na;
         np = na - nh;
 
