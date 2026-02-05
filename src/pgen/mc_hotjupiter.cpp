@@ -766,35 +766,35 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
          // }
          // //printf("Rejection efficiency: %g\n", 1.0/static_cast<Real>(nreject));
 
-					// CMF: sampling functions for phi and theta within meshblock boundaries
-					// Assumes star is in the -x direction (psi = 0)
-					Real unif_ph = pran->uniform();
-					ph = PI - std::asin(unif_ph * (sinphmax-sinphmin) + sinphmin);
+         // CMF: sampling functions for phi and theta within meshblock boundaries
+         // Assumes star is in the -x direction (psi = 0)
+          Real unif_ph = pran->uniform();
+          ph = PI - std::asin(unif_ph * (sinphmax-sinphmin) + sinphmin);
 
-					Real prob0 = 0.25 * (2*(thmax-thmin) + std::sin(2*thmin) - std::sin(2*thmax));
-					Real probmax;
-					if (thmax <= PI/2) {
-						probmax = SQR(sinthmax) / prob0;
-					} else if (thmin >= PI/2) {
-						probmax = SQR(sinthmin) / prob0;
-					} else {
-						probmax = 1/prob0;
-					}
+          Real prob0 = 0.25 * (2*(thmax-thmin) + std::sin(2*thmin) - std::sin(2*thmax));
+          Real probmax;
+          if (thmax <= PI/2) {
+            probmax = SQR(sinthmax) / prob0;
+          } else if (thmin >= PI/2) {
+            probmax = SQR(sinthmin) / prob0;
+          } else {
+            probmax = 1/prob0;
+          }
 
-					bool reject = true;
-					int step = 0;
-					while (reject) {
-						Real unif_th = pran->uniform();
-						Real th_samp = unif_th * (thmax-thmin) + thmin;
-						Real sth_samp = std::sin(th_samp);
-						Real th_prob = SQR(sth_samp)/prob0;
-						Real unif_2 = pran->uniform();
-						if (unif_2 <= th_prob) {
-							reject = false;
-							th = th_samp;
-						}
-						step++;
-					}
+          bool reject = true;
+          int step = 0;
+          while (reject) {
+            Real unif_th = pran->uniform();
+            Real th_samp = unif_th * (thmax-thmin) + thmin;
+            Real sth_samp = std::sin(th_samp);
+            Real th_prob = SQR(sth_samp)/prob0;
+            Real unif_2 = pran->uniform();
+            if (unif_2 <= th_prob) {
+              reject = false;
+              th = th_samp;
+            }
+            step++;
+          }
 
           // r position - R
           pphot->x1p[ip] = pmy_block->pmy_mesh->mesh_size.x1max;
@@ -807,17 +807,15 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
           Real sth = std::sin(th);
           Real cth = std::cos(th);
-          Real sphm = std::sin(ph - psi);
-          Real cphm = std::cos(ph - psi);
+          Real sph = std::sin(ph);
+          Real cph = std::cos(ph);
 
           // Set direction vector - parallel to star-planet separation vector
           pphot->k0p[ip] = 1.;
-          pphot->k1p[ip] = sth*cphm;
-          pphot->k2p[ip] = cth*cphm;
-          pphot->k3p[ip] = -sphm;
+          pphot->k1p[ip] = sth*cph;
+          pphot->k2p[ip] = cth*cph;
+          pphot->k3p[ip] = -sph;
 
-         // Real cph = std::cos(ph);
-				 // Real sph = std::sin(ph);
          // Real xhat = sth*cph*pphot->k1p[ip] + cth*cph*pphot->k2p[ip] - sph*pphot->k3p[ip];
          // Real yhat = sth*sph*pphot->k1p[ip] + cth*sph*pphot->k2p[ip] + cph*pphot->k3p[ip];
          // Real zhat = cth*pphot->k1p[ip] - sth*pphot->k2p[ip];
@@ -1040,7 +1038,7 @@ void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
 
   Real dt = pmy_block->pmy_mesh->dt;
   // for checking ionization
-  dt = 1.e10;
+  //dt = 1.e10;
   Real tint = pmy_mc->tint;
   for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je; ++j) {
@@ -1101,9 +1099,9 @@ void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
         }
 
         // check result
-        if (absweight > 0.0) {
-          printf("nh'=%g, na=%g, nh0=%g, alpha=%g, Gamma=%g, dt=%g\n", update, na, nh, alpha, Gamma, dt);
-        }
+       // if (absweight > 0.0) {
+       //   printf("nh'=%g, na=%g, nh0=%g, alpha=%g, Gamma=%g, dt=%g\n", update, na, nh, alpha, Gamma, dt);
+       // }
 
         nh = neutral_frac * na;
         np = na - nh;
