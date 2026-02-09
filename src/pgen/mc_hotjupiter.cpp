@@ -79,6 +79,7 @@ bool flag_zero_opacity;
 bool flag_escape_after_scatter;
 bool flag_lya_volume_emis, flag_lya_surface_emis, flag_ion_surface_emis;
 bool flag_point_mass = false;
+int  flag_tidal_gravity;
 bool flag_dynamic = false;
 bool flag_wind = false;
 bool flag_pow_law = false;
@@ -112,6 +113,10 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,
               const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
               AthenaArray<Real> &cons_scalar);
 void HillTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
+              const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
+              const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
+              AthenaArray<Real> &cons_scalar);
+void ThirdOrderTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
               const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
               const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
               AthenaArray<Real> &cons_scalar);
@@ -175,49 +180,38 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   nu0 = 2.4660675e+15;
   energy0 = h_cgs * nu0;
 
-	// H-Ionizing threshold energy at 912 angstrom (13.6 eV)
-	threshold = h_cgs*c_cgs/9.12e-6;
+  // H-Ionizing threshold energy at 912 angstrom (13.6 eV)
+  threshold = h_cgs*c_cgs/9.12e-6;
 
   // Gravity source term configuration
-  Real gm = pin->GetOrAddReal("problem", "GM", 0.0);
-  if (gm != 0.0) {
-		//printf("using tidal gravity source term\n");
-    gm_planet = gm;
-    gm_star = pin->GetReal("problem", "gm_star");
-    sep = pin->GetReal("problem", "orbit_sep")*1.49597871e+13; // cm
-    flag_point_mass = true;
+  gm_planet = pin->GetReal("problem", "GM");
+  gm_star = pin->GetReal("problem", "gm_star");
+  sep = pin->GetReal("problem", "orbit_sep")*1.49597871e+13; // cm
+  flag_tidal_gravity = pin->GetOrAddInteger("problem", "tidal_gravity", 0);
+  if (flag_tidal_gravity == 1) {
     EnrollUserExplicitSourceFunction(HillTidalGravity);
-  } else {
-		//printf("using two-body gravity source term\n");
-    gm_planet = pin->GetReal("problem", "gm_planet");
-    gm_star = pin->GetReal("problem", "gm_star");
-    sep = pin->GetReal("problem", "orbit_sep")*1.49597871e+13; // cm
-    EnrollUserExplicitSourceFunction(TwoPointMass);
+  }
+  if (flag_tidal_gravity == 2) {
+    EnrollUserExplicitSourceFunction(ThirdOrderTidalGravity);
   }
 
   // Parameters to set initial atmospheric conditions
   temp0 = pin->GetOrAddReal("problem", "isothermal_temp", 1e4);
   nbase = pin->GetOrAddReal("problem", "nbase", 1.0e10); // base hydrogen nH density in cm^-3 at rin
   flag_wind = pin->GetBoolean("problem", "wind");
-  if (flag_wind) {
-    mdot = pin->GetReal("problem", "mdot");
-  }
 
-  flag_incident_from_z = pin->GetBoolean("problem", "incident_from_z");
 
   // Sources of photons
+  flag_incident_from_z = pin->GetBoolean("problem", "incident_from_z");
   flag_lya_volume_emis = pin->GetBoolean("problem", "lya_volume_emis");
   flag_lya_surface_emis = pin->GetBoolean("problem", "lya_surface_emis");
   flag_ion_surface_emis = pin->GetBoolean("problem", "ion_surface_emis");
-	lya_flux = pin->GetReal("problem", "lya_flux");
-	ion_flux = pin->GetReal("problem", "ion_flux");
-	edot_lya = PI * SQR(mesh_size.x1max) * lya_flux;
-	edot_ion = PI * SQR(mesh_size.x1max) * ion_flux;
+  lya_flux = pin->GetReal("problem", "lya_flux");
+  ion_flux = pin->GetReal("problem", "ion_flux");
+  edot_lya = PI * SQR(mesh_size.x1max) * lya_flux;
+  edot_ion = PI * SQR(mesh_size.x1max) * ion_flux;
   linewidth = pin->GetReal("problem", "linewidth");
   linewidth_cutoff = pin->GetReal("problem", "linewidth_cutoff");
-
-	// Explicit heating
-	//EnrollUserExplicitSourceFunction(ExplicitEUVHeating);
 
   // Debug flag to turn off opacity entirely
   flag_zero_opacity = pin->GetBoolean("problem", "zero_opacity");
@@ -235,7 +229,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   user_dt = pin->GetReal("problem", "user_dt");
   EnrollUserTimeStepFunction(ConstantTimestep);
 
-	// Boundary conditions
+  // Boundary conditions
   EnrollUserBoundaryFunction(BoundaryFace::inner_x1, StaticInflowInnerX1);
   EnrollUserBoundaryFunction(BoundaryFace::outer_x1, OutflowOuterX1);
 
@@ -300,14 +294,14 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
   emission_geometry[0] = EMISAREA;
   emission_face[0] = SetEmissionSurface("outer_x1");
   if (ntype > 1) {
-    nsamp += nsamptype[1] = pin->GetInteger("problem", "nlyarec");
+    nsamp += nsamptype[1] = pin->GetInteger("problem", "nlyastr");
     emission_eqwt[1] = pin->GetOrAddBoolean("problem", "lys_eqwt",false);
     emission_geometry[1] = EMISAREA;
     EnrollUserEmissionFunction(SurfaceEmissivityLya,1);
     emission_face[1] = SetEmissionSurface("outer_x1");
   }
   if (ntype == 3) {
-    nsamp += nsamptype[2] = pin->GetInteger("problem", "nlyastar");
+    nsamp += nsamptype[2] = pin->GetInteger("problem", "nlyarec");
     emission_eqwt[2] = pin->GetOrAddBoolean("problem", "lyr_eqwt",false);
     emission_geometry[2] = EMISVOL;
     EnrollUserEmissionFunction(VolumeEmissivityLya,2);
@@ -323,7 +317,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
   EnrollUserOpacityFunction(BoundFreeAbsorptionOpacity, true);
   EnrollUserScatteringFunction(ResonantScattering);
   //EnrollUserEmissionFunction(MultipleEmissivities);
-	EnrollUserGetTemperature(GetIonizationTemperature);
+  EnrollUserGetTemperature(GetIonizationTemperature);
 }
 
 // INITIALIZATION
@@ -346,8 +340,6 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     std::string dataset_prim = pin->GetString("problem", "dataset_prim");
     int start_prim_file[5];
     start_prim_file[1] = gid;
-		//start_prim_file[0] = 0;
-		//start_prim_file[1] = 0;
     start_prim_file[2] = 0;
     start_prim_file[3] = 0;
     start_prim_file[4] = 0;
@@ -411,7 +403,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   Real vel3 = 0.0;
   if (flag_wind) {
     vbase = a * GetIsowindVelocity(2.0/lambda);
-		mdot = 4.*PI * SQR(rin) * nbase * mp_cgs * vbase;
+    mdot = 4.*PI * SQR(rin) * nbase * mp_cgs * vbase;
   }
 
   //for (int n=0; n<6; ++n) {
@@ -419,7 +411,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   //}
   //printf("\n");
 
-	// density and pressure floors
+  // density and pressure floors
   Real float_min = std::numeric_limits<float>::min();
   dfloor = pin->GetOrAddReal("hydro", "dfloor", (1024*(float_min)));
   pfloor = pin->GetOrAddReal("hydro", "pfloor", (1024*(float_min)));
@@ -436,7 +428,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         Real ion_rate_atten = Gamma0 / (1.0 + std::pow(nH*sigmapi*H, 1.5));
         Real np = std::sqrt(ion_rate_atten * nH / alpha);
         Real neutral_frac = nH / (nH + 2.*np);
-				Real mean_mol_weight = (1. + neutral_frac)/2.;
+        Real mean_mol_weight = (1. + neutral_frac)/2.;
         // ^ This will be wrong for the isothermal wind, but there is no analytic solution
 
         Real rho;
@@ -456,7 +448,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         Real mmw = (nH + np)/(2.*np + nH);
         Real a2_mmw = kb_cgs * temp0 / mmw / mp_cgs;
         //Real P = rho * a2;
-				Real P = rho * a2_mmw;
+        Real P = rho * a2_mmw;
 
         // Set global ghost zone constant values for inner boundary
         if ((r <= rin) && (i < NGHOST)) {
@@ -491,7 +483,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         phydro->u(IEN,k,j,i) += 0.5 * SQR(phydro->u(IM1,k,j,i)) / phydro->u(IDN,k,j,i);
         phydro->u(IEN,k,j,i) += 0.5 * SQR(phydro->u(IM2,k,j,i)) / phydro->u(IDN,k,j,i);
         phydro->u(IEN,k,j,i) += 0.5 * SQR(phydro->u(IM3,k,j,i)) / phydro->u(IDN,k,j,i);
-				//printf("radius, density, velocity, pressure: %e, %e, %e, %e\n", r, rho, vel1, P);
+        //printf("radius, density, velocity, pressure: %e, %e, %e, %e\n", r, rho, vel1, P);
 
         //phydro->w(IDN,k,j,i) = rho;
         //phydro->w(IVX,k,j,i) = vel1;
@@ -681,10 +673,10 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
         Real phmin = pmy_block->pcoord->x3f(k);
         Real thmax = pmy_block->pcoord->x2f(j+1);
         Real thmin = pmy_block->pcoord->x2f(j);
-				Real sinphmax = std::sin(phmax);
-				Real sinphmin = std::sin(phmin);
-				Real sinthmax = std::sin(thmax);
-				Real sinthmin = std::sin(thmin);
+        Real sinphmax = std::sin(phmax);
+        Real sinphmin = std::sin(phmin);
+        Real sinthmax = std::sin(thmax);
+        Real sinthmin = std::sin(thmin);
 
         if (flag_incident_from_z) {
 
@@ -842,18 +834,18 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
     } // END SWITCH EMIS_GEOMETRY
 
-		bool dayside = true;
-		if (flag_incident_from_z) {
-			Real pth = pphot->x2p[ip];
-			if (pth >= PI/2) {
-				dayside = false;
-			}
-		} else {
-			Real pph = pphot->x3p[ip];
-			if (pph <= PI/2 || pph >= 3*PI/2) {
-				dayside = false;
-			}
-		}
+    bool dayside = true;
+    if (flag_incident_from_z) {
+      Real pth = pphot->x2p[ip];
+      if (pth >= PI/2) {
+        dayside = false;
+      }
+    } else {
+      Real pph = pphot->x3p[ip];
+      if (pph <= PI/2 || pph >= 3*PI/2) {
+        dayside = false;
+      }
+    }
 
     // 5. Set photon type
     // ------------------
@@ -881,12 +873,12 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
         break;
       }
       case IONIZING: {
-				Real nu_phot;
-				if (!flag_pow_law) {
-					nu_phot = numin + kb_cgs * chromo_temp / h_cgs * std::log(1./(1-pran->uniform()));
-				} else {
-					nu_phot = pow(pran->uniform() * (numaxpow - numinpow) + numinpow, nuexp);
-				}
+        Real nu_phot;
+        if (!flag_pow_law) {
+          nu_phot = numin + kb_cgs * chromo_temp / h_cgs * std::log(1./(1-pran->uniform()));
+        } else {
+          nu_phot = pow(pran->uniform() * (numaxpow - numinpow) + numinpow, nuexp);
+        }
         pphot->ep[ip] = h_cgs * nu_phot;
         break;
       }
@@ -898,12 +890,12 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
     else
       pphot->statp[ip] = EVOLVING;
 
-		// CMF: quick and dirty killer of nightside photons
-		if (pphot->wp[ip] == 0.0) {
-			printf("Warning: photon with zero weight found.\n");
+    // CMF: quick and dirty killer of nightside photons
+    if (pphot->wp[ip] == 0.0) {
+      printf("Warning: photon with zero weight found.\n");
       pphot->PrintPhoton(ip);
-			pphot->statp[ip] = ABSORBED;
-		}
+      pphot->statp[ip] = ABSORBED;
+    }
 
     // Initialize the absorption and scattering extinction coefficients
     // to the values in the emitted zone
@@ -938,28 +930,28 @@ void StaticInflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &pr
   FaceField &b, Real time, Real dt, int il, int iu, int jl, int ju, int kl, int ku,
   int ngh) {
 
-	Real gamma = pmb->peos->GetGamma();
-	for (int k=kl; k<=ku; ++k) {
-		for (int j=jl; j<=ju; ++j) {
-			for (int i=1; i<=ngh; ++i) {
+  Real gamma = pmb->peos->GetGamma();
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=1; i<=ngh; ++i) {
 
-				// fix initial density and pressure
-				prim(IDN,k,j,il-i) = rho_gz[il-i];
-				//prim(IPR,k,j,il-i) = pres_gz[il-i];
-				prim(IPR,k,j,il-i) = prim(IPR,k,j,il) * std::pow(rho_gz[il-i]/prim(IDN,k,j,il), gamma);
+        // fix initial density and pressure
+        prim(IDN,k,j,il-i) = rho_gz[il-i];
+        //prim(IPR,k,j,il-i) = pres_gz[il-i];
+        prim(IPR,k,j,il-i) = prim(IPR,k,j,il) * std::pow(rho_gz[il-i]/prim(IDN,k,j,il), gamma);
 
-				// outflow diode for velocity
-				prim(IVY,k,j,il-i) = prim(IVY,k,j,il);
-				prim(IVZ,k,j,il-i) = prim(IVZ,k,j,il);
-				if (prim(IVX,k,j,il) >= 0.0) {
-					prim(IVX,k,j,il-i) = prim(IVX,k,j,il);
-				} else {
-					prim(IVX,k,j,il-i) = 0.0;
-				}
+        // outflow diode for velocity
+        prim(IVY,k,j,il-i) = prim(IVY,k,j,il);
+        prim(IVZ,k,j,il-i) = prim(IVZ,k,j,il);
+        if (prim(IVX,k,j,il) >= 0.0) {
+          prim(IVX,k,j,il-i) = prim(IVX,k,j,il);
+        } else {
+          prim(IVX,k,j,il-i) = 0.0;
+        }
 
-				// set neutral fraction to fully neutral
-				pmb->pscalars->r(0,k,j,il-i) = 1.0;
-				pmb->pscalars->s(0,k,j,il-i) = prim(IDN,k,j,il-i);
+        // set neutral fraction to fully neutral
+        pmb->pscalars->r(0,k,j,il-i) = 1.0;
+        pmb->pscalars->s(0,k,j,il-i) = prim(IDN,k,j,il-i);
       }
     }
   }
@@ -977,25 +969,25 @@ void StaticInflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &pr
 void OutflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
   FaceField &b, Real time, Real dt, int il, int iu, int jl, int ju, int kl, int ku,
   int ngh) {
-	for (int k=kl; k<=ku; ++k) {
-		for (int j=jl; j<=ju; ++j) {
-			for (int i=1; i<=ngh; ++i) {
-				if (prim(IVX,k,j,il) >= 0.0) {
-					prim(IVX,k,j,il-i) = prim(IVX,k,j,il);
-				} else {
-					prim(IVX,k,j,il-i) = 0.0;
-				}
-				prim(IVY,k,j,il-i) = prim(IVY,k,j,il);
-				prim(IVZ,k,j,il-i) = prim(IVZ,k,j,il);
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=1; i<=ngh; ++i) {
+        if (prim(IVX,k,j,il) >= 0.0) {
+          prim(IVX,k,j,il-i) = prim(IVX,k,j,il);
+        } else {
+          prim(IVX,k,j,il-i) = 0.0;
+        }
+        prim(IVY,k,j,il-i) = prim(IVY,k,j,il);
+        prim(IVZ,k,j,il-i) = prim(IVZ,k,j,il);
 
-				prim(IPR,k,j,il-i) = P_gz[ngh-i];
-				prim(IDN,k,j,il-i) = rho_gz[ngh-i];
+        prim(IPR,k,j,il-i) = P_gz[ngh-i];
+        prim(IDN,k,j,il-i) = rho_gz[ngh-i];
 
-				pmb->pscalars->r(0,k,j,il-i) = 1.0;
-				pmb->pscalars->s(0,k,j,il-i) = prim(IDN,k,j,il-i);
-			}
-		}
-	}
+        pmb->pscalars->r(0,k,j,il-i) = 1.0;
+        pmb->pscalars->s(0,k,j,il-i) = prim(IDN,k,j,il-i);
+      }
+    }
+  }
   return;
 }
 
@@ -1009,24 +1001,24 @@ void OutflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
 void OutflowOuterX1 (MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
   FaceField &b, Real time, Real dt, int il, int iu, int jl, int ju, int kl, int ku,
   int ngh) {
-	for (int k=kl; k<=ku; ++k) {
-		for (int j=jl; j<=ju; ++j) {
-			for (int i=1; i<=ngh; ++i) {
-				Real dr = pco->x1v(iu+i) - pco->x1v(iu);
-				if (prim(IVX,k,j,iu) >= 0.0) {
-					prim(IVX,k,j,iu+i) = prim(IVX,k,j,iu);
-					prim(IPR,k,j,iu+i) = prim(IPR,k,j,iu);
-					prim(IDN,k,j,iu+i) = prim(IDN,k,j,iu);
-				} else {
-					prim(IVX,k,j,iu+i) = 0.0;
-					prim(IPR,k,j,iu+i) = pfloor;
-					prim(IDN,k,j,iu+i) = dfloor;
-				}
-				prim(IVY,k,j,iu+i) = prim(IVY,k,j,iu);
-				prim(IVZ,k,j,iu+i) = prim(IVZ,k,j,iu);
-			}
-		}
-	}
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=1; i<=ngh; ++i) {
+        Real dr = pco->x1v(iu+i) - pco->x1v(iu);
+        if (prim(IVX,k,j,iu) >= 0.0) {
+          prim(IVX,k,j,iu+i) = prim(IVX,k,j,iu);
+          prim(IPR,k,j,iu+i) = prim(IPR,k,j,iu);
+          prim(IDN,k,j,iu+i) = prim(IDN,k,j,iu);
+        } else {
+          prim(IVX,k,j,iu+i) = 0.0;
+          prim(IPR,k,j,iu+i) = pfloor;
+          prim(IDN,k,j,iu+i) = dfloor;
+        }
+        prim(IVY,k,j,iu+i) = prim(IVY,k,j,iu);
+        prim(IVZ,k,j,iu+i) = prim(IVZ,k,j,iu);
+      }
+    }
+  }
   return;
 }
 
@@ -1223,17 +1215,17 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,
         Real a_r, a_th, a_ph;
         GetTidalAcceleration(r, th, ph, rho, a_r, a_th, a_ph);
 
-				// Coriolis
-				// Omega = (GM/a^3)(costh e_r - sinth e_th), a_cor = -2Omega cross vel
-				Real omega = std::sqrt((gm_star+gm_planet)/(sep*sep*sep));
-				Real sinth = std::sin(th);
-				Real costh = std::cos(th);
-				Real vel_r = prim(IVX,k,j,i);
-				Real vel_th = prim(IVY,k,j,i);
-				Real vel_ph = prim(IVZ,k,j,i);
-				a_r += 2*omega * vel_ph*sinth;
-				a_th += 2*omega * vel_ph*costh;
-				a_ph -= 2*omega * (vel_r*sinth + vel_th*costh);
+        // Coriolis
+        // Omega = (GM/a^3)(costh e_r - sinth e_th), a_cor = -2Omega cross vel
+        Real omega = std::sqrt((gm_star+gm_planet)/(sep*sep*sep));
+        Real sinth = std::sin(th);
+        Real costh = std::cos(th);
+        Real vel_r = prim(IVX,k,j,i);
+        Real vel_th = prim(IVY,k,j,i);
+        Real vel_ph = prim(IVZ,k,j,i);
+        a_r += 2*omega * vel_ph*sinth;
+        a_th += 2*omega * vel_ph*costh;
+        a_ph -= 2*omega * (vel_r*sinth + vel_th*costh);
 
         Real src1 = a_r*rho*dt;
         Real src2 = a_th*rho*dt;
@@ -1258,36 +1250,113 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,
 
 // Assumes the star is in the -x direction, i.e. psi = 0
 void HillTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
-              const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
-              const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
-              AthenaArray<Real> &cons_scalar) {
+    const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
+    const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
+    AthenaArray<Real> &cons_scalar) {
   for (int k=pmb->ks; k<=pmb->ke; ++k) {
     for (int j=pmb->js; j<=pmb->je; ++j) {
       for (int i=pmb->is; i<=pmb->ie; ++i) {
-				Real rho = prim(IDN,k,j,i);
+        Real rho = prim(IDN,k,j,i);
         Real r = pmb->pcoord->x1v(i);
         Real th = pmb->pcoord->x2v(j);
         Real ph = pmb->pcoord->x3v(k);
-				Real vel_r = prim(IVX,k,j,i);
+        Real vel_r = prim(IVX,k,j,i);
+        Real vel_th = prim(IVY,k,j,i);
+        Real vel_ph = prim(IVZ,k,j,i);
+        Real cosph = std::cos(ph);
+        Real sinph = std::sin(ph);
+        Real costh = std::cos(th);
+        Real sinth = std::sin(th);
+        Real x = r * cosph * sinth;
+        //Real y = r * sinph * sinth;
+        Real z = r * costh;
+
+        // Tidal gravity, second order
+        Real prefac = gm_star / (sep*sep*sep);
+        Real a_r = prefac * (3*x*sinth*cosph - z*costh);
+        Real a_th = prefac * (3*x*costh*cosph + z*sinth);
+        Real a_ph = prefac * (-3*x*sinph);
+
+        // Coriolis, second order
+        Real omega = std::sqrt((gm_star+gm_planet)/(sep*sep*sep));
+        a_r += 2*omega * vel_ph*sinth;
+        a_th += 2*omega * vel_ph*costh;
+        a_ph -= 2*omega * (vel_r*sinth + vel_th*costh);
+
+        Real src1 = a_r*rho*dt;
+        Real src2 = a_th*rho*dt;
+        Real src3 = a_ph*rho*dt;
+        cons(IM1,k,j,i) += src1;
+        cons(IM2,k,j,i) += src2;
+        cons(IM3,k,j,i) += src3;
+
+        // Update the user meshblock quantities
+        pmb->ruser_meshblock_data[1](0,k,j,i) = a_r;
+        pmb->ruser_meshblock_data[1](1,k,j,i) = a_th;
+        pmb->ruser_meshblock_data[1](2,k,j,i) = a_ph;
+
+        // Update conserved gas energy
+        cons(IEN,k,j,i) += src1*prim(IVX,k,j,i)
+                         + src2*prim(IVY,k,j,i)
+                         + src3*prim(IVZ,k,j,i);
+      }
+    }
+  }
+}
+
+// Assumes the star is in the -x direction, i.e. psi = 0
+void ThirdOrderTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
+  const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
+  const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
+  AthenaArray<Real> &cons_scalar) {
+	Real prefac2 = gm_star / (sep*sep*sep);
+	Real prefac3 = 3*gm_star / (2*sep*sep*sep*sep);
+	Real omega = std::sqrt((gm_star+gm_planet)/(sep*sep*sep));
+
+  for (int k=pmb->ks; k<=pmb->ke; ++k) {
+		Real ph = pmb->pcoord->x3v(k);
+		Real cosph = std::cos(ph);
+		Real sinph = std::sin(ph);
+
+    for (int j=pmb->js; j<=pmb->je; ++j) {
+			Real th = pmb->pcoord->x2v(j);
+			Real costh = std::cos(th);
+			Real sinth = std::sin(th);
+
+			// unit vector conversions
+			Real unit_xr = sinth*cosph;
+			Real unit_xt = costh*cosph;
+			Real unit_xp = -sinph;
+
+			Real unit_yr = sinth*sinph;
+			Real unit_yt = costh*sinph;
+			Real unit_yp = cosph;
+
+			Real unit_zr = costh;
+			Real unit_zt = -sinth;
+
+      for (int i=pmb->is; i<=pmb->ie; ++i) {
+        Real r = pmb->pcoord->x1v(i);
+				Real rho = prim(IDN,k,j,i);
+				Real vel_r  = prim(IVX,k,j,i);
 				Real vel_th = prim(IVY,k,j,i);
 				Real vel_ph = prim(IVZ,k,j,i);
-				Real cosph = std::cos(ph);
-				Real sinph = std::sin(ph);
-				Real costh = std::cos(th);
-				Real sinth = std::sin(th);
-				Real x = r * cosph * sinth;
-				//Real y = r * sinph * sinth;
+				Real x = r * sinth * cosph;
+				Real y = r * sinth * sinph;
 				Real z = r * costh;
 
 				// Tidal gravity, second order
-				Real prefac = gm_star / (sep*sep*sep);
-        Real a_r = prefac * (3*x*sinth*cosph - z*costh);
-				Real a_th = prefac * (3*x*costh*cosph + z*sinth);
-				Real a_ph = prefac * (-3*x*sinph);
+        Real a_r  = prefac2 * (3*x*unit_xr - z*unit_zr);
+				Real a_th = prefac2 * (3*x*unit_xt + z*unit_zt);
+				Real a_ph = prefac2 * (3*x*unit_xp);
 
-				// Coriolis, second order
-				Real omega = std::sqrt((gm_star+gm_planet)/(sep*sep*sep));
-				a_r += 2*omega * vel_ph*sinth;
+				// Tidal gravity, third order
+				a_r  += prefac3 * ((3*r*r - x*x)*unit_xr + 4*x*y*unit_yr + 4*x*z*unit_zr);
+				a_th += prefac3 * ((3*r*r - x*x)*unit_xt + 4*x*y*unit_yt + 4*x*z*unit_zt);
+				a_ph += prefac3 * ((3*r*r - x*x)*unit_xp + 4*x*y*unit_yp);
+
+				// Coriolis
+				a_r  += 2*omega * vel_ph*sinth;
 				a_th += 2*omega * vel_ph*costh;
 				a_ph -= 2*omega * (vel_r*sinth + vel_th*costh);
 
