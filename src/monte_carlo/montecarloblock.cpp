@@ -381,9 +381,10 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     Real h_cgs = 6.62607015e-27;
     for (int i=0; i<=nf_scat; i++) {
       energy_scat(i) = std::log10(emin_scat) + static_cast<Real>(i)*dloge_scat; // keep log
-      if (i > 0)
-        freq_scat_mid(i-1) = 0.5*( pow(10.,energy_scat(i-1)) + pow(10.,energy_scat(i)) )/h_cgs;
-;
+      if (i > 0) {
+        //        freq_scat_mid(i-1) = 0.5*( pow(10.,energy_scat(i-1)) + pow(10.,energy_scat(i)) )/h_cgs;
+        freq_scat_mid(i-1) = pow(10.,0.5*(energy_scat(i-1) + energy_scat(i)))/h_cgs;
+      }
     }
     if ((Globals::my_rank ==0) && (pmy_block->lid == 0)) {
       FILE *pfile;
@@ -943,7 +944,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     k1 = kf[1]/ep;
     k2 = kf[2]/ep;
     k3 = kf[3]/ep;
-   
+
     // Weight moments by time spent in domain
     weight = pphot->wp[ip] * pphot->ep[ip] / k0 * dl * l_cgs / c_cgs;
   } else {
@@ -1402,6 +1403,8 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
               norm = 1./ (dt * pcoord->vol(k,j,i));
             else
               norm = dt * pcoord->vol(k,j,i);
+            if (moments_scat(n,k,j,i) > 0.0)
+              //printf("norm: %g %g\n",moments_scat(n,k,j,i), norm);
             moments_scat(n,k,j,i) *= norm;
           }
         }
