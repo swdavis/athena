@@ -619,12 +619,8 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
           if (pmy_mc->verbose) {
             pphot->PrintPhoton("Warning: Nan encounterd in TransferPhotons(),"
                                " photon destroyed",ip);
-            }
+          }
         }
-	pphot->statp[ip] = DESTROYED;
-	if (pmy_mc->verbose) {
-	  pphot->PrintPhoton("Scattering Check",ip);
-	}
       }
 
       // Update the absorption and scattering extinction coefficients
