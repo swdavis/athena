@@ -121,7 +121,6 @@ void ThirdOrderTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
               const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
               AthenaArray<Real> &cons_scalar);
 
-
 // INITIALIZATION FUNCTIONS
 // ========================
 
@@ -879,8 +878,11 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
           nu_phot = pow(pran->uniform() * (numaxpow - numinpow) + numinpow, nuexp);
         }
         //pphot->ep[ip] = h_cgs * nu_phot;
+        //print("numin=%g, nu_phot=%g\n", numin, nu_phot);
+
         // Uniform: threshold photons only
         pphot->ep[ip] = numin_erg;
+
         break;
       }
     }

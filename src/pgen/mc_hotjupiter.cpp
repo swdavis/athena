@@ -121,20 +121,12 @@ void ThirdOrderTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
               const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
               AthenaArray<Real> &cons_scalar);
 
-// Explicit heating function, test
-void ExplicitEUVHeating(MeshBlock *pmb, const Real time, const Real dt,
-              const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
-              const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
-              AthenaArray<Real> &cons_scalar);
-
-
 // INITIALIZATION FUNCTIONS
 // ========================
 
 void ResonantScattering(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe);
 Real ResonantScatteringOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
 Real BoundFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
-
 
 Real ConstantTimestep(MeshBlock *pmb) {
   if (user_dt > TINY_NUMBER) {
@@ -143,15 +135,12 @@ Real ConstantTimestep(MeshBlock *pmb) {
     return std::numeric_limits<Real>().max();
   }
 }
+
 void GetIonizationTemperature(MonteCarloBlock *pmcb);
 //void EscapeCoords(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover, int ip);
 
 void UpdateSourceTerms(MonteCarloBlock *pmcb, Photon *pphot,Real energy0, Real weight0,
                   Real k1p0, Real k2p0, Real k3p0, int ip);
-
-} // end namespace
-
-// SWD: Why aren't these inside anonymous namespace -- move
 
 // Boundary Conditions
 void OutflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
@@ -161,6 +150,7 @@ void OutflowOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, F
 void StaticInflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
     Real time, Real dt, int il, int iu, int jl, int ju, int kl, int ku, int ngh);
 
+} // end namespace
 
 
 // SETUP
@@ -503,7 +493,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
           pscalars->s(0,k,j,i) = nH * mp_cgs;
           //pscalars->r(0,k,j,i) = nH / (nH + np); // concentration (0 <= r <= 1)
         }
-				//printf("ionization fraction: %e\n", pscalars->r(0,k,j,i));
+				//printf("ionization fraction: %e\n", pscalars->s(0,k,j,i)/rho);
 
         if (!flag_dynamic) {
           Real a_r, a_th, a_ph;
@@ -570,7 +560,6 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
   } else if (etype == LYA_REC) {
     SetEmissionCellWeight(pphot,ips,ipe);
   }
-
 
   // Calculate numerical prefactors for sampling so we don't repeat math operations
   Real numinpow = std::pow(numin, 1.0-powa);
@@ -880,6 +869,10 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
           nu_phot = pow(pran->uniform() * (numaxpow - numinpow) + numinpow, nuexp);
         }
         pphot->ep[ip] = h_cgs * nu_phot;
+        //printf("numin=%g, nu_phot=%g\n", numin, nu_phot);
+        //printf("threshold=%g, energy=%g\n", numin_erg, h_cgs*nu_phot);
+        // Threshold test
+        //pphot->ep[ip] = numin_erg;
         break;
       }
     }
@@ -919,114 +912,14 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 }*/
 
 
-/*
- * Bottom (r_inner) boundary condition: static inflow diode
- * If radial velocity is positive (outwards), copy it
- * If radial velocity is negative (inwards), set it to zero
- * Copy any theta and phi velocities
- * Density and pressure are fixed to initial values
-*/
-void StaticInflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-  FaceField &b, Real time, Real dt, int il, int iu, int jl, int ju, int kl, int ku,
-  int ngh) {
-
-  Real gamma = pmb->peos->GetGamma();
-  for (int k=kl; k<=ku; ++k) {
-    for (int j=jl; j<=ju; ++j) {
-      for (int i=1; i<=ngh; ++i) {
-
-        // fix initial density and pressure
-        prim(IDN,k,j,il-i) = rho_gz[il-i];
-        //prim(IPR,k,j,il-i) = pres_gz[il-i];
-        prim(IPR,k,j,il-i) = prim(IPR,k,j,il) * std::pow(rho_gz[il-i]/prim(IDN,k,j,il), gamma);
-
-        // outflow diode for velocity
-        prim(IVY,k,j,il-i) = prim(IVY,k,j,il);
-        prim(IVZ,k,j,il-i) = prim(IVZ,k,j,il);
-        if (prim(IVX,k,j,il) >= 0.0) {
-          prim(IVX,k,j,il-i) = prim(IVX,k,j,il);
-        } else {
-          prim(IVX,k,j,il-i) = 0.0;
-        }
-
-        // set neutral fraction to fully neutral
-        pmb->pscalars->r(0,k,j,il-i) = 1.0;
-        pmb->pscalars->s(0,k,j,il-i) = prim(IDN,k,j,il-i);
-      }
-    }
-  }
-  return;
-}
-
-
-/*
- * Bottom (r_inner) boundary condition: outflow diode
- * If radial velocity is positive (outwards), copy it
- * If radial velocity is negative (inwards), set it to zero
- * Density, pressure, ionization are fixed to initial values
- * Copy all other vars
-*/
-void OutflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-  FaceField &b, Real time, Real dt, int il, int iu, int jl, int ju, int kl, int ku,
-  int ngh) {
-  for (int k=kl; k<=ku; ++k) {
-    for (int j=jl; j<=ju; ++j) {
-      for (int i=1; i<=ngh; ++i) {
-        if (prim(IVX,k,j,il) >= 0.0) {
-          prim(IVX,k,j,il-i) = prim(IVX,k,j,il);
-        } else {
-          prim(IVX,k,j,il-i) = 0.0;
-        }
-        prim(IVY,k,j,il-i) = prim(IVY,k,j,il);
-        prim(IVZ,k,j,il-i) = prim(IVZ,k,j,il);
-
-        prim(IPR,k,j,il-i) = P_gz[ngh-i];
-        prim(IDN,k,j,il-i) = rho_gz[ngh-i];
-
-        pmb->pscalars->r(0,k,j,il-i) = 1.0;
-        pmb->pscalars->s(0,k,j,il-i) = prim(IDN,k,j,il-i);
-      }
-    }
-  }
-  return;
-}
-
-
-/*
- * Top (r_outer) boundary condition: outflow diode
- * If velocity is positive (outwards), copy velocity, density and pressure
- * Otherwise, if velocity is negative (inwards), set all to zero
- * Copy all other vars
-*/
-void OutflowOuterX1 (MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-  FaceField &b, Real time, Real dt, int il, int iu, int jl, int ju, int kl, int ku,
-  int ngh) {
-  for (int k=kl; k<=ku; ++k) {
-    for (int j=jl; j<=ju; ++j) {
-      for (int i=1; i<=ngh; ++i) {
-        Real dr = pco->x1v(iu+i) - pco->x1v(iu);
-        if (prim(IVX,k,j,iu) >= 0.0) {
-          prim(IVX,k,j,iu+i) = prim(IVX,k,j,iu);
-          prim(IPR,k,j,iu+i) = prim(IPR,k,j,iu);
-          prim(IDN,k,j,iu+i) = prim(IDN,k,j,iu);
-        } else {
-          prim(IVX,k,j,iu+i) = 0.0;
-          prim(IPR,k,j,iu+i) = pfloor;
-          prim(IDN,k,j,iu+i) = dfloor;
-        }
-        prim(IVY,k,j,iu+i) = prim(IVY,k,j,iu);
-        prim(IVZ,k,j,iu+i) = prim(IVZ,k,j,iu);
-      }
-    }
-  }
-  return;
-}
-
 void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
 
   // only update ionization after transfer of ionizing photons
   if (etype != ION_STR)
     return;
+
+  // Uniform test
+  //return;
 
   Real dt = pmy_block->pmy_mesh->dt;
   // for checking ionization
@@ -1046,18 +939,17 @@ void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
         //Real neutral_frac = pmy_block->pscalars->s(0,k,j,i)/rho;// Neutral fraction
         //Real mean_mol_weight = (1. + neutral_frac)/2.;
         //printf("mean mol weight: %g\n", mean_mol_weight);
-        const Real mass = 1.660538782e-24;
-        Real nh = pmy_block->pscalars->s(0,k,j,i)/mass;
-        Real np = (rho/mass) - nh;
+        Real nh = pmy_block->pscalars->s(0,k,j,i)/mp_cgs;
+        Real np = (rho/mp_cgs) - nh;
         Real na = nh + np;
 
         // Calculate the photoionization rate, Gamma, from the number of photons absorbed
         // per cell per time
         // absweight already normalized by (vol*dt) in NormalizeSourceTerms
-        Real absweight = sourceterms(MCNABS,k,j,i) *= norm;
+        //Real absweight = sourceterms(MCNABS,k,j,i) *= norm;
+        Real absweight = sourceterms(MCNABS,k,j,i) * norm;  // CMF: sourceterms should be kept unnormalized, only normalize for calculations/output
         Real vol = pcoord->vol(k,j,i);
         Real Gamma = absweight / nh;
-
 
         // Calculate the recombination rate, alpha, from the temperature of this cell
         Real alpha = 2.54e-13 * std::pow(tempo1e4K, -0.8164-0.0208*std::log(tempo1e4K));
@@ -1081,24 +973,22 @@ void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
         // Double-check that the implicit update gives a neutral fraction between 0 and 1 --- NOT guaranteed if dt is large
         Real neutral_frac = update/na;
         if (neutral_frac > 1.0) {
-          if ((k==ks)&&(j==js)&&(i==14))
-            printf("(Block %d) UpdateIonizationFraction: neutral fraction %g is greater than 1.0\n", pmy_block->lid, neutral_frac);
+          printf("(Block %d) UpdateIonizationFraction: neutral fraction %g is greater than 1.0\n", pmy_block->lid, neutral_frac);
           neutral_frac = 1.0;
         } else if (neutral_frac < 0.0) {
-          if ((k==ks)&&(j==js)&&(i==14))
-            printf("(Block %d) UpdateIonizationFraction: neutral fraction %g is less than 0.0\n", pmy_block->lid, neutral_frac);
+          printf("(Block %d) UpdateIonizationFraction: neutral fraction %g is less than 0.0\n", pmy_block->lid, neutral_frac);
           neutral_frac = 0.0;
         }
 
         // check result
-       // if (absweight > 0.0) {
-       //   printf("nh'=%g, na=%g, nh0=%g, alpha=%g, Gamma=%g, dt=%g\n", update, na, nh, alpha, Gamma, dt);
-       // }
+        //if (absweight > 0.0) {
+        //  printf("nh'=%g, na=%g, nh0=%g, alpha=%g, Gamma=%g, dt=%g\n", update, na, nh, alpha, Gamma, dt);
+        //}
 
         nh = neutral_frac * na;
         np = na - nh;
 
-        pmy_block->pscalars->s(0,k,j,i) = nh*mass;
+        pmy_block->pscalars->s(0,k,j,i) = nh*mp_cgs;
 
         // calculate impact excitation cooling
         // see Christie, Arras, Li, 2013, eq.8 and Table 2
@@ -1121,9 +1011,10 @@ void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
 
 }
 
+
 // Definitions for namespace functions
-namespace { // begin namespace
-            //
+namespace {
+
 void F1pos(MonteCarloBlock *pmcb, Photon *pphot, Real dl, int ip, int imom) {
 
   int i1 = pphot->i1p[ip];
@@ -1176,6 +1067,7 @@ void a1neg(MonteCarloBlock *pmcb, Photon *pphot, Real dl, int ip, int imom) {
   }
 }
 
+
 void GetTidalAcceleration(Real r, Real th, Real ph, Real rho, Real &a_r, Real &a_th, Real &a_ph) {
 
   Real sth = std::sin(th);
@@ -1197,6 +1089,7 @@ void GetTidalAcceleration(Real r, Real th, Real ph, Real rho, Real &a_r, Real &a
         - sphm*gm_star/(SQR(sep));
   return;
 }
+
 
 void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,
               const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
@@ -1247,6 +1140,7 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,
     }
   }
 }
+
 
 // Assumes the star is in the -x direction, i.e. psi = 0
 void HillTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
@@ -1303,6 +1197,7 @@ void HillTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
     }
   }
 }
+
 
 // Assumes the star is in the -x direction, i.e. psi = 0
 void ThirdOrderTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
@@ -1531,7 +1426,6 @@ Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype)
 Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i, int etype) {
   Coordinates *pco = pmcb->pmy_block->pcoord;
 
-
   Real emis = 0.0;
   if (pco->x1f(i+1) >= rout) {
     if (flag_incident_from_z) {
@@ -1564,7 +1458,6 @@ Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i, int e
     }
   }
 
-
 	// CMF note: currently no user_out_var space for EUV only?
   pmcb->pmy_block->ruser_meshblock_data[0](3,k,j,i) = emis;
 
@@ -1580,6 +1473,7 @@ void ResonantScattering(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) 
   }
 }
 
+
 Real BoundFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   Real opac = 0.0;
 	if (!flag_zero_opacity) {
@@ -1589,17 +1483,14 @@ Real BoundFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 			int i3 = pphot->i3p[ip];
 			Real energy = pphot->ep[ip];
 			Real xsec = sigmamin * std::pow((energy / h_cgs) / (numin), -3.0);
-			//Real rho = pmcb->pmy_block->phydro->u(IDN,i3,i2,i1);
-			//Real neutral_frac = pmcb->pmy_block->pscalars->s(0,i3,i2,i1) / rho;
-			//Real mean_mol_weight = (1. + neutral_frac) / 2.;
-			//Real nH = neutral_frac * rho / mean_mol_weight / mp_cgs;
 			Real nH = pmcb->pmy_block->pscalars->s(0,i3,i2,i1)/mp_cgs;
 			opac = xsec * nH;
-			//printf("In BoundFreeAbsorptionOpacity; energy, nH, mfp: %g, %g, %g\n", energy/1.6e-12, nH, 1./opac);
+			//printf("BoundFreeAbsorptionOpacity: energy/numin_erg=%g, xsec/sigmamin=%g, nH=%g, mfp=%g\n", energy/numin_erg, xsec/sigmamin, nH, 1./opac);
 		}
 	}
   return opac;
 }
+
 
 Real ResonantScatteringOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   Real opac = 0.0;
@@ -1634,11 +1525,13 @@ void gasdev(MeshBlock *pmb, Real mean, Real stddev, Real &samp) {
   return;
 }
 
+
 void ForceEscape(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
   for (int ip=ips; ip<=ipe; ip++) {
     pphot->statp[ip] = ESCAPED;
   }
 }
+
 
 Real GetIsowindVelocity(Real x) {
   Real y = (x <= 1.0) ? std::exp(1.5-2.0/x) : 1.1;
@@ -1667,7 +1560,6 @@ void GetIonizationTemperature(MonteCarloBlock *pmcb) {
     for (int j=jl; j<=ju; ++j) {
       for (int i=il; i<=iu; ++i) {
 				Real rho = phydro->u(IDN,k,j,i);
-				//Real neutral_frac = pmcb->pmy_block->pscalars->s(0,k,j,i)/rho;
 				Real mean_mol_weight = 1./(2. - pmcb->pmy_block->pscalars->r(0,k,j,i));
         Real tgas = phydro->w(IPR,k,j,i) * mean_mol_weight * mp_cgs / rho / kb_cgs;
 
@@ -1679,41 +1571,17 @@ void GetIonizationTemperature(MonteCarloBlock *pmcb) {
 }
 
 
-void ExplicitEUVHeating(MeshBlock *pmb, const Real time, const Real dt,
-             const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
-             const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
-             AthenaArray<Real> &cons_scalar) {
-	Real rmax = pmb->pmy_mesh->mesh_size.x1max;
-	Real total_vol = (4./3.)*PI*std::pow(rmax,3);
-  for (int k = pmb->ks; k <= pmb->ke; ++k) {
-    for (int j = pmb->js; j <= pmb->je; ++j) {
-		//	if (pmb->pcoord->x2v(j) > PI/2) {
-		//		continue;
-		//	}
-      for (int i = pmb->is; i <= pmb->ie; ++i) {
-				Real rad = pmb->pcoord->x1v(i);
-				Real the = pmb->pcoord->x2v(j);
-				//Real cell_vol = pmb->pcoord->GetCellVolume(k,j,i);
-				Real energy = dt*edot_ion/total_vol*(rmax/rad)*std::cos(the);
-				//printf("rad, the, energy = %g, %g, %g\n", rad, the, energy);
-        cons(IEN,k,j,i) += energy;
-      }
-    }
-  }
-  return;
-}
-
 void UpdateSourceTerms(MonteCarloBlock *pmcb, Photon *pphot, Real energy0, Real weight0,
                   Real k1p0, Real k2p0, Real k3p0, int ip) {
 
-  // if continuous absorptioin, handle source terms in UpdateMoments()
+  // if continuous absorption, handle source terms in UpdateMoments()
   if (pmcb->absorption_meth == ABSTAU)
     return;
 
   Real hplanck = 6.62607015e-27;
   Real threshold = 3.28808816e+15 * hplanck;
 
-  // Update soucterms for ionizing radiation
+  // Update sourceterms for ionizing radiation
   if (energy0 > threshold) {
     Real heat = weight0 * (energy0 - threshold);
     //printf("energy0, weight0: %g %g %g\n", energy0, weight0);
@@ -1800,8 +1668,9 @@ void UpdateSourceTerms(MonteCarloBlock *pmcb, Photon *pphot, Real energy0, Real 
     pmcb->sourceterms(MCRS3,k,j,i) -= dp3p;
   }
 
-
 }
+
+
 //void EscapeCoords(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover, int ip) {
 //  if (pphot->statp[ip] == ESCAPED || pphot->statp[ip] == ABSORBED) {
 //    pphot->user[6][ip] = pphot->x1p[ip];
@@ -1812,5 +1681,112 @@ void UpdateSourceTerms(MonteCarloBlock *pmcb, Photon *pphot, Real energy0, Real 
 //    pphot->user[11][ip] = pphot->k3p[ip];
 //  }
 //}
+
+
+// Boundary Conditions
+
+/*
+ * Bottom (r_inner) boundary condition: static inflow diode
+ * If radial velocity is positive (outwards), copy it
+ * If radial velocity is negative (inwards), set it to zero
+ * Copy any theta and phi velocities
+ * Density and pressure are fixed to initial values
+*/
+void StaticInflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
+  FaceField &b, Real time, Real dt, int il, int iu, int jl, int ju, int kl, int ku,
+  int ngh) {
+
+  Real gamma = pmb->peos->GetGamma();
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=1; i<=ngh; ++i) {
+
+        // fix initial density and pressure
+        prim(IDN,k,j,il-i) = rho_gz[il-i];
+        //prim(IPR,k,j,il-i) = pres_gz[il-i];
+        prim(IPR,k,j,il-i) = prim(IPR,k,j,il) * std::pow(rho_gz[il-i]/prim(IDN,k,j,il), gamma);
+
+        // outflow diode for velocity
+        prim(IVY,k,j,il-i) = prim(IVY,k,j,il);
+        prim(IVZ,k,j,il-i) = prim(IVZ,k,j,il);
+        if (prim(IVX,k,j,il) >= 0.0) {
+          prim(IVX,k,j,il-i) = prim(IVX,k,j,il);
+        } else {
+          prim(IVX,k,j,il-i) = 0.0;
+        }
+
+        // set neutral fraction to fully neutral
+        pmb->pscalars->r(0,k,j,il-i) = 1.0;
+        pmb->pscalars->s(0,k,j,il-i) = prim(IDN,k,j,il-i);
+      }
+    }
+  }
+  return;
+}
+
+
+/*
+ * Bottom (r_inner) boundary condition: outflow diode
+ * If radial velocity is positive (outwards), copy it
+ * If radial velocity is negative (inwards), set it to zero
+ * Density, pressure, ionization are fixed to initial values
+ * Copy all other vars
+*/
+void OutflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
+  FaceField &b, Real time, Real dt, int il, int iu, int jl, int ju, int kl, int ku,
+  int ngh) {
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=1; i<=ngh; ++i) {
+        if (prim(IVX,k,j,il) >= 0.0) {
+          prim(IVX,k,j,il-i) = prim(IVX,k,j,il);
+        } else {
+          prim(IVX,k,j,il-i) = 0.0;
+        }
+        prim(IVY,k,j,il-i) = prim(IVY,k,j,il);
+        prim(IVZ,k,j,il-i) = prim(IVZ,k,j,il);
+
+        prim(IPR,k,j,il-i) = P_gz[ngh-i];
+        prim(IDN,k,j,il-i) = rho_gz[ngh-i];
+
+        pmb->pscalars->r(0,k,j,il-i) = 1.0;
+        pmb->pscalars->s(0,k,j,il-i) = prim(IDN,k,j,il-i);
+      }
+    }
+  }
+  return;
+}
+
+
+/*
+ * Top (r_outer) boundary condition: outflow diode
+ * If velocity is positive (outwards), copy velocity, density and pressure
+ * Otherwise, if velocity is negative (inwards), set all to zero
+ * Copy all other vars
+*/
+void OutflowOuterX1 (MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
+  FaceField &b, Real time, Real dt, int il, int iu, int jl, int ju, int kl, int ku,
+  int ngh) {
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=1; i<=ngh; ++i) {
+        Real dr = pco->x1v(iu+i) - pco->x1v(iu);
+        if (prim(IVX,k,j,iu) >= 0.0) {
+          prim(IVX,k,j,iu+i) = prim(IVX,k,j,iu);
+          prim(IPR,k,j,iu+i) = prim(IPR,k,j,iu);
+          prim(IDN,k,j,iu+i) = prim(IDN,k,j,iu);
+        } else {
+          prim(IVX,k,j,iu+i) = 0.0;
+          prim(IPR,k,j,iu+i) = pfloor;
+          prim(IDN,k,j,iu+i) = dfloor;
+        }
+        prim(IVY,k,j,iu+i) = prim(IVY,k,j,iu);
+        prim(IVZ,k,j,iu+i) = prim(IVZ,k,j,iu);
+      }
+    }
+  }
+  return;
+}
+
 
 } // end namespace
