@@ -121,6 +121,12 @@ void ThirdOrderTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
               const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
               AthenaArray<Real> &cons_scalar);
 
+// Reset hydro to initial condition after every cycle
+void ResetInitialHydro(MeshBlock *pmb, const Real time, const Real dt,
+              const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
+              const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
+              AthenaArray<Real> &cons_scalar);
+
 // INITIALIZATION FUNCTIONS
 // ========================
 
@@ -220,6 +226,9 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   // Boundary conditions
   EnrollUserBoundaryFunction(BoundaryFace::inner_x1, StaticInflowInnerX1);
   EnrollUserBoundaryFunction(BoundaryFace::outer_x1, OutflowOuterX1);
+
+	// Uniform hydro
+	EnrollUserExplicitSourceFunction(ResetInitialHydro);
 
   return;
 }
@@ -927,9 +936,6 @@ void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
   // only update ionization after transfer of ionizing photons
   if (etype != ION_STR)
     return;
-
-  // Uniform: don't change ionization fraction or cool
-  return;
 
   Real dt = pmy_block->pmy_mesh->dt;
   // for checking ionization
@@ -1819,6 +1825,47 @@ void OutflowOuterX1 (MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
     }
   }
   return;
+}
+
+
+/*
+ * Resets hydro density, velocity and pressure after cycle to initial condition
+ * Still allows neutral fraction to change
+ */
+void ResetInitialHydro(MeshBlock *pmb, const Real time, const Real dt,
+		const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
+		const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
+		AthenaArray<Real> &cons_scalar) {
+
+	// Uniform density, velocity, temperature
+	Real rho = nbase * mp_cgs;
+	Real vel1 = 0.0;
+	Real vel2 = 0.0;
+	Real vel3 = 0.0;
+  Real gamma = pmb->peos->GetGamma();
+  Real invgm1 = 1.0/(gamma - 1.0);
+
+  for (int k=pmb->ks; k<=pmb->ke; ++k) {
+    for (int j=pmb->js; j<=pmb->je; ++j) {
+      for (int i=pmb->is; i<=pmb->ie; ++i) {
+				
+				// Set pressure to follow passive scalar -> constant temp
+				Real P = (2*rho - cons_scalar(0,k,j,i)) * kb_cgs * temp0 / mp_cgs;
+
+				// Update conserved variables
+        cons(IDN,k,j,i)  = rho;
+        cons(IM1,k,j,i)  = rho * vel1;
+        cons(IM2,k,j,i)  = rho * vel2;
+        cons(IM3,k,j,i)  = rho * vel3;
+        cons(IEN,k,j,i)  = P * invgm1;
+        cons(IEN,k,j,i) += 0.5 * rho * SQR(vel1);
+        cons(IEN,k,j,i) += 0.5 * rho * SQR(vel2);
+        cons(IEN,k,j,i) += 0.5 * rho * SQR(vel3);
+			}
+		}
+	}
+
+	return;
 }
 
 
