@@ -1570,7 +1570,7 @@ void MonteCarloBlock::NormalizeSourceTerms(bool normalize) {
 void MonteCarloBlock::ResetSourceTerms() {
 
   // set sourceterms to zero
-  for (int n=0; n<8; ++n) {
+  for (int n=0; n<nsrc; ++n) {
     for (int k=ks; k<=ke; ++k) {
       for (int j=js; j<=je; ++j) {
         for (int i=is; i<=ie; ++i) {
