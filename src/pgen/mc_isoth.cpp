@@ -119,7 +119,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
       for (int k=ks; k<=ke; k++) {
         for (int j=js; j<=je; j++) {
           for (int i=is; i<=ie; i++) {
-            Real x1 = pcoord->x1v(k);
+            Real x1 = pcoord->x1v(i);
             if (!constdens) rho = DensityProfile(x1,xlow,xhigh,taumin,taumax,kappaes);
             phydro->u(IDN,k,j,i) = rho;
             phydro->u(IM1,k,j,i) = rho*vel;
@@ -146,7 +146,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 //! \brief Initializes Photon packets before integration
 //========================================================================================
 
-void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
+void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etype) {
 
   // Set initial cells and emission weights for all photon samples
   BoundaryFace face;
@@ -154,7 +154,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
       SetEmissionCellWeight(pphot,ips,ipe);
   } else if (pmy_mc->emission_flag == EMISBB) {
     face = pmy_mc->emission_face[0];
-    SetEmissionCellWeightArea(pphot,face,ips,ipe); 
+    SetEmissionCellWeightArea(pphot,face,ips,ipe);
   }
 
   for (int ip=ips; ip<=ipe; ip++) {
@@ -180,7 +180,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
       PhotonEmitBlackbody(this,pphot,face,ip);
     }
-   
+
     // Convert k unit vector to k^\alpha
     /*if (pmy_mc->general_pusher_flag) {
       pphot->k0p[ip] = 1.;
@@ -201,7 +201,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
 
     // initialize scattering number
     pphot->nscp[ip] = 0;
-    
+
     // Initialize the absorption and scattering extinction coefficients
     // to the values appropriate in the emitted zone
     pphot->acp[ip] = AbsorptionOpacity(this,pphot,ip);

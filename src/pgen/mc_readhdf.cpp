@@ -48,7 +48,7 @@ namespace {
   Real TableOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
   Real IntegrateEmission(Real temp, Real num, Real nup, Real am, Real ap);
   Real Planck(Real temp, Real nu);
-  Real TableEmission(MonteCarloBlock *pmcb, int k, int j, int i);
+  Real TableEmission(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
   Real SampleEmissivity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
   Real FreeFreeOpacity(Real tgas, Real rho, Real energy);
   void GetNel(MonteCarloBlock *pmcb);
@@ -311,7 +311,7 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
             }
           } else {
               nff++;
- 
+
               for(int l=0; l<nfre; ++l) {
                 opact(lid,k,j,i,l) = FreeFreeOpacity(temp,rho(k,j,i),fre_grid(l));
               }
@@ -598,7 +598,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 //! \brief Initializes Photon packets before integration
 //========================================================================================
 
-void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe) {
+void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etype) {
 
   // Set initial cells and emission weights for all photon samples
   SetEmissionCellWeight(pphot,ips,ipe);
@@ -747,7 +747,7 @@ Real Planck(Real temp, Real nu) {
 
 }
 
-Real TableEmission(MonteCarloBlock *pmcb, int i3, int i2, int i1) {
+Real TableEmission(MonteCarloBlock *pmcb, int i3, int i2, int i1, int etype) {
 
   //Real comp =GetEmissionFreeFree(pmcb,i3,i2,i1);
   int lid = pmcb->pmy_block->lid;
