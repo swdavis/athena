@@ -23,6 +23,8 @@
 #include "eos.hpp"
 
 namespace {
+
+  bool debug_flag;
 // Declarations
 void CalculateNormalConserved(
     const AthenaArray<Real> &cons, const AthenaArray<Real> &g,
@@ -146,10 +148,14 @@ void EquationOfState::ConservedToPrimitive(
           normal_mm_(3,i) *= factor;
           fixed = true;
         }
+	debug_flag = false;
         if ( (pmy_block_->gid == 61)&&(k==5)&&(j==37)&&(i==5) ) {
           printf("h: %d %d %d %g %g ",k,j,i,normal_dd_(i),normal_ee_(i));
           printf("h2: %d %d %d %g %g ",k,j,i,prim_old(IPR,k,j,i),prim_old(IDN,k,j,i));
-        }
+	  debug_flag = true;
+        } else {
+	  debug_flag = false;
+	}
         // Set primitives
         Real gamma;
         bool success = ConservedToPrimitiveNormal(normal_dd_, normal_ee_, normal_mm_,
@@ -534,7 +540,8 @@ bool ConservedToPrimitiveNormal(
         break;
       }
     }
-
+    if (debug_flag)
+      printf("deb: %g %g %g\n",pgas[0],pgas[1],pgas[2]);
     // Step 4: Calculate Aitken accelerant and check for convergence
     if (n%3 == 2) {
       Real rr = (pgas[2] - pgas[1]) / (pgas[1] - pgas[0]);  // (NH 7.1)

@@ -3,8 +3,7 @@
 // Copyright(C) 2014 James M. Stone <jmstone@princeton.edu> and other code contributors
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
-//! \file from_array.cpp
-//! \brief Problem generator for initializing with preexisting array from HDF5 input
+//! \file from_array.cpp//! \brief Problem generator for initializing with preexisting array from HDF5 input
 
 // C headers
 
@@ -709,13 +708,14 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
                              kl, ku);
 
   if (gid == 61) {
-    for (int k=ks; k<=ke; ++k) {
+    printf("pgen: %d %d %d %d %g %g\n",gid,5,37,5,phydro->w(IEN,5,37,5),phydro->w(IDN,5,37,5));
+    /*for (int k=ks; k<=ke; ++k) {
       for (int j=js; j<=je; ++j) {
 	for (int i=is; i<=ie; ++i) {
-	  printf("%d %d %d %d %g %g\n",gid,k,j,i,phydro->w(IEN,k,j,i),phydro->w(IDN,k,j,i));
+	  printf("pgen: %d %d %d %d %g %g\n",gid,k,j,i,phydro->w(IEN,k,j,i),phydro->w(IDN,k,j,i));
 	}
       }
-    }
+      }*/
   }
   
 }
@@ -961,7 +961,7 @@ void GetNelFloor(MonteCarloBlock *pmcb) {
 
   Real heabund = 0.09; //hardcode for now (should be parameter)
   Real mp = 1.67262192369e-24;
-  Real dcut = 1.e-8*pmcb->rho_cgs; // 100 dfloor
+  Real dcut = 1.e-8*pmcb->rho_cgs; // dfloor
   
   for (int k=pmcb->ks; k<=pmcb->ke; ++k) {
     for (int j=pmcb->js; j<=pmcb->je; ++j) {
