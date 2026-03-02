@@ -73,7 +73,7 @@ public:
   bool ScreenCoordinates(Photon *pphot, int ip);
   void ResetSpectrum();
   void AddSpectrum(Spectrum *pspec);
-  void WriteSpectrum(std::string filename);
+  void WriteSpectrum(std::string filename, Real tint_out);
 
 };
 
@@ -101,7 +101,7 @@ public:
 
   //functions
   void AddPhoton(Photon *pphot, int ip);
-  void WriteList(std::string filename);
+  void WriteList(std::string filename, Real tint_out);
   void ResetList();
 
 private:
@@ -196,6 +196,8 @@ public:
   bool mom_flag_usr;
   bool mom_flag_scat;
   
+  Real time_cgs;
+
   //functions
   void OutputSpectrum(bool wtflag);
   void SendMonteCarloSpectrum(Spectrum *spect, int dest);

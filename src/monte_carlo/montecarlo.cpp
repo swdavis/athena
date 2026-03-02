@@ -468,7 +468,7 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
   // convert to cgs units
   Real vel_cgs = pin->GetOrAddReal("problem","vel_cgs",1.);
   Real l_cgs = pin->GetOrAddReal("problem","l_cgs",1.);
-  time_cgs = pin->GetOrAddReal("problem","time_cgs",l_cgs/vel_cgs);
+  Real time_cgs = l_cgs/vel_cgs;
   tint *= time_cgs;
   tmax *= time_cgs;
 
@@ -730,6 +730,12 @@ void MonteCarlo::RunMonteCarlo(Outputs *pouts, Mesh *pmesh,
     if (tmax < 0.)
       tmax = pmy_mesh->dt;
     tint = pmy_mesh->dt;
+    // convert to cgs units
+    Real vel_cgs = pinput->GetOrAddReal("problem","vel_cgs",1.);
+    Real l_cgs = pinput->GetOrAddReal("problem","l_cgs",1.);
+    Real time_cgs = l_cgs/vel_cgs;
+    tint *= time_cgs;
+    tmax *= time_cgs;
   }
 
   // Update MC blocks if needed
@@ -772,7 +778,6 @@ void MonteCarlo::RunMonteCarlo(Outputs *pouts, Mesh *pmesh,
     // Run Monte Carlo until all photons have escaped/been absorbed
     bool photons_remain = true; // True if photons on any process
     while(photons_remain) {
-
       for(int nb=0; nb<nblocal; ++nb){
         if (raytrace_flag)
           my_blocks(nb)->RayTracePhotonsOnBlock(etype);
@@ -860,6 +865,8 @@ bool MonteCarlo::CheckAndBroadCastPhotonsRemaining() {
     nprop += pmcb->pphot->nphot;
     //if (pmcb->nphremain > 0)
     //  printf("rem: %d %d \n",pmcb->pmy_block->gid,pmcb->nphremain);
+    //if (pmcb->pphot->nphot > 0)
+    //  printf("prop: %d %d \n",pmcb->pmy_block->gid,pmcb->pphot->nphot);
   }
 #ifdef MPI_PARALLEL
   MPI_Allreduce(MPI_IN_PLACE,&nprop,1,MPI_INT,MPI_MAX,MPI_COMM_WORLD);

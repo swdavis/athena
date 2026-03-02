@@ -85,6 +85,7 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
       }
       if (!accel_success) {// Acceleration not triggered - take standard step
         if (tauremaining > chi * step * pphot->ep[ip]) { // Photon hasn't yet reached tauremaining
+          //printf("step: %g %g %g %g\n", step, tauremaining, pphot->ep[ip], pphot->wp[ip]);
           //VerletStep(pphot,step,ip);
           RK4Step(pphot,step,ip);
           if (pmy_mcb->pmy_mc->polarized)
@@ -93,7 +94,6 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
           //printf("large: %g %g %g %g %g\n",tauremaining,chi,step,pphot->ep[ip],chi * step * pphot->ep[ip]);
         } else { // Photon has reached end of tauremaining - step to make it 0
           step = tauremaining / (chi * pphot->ep[ip]);
-          //printf("small: %g %g %g %g %g\n",tauremaining,chi,step,pphot->ep[ip],chi * step * pphot->ep[ip]);
           //VerletStep(pphot,step,ip);
           RK4Step(pphot,step,ip);
           if (pmy_mcb->pmy_mc->polarized)
@@ -381,7 +381,7 @@ void GeneralPusher::RK4Step(Photon *pphot, Real step, int ip) {
 
 void GeneralPusher::SubStep(Real xcon[4], Real kcov[4], Real dl[8]) {
 
-  for (int i = 0; i < 9; i++)
+  for (int i = 0; i < 8; i++)
     dl[i] = 0.0;
 
   Real gcon[4][4];
@@ -474,6 +474,16 @@ Real GeneralPusher::StepSize(Photon *pphot, int ip) {
 
   Real step = (stepx1 < stepx2) ? stepx1 : stepx2;
   step = (step < stepx3) ? step : stepx3;
+  Real tol = 1.e-4;
+  /*
+  if ( (fabs(pcoord->x2f(pphot->i2p[ip]+1) - PI) < tol) || (fabs(pcoord->x2f(pphot->i2p[ip])) < tol) ) {
+    if (step == stepx3) {
+      step *= 0.01;
+    }
+  }*/
 
+  //  printf("step: %g %g %g %g\n", step, stepx1, stepx2, stepx3);
+  //if (pcoord->x2f(pphot->i2p[ip]) < 0.0000001)
+  //  printf("step: %g %g %g %g\n", step, stepx1, stepx2, stepx3);
   return step * step_par;
 }

@@ -677,19 +677,20 @@ void Photon::GetPositionIndices(int ibegin, int iend) {
     i3p[k] = static_cast<int>(xi3);
     if ((i1p[k] < is-1) || (i1p[k] > ie+1)) {
       //printf("1: %d %d %d %g %g %g %g\n",i1p[k],is,ie,xi1,x1p[k]/l1cgs,pmy_block->block_size.x1min,pmy_block->block_size.x1max);
-      //PrintPhoton("Warning: [GetPostionIndicies], Photon not on block, destroyed",k);
+      PrintPhoton("Warning: [GetPostionIndicies], Photon not on block, destroyed",k);
       statp[k] = DESTROYED;
       continue;
     }
     if ((i2p[k] < js-1) || (i2p[k] > je+1)) {
       //printf("2: %d %d %d %g %g %g %g\n",i2p[k],js,je,xi2,x2p[k]/l2cgs,pmy_block->block_size.x2min,pmy_block->block_size.x2max);
-      //PrintPhoton("Warning: [GetPostionIndicies], Photon not on block, destroyed",k);
+      PrintPhoton("Warning: [GetPostionIndicies], Photon not on block, destroyed",k);
       statp[k] = DESTROYED;
       continue;
     }
     if ((i3p[k] < ks-1) || (i3p[k] > ke+1)) {
-      //printf("3: %d %d %d %g %g %g %g\n",i3p[k],ks,ke,xi3,x3p[k]/l3cgs,pmy_block->block_size.x3min,pmy_block->block_size.x3max);
-      //PrintPhoton("Warning: [GetPostionIndicies], Photon not on block, destroyed",k);
+      //printf("3: %d %d %d %g %g %g %g %g %g\n",i3p[k],ks,ke,xi3,x3p[k]/l3cgs,pmy_block->block_size.x3min,
+      //       pmy_block->block_size.x3max,x2p[k],k3p[k]/ep[k]);
+      PrintPhoton("Warning: [GetPostionIndicies], Photon not on block, destroyed",k);
       statp[k] = DESTROYED;
       continue;
     }

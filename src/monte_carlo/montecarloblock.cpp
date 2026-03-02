@@ -150,6 +150,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   tfloor_cgs = pin->GetOrAddReal("problem","tfloor_cgs",0.);
   tceiling_cgs = pin->GetOrAddReal("problem","tceiling_cgs",HUGE_NUMBER);
   l_cgs = pin->GetOrAddReal("problem","l_cgs",1.);
+  time_cgs = l_cgs/vel_cgs;
   betamax = pin->GetOrAddReal("problem","betamax",0.999);
 
   // SWD:  stepsize control needs to be modified
@@ -570,10 +571,18 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
       }
     }
   }
-
+  //if (pphot->nphot == 1) {
+  //  printf("gid: %d\n",pmy_block->gid);
+  //  printf("%g %g",pcoord->x1f(is),pcoord->x1f(ie+1));
+  //  pphot->PrintPhoton("before",0);
+  //}
   // move all samples to next interaction or boundary
   //printf("%d %d\n",pmy_block->gid, pphot->nphot);
   ppusher->Move(pphot,0,pphot->nphot-1);
+  //if (pphot->nphot == 1) {
+  //  printf("gid: %d\n",pmy_block->gid);
+  //  pphot->PrintPhoton("after",0);
+  //}
   //printf("%d done\n",pmy_block->gid);
   // perform all absorption and scattering related tasks for all samples
   for (int ip=0; ip<pphot->nphot; ip++) {
@@ -583,7 +592,6 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
     Real k1p0 = pphot->k1p[ip];
     Real k2p0 = pphot->k2p[ip];
     Real k3p0 = pphot->k3p[ip];
-
     // account for absorption
     if (pphot->statp[ip] == EVOLVING) {
       if (absorption_meth == ABSWEIGHT) {
@@ -685,8 +693,8 @@ void MonteCarloBlock::CoupleMonteCarloToFluid(Real dt) {
 
   if (!coupled) return;
 
-  Real edot_cgs = pmy_mc->time_cgs / (rho_cgs * SQR(vel_cgs));
-  Real pdot_cgs = pmy_mc->time_cgs / (rho_cgs * vel_cgs);
+  Real edot_cgs_inv = time_cgs / (rho_cgs * SQR(vel_cgs));
+  Real pdot_cgs_inv = time_cgs / (rho_cgs * vel_cgs);
 
   NormalizeSourceTerms(true);
 
@@ -695,12 +703,12 @@ void MonteCarloBlock::CoupleMonteCarloToFluid(Real dt) {
       for (int j=pmb->js; j<=pmb->je; ++j) {
 #pragma omp simd
         for (int i=pmb->is; i<=pmb->ie; ++i) {
-          pmb->phydro->u(IEN,k,j,i) += dt * edot_cgs * sourceterms(MCRS0,k,j,i);
-          pmb->phydro->u(IM1,k,j,i) += dt * pdot_cgs * sourceterms(MCRF1,k,j,i)
+          pmb->phydro->u(IEN,k,j,i) += dt * edot_cgs_inv * sourceterms(MCRS0,k,j,i);
+          pmb->phydro->u(IM1,k,j,i) += dt * pdot_cgs_inv * sourceterms(MCRF1,k,j,i)
                                           * pmb->phydro->u(IDN,k,j,i);
-          pmb->phydro->u(IM2,k,j,i) += dt * pdot_cgs * sourceterms(MCRF2,k,j,i)
+          pmb->phydro->u(IM2,k,j,i) += dt * pdot_cgs_inv * sourceterms(MCRF2,k,j,i)
                                           * pmb->phydro->u(IDN,k,j,i);
-          pmb->phydro->u(IM3,k,j,i) += dt * pdot_cgs * sourceterms(MCRF3,k,j,i)
+          pmb->phydro->u(IM3,k,j,i) += dt * pdot_cgs_inv * sourceterms(MCRF3,k,j,i)
                                           * pmb->phydro->u(IDN,k,j,i);
         }
       }
@@ -1069,7 +1077,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
 
   if (call_srcterms) {
     // Radiative Acceleration from flux (always lab frame)
-    Real weight = pphot->wp[ip] * pphot->ep[ip] * dl * l_cgs / c_cgs;
+    Real weight = pphot->wp[ip] * pphot->ep[ip] * dl / c_cgs;
     Real abs_coef = pphot->acp[ip];
     Real sct_coef = pphot->scp[ip];
     sourceterms(MCRF1,i3,i2,i1) += (sct_coef+abs_coef) * weight * k1;
@@ -1346,8 +1354,7 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
 
   // Get integration time
   // Fix for dynamic MC
-  Real dt = pmy_mc->tint;
-  //Real dt = pmy_mc->pmy_mesh->time;
+  Real tint = pmy_mc->tint;
   Real norm;
 
   if (mom_flag_lab) {
@@ -1356,9 +1363,9 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
             if (normalize) {
-              norm = 1./ (dt * pcoord->vol(k,j,i));
+              norm = 1./ (tint * pcoord->vol(k,j,i));
             } else {
-              norm = dt * pcoord->vol(k,j,i);
+              norm = tint * pcoord->vol(k,j,i);
             }
             moments(n,k,j,i) *= norm;
           }
@@ -1382,9 +1389,9 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
             if (normalize)
-              norm = 1./ (dt * pcoord->vol(k,j,i));
+              norm = 1./ (tint * pcoord->vol(k,j,i));
             else
-              norm = dt * pcoord->vol(k,j,i);
+              norm = tint * pcoord->vol(k,j,i);
             moments_com(n,k,j,i) *= norm;
           }
         }
@@ -1407,9 +1414,9 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
             if (normalize)
-              norm = 1./ (dt * pcoord->vol(k,j,i));
+              norm = 1./ (tint * pcoord->vol(k,j,i));
             else
-              norm = dt * pcoord->vol(k,j,i);
+              norm = tint * pcoord->vol(k,j,i);
             moments_scat(n,k,j,i) *= norm;
           }
         }
@@ -1422,9 +1429,9 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
             if (normalize)
-              norm = 1./ (dt * pcoord->vol(k,j,i));
+              norm = 1./ (tint * pcoord->vol(k,j,i));
             else
-              norm = dt * pcoord->vol(k,j,i);
+              norm = tint * pcoord->vol(k,j,i);
             moments_user(n,k,j,i) *= norm;
           }
         }
@@ -1541,7 +1548,7 @@ void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0,
 void MonteCarloBlock::NormalizeSourceTerms(bool normalize) {
 
   // Get integration time
-  Real dt = pmy_mc->tint;
+  Real tint = pmy_mc->tint;
 
   // Normalize sourcterms
   for (int n=0; n<nsrc; ++n) {
@@ -1549,9 +1556,9 @@ void MonteCarloBlock::NormalizeSourceTerms(bool normalize) {
       for (int j=js; j<=je; ++j) {
         for (int i=is; i<=ie; ++i) {
           if (normalize)
-            sourceterms(n,k,j,i) /= (dt * pcoord->vol(k,j,i));
+            sourceterms(n,k,j,i) /= (tint * pcoord->vol(k,j,i));
           else
-            sourceterms(n,k,j,i) *= (dt * pcoord->vol(k,j,i));
+            sourceterms(n,k,j,i) *= (tint * pcoord->vol(k,j,i));
         }
       }
     }
@@ -1627,7 +1634,7 @@ void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
 void MonteCarloBlock::ComputeEmissionArray(int etype, Real &em_min, Real &em_max, Real &em_tot) {
 
 
-  Real dt = pmy_mc->tint;
+  Real tint = pmy_mc->tint;
   em_min = SQR(HUGE_NUMBER);
   em_max = -HUGE_NUMBER;
   em_tot = 0.;
@@ -1638,8 +1645,8 @@ void MonteCarloBlock::ComputeEmissionArray(int etype, Real &em_min, Real &em_max
       for (int j=js; j<=je; ++j) {
         for (int i=is; i<=ie; ++i) {
           Real vol = pcoord->vol(k,j,i);
-          emission(k,j,i) = GetEmission(this,k,j,i,etype) * dt * vol;
-          //printf("emission[%d %d %d]: %g %g %g %g\n",i,j,k,dt,vol,emission(k,j,i),pmy_mc->GetEmission[etype](this,k,j,i,etype));
+          emission(k,j,i) = GetEmission(this,k,j,i,etype) * tint * vol;
+          //printf("emission[%d %d %d]: %g %g %g %g\n",i,j,k,tint,vol,emission(k,j,i),pmy_mc->GetEmission[etype](this,k,j,i,etype));
           em_tot += emission(k,j,i);
           if (emission(k,j,i) > em_max) em_max = emission(k,j,i);
           if (emission(k,j,i) < em_min) em_min = emission(k,j,i);
@@ -1735,7 +1742,7 @@ void MonteCarloBlock::ComputeEmissionArray(int etype, Real &em_min, Real &em_max
         throw std::runtime_error(msg.str().c_str());
         break;
     }
-    if (physical_boundary) {
+    if (physical_boundary) { // valid boundary on meshblock
       Coordinates *pbcoord = pmy_block->pcoord; // SWD: Maybe should improve this
       for (int k=kl; k<=ku; ++k) {
         for (int j=jl; j<=ju; ++j) {
@@ -1753,9 +1760,9 @@ void MonteCarloBlock::ComputeEmissionArray(int etype, Real &em_min, Real &em_max
               area = pbcoord->GetFace2Area(k,j+1,i);
             else if (iface == 5)
               area = pbcoord->GetFace3Area(k+1,j,i);
-            area *= l_cgs*l_cgs;
-            emission(k,j,i) = GetEmission(this,k,j,i,etype) * dt * area;
-            //printf("emission[%d %d %d %d]: %g %g %g %g\n",pmy_block->gid,i,j,k,dt,area,emission(k,j,i),pmy_mc->GetEmission[etype](this,k,j,i,etype));
+            area *= l_cgs*l_cgs; // convert area to cgs
+            emission(k,j,i) = GetEmission(this,k,j,i,etype) * tint * area;
+            //printf("emission[%d %d %d %d]: %g %g %g %g\n",pmy_block->gid,i,j,k,tint,area,emission(k,j,i),pmy_mc->GetEmission[etype](this,k,j,i,etype));
             em_tot += emission(k,j,i);
             if (emission(k,j,i) > em_max) em_max = emission(k,j,i);
             if (emission(k,j,i) < em_min) em_min = emission(k,j,i);

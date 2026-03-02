@@ -95,22 +95,22 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
       // r face
       if (kr > 0.0) { // Can only intersect outer sphere
         Real ri = pco->x1f(pphot->i1p[ip]+1) / r0;
-        Real det = 1. + (SQR(ri) - 1.) / SQR(kr);
-        dlr = kr * r0 * (sqrt(det) - 1.);
+        Real delta = 1. + (SQR(ri) - 1.) / SQR(kr);
+        dlr = kr * r0 * (sqrt(delta) - 1.);
         ascend[0] = true;
       } else if (kr < 0.0) { // Can intersect either sphere
         Real ri = pco->x1f(pphot->i1p[ip]) / r0;
-        Real det = 1.0 + (SQR(ri)-1.)/SQR(kr);
-        if (det < 0.) {
+        Real delta = 1.0 + (SQR(ri)-1.)/SQR(kr);
+        if (delta < 0.) {
           // ray does not intersect inner sphere so must intersect outer
           ri = pco->x1f(pphot->i1p[ip]+1) / r0;
-          det = 1. + (SQR(ri) - 1.) / SQR(kr);
-          dlr = -kr * r0 * (sqrt(det) + 1.); //positive solution
+          delta = 1. + (SQR(ri) - 1.) / SQR(kr);
+          dlr = -kr * r0 * (sqrt(delta) + 1.); //positive solution
           ascend[0] = true;
         } else {
           // ray intersects inner sphere first
           // one or two solutions -- pick shorter dlr
-          dlr = r0 * kr * (sqrt(det) - 1.);
+          dlr = r0 * kr * (sqrt(delta) - 1.);
           ascend[0] = false;
         }
       } else { // kr == 0
@@ -150,7 +150,8 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
       Real bz = r0 * (cth - kr * kz);
       Real th_ninf = acos(-kz);
       Real th_pinf = acos(kz);
-      Real l_ext = (kz * b2 - r0 * kr * bz) / bz;
+      //Real l_ext = (kz * b2 - r0 * kr * bz) / bz; // delta l
+      Real l_ext = kz * b2 / bz - r0 * kr; // delta l
       Real cth_ext2 = SQR(kz) + SQR(bz)/b2;
       Real th_ext;
       if (bz < 0) {
@@ -160,17 +161,34 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
       }
 
       // check for turning point
+      Real lp, lm, lpa, lma;
       if ((l_ext > 0) && ((thi-th_ninf) * (thi-th_ext)) > 0.) {
         dlt = HUGE_NUMBER;
       } else if ((l_ext <= 0) && ((thi-th_ext) * (thi-th_pinf)) > 0.) {
         dlt = HUGE_NUMBER;
       } else { //No turning point
-        Real det = b2*SQR(cthi)*(cth_ext2-SQR(cthi)); //det should be positive
-        Real lm = (-bz*kz - sqrt(det)) / (SQR(kz)-SQR(cthi)) - r0*kr;
-        Real lp = (-bz*kz + sqrt(det)) / (SQR(kz)-SQR(cthi)) - r0*kr;
-        if (lm <= 0) {
-          dlt = lp;
-        } else if (lp <= 0) {
+        //Real delta = b2*SQR(cthi)*(cth_ext2-SQR(cthi)); //delta should be positive
+        //lm = (-bz*kz - sqrt(delta)) / (SQR(kz)-SQR(cthi)) - r0*kr;
+        //lp = (-bz*kz + sqrt(delta)) / (SQR(kz)-SQR(cthi)) - r0*kr;
+        // user muller's method
+        Real aa = SQR(kz)-SQR(cthi);
+        Real bb = 2.0*bz*kz;
+        Real cc = SQR(bz) - b2*SQR(cthi);
+        Real delta = std::max(0.0, bb*bb - 4.0*aa*cc);
+        Real xx = -0.5 * (bb + std::copysign(std::sqrt(delta), bb));
+        if (aa == 0.) {
+          lm = cc/xx - r0*kr;
+          lp = HUGE_NUMBER;
+        } else {
+          lm = xx/aa - r0*kr;
+          lp = cc/xx - r0*kr;
+        }
+        if (lm <= 0.) {
+          if (lp <= 0.)
+            dlt = HUGE_NUMBER;
+          else
+            dlt = lp;
+        } else if (lp <= 0.) {
           dlt = lm;
         } else {
           if (lp >= lm)
@@ -179,7 +197,7 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
             dlt = lp;
         }
       }
-
+ 
       // phi face
       Real phii;
       if (kph > 0) {
@@ -220,14 +238,26 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
         }
         b2 = SQR(r0) * (1. - SQR(kr));
         bz = r0 * (cth - kr * kz);
-        Real det = b2 * SQR(cthi) * (cth_ext2 - SQR(cthi)); //det should be positive
-        Real lm = (-bz*kz - sqrt(det)) / (SQR(kz) - SQR(cthi)) - kr*r0;
-        Real lp = (-bz*kz + sqrt(det)) / (SQR(kz) - SQR(cthi)) - kr*r0;
+        Real delta = b2 * SQR(cthi) * (cth_ext2 - SQR(cthi)); //delta should be positive
+        Real lm = (-bz*kz - sqrt(delta)) / (SQR(kz) - SQR(cthi)) - kr*r0;
+        Real lp = (-bz*kz + sqrt(delta)) / (SQR(kz) - SQR(cthi)) - kr*r0;
+        /*Real aa = SQR(kz)-SQR(cthi);
+        Real bb = 2.0*bz*kz;
+        Real cc = SQR(bz) - b2*SQR(cthi);
+        Real delta = std::max(0.0, bb*bb - 4.0*aa*cc);
+        Real xx = -0.5 * (bb + std::copysign(std::sqrt(delta), bb));
+        if (aa == 0.) {
+          lm = cc/xx - r0*kr;
+          lp = HUGE_NUMBER;
+        } else {
+          lm = xx/aa - r0*kr;
+          lp = cc/xx - r0*kr;
+        }*/
 #ifdef DEBUG_SM
         if (iter < NBUFFER) {
           db[iter-1].lm = lm;
           db[iter-1].lp = lp;
-          db[iter-1].det = det;
+          db[iter-1].delta = delta;
         }
 #endif
         if (lm <= 0) {
@@ -364,7 +394,7 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
         printf("x: %16.12e %16.12e %16.12e\n",db[i].x,db[i].y,db[i].z);
         printf("i: %d %d %d\n",db[i].i,db[i].j,db[i].k);
         printf("ascend: %d %d %d\n",db[i].ascend[0],db[i].ascend[1],db[i].ascend[2]);
-        printf("l_ext: %g %g %g %g\n",db[i].l_ext,db[i].lm,db[i].lp,db[i].det);
+        printf("l_ext: %g %g %g %g\n",db[i].l_ext,db[i].lm,db[i].lp,db[i].delta);
         printf("xf: ");
         if ((db[i].i >= pmcb->is) && (db[i].i <= pmcb->ie))
           printf("%16.12e %16.12e ",pco->x1f(db[i].i),pco->x1f(db[i].i+1));

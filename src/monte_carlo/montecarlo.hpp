@@ -205,7 +205,6 @@ public:
 
   Real tint;   // Monte Carlo timestep
   Real tmax;   // Maximum evolution time
-  Real time_cgs; // conversion of time to cgs units
   Real weightratio; // used for setting minimum weight for absorption
 
   int ntype; // number of emission types 
@@ -359,7 +358,7 @@ public:
   bool orthotet_flag; // use orthonormal tetrad for TransferPhotons()
   bool varystep_flag; // use variable (true) or constant (false) step
 
-  Real rho_cgs, vel_cgs, tgas_cgs, tfloor_cgs, tceiling_cgs, l_cgs;
+  Real rho_cgs, vel_cgs, tgas_cgs, tfloor_cgs, tceiling_cgs, l_cgs, time_cgs;
   Real betamax;
   Real stepsize;
   Real minweight;
