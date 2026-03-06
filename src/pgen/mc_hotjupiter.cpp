@@ -1301,7 +1301,7 @@ Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype)
         return 0.0;
       Real cthm = std::cos(pco->x2f(j));
       Real cthp = std::cos(pco->x2f(j+1));
-      emis = 0.5*edot_lya/PI*(pco->x3f(k+1)-pco->x3f(k))*(SQR(cthm)-SQR(cthp))/energy0;
+      emis = 0.5*lya_flux*(SQR(cthm)-SQR(cthp))/(cthm-cthp)/energy0;
     } else {
       Real thm = pco->x2f(j);
       Real thp = pco->x2f(j+1);
@@ -1338,7 +1338,10 @@ Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype)
       Real sphm = std::sin(phm);
       Real sphp = std::sin(php);
 
-      emis = -0.5*edot_lya/PI*(thp - thm - (std::sin(thp - thm)*std::cos(thp + thm)))*(sphp-sphm)/energy0;
+      emis = -0.5*lya_flux*(thp - thm - (std::sin(thp - thm)*std::cos(thp + thm)))*(sphp-sphm)/energy0;
+      // divide by area
+      emis /= (pco->x3f(k+1)-pco->x3f(k))*(cthm-cthp);
+      //printf("emis: %g %g %g\n", emis, edot_lya, energy0);
     }
   }
 
@@ -1502,7 +1505,7 @@ void GetNH(MonteCarloBlock *pmcb) {
   for (int k=pmcb->ks; k<=pmcb->ke; ++k) {
     for (int j=pmcb->js; j<=pmcb->je; ++j) {
       for (int i=pmcb->is; i<=pmcb->ie; ++i) {
-        pmcb->spec(0,k,j,i) = pmcb->pmy_block->pscalars->s(0,k,j,i) * n_cgs; // nH
+        pmcb->species(0,k,j,i) = pmcb->pmy_block->pscalars->s(0,k,j,i) * n_cgs; // nH
       }
     }
   }

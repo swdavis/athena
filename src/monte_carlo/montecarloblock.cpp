@@ -1762,6 +1762,7 @@ void MonteCarloBlock::ComputeEmissionArray(int etype, Real &em_min, Real &em_max
               area = pbcoord->GetFace3Area(k+1,j,i);
             area *= l_cgs*l_cgs; // convert area to cgs
             emission(k,j,i) = GetEmission(this,k,j,i,etype) * tint * area;
+            printf("%d %d %d %g %g %g %g\n",k,j,i,tint,area,emission(k,j,i),pmy_mc->GetEmission[etype](this,k,j,i,etype));
             //printf("emission[%d %d %d %d]: %g %g %g %g\n",pmy_block->gid,i,j,k,tint,area,emission(k,j,i),pmy_mc->GetEmission[etype](this,k,j,i,etype));
             em_tot += emission(k,j,i);
             if (emission(k,j,i) > em_max) em_max = emission(k,j,i);
