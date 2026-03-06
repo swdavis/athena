@@ -137,6 +137,7 @@ Real ConstantTimestep(MeshBlock *pmb) {
 void GetIonizationTemperature(MonteCarloBlock *pmcb);
 //void EscapeCoords(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover, int ip);
 
+void GetNH(MonteCarloBlock *pmcb);
 void UpdateSourceTerms(MonteCarloBlock *pmcb, Photon *pphot,Real energy0, Real weight0,
                   Real k1p0, Real k2p0, Real k3p0, int ip);
 
@@ -305,8 +306,9 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
   EnrollUserOpacityFunction(ResonantScatteringOpacity, false);
   EnrollUserOpacityFunction(BoundFreeAbsorptionOpacity, true);
   EnrollUserScatteringFunction(ResonantScattering);
-  //EnrollUserEmissionFunction(MultipleEmissivities);
   EnrollUserGetTemperature(GetIonizationTemperature);
+  EnrollUserGetNumberDensity(GetNH);
+
 }
 
 // INITIALIZATION
@@ -1308,7 +1310,7 @@ Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype)
         return 0.0;
       Real cthm = std::cos(pco->x2f(j));
       Real cthp = std::cos(pco->x2f(j+1));
-      emis = 0.5*edot_lya/PI*(pco->x3f(k+1)-pco->x3f(k))*(SQR(cthm)-SQR(cthp))/energy0;
+      emis = 0.5*lya_flux*(SQR(cthm)-SQR(cthp))/(cthm-cthp)/energy0;
     } else {
       Real thm = pco->x2f(j);
       Real thp = pco->x2f(j+1);
@@ -1345,7 +1347,10 @@ Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype)
       Real sphm = std::sin(phm);
       Real sphp = std::sin(php);
 
-      emis = -0.5*edot_lya/PI*(thp - thm - (std::sin(thp - thm)*std::cos(thp + thm)))*(sphp-sphm)/energy0;
+      emis = -0.5*lya_flux*(thp - thm - (std::sin(thp - thm)*std::cos(thp + thm)))*(sphp-sphm)/energy0;
+      // divide by area
+      emis /= (pco->x3f(k+1)-pco->x3f(k))*(cthm-cthp);
+      //printf("emis: %g %g %g\n", emis, edot_lya, energy0);
     }
   }
 
@@ -1416,7 +1421,7 @@ Real BoundFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 			Real energy = pphot->ep[ip];
 			Real xsec = sigmamin * std::pow((energy / h_cgs) / (numin), -3.0);
 			Real nH = pmcb->pmy_block->pscalars->s(0,i3,i2,i1) * n_cgs;
-			opac = xsec * nH * pmcb->l_cgs; // opacities in code units
+			opac = xsec * nH; // opacities in cgs units
 			//printf("BoundFreeAbsorptionOpacity: energy/numin_erg=%g, xsec/sigmamin=%g, nH=%g, mfp=%g\n", energy/numin_erg, xsec/sigmamin, nH, 1./opac);
 		}
 	}
@@ -1504,6 +1509,16 @@ void GetIonizationTemperature(MonteCarloBlock *pmcb) {
   }
 }
 
+void GetNH(MonteCarloBlock *pmcb) {
+
+  for (int k=pmcb->ks; k<=pmcb->ke; ++k) {
+    for (int j=pmcb->js; j<=pmcb->je; ++j) {
+      for (int i=pmcb->is; i<=pmcb->ie; ++i) {
+        pmcb->species(0,k,j,i) = pmcb->pmy_block->pscalars->s(0,k,j,i) * n_cgs; // nH
+      }
+    }
+  }
+}
 
 void UpdateSourceTerms(MonteCarloBlock *pmcb, Photon *pphot, Real energy0, Real weight0,
                   Real k1p0, Real k2p0, Real k3p0, int ip) {

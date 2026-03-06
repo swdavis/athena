@@ -328,6 +328,7 @@ public:
   int nx1,nx2,nx3;
   int is,ie,js,je,ks,ke;
   int nsrc, nmom; // # of elements in sourcterm, moments arrays
+  int nspec;
   int nf_scat;
 
   bool weighted_absorption; // flag controling how absorption is handled
@@ -375,8 +376,7 @@ public:
   AthenaArray<Real> sourceterms;
   AthenaArray<Real> scalars;
   AthenaArray<Real> rho;
-  AthenaArray<Real> nel;
-  AthenaArray<Real> nion;
+  AthenaArray<Real> species;
   AthenaArray<Real> tgas;
   AthenaArray<Real> vel;
   AthenaArray<Real> bcc;

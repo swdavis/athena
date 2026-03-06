@@ -40,6 +40,9 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
   MCRandom *pran = pmy_mcb->pran;
   MCCoord *pco = pmy_mcb->pcoord;
   PhotonTrajectoryList *ptraj = pmy_mcb->ptraj;
+  Real l_cgs = pmcb->l_cgs;
+  Real c_cgs = 2.99792458e10;
+  Real c_code = c_cgs / pmcb->vel_cgs;
 
   for (int ip=ips; ip<=ipe; ip++) {
 
@@ -75,7 +78,6 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
     Real kz = kr*cth - kth*sth;
 
     int iter = 0;
-    Real c_cgs = 2.99792458e10;
 
     // Move photon until requisite # of mean free paths or escape
     while( (tauremaining > 0.) && (pphot->statp[ip] == EVOLVING) && (iter < checkmove) &&
@@ -297,9 +299,9 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
 #endif
 
       Real chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
-      //chi = (chi > TINY_NUMBER) ? chi : TINY_NUMBER; // return max
+  
       bool test = false;
-      if ((chi > 0.) && (dl > tauremaining / chi)) { // Photon remains in zone
+      if ((chi > 0.) && (dl * l_cgs > tauremaining / chi)) { // Photon remains in zone
         bool accel_success = false;
         if (acceleration) {
           Real dist = pco->dmin(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]);
@@ -320,11 +322,19 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
           if (pphot->statp[ip] != EVOLVING)
             break; // break out of while loop
           // compute distance remaining in zone
-          dl = tauremaining/chi;
-          pphot->dtp[ip] -= dl/c_cgs;
+          dl = tauremaining / chi / l_cgs;
+          pphot->dtp[ip] -= dl / c_code;;
           // Update moments
-          if (pmcb->call_moments)
-            pmcb->UpdateMoments(pphot,dl,ip);
+          if (pmcb->call_moments) {
+            Real dl_cgs = dl * l_cgs;
+            if (pmcb->absorption_meth == ABSTAU) {
+              Real etaua = ExpTauAbsorption(pphot->acp[ip],dl_cgs);
+              pmcb->UpdateMoments(pphot,dl_cgs,etaua,ip);
+              pphot->wp[ip] *= etaua;
+            } else {
+              pmcb->UpdateMoments(pphot,dl_cgs,ip);
+            }
+          }
           // Update postions
           pphot->x1p[ip] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
           pphot->x2p[ip] = acos((z0 + kz * dl) / pphot->x1p[ip]);
@@ -346,10 +356,18 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
         break;
       } else { // Photon moves to next zone and reduce tauremaining
         // Update moments
-        pphot->dtp[ip] -= dl/c_cgs;
+        pphot->dtp[ip] -= dl / c_code;
 
-        if (pmcb->call_moments)
-          pmcb->UpdateMoments(pphot,dl,ip);
+        if (pmcb->call_moments) {
+          Real dl_cgs = dl * l_cgs;
+          if (pmcb->absorption_meth == ABSTAU) {
+            Real etaua = ExpTauAbsorption(pphot->acp[ip],dl_cgs);
+            pmcb->UpdateMoments(pphot,dl_cgs,etaua,ip);
+            pphot->wp[ip] *= etaua;
+          } else {
+            pmcb->UpdateMoments(pphot,dl_cgs,ip);
+          }
+        }
         // Update positions
         pphot->x1p[ip] = sqrt(SQR(r0) + 2. * dl * kr * r0 + SQR(dl));
         pphot->x2p[ip] = acos((z0 + kz * dl) / pphot->x1p[ip]);
@@ -358,7 +376,7 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
           pphot->x3p[ip] += 2.*PI;
         pphot->x0p[ip] += pphot->k0p[ip] * dl;
 
-        tauremaining -= chi * dl;
+        tauremaining -= chi * l_cgs * dl;
         // move photon to next zone and update angular positions
         MovePhotonToNextZone(pphot,pco,pmcb,face,ascend,ip);
         if ((face == 1) || (face == 3) || (face == 4) || (face == 6))

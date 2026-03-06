@@ -346,6 +346,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   } else if (absorption_opac == ABSDUST) {
     AbsorptionOpacity = DustAbsorptionOpacity;
   }
+  // Get number of species
+  nspec = pin->GetOrAddInteger("problem","nspec",2);
 
   // Allocate (/initialize) variable arrays needed for evolution/output
   int ncells1 = nx1 + 2*(NGHOST);
@@ -353,8 +355,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   if (nx2 > 1) ncells2 = nx2 + 2*(NGHOST);
   if (nx3 > 1) ncells3 = nx3 + 2*(NGHOST);
   rho.NewAthenaArray(ncells3,ncells2,ncells1);
-  nel.NewAthenaArray(ncells3,ncells2,ncells1);
-  nion.NewAthenaArray(ncells3,ncells2,ncells1);
+  species.NewAthenaArray(nspec,ncells3,ncells2,ncells1);
   tgas.NewAthenaArray(ncells3,ncells2,ncells1);
   if (boosts || tetrads) {
     boost_cmv.NewAthenaArray(ncells3,ncells2,ncells1,4,4);
@@ -429,8 +430,7 @@ MonteCarloBlock::~MonteCarloBlock() {
   //delete ptraj;
 
   rho.DeleteAthenaArray();
-  nel.DeleteAthenaArray();
-  nion.DeleteAthenaArray();
+  species.DeleteAthenaArray();
   tgas.DeleteAthenaArray();
   if (boosts || tetrads) {
     boost_cmv.DeleteAthenaArray();
@@ -949,14 +949,14 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     k3 = kf[3]/ep;
 
     // Weight moments by time spent in domain
-    weight = pphot->wp[ip] * pphot->ep[ip] / k0 * dl * l_cgs / c_cgs;
+    weight = pphot->wp[ip] * pphot->ep[ip] / k0 * dl / c_cgs;
   } else {
     k0 = pphot->k0p[ip];
     k1 = pphot->k1p[ip];
     k2 = pphot->k2p[ip];
     k3 = pphot->k3p[ip];
     // Weight moments by time spent in domain
-    weight = pphot->wp[ip] * pphot->ep[ip] * dl * l_cgs / c_cgs;
+    weight = pphot->wp[ip] * pphot->ep[ip] * dl / c_cgs;
   }
 
   // Normalize k vector if using general pusher in spherical polar coords
@@ -1028,13 +1028,13 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
       k1c = kc[1];
       k2c = kc[2];
       k3c = kc[3];
-      weight = pphot->wp[ip] * pphot->ep[ip] / k0c * dl * l_cgs / c_cgs;
+      weight = pphot->wp[ip] * pphot->ep[ip] / k0c * dl / c_cgs;
     } else {
       Real shift = kc[0]/k0;
       k1c = kc[1]/kc[0];
       k2c = kc[2]/kc[0];
       k3c = kc[3]/kc[0];
-      weight = pphot->wp[ip] * pphot->ep[ip] * dl * SQR(shift) * l_cgs / c_cgs;
+      weight = pphot->wp[ip] * pphot->ep[ip] * dl * SQR(shift) / c_cgs;
     }
 
     //Real dlcom = dl * shift;
@@ -1762,6 +1762,7 @@ void MonteCarloBlock::ComputeEmissionArray(int etype, Real &em_min, Real &em_max
               area = pbcoord->GetFace3Area(k+1,j,i);
             area *= l_cgs*l_cgs; // convert area to cgs
             emission(k,j,i) = GetEmission(this,k,j,i,etype) * tint * area;
+            printf("%d %d %d %g %g %g %g\n",k,j,i,tint,area,emission(k,j,i),pmy_mc->GetEmission[etype](this,k,j,i,etype));
             //printf("emission[%d %d %d %d]: %g %g %g %g\n",pmy_block->gid,i,j,k,tint,area,emission(k,j,i),pmy_mc->GetEmission[etype](this,k,j,i,etype));
             em_tot += emission(k,j,i);
             if (emission(k,j,i) > em_max) em_max = emission(k,j,i);
@@ -2064,6 +2065,25 @@ void MonteCarloBlock::GetNumberDensity() {
     return;
   }
 
+  if (pmy_mc->scattering_meth == SCATRES) {
+    // Default for resonant scattering assumes pure hydrogen
+    // with 100% neutral fraction.
+    Real mp = 1.67262192369e-24;
+    for (int k=ks; k<=ke; ++k) {
+      for (int j=js; j<=je; ++j) {
+        for (int i=is; i<=ie; ++i) {
+          species(0,k,j,i) = rho(k,j,i) / mp;
+        }
+      }
+    }
+    return;
+  }
+
+  // For all other cases, the default assumes a compostion of hydrogen
+  // and helium with a given abundance and fully ionized. We
+  // compute the electron and ion number desnities. This is used
+  // for electron scattering and free-free emission/absorption.
+
   Real heabund = 0.09; //hardcode for now (should be parameter)
   Real mp = 1.67262192369e-24;
 
@@ -2072,8 +2092,8 @@ void MonteCarloBlock::GetNumberDensity() {
       for (int i=is; i<=ie; ++i) {
         Real nh = rho(k,j,i) / (mp*(1.+4.*heabund));
         Real nhe = nh*heabund;
-        nion(k,j,i) = nh + 4. * nhe;
-        nel(k,j,i) = nh + 2. * nhe;
+        species(1,k,j,i) = nh + 4. * nhe; // nion
+        species(0,k,j,i) = nh + 2. * nhe; // nel
       }
     }
   }

@@ -23,11 +23,11 @@ Real GetEmissionFreeFree(MonteCarloBlock *pmcb, int k, int j, int i, int etype) 
   const Real eta0 = 1.032521e-11;
   const Real gaunt = 1.0; // Gaunt factor
 
-  //eta0 *= 12.;  // Added to match the Athena++ prescription
-
+  Real nel = pmcb->spec(0,k,j,i);
+  Real nion = pmcb->spec(1,k,j,i);
   Real temp = pmcb->tgas(k,j,i);
 
-  return eta0 / sqrt(temp) * pmcb->nel(k,j,i) * pmcb->nion(k,j,i) * gaunt;
+  return eta0 / sqrt(temp) * nel * nion * gaunt;
 
 }
 
