@@ -1091,7 +1091,11 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,
 }
 
 
-// Assumes the star is in the -x direction, i.e. psi = 0
+/*
+ * Second order Hill potential
+ * Assumes the star is in the -x direction, i.e. psi = 0
+ * Inputs and outputs in code units
+ */
 void HillTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
     const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
     const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
@@ -1122,11 +1126,11 @@ void HillTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
 
         // Coriolis, second order
         Real omega = std::sqrt((gm_star+gm_planet)/(sep*sep*sep));
-        a_r += 2*omega * vel_ph*sinth;
+        a_r  += 2*omega * vel_ph*sinth;
         a_th += 2*omega * vel_ph*costh;
         a_ph -= 2*omega * (vel_r*sinth + vel_th*costh);
 
-        Real src1 = a_r*rho*dt;
+        Real src1 = a_r *rho*dt;
         Real src2 = a_th*rho*dt;
         Real src3 = a_ph*rho*dt;
         cons(IM1,k,j,i) += src1;
@@ -1148,7 +1152,11 @@ void HillTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
 }
 
 
-// Assumes the star is in the -x direction, i.e. psi = 0
+/*
+ * Third order Hill potential
+ * Assumes the star is in the -x direction, i.e. psi = 0
+ * Inputs and outputs in code units
+ */
 void ThirdOrderTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
   const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
   const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
@@ -1204,7 +1212,7 @@ void ThirdOrderTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
 				a_th += 2*omega * vel_ph*costh;
 				a_ph -= 2*omega * (vel_r*sinth + vel_th*costh);
 
-        Real src1 = a_r*rho*dt;
+        Real src1 = a_r *rho*dt;
         Real src2 = a_th*rho*dt;
         Real src3 = a_ph*rho*dt;
         cons(IM1,k,j,i) += src1;
@@ -1224,6 +1232,7 @@ void ThirdOrderTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
     }
   }
 }
+
 
 Real VolumeEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype) {
 // Sets the value of the emission array which determines where Lya photons are
