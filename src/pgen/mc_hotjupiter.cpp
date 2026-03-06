@@ -137,6 +137,7 @@ Real ConstantTimestep(MeshBlock *pmb) {
 void GetIonizationTemperature(MonteCarloBlock *pmcb);
 //void EscapeCoords(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover, int ip);
 
+void GetNH(MonteCarloBlock *pmcb);
 void UpdateSourceTerms(MonteCarloBlock *pmcb, Photon *pphot,Real energy0, Real weight0,
                   Real k1p0, Real k2p0, Real k3p0, int ip);
 
@@ -305,8 +306,9 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
   EnrollUserOpacityFunction(ResonantScatteringOpacity, false);
   EnrollUserOpacityFunction(BoundFreeAbsorptionOpacity, true);
   EnrollUserScatteringFunction(ResonantScattering);
-  //EnrollUserEmissionFunction(MultipleEmissivities);
   EnrollUserGetTemperature(GetIonizationTemperature);
+  EnrollUserGetNumberDensity(GetNH);
+
 }
 
 // INITIALIZATION
@@ -1495,6 +1497,16 @@ void GetIonizationTemperature(MonteCarloBlock *pmcb) {
   }
 }
 
+void GetNH(MonteCarloBlock *pmcb) {
+
+  for (int k=pmcb->ks; k<=pmcb->ke; ++k) {
+    for (int j=pmcb->js; j<=pmcb->je; ++j) {
+      for (int i=pmcb->is; i<=pmcb->ie; ++i) {
+        pmcb->spec(0,k,j,i) = pmcb->pmy_block->pscalars->s(0,k,j,i) * n_cgs; // nH
+      }
+    }
+  }
+}
 
 void UpdateSourceTerms(MonteCarloBlock *pmcb, Photon *pphot, Real energy0, Real weight0,
                   Real k1p0, Real k2p0, Real k3p0, int ip) {

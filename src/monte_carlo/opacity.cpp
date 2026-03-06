@@ -60,8 +60,10 @@ Real FreeFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   Real ehnu = exp(-energy / (kb * tgas) );
 
   Real aff = ffnrm/sqrt(tgas)/pow(nu,3);
+  Real nel = pmcb->spec(0,i3,i2,i1);
+  Real nion = pmcb->spec(1,i3,i2,i1);
 
-  return pmcb->nel(i3,i2,i1) * pmcb->nion(i3,i2,i1) * aff * (1. - ehnu);
+  return nel * nion * aff * (1. - ehnu);
 
 }
 
@@ -93,8 +95,9 @@ Real ThomsonOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   Real heabund = 0.09; //hardcode for now (should be parameter)
   Real mp = 1.67262192369e-24;
   Real sigmat = 6.65248e-25;
+  Real nel = pmcb->spec(0,i3,i2,i1);
 
-  return pmcb->nel(i3,i2,i1) * sigmat;
+  return nel * sigmat;
 }
 
 //----------------------------------------------------------------------------------------
@@ -153,7 +156,8 @@ Real ComptonOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
     sigma0 = sigmat;
   }
 
-  return sigma0 * pmcb->nel(i3,i2,i1);
+  Real nel = pmcb->spec(0,i3,i2,i1);
+  return sigma0 * nel;
 
 }
 //----------------------------------------------------------------------------------------
@@ -172,14 +176,11 @@ Real ResonanceLineOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   Real tgas = pmcb->tgas(i3, i2, i1);
   Real mass = 1.660538782e-24;
 
-  if (NSCALARS > 0) {
-    denscatterers = pmcb->rho(i3,i2,i1) - pmcb->scalars(i3,i2,i1);
-  } else {
-    denscatterers = pmcb->rho(i3,i2,i1);
-  }
-  Real nh = denscatterers / mass;
+  Real nh = pmcb->spec(0,i3,i2,i1);
+
   //if (pmcb->pmy_block->pmy_mesh->ncycle > 1)
-  //  printf("%g %g %g %g\n",nh, nh * XsecVoigt(energy / h, tgas),pmcb->rho(i3,i2,i1),pmcb->scalars(i3,i2,i1));
+  //printf("%g %g %g %g\n",nh, nh * XsecVoigt(energy / h, tgas),pmcb->rho(i3,i2,i1),pmcb->scalars(i3,i2,i1));
+  
   return nh * XsecVoigt(energy / h, tgas);
 }
 
