@@ -45,6 +45,9 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
   MonteCarloBlock *pmcb = pmy_mcb;
   MCRandom *pran = pmy_mcb->pran;
   PhotonTrajectoryList *ptraj = pmy_mcb->ptraj;
+  Real l_cgs = pmcb->l_cgs;
+  Real c_cgs = 2.99792458e10;
+  Real c_code = c_cgs / pmcb->vel_cgs;
 
   for (int ip=ips; ip<=ipe; ip++) {
     // get number of mean free paths photon will travel
@@ -55,7 +58,7 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
     Real path_length;
     Real k1, k2, k3;
     int iter = 0;
-    Real c_cgs = 2.99792458e10;
+
     Real chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
     while ( (pphot->statp[ip] == EVOLVING) && (tauremaining > TINY_NUMBER) &&
             (iter < checkmove) && (pphot->dtp[ip] > 0.) ) {
@@ -78,38 +81,39 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
 
         Real tauacc = 1000.; //BCM: make this an input parameter
         // Try to perform MRW acceleration if optical depth is large enough
-        if (dl*chi > tauacc) {
+        if (dl*l_cgs*chi > tauacc) {
           MRWResonanceAcceleration(pphot,pran,dl,tauacc,path_length,k1,k2,k3,ip);
           accel_success = true;
         }
       }
       if (!accel_success) {// Acceleration not triggered - take standard step
-        if (tauremaining > chi * step * pphot->ep[ip]) { // Photon hasn't yet reached tauremaining
+        if (tauremaining > chi * l_cgs* step * pphot->ep[ip]) { // Photon hasn't yet reached tauremaining
           //printf("step: %g %g %g %g\n", step, tauremaining, pphot->ep[ip], pphot->wp[ip]);
           //VerletStep(pphot,step,ip);
           RK4Step(pphot,step,ip);
           if (pmy_mcb->pmy_mc->polarized)
             PropogatePolarization(pphot,step,ip);
-          tauremaining -= chi * step * pphot->ep[ip];
+          tauremaining -= chi * l_cgs * step * pphot->ep[ip];
           //printf("large: %g %g %g %g %g\n",tauremaining,chi,step,pphot->ep[ip],chi * step * pphot->ep[ip]);
         } else { // Photon has reached end of tauremaining - step to make it 0
-          step = tauremaining / (chi * pphot->ep[ip]);
+          step = tauremaining / (chi * l_cgs * pphot->ep[ip]);
           //VerletStep(pphot,step,ip);
           RK4Step(pphot,step,ip);
           if (pmy_mcb->pmy_mc->polarized)
             PropogatePolarization(pphot,step,ip);
           tauremaining = 0.;
         }
-        pphot->dtp[ip] -= pphot->ep[ip]*step/c_cgs;
+        pphot->dtp[ip] -= pphot->ep[ip] * step / c_code;
         // Update moments
         if (pmcb->call_moments) {
           if (pmcb->absorption_meth == ABSTAU) {
-            Real dl = step*pphot->ep[ip];
-            Real etaua = ExpTauAbsorption(pphot->acp[ip],dl);
-            pmcb->UpdateMoments(pphot,dl,etaua,ip);
+            Real dl_cgs = step * pphot->ep[ip] * l_cgs;
+            Real etaua = ExpTauAbsorption(pphot->acp[ip],dl_cgs);
+            pmcb->UpdateMoments(pphot,dl_cgs,etaua,ip);
             pphot->wp[ip] *= etaua;
           } else {
-            pmcb->UpdateMoments(pphot,step*pphot->ep[ip],ip);
+            Real dl_cgs = step * pphot->ep[ip] * l_cgs;
+            pmcb->UpdateMoments(pphot,dl_cgs,ip);
           }
         }
       } else {
@@ -118,6 +122,7 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
         step = dl;
         tauremaining = 0.;
         if (pmcb->call_moments) {
+          // SWD needs to use correct dl here
           pmcb->UpdateMomentsAcceleration(pphot,step,path_length,k1,k2,k3,1.,ip);
         }
       }

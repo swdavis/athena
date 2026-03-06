@@ -949,14 +949,14 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     k3 = kf[3]/ep;
 
     // Weight moments by time spent in domain
-    weight = pphot->wp[ip] * pphot->ep[ip] / k0 * dl * l_cgs / c_cgs;
+    weight = pphot->wp[ip] * pphot->ep[ip] / k0 * dl / c_cgs;
   } else {
     k0 = pphot->k0p[ip];
     k1 = pphot->k1p[ip];
     k2 = pphot->k2p[ip];
     k3 = pphot->k3p[ip];
     // Weight moments by time spent in domain
-    weight = pphot->wp[ip] * pphot->ep[ip] * dl * l_cgs / c_cgs;
+    weight = pphot->wp[ip] * pphot->ep[ip] * dl / c_cgs;
   }
 
   // Normalize k vector if using general pusher in spherical polar coords
@@ -1028,13 +1028,13 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
       k1c = kc[1];
       k2c = kc[2];
       k3c = kc[3];
-      weight = pphot->wp[ip] * pphot->ep[ip] / k0c * dl * l_cgs / c_cgs;
+      weight = pphot->wp[ip] * pphot->ep[ip] / k0c * dl / c_cgs;
     } else {
       Real shift = kc[0]/k0;
       k1c = kc[1]/kc[0];
       k2c = kc[2]/kc[0];
       k3c = kc[3]/kc[0];
-      weight = pphot->wp[ip] * pphot->ep[ip] * dl * SQR(shift) * l_cgs / c_cgs;
+      weight = pphot->wp[ip] * pphot->ep[ip] * dl * SQR(shift) / c_cgs;
     }
 
     //Real dlcom = dl * shift;

@@ -1407,7 +1407,7 @@ Real BoundFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 			Real energy = pphot->ep[ip];
 			Real xsec = sigmamin * std::pow((energy / h_cgs) / (numin), -3.0);
 			Real nH = pmcb->pmy_block->pscalars->s(0,i3,i2,i1) * n_cgs;
-			opac = xsec * nH * pmcb->l_cgs; // opacities in code units
+			opac = xsec * nH; // opacities in cgs units
 			//printf("BoundFreeAbsorptionOpacity: energy/numin_erg=%g, xsec/sigmamin=%g, nH=%g, mfp=%g\n", energy/numin_erg, xsec/sigmamin, nH, 1./opac);
 		}
 	}
