@@ -767,6 +767,7 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     if (pmb != nullptr) pmcb = pmb->pmy_mcb;
 
     // monte carlo temperature
+    int ntype = pmcb->pmy_mc->ntype;
     if (output_params.variable.compare("mclab") == 0) {
       pod = new OutputData;
       pod->type = "SCALARS";
@@ -787,62 +788,92 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
     // monte carlo radiation energy density lab frame
     if (output_params.variable.compare("mclab") == 0 ||
         output_params.variable.compare("Ermc") == 0) {
-      pod = new OutputData;
-      pod->type = "SCALARS";
-      pod->name = "Ermc";
-      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIER,1);
-      AppendOutputDataNode(pod);
-      num_vars_++;
+      AthenaArray<Real> moments;
+      for (int n = 0; n < ntype; ++n) {
+        moments.InitWithShallowSlice(pmcb->moments,5,n,13);
+        std::string name = (ntype == 1) ? "Ermc" : "Ermc_" + std::to_string(n);
+        pod = new OutputData;
+        pod->type = "SCALARS";
+        pod->name = name;
+        if (pmb != nullptr) pod->data.InitWithShallowSlice(moments,4,MCIER,1);
+        AppendOutputDataNode(pod);
+        num_vars_++;
+      }
     }
     // monte carlo radiation energy density comoving frame
     if (output_params.variable.compare("mccom") == 0 ||
-        output_params.variable.compare("Ermc0") == 0) {
-      pod = new OutputData;
-      pod->type = "SCALARS";
-      pod->name = "Ermc0";
-      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments_com,4,MCIER,1);
-      AppendOutputDataNode(pod);
-      num_vars_++;
+        output_params.variable.compare("Ermc_com") == 0) {
+      AthenaArray<Real> moments;
+      for (int n = 0; n < ntype; ++n) {
+        moments.InitWithShallowSlice(pmcb->moments_com,5,n,13);
+        std::string name = (ntype == 1) ? "Ermc_com" : "Ermc_com_" + std::to_string(n);
+        pod = new OutputData;
+        pod->type = "SCALARS";
+        pod->name = name;
+        if (pmb != nullptr) pod->data.InitWithShallowSlice(moments,4,MCIER,1);
+        AppendOutputDataNode(pod);
+        num_vars_++;
+      }
     }
     // monte carlo radiation flux vector lab frame
     if (output_params.variable.compare("mclab") == 0 ||
         output_params.variable.compare("Frmc") == 0) {
-      pod = new OutputData;
-      pod->type = "VECTORS";
-      pod->name = "Frmc";
-      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIFR1,3);
-      AppendOutputDataNode(pod);
-      num_vars_+=3;
+      AthenaArray<Real> moments;
+      for (int n = 0; n < ntype; ++n) {
+        moments.InitWithShallowSlice(pmcb->moments,5,n,13);
+        std::string name = (ntype == 1) ? "Frmc" : "Frmc_" + std::to_string(n) + "_";
+        pod = new OutputData;
+        pod->type = "VECTORS";
+        pod->name = name;
+        if (pmb != nullptr) pod->data.InitWithShallowSlice(moments,4,MCIFR1,3);
+        AppendOutputDataNode(pod);
+        num_vars_+=3;
+      }
     }
     // monte carlo radiation flux vector comoving frame
     if (output_params.variable.compare("mccom") == 0 ||
-        output_params.variable.compare("Frmc0") == 0) {
-      pod = new OutputData;
-      pod->type = "VECTORS";
-      pod->name = "Frmc0";
-      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments_com,4,MCIFR1,3);
-      AppendOutputDataNode(pod);
-      num_vars_+=3;
+        output_params.variable.compare("Frmc_com") == 0) {
+      AthenaArray<Real> moments;
+      for (int n = 0; n < ntype; ++n) {
+        moments.InitWithShallowSlice(pmcb->moments_com,5,n,13);
+        std::string name = (ntype == 1) ? "Frmc_com" : "Frmc_com_" + std::to_string(n) + "_";
+        pod = new OutputData;
+        pod->type = "VECTORS";
+        pod->name = name;
+        if (pmb != nullptr) pod->data.InitWithShallowSlice(moments,4,MCIFR1,3);
+        AppendOutputDataNode(pod);
+        num_vars_+=3;
+      }
     }
     // monte carlo radiation pressure lab frame
     if (output_params.variable.compare("mclab") == 0 ||
         output_params.variable.compare("Prmc") == 0) {
-      pod = new OutputData;
-      pod->type = "TENSORS";
-      pod->name = "Prmc";
-      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments,4,MCIPR11,9);
-      AppendOutputDataNode(pod);
-      num_vars_ += 9;
+      AthenaArray<Real> moments;
+      for (int n = 0; n < ntype; ++n) {
+        moments.InitWithShallowSlice(pmcb->moments,5,n,13);
+        std::string name = (ntype == 1) ? "Prmc" : "Prmc_" + std::to_string(n)  + "_";
+        pod = new OutputData;
+        pod->type = "TENSORS";
+        pod->name = name;
+        if (pmb != nullptr) pod->data.InitWithShallowSlice(moments,4,MCIPR11,9);
+        AppendOutputDataNode(pod);
+        num_vars_ += 9;
+      }
     }
     // monte carlo radiation pressure comoving frame
     if (output_params.variable.compare("mccom") == 0 ||
-        output_params.variable.compare("Prmc0") == 0) {
-      pod = new OutputData;
-      pod->type = "TENSORS";
-      pod->name = "Prmc0";
-      if (pmb != nullptr) pod->data.InitWithShallowSlice(pmcb->moments_com,4,MCIPR11,9);
-      AppendOutputDataNode(pod);
-      num_vars_ += 9;
+        output_params.variable.compare("Prmc_com") == 0) {
+      AthenaArray<Real> moments;
+      for (int n = 0; n < ntype; ++n) {
+        moments.InitWithShallowSlice(pmcb->moments_com,5,n,13);
+        std::string name = (ntype == 1) ? "Prmc_com" : "Prmc_com_" + std::to_string(n) + "_";
+        pod = new OutputData;
+        pod->type = "TENSORS";
+        pod->name = name;
+        if (pmb != nullptr) pod->data.InitWithShallowSlice(moments,4,MCIPR11,9);
+        AppendOutputDataNode(pod);
+        num_vars_ += 9;
+      }
     }
     // monte carlo scattering sourcterms 
     if (output_params.variable.compare("mcscat") == 0){

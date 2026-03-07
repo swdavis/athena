@@ -20,7 +20,7 @@ bool Photon::initialized = false;
 bool Photon::polarized = false;
 bool Photon::general_pusher_flag = false;
 
-int Photon::inscp = -1, Photon::istatp = -1, Photon::itrp = -1;
+int Photon::inscp = -1, Photon::istatp = -1, Photon::ityp = -1;
 int Photon::ii1p = -1, Photon::ii2p = -1, Photon::ii3p = -1;
 int Photon::ix0p = -1, Photon::ix1p = -1, Photon::ix2p = -1, Photon::ix3p = -1;
 int Photon::ik0p = -1, Photon::ik1p = -1, Photon::ik2p = -1, Photon::ik3p = -1;
@@ -47,7 +47,7 @@ Photon::Photon(MonteCarloBlock *pmcb, ParameterInput *pin)
     //user(new std::vector<Real> [pmcb->pmy_mc->nuser_var]),
     //polten(new std::vector<std::complex<Real>> [ncplx]),
     nphot(npar),nscp(intprop[inscp]), statp(intprop[istatp]),
-    trp(intprop[itrp]), i1p(intprop[ii1p]), i2p(intprop[ii2p]), i3p(intprop[ii3p]),
+    type(intprop[ityp]), i1p(intprop[ii1p]), i2p(intprop[ii2p]), i3p(intprop[ii3p]),
     x0p(rp[ix0p]), x1p(rp[ix1p]), x2p(rp[ix2p]), x3p(rp[ix3p]),
     k0p(rp[ik0p]), k1p(rp[ik1p]), k2p(rp[ik2p]), k3p(rp[ik3p]),
     dk0p(rp[idk0p]), dk1p(rp[idk1p]), dk2p(rp[idk2p]),
@@ -225,7 +225,6 @@ void Photon::PolarizationToCoord(std::complex<Real> ttet[4][4], Real econ[4][4],
 //! \fn Photon::Initialize(MonteCarloBlock *pmcb, ParameterInput *pin)
 //! \brief initializes the Photon class.
 // SWD: Change name to distinguish with InitializePhoton?
-// SWD: make trp a user variable
 
 void Photon::Initialize(MonteCarlo *pmc, ParameterInput *pin) {
 
@@ -237,7 +236,7 @@ void Photon::Initialize(MonteCarlo *pmc, ParameterInput *pin) {
   // Add particle ID and status flags, other int parameters.
   inscp = AddIntProperty("nscp");
   istatp = AddIntProperty("statp");
-  itrp = AddIntProperty("trp");
+  ityp = AddIntProperty("type");
 
   // Add photon position.
   ix0p = AddRealProperty("x0");

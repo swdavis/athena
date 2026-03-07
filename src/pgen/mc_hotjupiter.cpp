@@ -43,11 +43,9 @@
 
 namespace {
 
-enum emission_type {ION_STR= 0, LYA_STR = 1, LYA_REC = 2};
-
 // GLOBAL VARIABLES
 // ----------------
-
+int ion_str = -1, lya_str = -1, lya_rec = -1;
 Real kb_cgs, mp_cgs, c_cgs, h_cgs;
 Real n_cgs; // code units for number density
 Real rin, rout; // inner and outer limits of coordinate system
@@ -276,26 +274,50 @@ void MeshBlock::UserWorkBeforeOutput(ParameterInput *pin) {
 // Read in input params that define the attributes of the Monte Carlo photons
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
 
+  flag_lya_volume_emis = pin->GetBoolean("problem", "lya_volume_emis");
+  flag_lya_surface_emis = pin->GetBoolean("problem", "lya_surface_emis");
+  flag_ion_surface_emis = pin->GetBoolean("problem", "ion_surface_emis");
 
-  // set up emission methods
-  nsamp = nsamptype[0] = pin->GetInteger("problem", "nion");
-  emission_eqwt[0] = pin->GetOrAddBoolean("problem", "ion_eqwt",false);
-  EnrollUserEmissionFunction(SurfaceEmissivityIonizing,0);
-  emission_geometry[0] = EMISAREA;
-  emission_face[0] = SetEmissionSurface("outer_x1");
-  if (ntype > 1) {
-    nsamp += nsamptype[1] = pin->GetInteger("problem", "nlyastr");
-    emission_eqwt[1] = pin->GetOrAddBoolean("problem", "lys_eqwt",false);
-    emission_geometry[1] = EMISAREA;
-    EnrollUserEmissionFunction(SurfaceEmissivityLya,1);
-    emission_face[1] = SetEmissionSurface("outer_x1");
+  int ecount = 0;
+  if (flag_ion_surface_emis) ecount++;
+  if (flag_lya_surface_emis) ecount++;
+  if (flag_lya_volume_emis) ecount++;
+  if (ecount != ntype) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in MonteCarlo::InitUserMonteCarloData" << std::endl
+        << "Number of emission types (ntype) does not match number of emission flags set "
+        << "to true. Please check that ntype is consistent with the number of true values "
+        << " among ion_surface_emis, lya_surface_emis, or lya_volume_emis."
+        << std::endl;
+    throw std::runtime_error(msg.str());
   }
-  if (ntype == 3) {
-    nsamp += nsamptype[2] = pin->GetInteger("problem", "nlyarec");
-    emission_eqwt[2] = pin->GetOrAddBoolean("problem", "lyr_eqwt",false);
-    emission_geometry[2] = EMISVOL;
-    EnrollUserEmissionFunction(VolumeEmissivityLya,2);
-    emission_face[2] = SetEmissionSurface("none");
+  // set up emission methods
+  int etype = 0;
+  if (flag_ion_surface_emis) {
+    ion_str = etype;
+    nsamp = nsamptype[etype] = pin->GetInteger("problem", "nion");
+    emission_eqwt[etype] = pin->GetOrAddBoolean("problem", "ion_eqwt",false);
+    EnrollUserEmissionFunction(SurfaceEmissivityIonizing,etype);
+    emission_geometry[etype] = EMISAREA;
+    emission_face[etype] = SetEmissionSurface("outer_x1");
+    etype++;
+  }
+  if (flag_lya_surface_emis) {
+    lya_str = etype;
+    nsamp += nsamptype[etype] = pin->GetInteger("problem", "nlyastr");
+    emission_eqwt[etype] = pin->GetOrAddBoolean("problem", "lys_eqwt",false);
+    emission_geometry[etype] = EMISAREA;
+    EnrollUserEmissionFunction(SurfaceEmissivityLya,etype);
+    emission_face[etype] = SetEmissionSurface("outer_x1");
+    etype++;
+  }
+  if (flag_lya_volume_emis) {
+    lya_rec = etype;;
+    nsamp += nsamptype[etype] = pin->GetInteger("problem", "nlyarec");
+    emission_eqwt[etype] = pin->GetOrAddBoolean("problem", "lyr_eqwt",false);
+    emission_geometry[etype] = EMISVOL;
+    EnrollUserEmissionFunction(VolumeEmissivityLya,etype);
+    emission_face[etype] = SetEmissionSurface("none");
   }
 
   EnrollUserSourcetermUpdate(UpdateSourceTerms);
@@ -559,11 +581,17 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
   // Note: on the RunPhotoionization pass, the emissivity array will contain
   // only the emissivity from the ionizing radiation source
-  if (etype == ION_STR) {
-    SetEmissionCellWeightArea(pphot,pmy_mc->emission_face[0],ips,ipe);
-  } else if (etype == LYA_STR) {
-    SetEmissionCellWeightArea(pphot,pmy_mc->emission_face[1],ips,ipe);
-  } else if (etype == LYA_REC) {
+  if (etype == ion_str) {
+    emis_geometry = SURFACE;
+    phot_type = IONIZING;
+    SetEmissionCellWeightArea(pphot,pmy_mc->emission_face[etype],ips,ipe);
+  } else if (etype == lya_str) {
+    emis_geometry = SURFACE;
+    phot_type = LYA;
+    SetEmissionCellWeightArea(pphot,pmy_mc->emission_face[etype],ips,ipe);
+  } else if (etype == lya_rec) {
+    emis_geometry = VOLUME;
+    phot_type = LYA;
     SetEmissionCellWeight(pphot,ips,ipe);
   }
 
@@ -574,54 +602,12 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
   // Loop over photon index
   for (int ip=ips; ip<=ipe; ip++) {
-
+    pphot->type[ip] = etype;
     pphot->dtp[ip] = pphot->pmy_mcb->pmy_mc->tmax;
 
     int i = pphot->i1p[ip];
     int j = pphot->i2p[ip];
     int k = pphot->i3p[ip];
-
-    // 2. Calculate probability of photon being emitted from each source
-    // -----------------------------------------------------------------
-    // SetEmissionCellWeight has chosen a zone for this photon, so now we look at the
-    // emissivity arrays for that zone and sample a type for the photon.
-    // Could technically do this calculation outside of the loop over photons, might
-    // save a small amount of time
-    Real vol_lya = emis(0,k,j,i) + emis(1,k,j,i);
-    Real sur_lya = emis(2,k,j,i);
-    Real sur_ion = emis(3,k,j,i);
-    Real emis_tot;
-
-    if (!flag_lya_volume_emis) vol_lya = 0.0;
-    if (!flag_lya_surface_emis) sur_lya = 0.0;
-    if (!flag_ion_surface_emis) sur_ion = 0.0;
-
-    // 3. Sample emission probabilities to determine photon type
-    // ---------------------------------------------------------
-    // Sample random numbers, compare with probability of photon belonging to each
-    // source of emissivity
-
-    if (pmy_mc->emission_method == ION_STR) {
-      // photoionization pass
-      emis_tot = sur_ion;
-      emis_geometry = SURFACE;
-      phot_type = IONIZING;
-    } else { // main monte carlo simulation
-      emis_tot = sur_lya + vol_lya;
-      Real frac_vol;
-      if (emis_tot == 0.0) {
-        printf("TOTAL EMISSIVITY IS ZERO FOR LYMAN ALPHA - SHOULD NOT HAPPEN");
-      } else {
-        frac_vol = vol_lya / emis_tot;
-      }
-      if (pran->uniform() <= frac_vol) {
-        emis_geometry = VOLUME;
-        phot_type = LYA;
-      } else {
-        emis_geometry = SURFACE;
-        phot_type = LYA;
-      }
-    }
 
     // 4. Calculate emission geometry
     // ------------------------------
@@ -648,12 +634,6 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
         pphot->k1p[ip] = stheta * std::cos(phi);
         pphot->k2p[ip] = stheta * std::sin(phi);
         pphot->k3p[ip] = mu;
-
-        // Resize direction vector to sphpol code coords
-        //if (pphot->general_pusher_flag) {
-        //  pphot->k2p[ip] /= pphot->x1p[ip];
-        //  pphot->k3p[ip] /= pphot->x1p[ip] * sin(pphot->x2p[ip]);
-        //}
 
         break;
       } // END CASE VOLUME
@@ -829,6 +809,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
     } // END SWITCH EMIS_GEOMETRY
 
+    // SWD check if this is ever true
     bool dayside = true;
     if (flag_incident_from_z) {
       Real pth = pphot->x2p[ip];
@@ -921,7 +902,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
 
   // only update ionization after transfer of ionizing photons
-  if (etype != ION_STR)
+  if (etype != ion_str)
     return;
 
   // Uniform test

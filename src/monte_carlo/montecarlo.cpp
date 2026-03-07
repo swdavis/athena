@@ -754,8 +754,7 @@ void MonteCarlo::RunMonteCarlo(Outputs *pouts, Mesh *pmesh,
       // Clear Boundary buffers for photons
       pmcb->pphot->ClearBoundary();
     }
-    // reset counters
-    pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
+  
   }
 
    // reset moments/sourcterms for start of new timestep
@@ -770,6 +769,12 @@ void MonteCarlo::RunMonteCarlo(Outputs *pouts, Mesh *pmesh,
   }
 
   for (int etype=0; etype < ntype; etype++) {
+
+      // reset counters
+    for (int nb=0; nb<nblocal; nb++) {
+      MonteCarloBlock *pmcb = my_blocks(nb);
+      pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
+    }
     // Distribute samples to all blocks based on emission properties
     // Sets nphremain and parameters for determining initial photon weights
     DistributeSamples(etype);
