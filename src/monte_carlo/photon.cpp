@@ -115,8 +115,11 @@ void Photon::PrintPhoton(int ip) {
         }
     }
   }
-  std::cout << "opacity [sc] [abs]: " << scp[ip] << " " << acp[ip] << std::endl;
-  std::cout << "dt: " << dtp[ip] << " ";
+  std::cout << "opacity (cgs) [sc] [abs]: " << scp[ip] << " " << acp[ip] << std::endl;
+  Real l_cgs = pmy_mcb->l_cgs;
+  if (l_cgs != 1.0)
+    std::cout << "opacity (dim) [sc] [abs]: " << scp[ip]*l_cgs << " " << acp[ip]*l_cgs << std::endl;
+    std::cout << "dt: " << dtp[ip] << " ";
   if (statp[ip] == EVOLVING)
     std::cout << "EVOLVING" << std::endl;
   else if (statp[ip] == ESCAPED)

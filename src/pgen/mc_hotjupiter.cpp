@@ -1301,35 +1301,19 @@ Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype)
         return 0.0;
       Real cthm = std::cos(pco->x2f(j));
       Real cthp = std::cos(pco->x2f(j+1));
-      emis = 0.5*lya_flux*(SQR(cthm)-SQR(cthp))/(cthm-cthp)/energy0;
+      Real r2 = pco->x1f(i+1)*pco->x1f(i+1);
+      Real nflux = r2*lya_flux/energy0/pco->GetFace1Area(k,j,i+1);
+      emis = 0.5*nflux*(pco->x3f(k+1)-pco->x3f(k))*(SQR(cthm)-SQR(cthp));
+
     } else {
-      Real thm = pco->x2f(j);
-      Real thp = pco->x2f(j+1);
+      // incident from x direction
       Real phm = pco->x3f(k);
       Real php = pco->x3f(k+1);
-
-     // if (phm < 0.) {
-     //   phm += 2.0 * PI;
-     // } else if (phm >= 2.0 * PI) {
-     //   phm -= 2.0 * PI;
-     // }
-
-     // if (php < 0) {
-     //   php += 2.0 * PI;
-     // } else if (php >= 2.0 * PI) {
-     //   php -= 2.0 * PI;
-     // }
-
-     // bool dayside = true;
-     // if ((phm < PI/2.) || (php > 3.*PI/2.)) {
-     //   dayside = false;
-     // }
-
-      //printf("k=%d  j=%d  i=%d     phm=%g     php=%g    dayside=%d\n", k,j,i,phm,php,dayside);
-      // Zero emissivity if phi coordinate does not fall within dayside bounds
       if ((phm < PI/2.) || (php > 3.*PI/2.)) {
         return 0.0;
       }
+      Real thm = pco->x2f(j);
+      Real thp = pco->x2f(j+1);
 
       Real sthm = std::sin(thm);
       Real cthm = std::cos(thm);
@@ -1337,11 +1321,11 @@ Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype)
       Real cthp = std::cos(thp);
       Real sphm = std::sin(phm);
       Real sphp = std::sin(php);
+      Real r2 = pco->x1f(i+1)*pco->x1f(i+1);
+      Real nflux = r2*lya_flux/energy0/pco->GetFace1Area(k,j,i+1);
+      emis = -0.5*nflux*(thp-thm-(std::sin(thp - thm)*std::cos(thp + thm)))*(sphp-sphm);
+ ;
 
-      emis = -0.5*lya_flux*(thp - thm - (std::sin(thp - thm)*std::cos(thp + thm)))*(sphp-sphm)/energy0;
-      // divide by area
-      emis /= (pco->x3f(k+1)-pco->x3f(k))*(cthm-cthp);
-      //printf("emis: %g %g %g\n", emis, edot_lya, energy0);
     }
   }
 
@@ -1353,6 +1337,7 @@ Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype)
 
 
 Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i, int etype) {
+  
   Coordinates *pco = pmcb->pmy_block->pcoord;
 
   Real emis = 0.0;
@@ -1367,6 +1352,7 @@ Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i, int e
       emis = 0.5*nflux*(pco->x3f(k+1)-pco->x3f(k))*(SQR(cthm)-SQR(cthp));
 
     } else {
+      // incident from x direction
       Real phm = pco->x3f(k);
       Real php = pco->x3f(k+1);
       if ((phm < PI/2.) || (php > 3.*PI/2.)) {
@@ -1382,13 +1368,12 @@ Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i, int e
       Real sphm = std::sin(phm);
       Real sphp = std::sin(php);
       Real r2 = pco->x1f(i+1)*pco->x1f(i+1);
-      Real nflux = r2*ion_flux/(h_cgs*mean_nu) / pco->GetFace1Area(k,j,i+1);
+      Real nflux = r2*ion_flux/(h_cgs*mean_nu)/pco->GetFace1Area(k,j,i+1);
       emis = -0.5*nflux*(thp-thm-(std::sin(thp - thm)*std::cos(thp + thm)))*(sphp-sphm);
     }
   }
 
   pmcb->pmy_block->ruser_meshblock_data[0](3,k,j,i) = emis;
-
   return emis;
 }
 

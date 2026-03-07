@@ -390,7 +390,6 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
         kph = -kx * sph + ky * cph;
         //if (ptraj != NULL) ptraj->AddToTrajectory(pphot,ip);
       }
-
     } // end while loop
 
     // -------------------------- Debugging ----------------------------------------------
