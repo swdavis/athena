@@ -49,6 +49,9 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
   Real c_cgs = 2.99792458e10;
   Real c_code = c_cgs / pmcb->vel_cgs;
 
+    // Check if using continuous absorption (all photon use same method)
+  bool abs_tau = (pmy_mc->absorption_method[pphot->type[ips]] == ABSTAU);
+
   for (int ip=ips; ip<=ipe; ip++) {
     // get number of mean free paths photon will travel
     Real tauremaining = GetOpticalDepth(pran);
@@ -59,7 +62,8 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
     Real k1, k2, k3;
     int iter = 0;
 
-    Real chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
+    // set total extinction coefficient
+    Real chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
     while ( (pphot->statp[ip] == EVOLVING) && (tauremaining > TINY_NUMBER) &&
             (iter < checkmove) && (pphot->dtp[ip] > 0.) ) {
       iter++;
@@ -106,13 +110,12 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
         pphot->dtp[ip] -= pphot->ep[ip] * step / c_code;
         // Update moments
         if (pmcb->call_moments) {
-          if (pmcb->absorption_meth == ABSTAU) {
-            Real dl_cgs = step * pphot->ep[ip] * l_cgs;
-            Real etaua = ExpTauAbsorption(pphot->acp[ip],dl_cgs);
+          Real dl_cgs = step * pphot->ep[ip] * l_cgs;
+          if (abs_tau) {
+            Real etaua = std::exp(-pphot->acp[ip] * dl_cgs);
             pmcb->UpdateMoments(pphot,dl_cgs,etaua,ip);
             pphot->wp[ip] *= etaua;
           } else {
-            Real dl_cgs = step * pphot->ep[ip] * l_cgs;
             pmcb->UpdateMoments(pphot,dl_cgs,ip);
           }
         }
@@ -130,7 +133,8 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
       // Check if photon changed zones
       if (UpdateZone(pphot,ip)) {
         UpdateOpacities(pphot,pmcb,ip);
-        chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
+        // set total extinction coefficient
+        Real chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
       }
 
       if (pphot->IsNanPhoton(ip)) {

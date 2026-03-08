@@ -44,6 +44,9 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
   Real c_cgs = 2.99792458e10;
   Real c_code = c_cgs / pmcb->vel_cgs;
 
+  // Check if using continuous absorption (all photon use same method)
+  bool abs_tau = (pmy_mc->absorption_method[pphot->type[ips]] == ABSTAU);
+
   for (int ip=ips; ip<=ipe; ip++) {
 
     // get number of mean free paths photon will travel
@@ -297,9 +300,9 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
         db[iter-1].l_ext = l_ext;
       }
 #endif
+      // set total extinction coefficient
+      Real chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
 
-      Real chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
-  
       bool test = false;
       if ((chi > 0.) && (dl * l_cgs > tauremaining / chi)) { // Photon remains in zone
         bool accel_success = false;
@@ -327,8 +330,8 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
           // Update moments
           if (pmcb->call_moments) {
             Real dl_cgs = dl * l_cgs;
-            if (pmcb->absorption_meth == ABSTAU) {
-              Real etaua = ExpTauAbsorption(pphot->acp[ip],dl_cgs);
+            if (abs_tau) {
+              Real etaua = std::exp(-pphot->acp[ip] * dl_cgs);
               pmcb->UpdateMoments(pphot,dl_cgs,etaua,ip);
               pphot->wp[ip] *= etaua;
             } else {
@@ -360,8 +363,8 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
 
         if (pmcb->call_moments) {
           Real dl_cgs = dl * l_cgs;
-          if (pmcb->absorption_meth == ABSTAU) {
-            Real etaua = ExpTauAbsorption(pphot->acp[ip],dl_cgs);
+          if (abs_tau) {
+            Real etaua = std::exp(-pphot->acp[ip] * dl_cgs);
             pmcb->UpdateMoments(pphot,dl_cgs,etaua,ip);
             pphot->wp[ip] *= etaua;
           } else {

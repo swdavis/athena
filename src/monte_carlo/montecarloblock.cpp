@@ -332,9 +332,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   // Set pcoord in ppusher
   ppusher->pcoord = pcoord;
 
-  // Set absorption opacity and method
-  absorption_meth = GetAbsorptionMethodFlag(pin->GetOrAddString("montecarlo","abs_method",
-                                                                "weight"));
+  // Set absorption opacity type
   absorption_opac = GetAbsorptionOpacityFlag(pin->GetOrAddString("montecarlo",
                                                                  "absorption","none"));
   if (absorption_opac == ABSUSER) {
@@ -535,6 +533,9 @@ void MonteCarloBlock::RayTracePhotonsOnBlock(int etype) {
 //! \brief perform radiation transfer
 
 void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
+
+  // Set absorption method for this photon type
+  enum AbsorptionMethodFlag absorption_meth = pmy_mc->absorption_method[etype];
 
   //int nbuf = 0;
   int nold = pphot->nphot;
@@ -889,20 +890,16 @@ void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign, int ips, i
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip)
-//! \brief Overload for UpdateMoments with additional wait time argument
+//! \brief Overload for UpdateMoments with additional extinction argument
 
 void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
 
   // Account for attenuation along ray
   Real leff;
-  if (absorption_meth == ABSTAU) {
-    if (fabs(1.-etau) < TINY_NUMBER) {
-      leff = dl;
-    } else {
-      leff = (1.-etau)/pphot->acp[ip];;
-    }
-  } else {
+  if (fabs(1.-etau) < TINY_NUMBER) {
     leff = dl;
+  } else {
+    leff = (1.-etau)/pphot->acp[ip];;
   }
   UpdateMoments(pphot, leff, ip);
 }
@@ -918,7 +915,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   // tetrad frame  (currently lab frame)
   // coordinate frame
 
-  int etype = pphot->type[ip];
+  int type = pphot->type[ip];
 
   //dl *= pphot->ep[ip];
   int i1 = pphot->i1p[ip];
@@ -981,21 +978,21 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     } else {
       // Add contribution to corresponding moments
       // Energy density
-      moments(etype,MCIER,i3,i2,i1) += weight * k0 * k0;
-      if (std::isnan(moments(etype,MCIER,i3,i2,i1))) {
-        printf("k0: %e weight: %e dl: %e %g\n",k0,weight,dl,moments(etype,MCIER,i3,i2,i1));
+      moments(type,MCIER,i3,i2,i1) += weight * k0 * k0;
+      if (std::isnan(moments(type,MCIER,i3,i2,i1))) {
+        printf("k0: %e weight: %e dl: %e %g\n",k0,weight,dl,moments(type,MCIER,i3,i2,i1));
       }
       // Flux
-      moments(etype,MCIFR1,i3,i2,i1) += weight * k0 * k1 * c_cgs;
-      moments(etype,MCIFR2,i3,i2,i1) += weight * k0 * k2 * c_cgs;
-      moments(etype,MCIFR3,i3,i2,i1) += weight * k0 * k3 * c_cgs;
+      moments(type,MCIFR1,i3,i2,i1) += weight * k0 * k1 * c_cgs;
+      moments(type,MCIFR2,i3,i2,i1) += weight * k0 * k2 * c_cgs;
+      moments(type,MCIFR3,i3,i2,i1) += weight * k0 * k3 * c_cgs;
       // Radiation Pressure
-      moments(etype,MCIPR11,i3,i2,i1) += weight * k1 * k1;
-      moments(etype,MCIPR22,i3,i2,i1) += weight * k2 * k2;
-      moments(etype,MCIPR33,i3,i2,i1) += weight * k3 * k3;
-      moments(etype,MCIPR12,i3,i2,i1) += weight * k1 * k2;
-      moments(etype,MCIPR13,i3,i2,i1) += weight * k1 * k3;
-      moments(etype,MCIPR23,i3,i2,i1) += weight * k2 * k3;
+      moments(type,MCIPR11,i3,i2,i1) += weight * k1 * k1;
+      moments(type,MCIPR22,i3,i2,i1) += weight * k2 * k2;
+      moments(type,MCIPR33,i3,i2,i1) += weight * k3 * k3;
+      moments(type,MCIPR12,i3,i2,i1) += weight * k1 * k2;
+      moments(type,MCIPR13,i3,i2,i1) += weight * k1 * k3;
+      moments(type,MCIPR23,i3,i2,i1) += weight * k2 * k3;
     }
   }
 
@@ -1058,18 +1055,18 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     } else {
       // Add contribution to corresponding moments
       // Energy density
-      moments_com(etype,MCIER,i3,i2,i1) += weight * k0c * k0c;
+      moments_com(type,MCIER,i3,i2,i1) += weight * k0c * k0c;
       // Flux
-      moments_com(etype,MCIFR1,i3,i2,i1) += weight * k0c * k1c * c_cgs;
-      moments_com(etype,MCIFR2,i3,i2,i1) += weight * k0c * k2c * c_cgs;
-      moments_com(etype,MCIFR3,i3,i2,i1) += weight * k0c * k3c * c_cgs;
+      moments_com(type,MCIFR1,i3,i2,i1) += weight * k0c * k1c * c_cgs;
+      moments_com(type,MCIFR2,i3,i2,i1) += weight * k0c * k2c * c_cgs;
+      moments_com(type,MCIFR3,i3,i2,i1) += weight * k0c * k3c * c_cgs;
       // Radiation Pressure
-      moments_com(etype,MCIPR11,i3,i2,i1) += weight * k1c * k1c;
-      moments_com(etype,MCIPR22,i3,i2,i1) += weight * k2c * k2c;
-      moments_com(etype,MCIPR33,i3,i2,i1) += weight * k3c * k3c;
-      moments_com(etype,MCIPR12,i3,i2,i1) += weight * k1c * k2c;
-      moments_com(etype,MCIPR13,i3,i2,i1) += weight * k1c * k3c;
-      moments_com(etype,MCIPR23,i3,i2,i1) += weight * k2c * k3c;
+      moments_com(type,MCIPR11,i3,i2,i1) += weight * k1c * k1c;
+      moments_com(type,MCIPR22,i3,i2,i1) += weight * k2c * k2c;
+      moments_com(type,MCIPR33,i3,i2,i1) += weight * k3c * k3c;
+      moments_com(type,MCIPR12,i3,i2,i1) += weight * k1c * k2c;
+      moments_com(type,MCIPR13,i3,i2,i1) += weight * k1c * k3c;
+      moments_com(type,MCIPR23,i3,i2,i1) += weight * k2c * k3c;
     }
   }
 
@@ -1088,7 +1085,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     sourceterms(MCRF2,i3,i2,i1) += (sct_coef+abs_coef) * weight * k2;
     sourceterms(MCRF3,i3,i2,i1) += (sct_coef+abs_coef) * weight * k3;
 
-    if (absorption_meth == ABSTAU) {
+    if (pmy_mc->absorption_method[pphot->type[ip]] == ABSTAU) {
         Real hplanck = 6.62607015e-27;
         Real threshold = 3.28808816e+15 * hplanck;
         // Update soucterms for ionizing radiation
@@ -1112,7 +1109,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
 void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl, Real k1,
                                                 Real k2, Real k3, Real etau, int ip) {
 
-  int etype = pphot->type[ip];
+  int type = pphot->type[ip];
   const Real c_cgs = 2.99792458e10;;
   Real k1p = pphot->k1p[ip];
   Real k2p = pphot->k2p[ip];
@@ -1160,15 +1157,12 @@ void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl,
   }
   // Account for attenuation along ray
   Real leff;
-  if (absorption_meth == ABSTAU) {
-    if (fabs(1.-etau) < TINY_NUMBER) {
-      leff = step;
-    } else {
-      leff = (1.-etau)/abs_coef;
-    }
-  } else {
+  if (fabs(1.-etau) < TINY_NUMBER) {
     leff = step;
+  } else {
+    leff = (1.-etau)/abs_coef;
   }
+
   // Weight moments by time spent in domain
 
   Real weight = pphot->wp[ip] * energy * leff / c_cgs;
@@ -1193,24 +1187,24 @@ void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl,
     if (mom_flag_lab) {
       // Add contribution to corresponding moments
       // Energy density
-      moments(etype,MCIER,k,j,i) += path_weight;
+      moments(type,MCIER,k,j,i) += path_weight;
       // Flux
-      moments(etype,MCIFR1,k,j,i) += weight1 * c_cgs;
-      moments(etype,MCIFR2,k,j,i) += weight2 * c_cgs;
-      moments(etype,MCIFR3,k,j,i) += weight3 * c_cgs;
+      moments(type,MCIFR1,k,j,i) += weight1 * c_cgs;
+      moments(type,MCIFR2,k,j,i) += weight2 * c_cgs;
+      moments(type,MCIFR3,k,j,i) += weight3 * c_cgs;
       // Radiation Pressure
       Real weightp = weight1 * k1p;
-      moments(etype,MCIPR11,k,j,i) += weightp;
+      moments(type,MCIPR11,k,j,i) += weightp;
       weightp = weight2 * k2p;
-      moments(etype,MCIPR22,k,j,i) += weightp;
+      moments(type,MCIPR22,k,j,i) += weightp;
       weightp = weight3 * k3p;
-      moments(etype,MCIPR33,k,j,i) += weightp;
+      moments(type,MCIPR33,k,j,i) += weightp;
       weightp = weight1 * k2p;
-      moments(etype,MCIPR12,k,j,i) += weightp;
+      moments(type,MCIPR12,k,j,i) += weightp;
       weightp = weight1 * k3p;
-      moments(etype,MCIPR13,k,j,i)  += weightp;
+      moments(type,MCIPR13,k,j,i)  += weightp;
       weightp = weight2 * k3p;
-      moments(etype,MCIPR23,k,j,i) += weightp;
+      moments(type,MCIPR23,k,j,i) += weightp;
     }
 
     if (call_srcterms) {
