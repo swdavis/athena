@@ -43,68 +43,64 @@
 
 namespace {
 
-enum emission_type {ION_STR= 0, LYA_STR = 1, LYA_REC = 2};
+// ***** VARIABLES *****
 
-// GLOBAL VARIABLES
-// ----------------
+// Flags to determine which processe etype corresponds to
+int ion_str = -1, lya_str = -1, lya_rec = -1;
+Real kb_cgs, mp_cgs, c_cgs, h_cgs; // constants in cgs
+Real ev_to_erg;
 
-Real kb_cgs, mp_cgs, c_cgs, h_cgs;
+// parameters for hydro integration /grid initialization
 Real n_cgs; // code units for number density
 Real rin, rout; // inner and outer limits of coordinate system
-Real energy0, nu0, threshold;
 Real gm_planet, gm_star, sep, psi;
 Real temp0, nbase;
-Real lya_flux;
-Real ion_flux;
-Real edot_lya;
-Real edot_ion;
-Real linewidth, linewidth_cutoff, linewidth_cutoff_energy;
-Real stddev;
-Real numin, numax, powa, mean_nu, chromo_temp, sigmamin;
-Real numin_erg;
-Real ev_to_erg;
-Real user_dt;
 Real mdot;
-// SWD: might want to rethink this choice
-int iset = 0; // Flag for performance-saving random deviate sampling (internal use only - DO NOT SET)
-Real gset; // Variable that contains extra deviate from sampling using Box-Muller method
-Real pfloor;
-Real dfloor;
-
-// Ghost zones
+Real pfloor, dfloor;
+// Ghost zones arrays
 Real rho_gz[2];
 Real P_gz[2];
 Real nfrac_gz[2];
-
-bool flag_incident_from_z;
-bool flag_zero_opacity;
-bool flag_escape_after_scatter;
-bool flag_lya_volume_emis, flag_lya_surface_emis, flag_ion_surface_emis;
+Real user_dt;
 bool flag_point_mass = false;
 int  flag_tidal_gravity;
-bool flag_dynamic = false;
 bool flag_wind = false;
-bool flag_pow_law = false;
 
-enum PhotonType {NO_TYPE=0, LYA=1, IONIZING=2};
-enum EmissionGeometryLya {NO_GEOMETRY=0, VOLUME=1, SURFACE=2};
+// parameters for MC radiation transfer
+Real energy0, nu0, threshold;
+Real lya_flux;
+Real ion_flux;
+Real linewidth, linewidth_cutoff, linewidth_cutoff_energy;
+Real stddev;
+Real numin, mean_nu, nuexp, numinpow, numaxpow;
+Real chromo_temp, sigmamin;
+Real numin_erg;
+bool flag_incident_from_z;
+bool flag_zero_opacity;
+bool flag_pow_law;
 
-// Function for sampling photon frequencies
+// Flag for performance-saving random deviate sampling using Box-Muller method
+//  which generates two deviates at a time, used for stellar lyman alpha
+int iset = 0; 
+Real gset; // saves extra deviate
+
+enum EmissionType {LYA=0, IONIZING=1};
+enum EmissionGeometryHJ {VOLUME=0, SURFACE=1};
+
+// ***** FUNCTION PROTOTYPES *****
+
+// Box-Muller sampling uses for stellar lyman alpha
 void gasdev(MeshBlock *pmb, Real mean, Real stddev, Real &samp);
 
-void ForceEscape(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe);
-
+// velocity initial isothermal wind profile
 Real GetIsowindVelocity(Real x);
 
-// Function to calculate the emission array for Lya emitted from recombinations
-// and from electron impact excitation
-//Real MultipleEmissivities(MonteCarloBlock *pmcb, int k, int j, int i);
+// Functions to calculate the emission for various prcosesses
 Real VolumeEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
 Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
 Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
 
-
-// Tidal gravity source term
+// user gravity source term functions
 void GetTidalAcceleration(Real r, Real th, Real ph, Real rho, Real &a_r, Real &a_th, Real &a_ph);
 void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,
               const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
@@ -119,25 +115,19 @@ void ThirdOrderTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
               const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
               AthenaArray<Real> &cons_scalar);
 
-// INITIALIZATION FUNCTIONS
-// ========================
-
+// user functions for defining scattering and opacities
 void ResonantScattering(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe);
 Real ResonantScatteringOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
 Real BoundFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
 
-Real ConstantTimestep(MeshBlock *pmb) {
-  if (user_dt > TINY_NUMBER) {
-    return user_dt;
-  } else {
-    return std::numeric_limits<Real>().max();
-  }
-}
+// user timestep SWD: not sure why this is used
+Real ConstantTimestep(MeshBlock *pmb);
 
+// user functions for converting temperature and number density to cgs
 void GetIonizationTemperature(MonteCarloBlock *pmcb);
-//void EscapeCoords(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover, int ip);
-
 void GetNH(MonteCarloBlock *pmcb);
+
+// user function to update source terms for coupling to hydro; handles different types
 void UpdateSourceTerms(MonteCarloBlock *pmcb, Photon *pphot,Real energy0, Real weight0,
                   Real k1p0, Real k2p0, Real k3p0, int ip);
 
@@ -152,8 +142,6 @@ void StaticInflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &pr
 } // end namespace
 
 
-// SETUP
-// =====
 
 void Mesh::InitUserMeshData(ParameterInput *pin) {
 
@@ -170,13 +158,6 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   Real rho_cgs = pin->GetOrAddReal("problem","rho_cgs",1.);
   n_cgs = rho_cgs / mp_cgs;
   Real time_cgs = l_cgs / vel_cgs;
-
-  // Parameters for Lya emission
-  nu0 = 2.4660675e+15;
-  energy0 = h_cgs * nu0;
-
-  // H-Ionizing threshold energy at 912 angstrom (13.6 eV)
-  threshold = h_cgs*c_cgs/9.12e-6;
 
   // Gravity source term configuration
   gm_planet = pin->GetReal("problem", "GM");
@@ -195,32 +176,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   nbase = pin->GetOrAddReal("problem", "nbase", 1.0e10)/n_cgs; // base hydrogen nH density in cm^-3 at rin
   flag_wind = pin->GetBoolean("problem", "wind");
 
-
-  // Sources of photons
-  flag_incident_from_z = pin->GetBoolean("problem", "incident_from_z");
-  flag_lya_volume_emis = pin->GetBoolean("problem", "lya_volume_emis");
-  flag_lya_surface_emis = pin->GetBoolean("problem", "lya_surface_emis");
-  flag_ion_surface_emis = pin->GetBoolean("problem", "ion_surface_emis");
-  lya_flux = pin->GetReal("problem", "lya_flux");
-  ion_flux = pin->GetReal("problem", "ion_flux");
-  edot_lya = PI * SQR(mesh_size.x1max*l_cgs) * lya_flux; // cgs
-  edot_ion = PI * SQR(mesh_size.x1max*l_cgs) * ion_flux; // cgs
-  linewidth = pin->GetReal("problem", "linewidth");
-  linewidth_cutoff = pin->GetReal("problem", "linewidth_cutoff");
-
-  // Debug flag to turn off opacity entirely
-  flag_zero_opacity = pin->GetBoolean("problem", "zero_opacity");
-  flag_escape_after_scatter = pin->GetBoolean("problem", "escape_after_scatter");
-
-  // Normal distribution for sampling initial photon frequencies
-  // Using a standard deviation of 67 km/s
-  stddev = linewidth*1.0e5 / c_cgs * energy0;
-  linewidth_cutoff_energy = linewidth_cutoff*1.0e5 / c_cgs * energy0;
-  sigmamin = 6.3e-18; // absorption edge cross section
-
   // Time evolution
   // Set a constant timestep (best for photoionization equilibrium convergence tests)
-  flag_dynamic = pin->GetBoolean("montecarlo", "dynamic");
   user_dt = pin->GetReal("problem", "user_dt");
   EnrollUserTimeStepFunction(ConstantTimestep);
 
@@ -276,33 +233,88 @@ void MeshBlock::UserWorkBeforeOutput(ParameterInput *pin) {
 // Read in input params that define the attributes of the Monte Carlo photons
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
 
+  bool report_setup = pin->GetOrAddBoolean("problem","report_setup",false);
 
-  // set up emission methods
-  nsamp = nsamptype[0] = pin->GetInteger("problem", "nion");
-  emission_eqwt[0] = pin->GetOrAddBoolean("problem", "ion_eqwt",false);
-  EnrollUserEmissionFunction(SurfaceEmissivityIonizing,0);
-  emission_geometry[0] = EMISAREA;
-  emission_face[0] = SetEmissionSurface("outer_x1");
-  if (ntype > 1) {
-    nsamp += nsamptype[1] = pin->GetInteger("problem", "nlyastr");
-    emission_eqwt[1] = pin->GetOrAddBoolean("problem", "lys_eqwt",false);
-    emission_geometry[1] = EMISAREA;
-    EnrollUserEmissionFunction(SurfaceEmissivityLya,1);
-    emission_face[1] = SetEmissionSurface("outer_x1");
+  int nion = pin->GetOrAddInteger("problem","nion",0);
+  int nlyastr = pin->GetOrAddInteger("problem","nlyastr",0);
+  int nlyarec = pin->GetOrAddInteger("problem","nlyarec",0);
+  int ecount = 0;
+  if (nion > 0) ecount++;
+  if (nlyastr > 0) ecount++;
+  if (nlyarec > 0) ecount++;
+  if (ecount != ntype) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in MonteCarlo::InitUserMonteCarloData" << std::endl
+        << "Number of emission types (ntype) does not match number of emission flags set "
+        << "to true. Please check that ntype is consistent with the number of true values "
+        << " among ion_surface_emis, lya_surface_emis, or lya_volume_emis."
+        << std::endl;
+    throw std::runtime_error(msg.str());
   }
-  if (ntype == 3) {
-    nsamp += nsamptype[2] = pin->GetInteger("problem", "nlyarec");
-    emission_eqwt[2] = pin->GetOrAddBoolean("problem", "lyr_eqwt",false);
-    emission_geometry[2] = EMISVOL;
-    EnrollUserEmissionFunction(VolumeEmissivityLya,2);
-    emission_face[2] = SetEmissionSurface("none");
+  // set up emission methods
+  int etype = 0;
+  if (nion > 0) {
+    ion_str = etype;
+    nsamp = nsamptype[etype] = nion;
+    emission_eqwt[etype] = pin->GetOrAddBoolean("problem", "ion_eqwt",true);
+    std::string abs_meth = pin->GetOrAddString("problem","ion_str_abs","tau");
+    absorption_method[0] = GetAbsorptionMethodFlag(abs_meth);
+    EnrollUserEmissionFunction(SurfaceEmissivityIonizing,etype);
+    emission_geometry[etype] = EMISAREA;
+    emission_face[etype] = SetEmissionSurface("outer_x1");
+    etype++;
+    if (report_setup && (Globals::my_rank == 0)) {
+      std::cout << "Computing stellar ionizing photons emitted from surface."
+                << std::endl;
+      std::cout << "nion: " << nion << std::endl;
+      std::cout << "absortion method: " << abs_meth << std::endl;
+      std::cout << "equal weight: " << emission_eqwt[etype-1] << std::endl;
+      std::cout << "etype: " << etype-1 << std::endl << std::endl;
+    }
+  }
+  if (nlyastr > 0) {
+    lya_str = etype;
+    nsamp += nsamptype[etype] = nlyastr;
+    emission_eqwt[etype] = pin->GetOrAddBoolean("problem", "lys_eqwt",true);
+    std::string abs_meth = pin->GetOrAddString("problem","lya_str_abs","weight");
+    absorption_method[0] = GetAbsorptionMethodFlag(abs_meth);
+    emission_geometry[etype] = EMISAREA;
+    EnrollUserEmissionFunction(SurfaceEmissivityLya,etype);
+    emission_face[etype] = SetEmissionSurface("outer_x1");
+    etype++;
+    if (report_setup && (Globals::my_rank == 0)) {
+      std::cout << "Computing stellar lyman alpha photons emitted from surface."
+                << std::endl;
+      std::cout << "nlyastr: " << nlyastr << std::endl;
+      std::cout << "absortion method: " << abs_meth << std::endl;
+      std::cout << "equal weight: " << emission_eqwt[etype-1] << std::endl;
+      std::cout << "etype: " << etype-1 << std::endl << std::endl;
+    }
+  }
+  if (nlyarec > 0) {
+    lya_rec = etype;;
+    nsamp += nsamptype[etype] = nlyarec;
+    emission_eqwt[etype] = pin->GetOrAddBoolean("problem", "lyr_eqwt",false);
+    std::string abs_meth = pin->GetOrAddString("problem","lya_rec_abs","weight");
+    absorption_method[0] = GetAbsorptionMethodFlag(abs_meth);
+    emission_geometry[etype] = EMISVOL;
+    EnrollUserEmissionFunction(VolumeEmissivityLya,etype);
+    emission_face[etype] = SetEmissionSurface("none");
+    if (report_setup && (Globals::my_rank == 0)) {
+      std::cout << "Computing recombination lyman alpha photons emitted throughout volume."
+                << std::endl;
+      std::cout << "nlyarec: " << nlyarec << std::endl;
+      std::cout << "absortion method: " << abs_meth << std::endl;
+      std::cout << "equal weight: " << emission_eqwt[etype] << std::endl;
+      std::cout << "etype: " << etype << std::endl << std::endl;
+    }
   }
 
   EnrollUserSourcetermUpdate(UpdateSourceTerms);
   // Photon user variables for incident and outgoing direction vector and position
   nuser_var = 1;
 
-  //EnrollUserWorkInMove(EscapeCoords);
+  // Enroll user functions for handling MC trnasport
   EnrollUserOpacityFunction(ResonantScatteringOpacity, false);
   EnrollUserOpacityFunction(BoundFreeAbsorptionOpacity, true);
   EnrollUserScatteringFunction(ResonantScattering);
@@ -311,10 +323,9 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
 
 }
 
-// INITIALIZATION
-// ==============
 
 void MeshBlock::ProblemGenerator(ParameterInput *pin) {
+
   // Set initial conditions before the main loop starts. Note that any variables
   // or arrays initialized here are *not* saved in restart files and are
   // inaccessible except at initialization
@@ -325,6 +336,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   bool flag_initialize_velocity_from_file = pin->GetBoolean("problem", "initialize_velocity_from_file");
   bool flag_initialize_density_from_file = pin->GetBoolean("problem", "initialize_density_from_file");
 
+  // SWD: Maybe better to move this to InitUserMeshBlockData
   // BEGIN INITIALIZATION FILE I/O
   if ((flag_initialize_scalar_from_file || flag_initialize_pressure_from_file)) {
     std::string input_filename = pin->GetString("problem", "input_filename");
@@ -391,7 +403,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   Real alpha = 2.6e-13; // cm^3/s, recombination coefficient
   Real neq0 = Gamma0 / alpha / n_cgs; // dimensionless
   Real sigmapi = 6.e-18; // cm^2, cross section at the ionization edge
-  sigmapi /= (mp_cgs*l_cgs/rho_cgs); // convert to code units
+  sigmapi /= (mp_cgs/rho_cgs/l_cgs); // convert to code units
 
   Real vbase = 0.0;
   Real vel1 = 0.0;
@@ -401,11 +413,6 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
     vbase = a * GetIsowindVelocity(2.0/lambda);
     mdot = 4.*PI * SQR(rin) * nbase * vbase;
   }
-
-  //for (int n=0; n<6; ++n) {
-  //  printf("Input data (%d, 4, 4, 4): %g\n", n, ruser_meshblock_data[2](n,4,4,4));
-  //}
-  //printf("\n");
 
   // density and pressure floors
   Real float_min = std::numeric_limits<float>::min();
@@ -425,7 +432,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         Real np = std::sqrt(ion_rate_atten * nH * neq0);
         Real neutral_frac = nH / (nH + 2.*np);
         Real mean_mol_weight = (1. + neutral_frac)/2.;
-        // ^ This will be wrong for the isothermal wind, but there is no analytic solution
+        // ^ This will be wrong for the isothermal wind, but no analytic solution
 
         Real rho;
         if (flag_wind) {
@@ -471,37 +478,28 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         }
 
         // Set corresponding conserved fluid variables for the above
-        phydro->u(IDN,k,j,i) = rho;             // Density
-        phydro->u(IM1,k,j,i) = rho * vel1;             // X1 Momentum
-        phydro->u(IM2,k,j,i) = rho * vel2;             // X2 Momentum
-        phydro->u(IM3,k,j,i) = rho * vel3;             // X3 Momentum
-        phydro->u(IEN,k,j,i) = P*invgm1;        // Internal energy
+        phydro->u(IDN,k,j,i) = rho;        // Density
+        phydro->u(IM1,k,j,i) = rho * vel1; // X1 Momentum
+        phydro->u(IM2,k,j,i) = rho * vel2; // X2 Momentum
+        phydro->u(IM3,k,j,i) = rho * vel3; // X3 Momentum
+        phydro->u(IEN,k,j,i) = P*invgm1;   // Internal energy
         phydro->u(IEN,k,j,i) += 0.5 * SQR(phydro->u(IM1,k,j,i)) / phydro->u(IDN,k,j,i);
         phydro->u(IEN,k,j,i) += 0.5 * SQR(phydro->u(IM2,k,j,i)) / phydro->u(IDN,k,j,i);
         phydro->u(IEN,k,j,i) += 0.5 * SQR(phydro->u(IM3,k,j,i)) / phydro->u(IDN,k,j,i);
-        //printf("radius, density, velocity, pressure: %e, %e, %e, %e\n", r, rho, vel1, P);
-
-        //phydro->w(IDN,k,j,i) = rho;
-        //phydro->w(IVX,k,j,i) = vel1;
-        //phydro->w(IVY,k,j,i) = vel2;
-        //phydro->w(IVZ,k,j,i) = vel3;
-        //phydro->w(IPR,k,j,i) = P;
 
         // Ionization state of the gas
         if (flag_initialize_scalar_from_file) {
           //printf("INITIALIZED FROM FILE: %g     INITIALIZED FROM PROBLEM: %g\n", ruser_meshblock_data[2](0,k,j,i), rho);
           pscalars->s(0,k,j,i) = ruser_meshblock_data[2](5,k,j,i)*rho;
-          //pscalars->r(0,k,j,i) = ruser_meshblock_data[2](5,k,j,i); // concentration (0 <= r <= 1)
-
         } else {
           // Initialize presuming optically-thin photoionization rate equilibrium
-					// This passive scalar tracks mass-fraction: s = rho_H, r = rho_H / rho = n_H / (n_H + n_p)
+					// This passive scalar tracks mass-fraction: s = rho_H, 
+          // r = rho_H / rho = n_H / (n_H + n_p)
           pscalars->s(0,k,j,i) = nH;
-          //pscalars->r(0,k,j,i) = nH / (nH + np); // concentration (0 <= r <= 1)
         }
-				//printf("ionization fraction: %e\n", pscalars->s(0,k,j,i)/rho);
 
-        if (!flag_dynamic) {
+        // SWD: not sure why this has ! in front of it
+        if (!pin->GetBoolean("montecarlo", "dynamic")) {
           Real a_r, a_th, a_ph;
           GetTidalAcceleration(r, th, ph, rho, a_r, a_th, a_ph);
 
@@ -511,130 +509,92 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
           ruser_meshblock_data[1](2,k,j,i) = a_ph;
         }
       }
-
-      //for (int i=ie+NGHOST; i>=is-NGHOST; i--) {
-      //  if (((k==ks) && (j==js)) && i>=is) {
-      //    Real tgas = temp0;//pmy_mcb->tgas(k,j,i);
-      //    Real chi = pscalars->s(0,k,j,i)/mp_cgs * XsecVoigt(energy0/h_cgs, tgas);
-      //    lc_tau += chi * pcoord->dx1f(i);
-      //    printf("i=%d   nh=%g   xsec=%g   dx1f=%g   lc_tau = %g\n", i, pscalars->s(0,k,j,i)/mp_cgs, XsecVoigt(energy0/h_cgs, tgas), pcoord->dx1f(i), lc_tau);
-      //  }
-      //}
     }
   }
-  //printf("LINE CENTER OPTICAL DEPTH THROUGH DOMAIN: %g\n", lc_tau);
+
 }
 
 
 void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
+
+  // Parameters for Lya emission
+  nu0 = 2.4660675e+15;
+  energy0 = h_cgs * nu0;
+
+  // H-Ionizing threshold energy at 912 angstrom (13.6 eV)
+  threshold = h_cgs*c_cgs/9.12e-6;
+
+  // Sources of photons
+  flag_incident_from_z = pin->GetOrAddBoolean("problem","incident_from_z",false);
+  lya_flux = pin->GetReal("problem","lya_flux");
+  ion_flux = pin->GetReal("problem","ion_flux");
+  linewidth = pin->GetReal("problem","linewidth");
+  linewidth_cutoff = pin->GetReal("problem","linewidth_cutoff");
+
+  // Set-up parmeters for ionizing photons
   numin = pin->GetReal("problem", "numin");
   numin_erg = numin * h_cgs; // absorption edge energy
-  numax = pin->GetReal("problem", "numax");
-  powa = pin->GetReal("problem", "powa");
-	if (powa <= 2.) {
-		mean_nu = std::log(numax/numin) / (std::pow(numax, 1-powa) - std::pow(numin, 1-powa)) * (1-powa);
-	} else {
-		mean_nu = (std::pow(numax, 2-powa) - std::pow(numin, 2-powa)) * (1-powa)
-			/ (std::pow(numax, 1-powa) - std::pow(numin, 1-powa)) / (2-powa);
-	}
-	//printf("mean freq: %g\n", mean_nu);
-	flag_pow_law = pin->GetBoolean("problem", "pow_law");
+
+  flag_pow_law = pin->GetOrAddBoolean("problem","pow_law",false);
+  // SWD: WARNING: mean_nu is used in SurfaceEmissivityIonizing even if flag_pow_law is false
+  if (flag_pow_law) {
+    Real numax = pin->GetReal("problem", "numax");
+    Real powa = pin->GetReal("problem", "powa");
+	  if (powa <= 2.) {
+		  mean_nu = std::log(numax/numin) / (std::pow(numax, 1-powa) - std::pow(numin, 1-powa)) * (1-powa);
+	  } else {
+		  mean_nu = (std::pow(numax, 2-powa) - std::pow(numin, 2-powa)) * (1-powa)
+			  / (std::pow(numax, 1-powa) - std::pow(numin, 1-powa)) / (2-powa);
+	  }
+    numinpow = std::pow(numin, 1.0-powa);
+    numaxpow = std::pow(numax, 1.0-powa);
+    nuexp = 1.0 / (1.0 - powa);
+  }
 	chromo_temp = pin->GetReal("problem", "chromo_temp");
+
+  // Normal distribution for sampling initial photon frequencies
+  // Using a standard deviation of 67 km/s
+  stddev = linewidth*1.0e5 / c_cgs * energy0;
+  linewidth_cutoff_energy = linewidth_cutoff*1.0e5 / c_cgs * energy0;
+  sigmamin = 6.3e-18; // absorption edge cross section
+
+  // Debug flag to turn off opacity entirely
+  flag_zero_opacity = pin->GetBoolean("problem", "zero_opacity");
+
 }
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etype) {
   // Function called each time a photon is initialized
 
   std::stringstream msg;
-  AthenaArray<Real> emis = pmy_block->ruser_meshblock_data[0];
-  PhotonType phot_type = NO_TYPE;
-  EmissionGeometryLya emis_geometry = NO_GEOMETRY;
-
-  // 1. Determine from which cell the photon is emitted
-  // --------------------------------------------------
-  // Sets initial cells and emission weights for all photon samples.
-  // This function is unmodified from the single photon population case since
-  // it doesn't need to know which emissivity the photon came from, only the
-  // total number
-
-  // Note: on the RunPhotoionization pass, the emissivity array will contain
-  // only the emissivity from the ionizing radiation source
-  if (etype == ION_STR) {
-    SetEmissionCellWeightArea(pphot,pmy_mc->emission_face[0],ips,ipe);
-  } else if (etype == LYA_STR) {
-    SetEmissionCellWeightArea(pphot,pmy_mc->emission_face[1],ips,ipe);
-  } else if (etype == LYA_REC) {
+  EmissionType phot_type;
+  EmissionGeometryHJ emis_geometry;
+  // Set emission parameters based on etype
+  if (etype == ion_str) {
+    emis_geometry = SURFACE;
+    phot_type = IONIZING;
+    SetEmissionCellWeightArea(pphot,pmy_mc->emission_face[etype],ips,ipe);
+  } else if (etype == lya_str) {
+    emis_geometry = SURFACE;
+    phot_type = LYA;
+    SetEmissionCellWeightArea(pphot,pmy_mc->emission_face[etype],ips,ipe);
+  } else if (etype == lya_rec) {
+    emis_geometry = VOLUME;
+    phot_type = LYA;
     SetEmissionCellWeight(pphot,ips,ipe);
   }
 
-  // Calculate numerical prefactors for sampling so we don't repeat math operations
-  Real numinpow = std::pow(numin, 1.0-powa);
-  Real numaxpow = std::pow(numax, 1.0-powa);
-  Real nuexp = 1.0 / (1.0 - powa);
-
   // Loop over photon index
   for (int ip=ips; ip<=ipe; ip++) {
-
+    pphot->type[ip] = etype;
     pphot->dtp[ip] = pphot->pmy_mcb->pmy_mc->tmax;
 
     int i = pphot->i1p[ip];
     int j = pphot->i2p[ip];
     int k = pphot->i3p[ip];
 
-    // 2. Calculate probability of photon being emitted from each source
-    // -----------------------------------------------------------------
-    // SetEmissionCellWeight has chosen a zone for this photon, so now we look at the
-    // emissivity arrays for that zone and sample a type for the photon.
-    // Could technically do this calculation outside of the loop over photons, might
-    // save a small amount of time
-    Real vol_lya = emis(0,k,j,i) + emis(1,k,j,i);
-    Real sur_lya = emis(2,k,j,i);
-    Real sur_ion = emis(3,k,j,i);
-    Real emis_tot;
-
-    if (!flag_lya_volume_emis) vol_lya = 0.0;
-    if (!flag_lya_surface_emis) sur_lya = 0.0;
-    if (!flag_ion_surface_emis) sur_ion = 0.0;
-
-    // 3. Sample emission probabilities to determine photon type
-    // ---------------------------------------------------------
-    // Sample random numbers, compare with probability of photon belonging to each
-    // source of emissivity
-
-    if (pmy_mc->emission_method == ION_STR) {
-      // photoionization pass
-      emis_tot = sur_ion;
-      emis_geometry = SURFACE;
-      phot_type = IONIZING;
-    } else { // main monte carlo simulation
-      emis_tot = sur_lya + vol_lya;
-      Real frac_vol;
-      if (emis_tot == 0.0) {
-        printf("TOTAL EMISSIVITY IS ZERO FOR LYMAN ALPHA - SHOULD NOT HAPPEN");
-      } else {
-        frac_vol = vol_lya / emis_tot;
-      }
-      if (pran->uniform() <= frac_vol) {
-        emis_geometry = VOLUME;
-        phot_type = LYA;
-      } else {
-        emis_geometry = SURFACE;
-        phot_type = LYA;
-      }
-    }
-
-    // 4. Calculate emission geometry
-    // ------------------------------
-    // Set zone index, position within zone, initial direction vector for the case of
-    // either volume emission or surface emission
+    // Choose photon position and direction based on the emission geometry
     switch (emis_geometry) {
-
-      case NO_GEOMETRY: {
-        msg << "### FATAL ERROR in function MonteCarloBlock::InitializePhoton"
-            << std::endl << "Photon has no emission geometry defined" <<std::endl;
-        ATHENA_ERROR(msg);
-        break;
-      } // END CASE NO_GEOMETRY
 
       case VOLUME: {
         // Obtain initial position within zone
@@ -649,12 +609,6 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
         pphot->k2p[ip] = stheta * std::sin(phi);
         pphot->k3p[ip] = mu;
 
-        // Resize direction vector to sphpol code coords
-        //if (pphot->general_pusher_flag) {
-        //  pphot->k2p[ip] /= pphot->x1p[ip];
-        //  pphot->k3p[ip] /= pphot->x1p[ip] * sin(pphot->x2p[ip]);
-        //}
-
         break;
       } // END CASE VOLUME
 
@@ -663,7 +617,6 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
         // Set initial position on the outer radial surface of this zone
         // Use a rejection method for theta and phi within the zone's bounds
 
-        Real ph, th;
         Real phmax = pmy_block->pcoord->x3f(k+1);
         Real phmin = pmy_block->pcoord->x3f(k);
         Real thmax = pmy_block->pcoord->x2f(j+1);
@@ -677,25 +630,23 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
           Real sthp = std::sin(thmax);
           Real sthm = std::sin(thmin);
-          Real unif_1 = pran->uniform();
-          Real sth_samp = std::sqrt(unif_1*(SQR(sthp) - SQR(sthm)) + SQR(sthm));
+          Real sth_samp = std::sqrt(pran->uniform()*(SQR(sthp) - SQR(sthm)) + SQR(sthm));
           Real th = std::asin(sth_samp);
           if (th < 0.0) {
             printf("WARNING: arcsin domain - sampled theta was %g\n", th);
             th += PI;
           }
-
-          Real unif_2 = pran->uniform();
-          Real ph_samp = unif_2 * (phmax - phmin) + phmin;
-
-          // r position - R
+          // initialize position
+          pphot->x0p[ip] = 0.0;
           pphot->x1p[ip] = pmy_block->pmy_mesh->mesh_size.x1max;
-
-          // theta position - [0, pi]
           pphot->x2p[ip] = th;
+          pphot->x3p[ip] = pran->uniform() * (phmax - phmin) + phmin;
 
-          // phi position - [0, 2pi]
-          pphot->x3p[ip] = ph_samp;
+          // check for nightside emission
+          if (pphot->x2p[ip] > 0.5*PI) { 
+            pphot->PrintPhoton("Warning: Photon on nightside",ip);
+            pphot->statp[ip] = DESTROYED;
+          }
 
           // Set direction vector - parallel to star-planet separation vector
           pphot->k0p[ip] = 1.;
@@ -703,61 +654,12 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
           pphot->k2p[ip] = std::sin(th);
           pphot->k3p[ip] = 0.0;
 
-          //Real sth = std::sin(th);
-          //Real cth = std::cos(th);
-          //Real sph = std::sin(ph_samp);
-          //Real cph = std::cos(ph_samp);
-
-          //Real xhat = sth*cph*pphot->k1p[ip] + cth*cph*pphot->k2p[ip] - sph*pphot->k3p[ip];
-          //Real yhat = sth*sph*pphot->k1p[ip] + cth*sph*pphot->k2p[ip] + cph*pphot->k3p[ip];
-          //Real zhat = cth*pphot->k1p[ip] - sth*pphot->k2p[ip];
-          //printf("xhat = %g      yhat = %g       zhat = %g\n", xhat, yhat, zhat);
-
         } else { // NOT INCIDENT_FROM_Z
 
-         // // Sample phi from probability distribution within meshblock bounds
-         // Real unif_1 = pran->uniform();
-         // Real cph_samp = unif_1 * (std::cos(phmax) - std::cos(phmin)) + std::cos(phmin);
-         // Real ph_samp = std::atan2(std::sqrt(1.0 - SQR(cph_samp)), cph_samp); // TODO: Does this work?
-         //                                                                      // This assumes sin phi is always positive
-
-         // // Return domain to 0 < ph < 2 PI
-         // if (ph_samp < 0) {
-         //   ph_samp += 2.0 * PI;
-         // }
-         // ph = ph_samp;
-         // Real sph = std::sin(ph);
-
-         // // Use rejection method to sample theta
-         // bool reject = true;
-         // int nreject = 0;
-         // while (reject) {
-
-         //   // Sample uniformly within the bounding box
-         //   Real th_sample = pran->uniform() * (thmax - thmin) + thmin;
-
-         //   // Evaluate theta probability at the sampled theta
-         //   Real sth_sample = sin(th_sample);
-         //   Real th_prob = SQR(sth_sample) * sph;
-
-         //   // Draw a random number between 0 and 1 (uniform)
-         //   Real unif_2 = pran->uniform();
-
-         //   nreject++;
-         //   // Keep if uniform sample is under the curve of the theta probability
-         //   // distribution
-         //   if (unif_2 < th_prob) {
-         //     reject = false;
-         //     th = th_sample;
-         //   }
-         // }
-         // //printf("Rejection efficiency: %g\n", 1.0/static_cast<Real>(nreject));
-
-         // CMF: sampling functions for phi and theta within meshblock boundaries
+         // Sampling functions for phi and theta within meshblock boundaries
          // Assumes star is in the -x direction (psi = 0)
-          Real unif_ph = pran->uniform();
-          ph = PI - std::asin(unif_ph * (sinphmax-sinphmin) + sinphmin);
 
+          Real ph = PI - std::asin(pran->uniform() * (sinphmax-sinphmin) + sinphmin);
           Real prob0 = 0.25 * (2*(thmax-thmin) + std::sin(2*thmin) - std::sin(2*thmax));
           Real probmax;
           if (thmax <= PI/2) {
@@ -770,27 +672,29 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
           bool reject = true;
           int step = 0;
+          Real th;
           while (reject) {
-            Real unif_th = pran->uniform();
-            Real th_samp = unif_th * (thmax-thmin) + thmin;
+            Real th_samp = pran->uniform() * (thmax-thmin) + thmin;
             Real sth_samp = std::sin(th_samp);
             Real th_prob = SQR(sth_samp)/prob0;
-            Real unif_2 = pran->uniform();
-            if (unif_2 <= th_prob) {
+            if (pran->uniform() <= th_prob) {
               reject = false;
               th = th_samp;
             }
             step++;
           }
 
-          // r position - R
+          // initialize position
+          pphot->x0p[ip] = 0.0;
           pphot->x1p[ip] = pmy_block->pmy_mesh->mesh_size.x1max;
-
-          // theta position - [0, pi]
           pphot->x2p[ip] = th;
-
-          // phi position - [0, 2pi]
           pphot->x3p[ip] = ph;
+
+          // check for nightside emission
+          if ((ph < 0.5*PI) || (ph > 1.5*PI)) {
+            pphot->PrintPhoton("Warning: Photon on nightside",ip);
+            pphot->statp[ip] = DESTROYED;
+          }
 
           Real sth = std::sin(th);
           Real cth = std::cos(th);
@@ -803,55 +707,17 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
           pphot->k2p[ip] = cth*cph;
           pphot->k3p[ip] = -sph;
 
-         // Real xhat = sth*cph*pphot->k1p[ip] + cth*cph*pphot->k2p[ip] - sph*pphot->k3p[ip];
-         // Real yhat = sth*sph*pphot->k1p[ip] + cth*sph*pphot->k2p[ip] + cph*pphot->k3p[ip];
-         // Real zhat = cth*pphot->k1p[ip] - sth*pphot->k2p[ip];
-         // printf("photon x, y, z directions: %g, %g, %g\n", xhat, yhat, zhat);
-
         } // END IF INCIDENT_FROM_Z
-
-        // Resize direction vector to sphpol code coords
-        //if (pphot->general_pusher_flag) {
-        //  pphot->k2p[ip] /= pphot->x1p[ip];
-        //  pphot->k3p[ip] /= pphot->x1p[ip] * sin(pphot->x2p[ip]);
-        //}
-
-        // Set photon position indices
-        //Real xi1, xi2, xi3;
-        //pmy_block->pcoord->MeshCoordsToIndices(pphot->x1p[ip], pphot->x2p[ip],
-        //                                       pphot->x3p[ip], xi1, xi2, xi3);
-        //pphot->i1p[ip] = static_cast<int>(xi1);
-        //pphot->i2p[ip] = static_cast<int>(xi2);
-        //pphot->i3p[ip] = static_cast<int>(xi3);
 
         break;
       } // END CASE SURFACE
 
     } // END SWITCH EMIS_GEOMETRY
 
-    bool dayside = true;
-    if (flag_incident_from_z) {
-      Real pth = pphot->x2p[ip];
-      if (pth >= PI/2) {
-        dayside = false;
-      }
-    } else {
-      Real pph = pphot->x3p[ip];
-      if (pph <= PI/2 || pph >= 3*PI/2) {
-        dayside = false;
-      }
-    }
 
-    // 5. Set photon type
-    // ------------------
     // Set the photon's energy and absorption / scattering opacities
     switch (phot_type) {
-      case NO_TYPE: {
-        msg << "### FATAL ERROR in function MonteCarloBlock::InitializePhoton"
-            << std::endl << "Photon has no type defined" <<std::endl;
-        ATHENA_ERROR(msg);
-        break;
-      }
+
       case LYA: {
         if (emis_geometry == SURFACE) {
           Real energy;
@@ -875,26 +741,16 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
           nu_phot = pow(pran->uniform() * (numaxpow - numinpow) + numinpow, nuexp);
         }
         pphot->ep[ip] = h_cgs * nu_phot;
-        //printf("numin=%g, nu_phot=%g\n", numin, nu_phot);
-        //printf("threshold=%g, energy=%g\n", numin_erg, h_cgs*nu_phot);
-        // Threshold test
-        //pphot->ep[ip] = numin_erg;
+
         break;
       }
     }
 
     // Set status flag
-    if (pphot->wp[ip] < 0.0)
+    if (pphot->wp[ip] <= 0.0)
       pphot->statp[ip] = DESTROYED;
     else
       pphot->statp[ip] = EVOLVING;
-
-    // CMF: quick and dirty killer of nightside photons
-    if (pphot->wp[ip] == 0.0) {
-      printf("Warning: photon with zero weight found.\n");
-      pphot->PrintPhoton(ip);
-      pphot->statp[ip] = ABSORBED;
-    }
 
     // Initialize the absorption and scattering extinction coefficients
     // to the values in the emitted zone
@@ -921,7 +777,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
 
   // only update ionization after transfer of ionizing photons
-  if (etype != ION_STR)
+  if (etype != ion_str)
     return;
 
   // Uniform test
@@ -1310,35 +1166,19 @@ Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype)
         return 0.0;
       Real cthm = std::cos(pco->x2f(j));
       Real cthp = std::cos(pco->x2f(j+1));
-      emis = 0.5*lya_flux*(SQR(cthm)-SQR(cthp))/(cthm-cthp)/energy0;
+      Real r2 = pco->x1f(i+1)*pco->x1f(i+1);
+      Real nflux = r2*lya_flux/energy0/pco->GetFace1Area(k,j,i+1);
+      emis = 0.5*nflux*(pco->x3f(k+1)-pco->x3f(k))*(SQR(cthm)-SQR(cthp));
+
     } else {
-      Real thm = pco->x2f(j);
-      Real thp = pco->x2f(j+1);
+      // incident from x direction
       Real phm = pco->x3f(k);
       Real php = pco->x3f(k+1);
-
-     // if (phm < 0.) {
-     //   phm += 2.0 * PI;
-     // } else if (phm >= 2.0 * PI) {
-     //   phm -= 2.0 * PI;
-     // }
-
-     // if (php < 0) {
-     //   php += 2.0 * PI;
-     // } else if (php >= 2.0 * PI) {
-     //   php -= 2.0 * PI;
-     // }
-
-     // bool dayside = true;
-     // if ((phm < PI/2.) || (php > 3.*PI/2.)) {
-     //   dayside = false;
-     // }
-
-      //printf("k=%d  j=%d  i=%d     phm=%g     php=%g    dayside=%d\n", k,j,i,phm,php,dayside);
-      // Zero emissivity if phi coordinate does not fall within dayside bounds
       if ((phm < PI/2.) || (php > 3.*PI/2.)) {
         return 0.0;
       }
+      Real thm = pco->x2f(j);
+      Real thp = pco->x2f(j+1);
 
       Real sthm = std::sin(thm);
       Real cthm = std::cos(thm);
@@ -1346,11 +1186,11 @@ Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype)
       Real cthp = std::cos(thp);
       Real sphm = std::sin(phm);
       Real sphp = std::sin(php);
+      Real r2 = pco->x1f(i+1)*pco->x1f(i+1);
+      Real nflux = r2*lya_flux/energy0/pco->GetFace1Area(k,j,i+1);
+      emis = -0.5*nflux*(thp-thm-(std::sin(thp - thm)*std::cos(thp + thm)))*(sphp-sphm);
+ ;
 
-      emis = -0.5*lya_flux*(thp - thm - (std::sin(thp - thm)*std::cos(thp + thm)))*(sphp-sphm)/energy0;
-      // divide by area
-      emis /= (pco->x3f(k+1)-pco->x3f(k))*(cthm-cthp);
-      //printf("emis: %g %g %g\n", emis, edot_lya, energy0);
     }
   }
 
@@ -1362,6 +1202,7 @@ Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype)
 
 
 Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i, int etype) {
+  
   Coordinates *pco = pmcb->pmy_block->pcoord;
 
   Real emis = 0.0;
@@ -1376,6 +1217,7 @@ Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i, int e
       emis = 0.5*nflux*(pco->x3f(k+1)-pco->x3f(k))*(SQR(cthm)-SQR(cthp));
 
     } else {
+      // incident from x direction
       Real phm = pco->x3f(k);
       Real php = pco->x3f(k+1);
       if ((phm < PI/2.) || (php > 3.*PI/2.)) {
@@ -1391,22 +1233,22 @@ Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i, int e
       Real sphm = std::sin(phm);
       Real sphp = std::sin(php);
       Real r2 = pco->x1f(i+1)*pco->x1f(i+1);
-      Real nflux = r2*ion_flux/(h_cgs*mean_nu) / pco->GetFace1Area(k,j,i+1);
+      Real nflux = r2*ion_flux/(h_cgs*mean_nu)/pco->GetFace1Area(k,j,i+1);
       emis = -0.5*nflux*(thp-thm-(std::sin(thp - thm)*std::cos(thp + thm)))*(sphp-sphm);
     }
   }
 
   pmcb->pmy_block->ruser_meshblock_data[0](3,k,j,i) = emis;
-
   return emis;
 }
 
+// SWD: should be able to remove this
+void ResonantScattering(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {  
 
-void ResonantScattering(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
-  if (!flag_escape_after_scatter) {
+  if (pphot->type[ips] != ion_str) {
     ScatterResonanceLine(pmcb, pphot, ips, ipe);
   } else {
-    ForceEscape(pmcb, pphot, ips, ipe);
+    std::cout << "Warning: attempted to scatter ionizing photon\n";
   }
 }
 
@@ -1419,10 +1261,9 @@ Real BoundFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 			int i2 = pphot->i2p[ip];
 			int i3 = pphot->i3p[ip];
 			Real energy = pphot->ep[ip];
-			Real xsec = sigmamin * std::pow((energy / h_cgs) / (numin), -3.0);
+			Real xsec = sigmamin * std::pow(energy / h_cgs / numin, -3.0);
 			Real nH = pmcb->pmy_block->pscalars->s(0,i3,i2,i1) * n_cgs;
 			opac = xsec * nH; // opacities in cgs units
-			//printf("BoundFreeAbsorptionOpacity: energy/numin_erg=%g, xsec/sigmamin=%g, nH=%g, mfp=%g\n", energy/numin_erg, xsec/sigmamin, nH, 1./opac);
 		}
 	}
 
@@ -1441,7 +1282,7 @@ Real ResonantScatteringOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   return opac;
 }
 
-// SWD: redo this function
+// SWD: redo this function?
 void gasdev(MeshBlock *pmb, Real mean, Real stddev, Real &samp) {
 
   if (iset == 0) {
@@ -1487,6 +1328,13 @@ Real GetIsowindVelocity(Real x) {
   return y;
 }
 
+Real ConstantTimestep(MeshBlock *pmb) {
+  if (user_dt > TINY_NUMBER) {
+    return user_dt;
+  } else {
+    return std::numeric_limits<Real>().max();
+  }
+}
 
 void GetIonizationTemperature(MonteCarloBlock *pmcb) {
 	Hydro* phydro = pmcb->pmy_block->phydro;
@@ -1524,7 +1372,7 @@ void UpdateSourceTerms(MonteCarloBlock *pmcb, Photon *pphot, Real energy0, Real 
                   Real k1p0, Real k2p0, Real k3p0, int ip) {
 
   // if continuous absorption, handle source terms in UpdateMoments()
-  if (pmcb->absorption_meth == ABSTAU)
+  if (pmcb->pmy_mc->absorption_method[pphot->type[ip]] == ABSTAU) 
     return;
 
   Real hplanck = 6.62607015e-27;
@@ -1618,19 +1466,6 @@ void UpdateSourceTerms(MonteCarloBlock *pmcb, Photon *pphot, Real energy0, Real 
   }
 
 }
-
-
-//void EscapeCoords(MonteCarloBlock *pmcb, Photon *pphot, PhotonMover *pmover, int ip) {
-//  if (pphot->statp[ip] == ESCAPED || pphot->statp[ip] == ABSORBED) {
-//    pphot->user[6][ip] = pphot->x1p[ip];
-//    pphot->user[7][ip] = pphot->x2p[ip];
-//    pphot->user[8][ip] = pphot->x3p[ip];
-//    pphot->user[9][ip] = pphot->k1p[ip];
-//    pphot->user[10][ip] = pphot->k2p[ip];
-//    pphot->user[11][ip] = pphot->k3p[ip];
-//  }
-//}
-
 
 // Boundary Conditions
 

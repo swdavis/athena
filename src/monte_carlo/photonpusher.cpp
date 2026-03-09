@@ -21,6 +21,7 @@
 PhotonPusher::PhotonPusher(MonteCarloBlock *pmcb) {
 
   pmy_mcb = pmcb;
+  pmy_mc = pmcb->pmy_mc;
   pcoord = NULL;
   UserWorkInMove = pmcb->pmy_mc->UserWorkInMove;
   checkmove = pmcb->pmy_mc->checkmove;
@@ -502,13 +503,13 @@ Real PhotonPusher::GetOpticalDepth(MCRandom *pran) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real PhotonPusher::GetExtinctionCoefficient(Real ac, Real sc)
+//! \fn Real PhotonPusher::GetExtinctionCoefficient(Real ac, Real sc, bool abs_tau)
 //! \brief returns total opacity or scattering opacity depending on method
 
-Real PhotonPusher::GetExtinctionCoefficient(Real ac, Real sc) {
+Real PhotonPusher::GetExtinctionCoefficient(Real ac, Real sc, bool abs_tau) {
 
   Real chi;
-  if (pmy_mcb->absorption_meth == ABSTAU) {
+  if (abs_tau) {
     chi = sc;
   } else {
     chi = sc + ac;
@@ -518,12 +519,12 @@ Real PhotonPusher::GetExtinctionCoefficient(Real ac, Real sc) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real PhotonPusher::ExpTauAbsorption(Real ac, Real dl)
+//! \fn Real PhotonPusher::ExpTauAbsorption(Real ac, Real dl, bool abs_tau)
 //! \brief Computes e^-tau_abs
 
-Real PhotonPusher::ExpTauAbsorption(Real ac, Real dl) {
+Real PhotonPusher::ExpTauAbsorption(Real ac, Real dl, bool abs_tau) {
 
-  if (pmy_mcb->absorption_meth == ABSTAU) {
+  if (abs_tau) {
     return exp(-ac * dl);
   } else {
     return 1.;

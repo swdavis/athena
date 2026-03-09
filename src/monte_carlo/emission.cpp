@@ -23,8 +23,8 @@ Real GetEmissionFreeFree(MonteCarloBlock *pmcb, int k, int j, int i, int etype) 
   const Real eta0 = 1.032521e-11;
   const Real gaunt = 1.0; // Gaunt factor
 
-  Real nel = pmcb->spec(0,k,j,i);
-  Real nion = pmcb->spec(1,k,j,i);
+  Real nel = pmcb->species(0,k,j,i);
+  Real nion = pmcb->species(1,k,j,i);
   Real temp = pmcb->tgas(k,j,i);
 
   return eta0 / sqrt(temp) * nel * nion * gaunt;

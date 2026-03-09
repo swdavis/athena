@@ -236,7 +236,8 @@ public:
   bool tetrads; // convert from coordinate frame
   bool emission_array;  // Compute and save zone emissivities
   bool *emission_eqwt; // Set initial weights equal
-  
+  enum AbsorptionMethodFlag *absorption_method; // absorption method for each emission type
+
   bool polarized;// track photon polarization
   bool acceleration;  // use MRW acceleration
   bool computedmin;
@@ -331,7 +332,6 @@ public:
   int nspec;
   int nf_scat;
 
-  bool weighted_absorption; // flag controling how absorption is handled
   bool mom_flag_lab; // Compute/output moments
   bool mom_flag_com; // Compute moments in comoving frame
   bool mom_flag_src; // Compute source terms for output
@@ -349,7 +349,7 @@ public:
   bool time_acc;  // use MRW acceleration with time limit
 
   // Set flags
-  enum AbsorptionMethodFlag absorption_meth;
+
   enum AbsorptionOpacityFlag absorption_opac;
   enum ScatteringFlag scattering_meth;
 

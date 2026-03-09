@@ -854,7 +854,7 @@ void PhotonTrajectoryList::CompleteTrajectory(int itraj) {
 
 void PhotonTrajectoryList::AddToTrajectory(Photon *pphot, int ip) {
 
-  int itr = pphot->trp[ip];
+  int itr = 0; //pphot->trp[ip]; SWD: removed trp
   int &step = nsteps[itr];
   if (step >= step_limit)
     return;

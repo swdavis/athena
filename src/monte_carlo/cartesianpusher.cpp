@@ -42,6 +42,9 @@ void CartesianPusher::Move(Photon *pphot, int ips, int ipe) {
   Real c_cgs = 2.99792458e10;
   Real c_code = c_cgs / pmcb->vel_cgs;
 
+  // Check if using continuous absorption (all photon use same method)
+  bool abs_tau = (pmy_mc->absorption_method[pphot->type[ips]] == ABSTAU);
+
   for (int ip=ips; ip<=ipe; ip++) {
 
     // get number of mean free paths photon will travel
@@ -99,7 +102,8 @@ void CartesianPusher::Move(Photon *pphot, int ips, int ipe) {
 
       int face;
       NextFace(dlx,dly,dlz,face,dl);
-      Real chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
+      // set total extinction coefficient
+      Real chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
 
       if ((chi > 0.) && (dl*l_cgs > tauremaining / chi)) { // Photon remains in zone
         bool accel_success = false;
@@ -131,8 +135,8 @@ void CartesianPusher::Move(Photon *pphot, int ips, int ipe) {
   
           if (pmcb->call_moments) {
             Real dl_cgs = dl * l_cgs;
-            if (pmcb->absorption_meth == ABSTAU) {
-              Real etaua = ExpTauAbsorption(pphot->acp[ip],dl_cgs);
+            if (abs_tau) {
+              Real etaua = std::exp(-pphot->acp[ip] * dl_cgs);
               pmcb->UpdateMoments(pphot,dl_cgs,etaua,ip);
               pphot->wp[ip] *= etaua;
             } else {
@@ -154,8 +158,8 @@ void CartesianPusher::Move(Photon *pphot, int ips, int ipe) {
         // Account for absorption (if needed) and update moments
         if (pmcb->call_moments) {
           Real dl_cgs = dl * l_cgs;
-          if (pmcb->absorption_meth == ABSTAU) {
-            Real etaua = ExpTauAbsorption(pphot->acp[ip],dl_cgs);
+          if (abs_tau) {
+            Real etaua = std::exp(-pphot->acp[ip] * dl_cgs);
             pmcb->UpdateMoments(pphot,dl_cgs,etaua,ip);
             pphot->wp[ip] *= etaua;
           } else {
