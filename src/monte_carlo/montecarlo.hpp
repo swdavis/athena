@@ -40,9 +40,30 @@ class MCBoundaryValues;
 class MCOutoupt;
 class MCCoord;
 
-// SWD: Make into a general MACRO set by configure?
-// SWD: or make a paramter that is set
-#define NMOM 15
+//! \brief Physical constants defined in c.g.s.
+namespace MCConstants {
+
+static const Real kb_cgs = 1.380649e-16; // Boltzmann constant
+static const Real c_cgs = 2.99792458e+10; //  speed of light
+static const Real h_cgs = 6.62607015e-27; // Planck's constant
+static const Real ec = 4.80320425e-10; // elementary charge in esu
+static const Real mp_cgs = 1.67262192595e-24; // proton mass
+static const Real me_cgs = 9.1093837139e-28; // electron mass
+static const Real amu_cgs = 1.660538782e-24; // atomic mass unit
+static const Real mH_cgs = 1.007825 * amu_cgs; // mass of hydrogen
+static const Real mec2 = me_cgs * c_cgs * c_cgs;
+static const Real kmec2 = kb_cgs / (me_cgs * c_cgs * c_cgs); 
+static const Real ev_to_erg = 1.602176634e-12; 
+static const Real sigmat = 6.652487051e-25; // Thomson cross section
+static const Real res_osc = PI*ec*ec / (me_cgs*c_cgs); // classic oscillator
+static const Real lambda_lya = 1215.6701; // Lya wavelength in angstroms
+static const Real nu_lya = 1.e8 * c_cgs / lambda_lya;  // frequency of Lya
+static const Real lambda_ly_edge = 912.0; // ionization edge wavelength in angstroms
+static const Real energy_ly_edge = h_cgs * 1.e8 * c_cgs / lambda_ly_edge; // energy of Lyman edge
+static const Real lorwidth_lya = 6.265e8/(4.*PI); // natural line width of Lya
+static const Real oscf_lya = 0.4164; // oscilator strength for Lya
+
+} // namespace MCConstants
 
 // Flags for controlling monte carlo emission, scattering, absorption, bcs
 enum EmissionFlag {EMISUSER = 0, EMISNONE = 1, EMISFF = 2, EMISBB = 3, MULTI = 4};

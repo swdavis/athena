@@ -535,21 +535,6 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe
     Real &ky = pphot->k2p[ip];
     Real &kz = pphot->k3p[ip];
 
-    bool sphnorm = false;
-    if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_pusher_flag)) {
-      sphnorm = true;
-      ky *= pphot->x1p[ip];
-      kz *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
-
-      // BCM: Temporary fix for NaN photons
-      Real norm = sqrt(SQR(kx) + SQR(ky) + SQR(kz));
-      if (norm > 1.) {
-        kx /= norm;
-        ky /= norm;
-        kz /= norm;
-      }
-    }
-
     int &i1 = pphot->i1p[ip];
     int &i2 = pphot->i2p[ip];
     int &i3 = pphot->i3p[ip];
@@ -561,7 +546,7 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe
     Real vth = sqrt( 2 * kb * tgas / mass );
 
     // Compute a and x
-    Real nu0 = 2.468e15;
+    Real nu0 = 2.4660675e15;
     Real c = 2.99792458e10;
     Real doppwidth = nu0 * vth / c;
     Real lorwidth = 6.265e8/(4.*PI);
@@ -601,10 +586,6 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe
     Real sgam = sqrt(1. - SQR(cgam));
     pphot->ep[ip] = h * (nu + nu0 * ( (cgam - 1.) * vpar + sgam * vperp ) / c);
 
-    if (sphnorm) {
-      ky /= pphot->x1p[ip];
-      kz /= pphot->x1p[ip] * sin(pphot->x2p[ip]);
-    }
     //printf("nu: %g %g %g %g %g %g\n", pphot->ep[i]/h, nu, cgam, vpar, vperp, vth);
 
   } // end loop over ip
