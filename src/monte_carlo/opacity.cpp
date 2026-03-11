@@ -172,16 +172,15 @@ Real ResonanceLineOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   Real denscatterers;
   Real &energy = pphot->ep[ip];
 
-  Real h = 6.62607015e-27;
+  Real h_cgs = MCConstants::h_cgs;
   Real tgas = pmcb->tgas(i3, i2, i1);
-  Real mass = 1.660538782e-24;
 
-  Real nh = pmcb->species(0,i3,i2,i1);
+  Real nH = pmcb->species(0,i3,i2,i1);
 
   //if (pmcb->pmy_block->pmy_mesh->ncycle > 1)
-  //printf("%g %g %g %g\n",nh, nh * XsecVoigt(energy / h, tgas),pmcb->rho(i3,i2,i1),pmcb->scalars(i3,i2,i1));
+  //printf("%g %g %g %g %g %g\n",nH,XsecVoigt(energy / h, tgas),tgas, energy,pmcb->rho(i3,i2,i1),pmcb->scalars(i3,i2,i1));
   
-  return nh * XsecVoigt(energy / h, tgas);
+  return nH * XsecVoigt(energy / h_cgs, tgas);
 }
 
 //----------------------------------------------------------------------------------------
@@ -395,15 +394,15 @@ void InitializeAccelerationOpacity(MonteCarloBlock *pmcb) {
 //----------------------------------------------------------------------------
 //! \fn Real ResLinePre()
 //! \brief Species dependent prefactor
-
+// SWD: no longer need -- remove?
 Real ResLinePre() {
 
-  Real charge = 4.80320427e-10;
-  Real melectron = 9.10938215e-28;
-  Real clight = 2.99792458e10;
+  Real charge = MCConstants::ec;
+  Real melectron = MCConstants::me_cgs;
+  Real c_cgs = MCConstants::c_cgs;
   Real osc_strength = 0.4164;
 
-  return PI*charge*charge / (melectron*clight) * osc_strength;
+  return PI*charge*charge / (melectron*c_cgs) * osc_strength;
 }
 
 //----------------------------------------------------------------------------
@@ -412,10 +411,13 @@ Real ResLinePre() {
 
 Real XsecLorentzian(Real nu) {
 
-  Real lorwidth = 6.265e8/(4.*PI);
-  Real nu0 = 2.468e15;
+  Real lorwidth = MCConstants::lorwidth_lya;
+  Real nu0 = MCConstants::nu_lya;
+
   Real lineprofile = lorwidth/ PI / ( SQR(nu-nu0) + SQR(lorwidth) );
-  Real sigmatot = ResLinePre() * lineprofile;
+
+  Real pre = MCConstants::res_osc * MCConstants::oscf_lya;
+  Real sigmatot = pre * lineprofile;
 
   return sigmatot;
 }
@@ -426,19 +428,21 @@ Real XsecLorentzian(Real nu) {
 
 Real XsecDoppler(Real nu, Real tgas) {
 
-  Real kb = 1.380649e-16;
-  Real mass = 1.660538782e-24;
-  Real vth = sqrt( 2. * kb * tgas / mass);
 
-  Real clight = 2.99792458e10;
-  Real lorwidth = 6.265e8/(4.*PI);
-  Real nu0 = 2.468e15;
+  Real kb = MCConstants::kb_cgs;
+  Real mass = MCConstants::mH_cgs;
+  Real vth = sqrt(2.0 * kb * tgas / mass);
 
-  Real doppwidth = nu0 * vth / clight;
+  Real c_cgs= MCConstants::c_cgs;
+  Real lorwidth = MCConstants::lorwidth_lya;
+  Real nu0 = MCConstants::nu_lya;
+
+  Real doppwidth = nu0 * vth / c_cgs;
   Real x = (nu-nu0)/doppwidth;
   Real lineprofile = exp(-x*-x) / sqrt(PI) / doppwidth;
 
-  Real sigmatot = ResLinePre() * lineprofile;
+  Real pre = MCConstants::res_osc * MCConstants::oscf_lya;
+  Real sigmatot = pre * lineprofile;
 
   return sigmatot;
 
@@ -450,16 +454,15 @@ Real XsecDoppler(Real nu, Real tgas) {
 
 Real XsecVoigt(Real nu, Real tgas) {
 
-  Real kb = 1.380649e-16;
-  Real mass = 1.660538782e-24;
-  Real vth = sqrt( 2. * kb * tgas / mass);
+  Real kb = MCConstants::kb_cgs;
+  Real mass = MCConstants::mH_cgs;
+  Real vth = sqrt(2.0 * kb * tgas / mass);
 
-  Real lorwidth = 6.265e8/(4.*PI);
-  Real nu0 = 2.468e15;
+  Real c_cgs= MCConstants::c_cgs;
+  Real lorwidth = MCConstants::lorwidth_lya;
+  Real nu0 = MCConstants::nu_lya;
 
-  Real clight = 2.99792458e10;
-
-  Real doppwidth = nu0 * vth / clight;
+  Real doppwidth = nu0 * vth / c_cgs;
   Real a = lorwidth / doppwidth;
   Real x = (nu-nu0)/doppwidth;
 
@@ -467,10 +470,10 @@ Real XsecVoigt(Real nu, Real tgas) {
   std::complex<double> f = ZetaVoigt(z);
 
   Real H = f.imag() / sqrt(PI);
-
   Real lineprofile = H / sqrt(PI) / doppwidth;
+  Real pre = MCConstants::res_osc * MCConstants::oscf_lya;
 
-  Real sigmatot = ResLinePre() * lineprofile;
+  Real sigmatot = pre * lineprofile;
 
   return sigmatot;
 }

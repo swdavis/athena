@@ -1331,7 +1331,7 @@ void MonteCarloBlock::ResetMoments() {
 
   // set moments to zero
   for (int m=0; m<pmy_mc->ntype; ++m) {
-    for (int n=0; n<NMOM-5; ++n) {
+    for (int n=0; n<nmom-3; ++n) {
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
