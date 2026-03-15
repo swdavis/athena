@@ -956,15 +956,35 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     k1 = pphot->k1p[ip];
     k2 = pphot->k2p[ip];
     k3 = pphot->k3p[ip];
+
+    if (COORDINATE_SYSTEM == "spherical_polar") {
+      Real theta = pphot->x2p[ip];
+      Real phi = pphot->x3p[ip];
+      Real sth = sin(theta);
+      Real cth = cos(theta);
+      Real sph = sin(phi);
+      Real cph = cos(phi);
+      Real nx = sth * cph * k1 + cth * cph * k2 - sph * k3;
+      Real ny = sth * sph * k1 + cth * sph * k2 + cph * k3;
+      Real nz = cth * k1 - sth * k2;
+      theta = pmy_block->pcoord->x2v(i2);
+      phi = pmy_block->pcoord->x3v(i3);
+      sth = sin(theta);
+      cth = cos(theta);
+      sph = sin(phi);
+      cph = cos(phi);
+      k1 = sth * cph * nx + sth * sph * ny + cth * nz;
+      k2 = cth * cph * nx + cth * sph * ny - sth * nz;
+      k3 = -sph * nx + cph * ny;
+      //printf("k: %g %g %g %g %g %g %g %g %g\n",k1,k2,k3,nx,ny,nz,pphot->k1p[ip],pphot->k2p[ip],pphot->k3p[ip]);
+
+      //printf("k: %g %g %g %g %g %g\n",k1,k2,k3,pphot->k1p[ip],pphot->k2p[ip],pphot->k3p[ip]);
+      // SWD: this could be simplified since only phi_1-phi_2 enters,
+      // but would only save two sin/cos evalutations 
+    }
     // Weight moments by time spent in domain
     weight = pphot->wp[ip] * pphot->ep[ip] * dl / c_cgs;
   }
-
-  // Normalize k vector if using general pusher in spherical polar coords
-  //if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_pusher_flag)) {
-  //  k2 *= pphot->x1p[ip];
-  //  k3 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
-  //}
 
   if (mom_flag_lab) {
     if (std::isinf(weight) || std::isnan(weight) || std::isnan(k0) || std::isnan(k1) ||
