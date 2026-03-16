@@ -146,7 +146,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   psi = pin->GetOrAddReal("problem", "psi", 0.0)*PI; // radians, defaults to star in -x direction
   
   Real l_cgs = pin->GetOrAddReal("problem","l_cgs",1.);
-  Real vel_cgs = pin->GetOrAddReal("problem","l_cgs",1.);
+  Real vel_cgs = pin->GetOrAddReal("problem","vel_cgs",1.);
   Real rho_cgs = pin->GetOrAddReal("problem","rho_cgs",1.);
   n_cgs = rho_cgs / MCConstants::mp_cgs;
   Real time_cgs = l_cgs / vel_cgs;
@@ -264,7 +264,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
     nsamp += nsamptype[etype] = nlyastr;
     emission_eqwt[etype] = pin->GetOrAddBoolean("problem", "lys_eqwt",true);
     std::string abs_meth = pin->GetOrAddString("problem","lya_str_abs","weight");
-    absorption_method[0] = GetAbsorptionMethodFlag(abs_meth);
+    absorption_method[etype] = GetAbsorptionMethodFlag(abs_meth);
     emission_geometry[etype] = EMISAREA;
     EnrollUserEmissionFunction(SurfaceEmissivityLya,etype);
     emission_face[etype] = SetEmissionSurface("outer_x1");
@@ -279,11 +279,11 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
     }
   }
   if (nlyarec > 0) {
-    lya_rec = etype;;
+    lya_rec = etype;
     nsamp += nsamptype[etype] = nlyarec;
     emission_eqwt[etype] = pin->GetOrAddBoolean("problem", "lyr_eqwt",false);
     std::string abs_meth = pin->GetOrAddString("problem","lya_rec_abs","weight");
-    absorption_method[0] = GetAbsorptionMethodFlag(abs_meth);
+    absorption_method[etype] = GetAbsorptionMethodFlag(abs_meth);
     emission_geometry[etype] = EMISVOL;
     EnrollUserEmissionFunction(VolumeEmissivityLya,etype);
     emission_face[etype] = SetEmissionSurface("none");
@@ -402,7 +402,6 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   }
 
   // density and pressure floors
-  Real float_min = std::numeric_limits<float>::min();
   dfloor = pin->GetOrAddReal("hydro", "dfloor", 1.e-8);
   pfloor = pin->GetOrAddReal("hydro", "pfloor", 1.e-8);
 
@@ -713,6 +712,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
           // Photon is emitted via recombination - should have line center energy
           pphot->ep[ip] = energy_lya;
         }
+        //pphot->ep[ip] = energy_lya;
         break;
       }
       case IONIZING: {
@@ -775,8 +775,13 @@ void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
         // Calculate the photoionization rate, Gamma, from the number of photons absorbed
         // per cell per time
         Real absweight = sourceterms(MCNABS,k,j,i) * norm;
-        Real vol = pcoord->vol(k,j,i);
-        Real Gamma = absweight / nh * (time_cgs/n_cgs);
+        Real Gamma;
+        if (nh <= 0.0) {
+          std::cout << "WARNING: neutral density is <= 0 in UpdateIonizationFraction, setting Gamma to 0.0" << std::endl;
+          Gamma = 0.0;
+        } else {
+          Gamma = absweight / nh * (time_cgs/n_cgs);
+        }
 
         // Calculate the recombination rate, alpha, from the temperature of this cell
         Real alpha = 2.54e-13 * std::pow(tempo1e4K, -0.8164-0.0208*std::log(tempo1e4K));
@@ -821,7 +826,8 @@ void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
         Real eimp = 10.2 * MCConstants::ev_to_erg;
         Real cool = ctot * nh * np * eimp * SQR(n_cgs);
         // Result should be in cgs units multiply vol*tint to offset normalization
-        sourceterms(MCRS0,k,j,i) -= cool*vol*tint;
+        Real vol = pcoord->vol(k,j,i);
+        sourceterms(MCRS0,k,j,i) -= cool * vol * tint;
         pmy_block->user_out_var(5,k,j,i) += cool;
       
       }
@@ -1259,7 +1265,6 @@ Real GetIsowindVelocity(Real x) {
   Real y = (x <= 1.0) ? std::exp(1.5-2.0/x) : 1.1;
   int l = 0;
   while (l<1000) {
-    l++;
     Real f = 0.5*y*y - std::log(y*x*x) - 2.0/x + 1.5;
     Real dfdy = y - 1./y;
     if (std::abs(f) < 1e-10)

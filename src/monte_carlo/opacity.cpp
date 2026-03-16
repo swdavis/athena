@@ -92,8 +92,6 @@ Real ThomsonOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   int &i2 = pphot->i2p[ip];
   int &i3 = pphot->i3p[ip];
 
-  Real heabund = 0.09; //hardcode for now (should be parameter)
-  Real mp = 1.67262192369e-24;
   Real sigmat = 6.65248e-25;
   Real nel = pmcb->species(0,i3,i2,i1);
 
@@ -369,7 +367,7 @@ void InitializeAccelerationOpacity(MonteCarloBlock *pmcb) {
   Real kb = 1.380649e-16;
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
-      for (int i=il; i<=iu+1; ++i) {
+      for (int i=il; i<=iu; ++i) {
         Real temp = pmcb->tgas(k,j,i);
         Real dens = pmcb->rho(k,j,i);
         Real Bint = 0.0;
@@ -439,7 +437,7 @@ Real XsecDoppler(Real nu, Real tgas) {
 
   Real doppwidth = nu0 * vth / c_cgs;
   Real x = (nu-nu0)/doppwidth;
-  Real lineprofile = exp(-x*-x) / sqrt(PI) / doppwidth;
+  Real lineprofile = exp(-x*x) / sqrt(PI) / doppwidth;
 
   Real pre = MCConstants::res_osc * MCConstants::oscf_lya;
   Real sigmatot = pre * lineprofile;
@@ -458,7 +456,7 @@ Real XsecVoigt(Real nu, Real tgas) {
   Real mass = MCConstants::mH_cgs;
   Real vth = sqrt(2.0 * kb * tgas / mass);
 
-  Real c_cgs= MCConstants::c_cgs;
+  Real c_cgs = MCConstants::c_cgs;
   Real lorwidth = MCConstants::lorwidth_lya;
   Real nu0 = MCConstants::nu_lya;
 
@@ -474,6 +472,5 @@ Real XsecVoigt(Real nu, Real tgas) {
   Real pre = MCConstants::res_osc * MCConstants::oscf_lya;
 
   Real sigmatot = pre * lineprofile;
-
   return sigmatot;
 }
