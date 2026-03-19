@@ -1092,7 +1092,7 @@ Real VolumeEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype) 
   Real recombination = alpha*SQR(np);
   Real impact = ctot*nH*np;
   Real emis = recombination + impact;
-  printf("tempo1e4K=%g, ntot=%g, nH=%g, np=%g, recomb=%g, impact=%g, emis=%g\n", tempo1e4K, ntot, nH, np, recombination, impact, emis);
+  //printf("tempo1e4K=%g, ntot=%g, nH=%g, np=%g, recomb=%g, impact=%g, emis=%g\n", tempo1e4K, ntot, nH, np, recombination, impact, emis);
 
   pmcb->pmy_block->user_out_var(0,k,j,i) = emis;
 
