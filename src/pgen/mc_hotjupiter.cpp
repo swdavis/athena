@@ -1061,34 +1061,38 @@ Real VolumeEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype) 
 // likely to be emitted. The associated cooling of the gas is handled in
 // UpdateSourceTerms, not here - this is just where the emissivity is calculated
 
-   Real rho = pmcb->rho(k,j,i); // cgs units
-   Real tempo1e4K = pmcb->tgas(k,j,i) / 1.0e4;
-   Real invtemp = 1.0/tempo1e4K;
+  Real rho = pmcb->rho(k,j,i); // cgs units
+  Real mp_cgs = MCConstants::mp_cgs;
+  Real ntot = rho/mp_cgs;
+  Real tempo1e4K = pmcb->tgas(k,j,i) / 1.0e4;
+  Real invtemp = 1.0/tempo1e4K;
 
-   // LYA COOLING TERMS
-   // c.f. Christie Arras & Li (2013), Table 2
-   // ----------------------------------------
+  // LYA COOLING TERMS
+  // c.f. Christie Arras & Li (2013), Table 2
+  // ----------------------------------------
 
-   // Recombination rate as a function of temperature
-   // Ionized hydrogen and free electrons combine to produce Lya
-   // Energy per volume per time = 10.2 eV * alpha * np * ne
-   Real alpha = 2.54e-13 * std::pow(tempo1e4K, -0.8164-0.0208*std::log(tempo1e4K));
+  // Recombination rate as a function of temperature
+  // Ionized hydrogen and free electrons combine to produce Lya
+  // Energy per volume per time = 10.2 eV * alpha * np * ne
+  Real alpha = 2.54e-13 * std::pow(tempo1e4K, -0.8164-0.0208*std::log(tempo1e4K));
 
-   // Electron impact excitation rate as a function of temperature
-   // We presume thermal electrons excite neutral H(1s) to the n=2 state (either 2s or 2p)
-   // which then immediately de-excite, producing Lya
-   // Energy per volume per time = 10.2 eV * ctot * nH * ne
-   Real c1s2s = 1.21e-8 * std::pow(invtemp, 0.455) * std::exp(-11.84/tempo1e4K);
-   Real c1s2p = 1.71e-8 * std::pow(invtemp, 0.077) * std::exp(-11.84/tempo1e4K);
-   Real ctot = c1s2s + c1s2p;
+  // Electron impact excitation rate as a function of temperature
+  // We presume thermal electrons excite neutral H(1s) to the n=2 state (either 2s or 2p)
+  // which then immediately de-excite, producing Lya
+  // Energy per volume per time = 10.2 eV * ctot * nH * ne
+  Real c1s2s = 1.21e-8 * std::pow(invtemp, 0.455) * std::exp(-11.84/tempo1e4K);
+  Real c1s2p = 1.71e-8 * std::pow(invtemp, 0.077) * std::exp(-11.84/tempo1e4K);
+  Real ctot = c1s2s + c1s2p;
 
-   // Number density of neutral H, portons
-	 Real nH = pmcb->pmy_block->pscalars->s(0,k,j,i);
-	 Real np = rho - nH;
+  // Number density of neutral H, protons
+	//Real nH = pmcb->pmy_block->pscalars->s(0,k,j,i);
+  Real nH = pmcb->species(0,k,j,i);
+	Real np = ntot - nH;
 
-   Real recombination = alpha*SQR(np*n_cgs);
-   Real impact = ctot*nH*np*SQR(n_cgs);
-   Real emis = recombination + impact;
+  Real recombination = alpha*SQR(np);
+  Real impact = ctot*nH*np;
+  Real emis = recombination + impact;
+  printf("tempo1e4K=%g, ntot=%g, nH=%g, np=%g, recomb=%g, impact=%g, emis=%g\n", tempo1e4K, ntot, nH, np, recombination, impact, emis);
 
   pmcb->pmy_block->user_out_var(0,k,j,i) = emis;
 
