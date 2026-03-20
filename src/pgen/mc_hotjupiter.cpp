@@ -913,7 +913,11 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,
 }
 
 
-// Assumes the star is in the -x direction, i.e. psi = 0
+/*
+ * Second order Hill potential
+ * Assumes the star is in the -x direction, i.e. psi = 0
+ * Inputs and outputs in code units
+ */
 void HillTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
     const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
     const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
@@ -944,11 +948,11 @@ void HillTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
 
         // Coriolis, second order
         Real omega = std::sqrt((gm_star+gm_planet)/(sep*sep*sep));
-        a_r += 2*omega * vel_ph*sinth;
+        a_r  += 2*omega * vel_ph*sinth;
         a_th += 2*omega * vel_ph*costh;
         a_ph -= 2*omega * (vel_r*sinth + vel_th*costh);
 
-        Real src1 = a_r*rho*dt;
+        Real src1 = a_r *rho*dt;
         Real src2 = a_th*rho*dt;
         Real src3 = a_ph*rho*dt;
         cons(IM1,k,j,i) += src1;
@@ -970,7 +974,11 @@ void HillTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
 }
 
 
-// Assumes the star is in the -x direction, i.e. psi = 0
+/*
+ * Third order Hill potential
+ * Assumes the star is in the -x direction, i.e. psi = 0
+ * Inputs and outputs in code units
+ */
 void ThirdOrderTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
   const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
   const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
@@ -1026,7 +1034,7 @@ void ThirdOrderTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
 				a_th += 2*omega * vel_ph*costh;
 				a_ph -= 2*omega * (vel_r*sinth + vel_th*costh);
 
-        Real src1 = a_r*rho*dt;
+        Real src1 = a_r *rho*dt;
         Real src2 = a_th*rho*dt;
         Real src3 = a_ph*rho*dt;
         cons(IM1,k,j,i) += src1;
@@ -1047,39 +1055,44 @@ void ThirdOrderTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
   }
 }
 
+
 Real VolumeEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype) {
 // Sets the value of the emission array which determines where Lya photons are
 // likely to be emitted. The associated cooling of the gas is handled in
 // UpdateSourceTerms, not here - this is just where the emissivity is calculated
 
-   Real rho = pmcb->rho(k,j,i); // cgs units
-   Real tempo1e4K = pmcb->tgas(k,j,i) / 1.0e4;
-   Real invtemp = 1.0/tempo1e4K;
+  Real rho = pmcb->rho(k,j,i); // cgs units
+  Real mp_cgs = MCConstants::mp_cgs;
+  Real ntot = rho/mp_cgs;
+  Real tempo1e4K = pmcb->tgas(k,j,i) / 1.0e4;
+  Real invtemp = 1.0/tempo1e4K;
 
-   // LYA COOLING TERMS
-   // c.f. Christie Arras & Li (2013), Table 2
-   // ----------------------------------------
+  // LYA COOLING TERMS
+  // c.f. Christie Arras & Li (2013), Table 2
+  // ----------------------------------------
 
-   // Recombination rate as a function of temperature
-   // Ionized hydrogen and free electrons combine to produce Lya
-   // Energy per volume per time = 10.2 eV * alpha * np * ne
-   Real alpha = 2.54e-13 * std::pow(tempo1e4K, -0.8164-0.0208*std::log(tempo1e4K));
+  // Recombination rate as a function of temperature
+  // Ionized hydrogen and free electrons combine to produce Lya
+  // Energy per volume per time = 10.2 eV * alpha * np * ne
+  Real alpha = 2.54e-13 * std::pow(tempo1e4K, -0.8164-0.0208*std::log(tempo1e4K));
 
-   // Electron impact excitation rate as a function of temperature
-   // We presume thermal electrons excite neutral H(1s) to the n=2 state (either 2s or 2p)
-   // which then immediately de-excite, producing Lya
-   // Energy per volume per time = 10.2 eV * ctot * nH * ne
-   Real c1s2s = 1.21e-8 * std::pow(invtemp, 0.455) * std::exp(-11.84/tempo1e4K);
-   Real c1s2p = 1.71e-8 * std::pow(invtemp, 0.077) * std::exp(-11.84/tempo1e4K);
-   Real ctot = c1s2s + c1s2p;
+  // Electron impact excitation rate as a function of temperature
+  // We presume thermal electrons excite neutral H(1s) to the n=2 state (either 2s or 2p)
+  // which then immediately de-excite, producing Lya
+  // Energy per volume per time = 10.2 eV * ctot * nH * ne
+  Real c1s2s = 1.21e-8 * std::pow(invtemp, 0.455) * std::exp(-11.84/tempo1e4K);
+  Real c1s2p = 1.71e-8 * std::pow(invtemp, 0.077) * std::exp(-11.84/tempo1e4K);
+  Real ctot = c1s2s + c1s2p;
 
-   // Number density of neutral H, portons
-	 Real nH = pmcb->species(0,k,j,i);
-	 Real np = rho / MCConstants::mp_cgs - nH;
+  // Number density of neutral H, protons
+	//Real nH = pmcb->pmy_block->pscalars->s(0,k,j,i);
+  Real nH = pmcb->species(0,k,j,i);
+	Real np = ntot - nH;
 
-   Real recombination = alpha*SQR(np);
-   Real impact = ctot*nH*np;
-   Real emis = recombination + impact;
+  Real recombination = alpha*SQR(np);
+  Real impact = ctot*nH*np;
+  Real emis = recombination + impact;
+  //printf("rho=%g, ntot=%g, nH=%g, np=%g, recomb=%g, impact=%g, emis=%g\n",rho, ntot, nH, np, recombination, impact, emis);
 
   pmcb->pmy_block->user_out_var(0,k,j,i) = emis;
 
