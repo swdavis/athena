@@ -586,7 +586,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
         Real mu = 2.*pran->uniform()-1.0;
         Real stheta = std::sqrt(1.0-mu*mu);
         Real phi = 2.*PI*pran->uniform();
-        pphot->k0p[ip] = 1. / c_cgs;
+        pphot->k0p[ip] = 1.;
         pphot->k1p[ip] = stheta * std::cos(phi);
         pphot->k2p[ip] = stheta * std::sin(phi);
         pphot->k3p[ip] = mu;
@@ -1074,11 +1074,11 @@ Real VolumeEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype) 
    Real ctot = c1s2s + c1s2p;
 
    // Number density of neutral H, portons
-	 Real nH = pmcb->pmy_block->pscalars->s(0,k,j,i);
-	 Real np = rho - nH;
+	 Real nH = pmcb->species(0,k,j,i);
+	 Real np = rho / MCConstants::mp_cgs - nH;
 
-   Real recombination = alpha*SQR(np*n_cgs);
-   Real impact = ctot*nH*np*SQR(n_cgs);
+   Real recombination = alpha*SQR(np);
+   Real impact = ctot*nH*np;
    Real emis = recombination + impact;
 
   pmcb->pmy_block->user_out_var(0,k,j,i) = emis;
