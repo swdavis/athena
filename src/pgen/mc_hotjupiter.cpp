@@ -1061,9 +1061,7 @@ Real VolumeEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype) 
 // likely to be emitted. The associated cooling of the gas is handled in
 // UpdateSourceTerms, not here - this is just where the emissivity is calculated
 
-  Real rho = pmcb->rho(k,j,i); // cgs units
-  Real mp_cgs = MCConstants::mp_cgs;
-  Real ntot = rho/mp_cgs;
+  Real ntot = pmcb->rho(k,j,i) / MCConstants::mp_cgs;
   Real tempo1e4K = pmcb->tgas(k,j,i) / 1.0e4;
   Real invtemp = 1.0/tempo1e4K;
 
@@ -1134,7 +1132,6 @@ Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype)
       Real r2 = pco->x1f(i+1)*pco->x1f(i+1);
       Real nflux = r2*lya_flux/energy_lya/pco->GetFace1Area(k,j,i+1);
       emis = -0.5*nflux*(thp-thm-(std::sin(thp - thm)*std::cos(thp + thm)))*(sphp-sphm);
- ;
 
     }
   }
