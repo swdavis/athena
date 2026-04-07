@@ -27,7 +27,7 @@ def main(**kwargs):
     # Filenames for io
     infile = kwargs.pop('infile')
     outfile = kwargs.pop('outfile')
-  
+
     # spectrum parameters
     nx = kwargs.pop('nx')
     xmin = kwargs.pop('xmin')
@@ -37,7 +37,7 @@ def main(**kwargs):
     # check for screening function
     screen_name = kwargs.pop('screen')
     if screen_name != 'no_screen':
-        screen_function = getattr(screen, screen_name) 
+        screen_function = getattr(screen, screen_name)
 
     # Read photon list
     reader = athenamc.read_list_generator(infile)
@@ -46,16 +46,20 @@ def main(**kwargs):
 
     spectrum = {}
     nchunk = 0
+    list_lum = 0.
     for result in reader:
-    
+
         phlist = header.copy()
         phlist['list'] = result['chunk']
         phlist['length'] = result['length']
-        
+
+        if kwargs['calclum']:
+            list_lum += athenamc.get_luminosity_list(phlist)
+
         if (nchunk % 20) == 0:
             print(f"Generating spectrum: {result['remaining']} samples remain.")
         nchunk += 1
-        
+
         # Creat photon object for current chunk
         phots = Photons(phlist)
 
@@ -73,6 +77,8 @@ def main(**kwargs):
         if result['done']:
             break
 
+    if (kwargs['calclum']):
+        print("List luminosity: ", list_lum)
     # Write spectrum to file
     if outfile is None:
         outfile = infile.replace('.list','.spec')
@@ -116,6 +122,9 @@ if __name__ == '__main__':
         type = float,
         default = 2.*np.pi,
         help = 'maximum phi')
+    parser.add_argument('--anglebin',
+        default = 'cartesian',
+        help = 'controls binning: cartesian or spherical')
     parser.add_argument('--xaxis',
         default = 'ev',
         help = 'variable to be used for x axis: ev, kev, nu, lambda')

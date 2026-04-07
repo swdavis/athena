@@ -1153,7 +1153,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         } else if (var.compare("mcsrc") == 0) {
           mom_flag_src = true;
         } else if (var.compare("mcscat") == 0) {
-          mom_flag_scat = true; 
+          mom_flag_scat = true;
         } else if (var.compare("uom") == 0) {
           if (pmy_mc->nuser_mom > 0) {
             mom_flag_usr = true;
@@ -1337,7 +1337,7 @@ void MCOutput::OutputSpectrum(bool wtflag) {
 
   if (pspec == nullptr) //no spectra requested
     return;
-  
+
   Spectrum *pspect = pspec;
   Spectrum *pspecout = nullptr;
   // Check if any spectra are ready to be output

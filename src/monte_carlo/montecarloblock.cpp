@@ -622,10 +622,6 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
                                " photon destroyed",ip);
             }
         }
-	pphot->statp[ip] = DESTROYED;
-	if (pmy_mc->verbose) {
-	  pphot->PrintPhoton("Scattering Check",ip);
-	}
       }
 
       // Update the absorption and scattering extinction coefficients
@@ -913,7 +909,6 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   // tetrad frame  (currently lab frame)
   // coordinate frame
 
-  dl *= pphot->ep[ip];
   int i1 = pphot->i1p[ip];
   int i2 = pphot->i2p[ip];
   int i3 = pphot->i3p[ip];
@@ -921,6 +916,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   Real k0,k1,k2,k3,weight;
   const Real c_cgs = 2.99792458e10;
   if (pmy_mc->general_pusher_flag) {
+    dl *= pphot->ep[ip];
     Real ki[4];
     ki[0] = pphot->k0p[ip];
     ki[1] = pphot->k1p[ip];
@@ -1000,7 +996,8 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     int n = std::floor((loge-energy_scat(0))/dloge_scat);
     if (n >= 0 && n < nf_scat) {
       Real norm = c_cgs/(4.*PI*freq_scat_mid(n)*dloge_scat*log10);
-      moments_scat(n,i3,i2,i1) += norm * pphot->scp[ip] * weight * k0 * k0;
+      moments_scat(n,i3,i2,i1) += norm * weight;
+      //moments_scat(n,i3,i2,i1) += norm * pphot->scp[ip] * weight * k0 * k0;
     }
   }
 

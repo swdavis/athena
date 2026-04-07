@@ -374,7 +374,7 @@ void GeneralPusher::RK4Step(Photon *pphot, Real step, int ip) {
 
 void GeneralPusher::SubStep(Real xcon[4], Real kcov[4], Real dl[8]) {
 
-  for (int i = 0; i < 9; i++)
+  for (int i = 0; i < 8; i++)
     dl[i] = 0.0;
 
   Real gcon[4][4];

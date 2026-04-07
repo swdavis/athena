@@ -1240,10 +1240,10 @@ def get_angle_bins_spherical(photons,nmu,mufaces):
 
     # Bin based on k_r
     mu = kr
-    mubins = get_bins(mu,mufaces,nmu,log=False)
+    mubins = get_bins(mu, mufaces ,nmu, log=False)
 
     # return 0 for phi
-    phibins = np.zeros(photons.nphot,dtype=int)
+    phibins = np.zeros(photons.nphot, dtype=int)
 
     return mubins, phibins
 
