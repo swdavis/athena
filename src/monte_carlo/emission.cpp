@@ -26,7 +26,6 @@ Real GetEmissionFreeFree(MonteCarloBlock *pmcb, int k, int j, int i, int etype) 
   //eta0 *= 12.;  // Added to match the Athena++ prescription
 
   Real temp = pmcb->tgas(k,j,i);
-
   return eta0 / sqrt(temp) * pmcb->nel(k,j,i) * pmcb->nion(k,j,i) * gaunt;
 
 }
