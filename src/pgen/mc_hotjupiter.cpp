@@ -83,6 +83,7 @@ int  flag_tidal_gravity;
 bool flag_dynamic = false;
 bool flag_wind = false;
 bool flag_pow_law = false;
+bool flag_lya_abs;
 
 enum PhotonType {NO_TYPE=0, LYA=1, IONIZING=2};
 enum EmissionGeometryLya {NO_GEOMETRY=0, VOLUME=1, SURFACE=2};
@@ -302,8 +303,10 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
   // Photon user variables for incident and outgoing direction vector and position
   nuser_var = 1;
 
+  flag_lya_abs = pin->GetOrAddBoolean("problem", "lya_abs", false);
+
   //EnrollUserWorkInMove(EscapeCoords);
-  EnrollUserOpacityFunction(ResonantScatteringOpacity, false);
+  EnrollUserOpacityFunction(ResonantScatteringOpacity, flag_lya_abs);
   EnrollUserOpacityFunction(BoundFreeAbsorptionOpacity, true);
   EnrollUserScatteringFunction(ResonantScattering);
   //EnrollUserEmissionFunction(MultipleEmissivities);
