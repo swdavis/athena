@@ -468,7 +468,7 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
   // convert to cgs units
   Real vel_cgs = pin->GetOrAddReal("problem","vel_cgs",1.);
   Real l_cgs = pin->GetOrAddReal("problem","l_cgs",1.);
-  time_cgs = pin->GetOrAddReal("problem","time_cgs",l_cgs/vel_cgs);
+  Real time_cgs = l_cgs/vel_cgs;
   tint *= time_cgs;
   tmax *= time_cgs;
 
@@ -517,6 +517,8 @@ void MonteCarlo::InitializeEmission(ParameterInput *pin) {
   }
   nsamptype = new int64_t[ntype];
   emission_eqwt = new bool[ntype];
+  std::string abs_def = pin->GetOrAddString("montecarlo","abs_method","weight");
+  absorption_method = new AbsorptionMethodFlag[ntype];
   GetEmission = new EmisFunc_t[ntype];
   emission_geometry = new int[ntype];
   emission_face = new BoundaryFace[ntype];
@@ -525,12 +527,14 @@ void MonteCarlo::InitializeEmission(ParameterInput *pin) {
     GetEmission[0] = nullptr; // left unset
     nsamptype[0] = nsamp = pin->GetInteger("montecarlo","nphot");
     emission_eqwt[0] = pin->GetOrAddBoolean("montecarlo","equal_weight",false);
+    absorption_method[0] = GetAbsorptionMethodFlag(abs_def);
     emission_geometry[0] = GetEmissionGeometry(pin->GetOrAddString("montecarlo","emission_geometry","none"));
     emission_array = false; // do not allocate memory for array;
   } else if (emission_flag ==  EMISUSER) {
     GetEmission[0] = nullptr; // must be set in InitUserMonteCarloData
     nsamptype[0] = nsamp = pin->GetInteger("montecarlo","nphot");
     emission_eqwt[0] = pin->GetOrAddBoolean("montecarlo","equal_weight",false);
+    absorption_method[0] = GetAbsorptionMethodFlag(abs_def);
     emission_geometry[0] = GetEmissionGeometry(pin->GetOrAddString("montecarlo","emission_geometry","volume"));
     if (emission_geometry[0] == EMISAREA)
       emission_face[0] = SetEmissionSurface(pin->GetOrAddString("montecarlo","emission_face","none"));
@@ -539,18 +543,21 @@ void MonteCarlo::InitializeEmission(ParameterInput *pin) {
     GetEmission[0] = GetEmissionFreeFree;
     nsamptype[0] = nsamp = pin->GetInteger("montecarlo","nphot");
     emission_eqwt[0] = pin->GetOrAddBoolean("montecarlo","equal_weight",false);
+    absorption_method[0] = GetAbsorptionMethodFlag(abs_def);
     emission_geometry[0] = EMISVOL; // Must be volumetric
     emission_array = true; // allocate memory for array
   } else if (emission_flag ==  EMISBB) {
     GetEmission[0] = GetEmissionBlackbody;
     nsamptype[0] = nsamp = pin->GetInteger("montecarlo","nphot");
     emission_eqwt[0] = pin->GetOrAddBoolean("montecarlo","equal_weight",false);
+    absorption_method[0] = GetAbsorptionMethodFlag(abs_def);
     emission_geometry[0] = EMISAREA; // Must be areal
     emission_face[0] = SetEmissionSurface(pin->GetString("montecarlo","emission_face"));
     emission_array = true; // allocate memory for array
   } else if (emission_flag ==  MULTI) {
-    // GetEmission and other arrays must be set in InitUserMonteCarloDatea
+    // GetEmission and other arrays must be set in InitUserMonteCarloData
     emission_array = pin->GetOrAddBoolean("montecarlo","emission_array",true);
+
   }
 
 
@@ -638,12 +645,7 @@ void MonteCarlo::DistributeSamples(int etype) {
       my_blocks(nb)->minweight = weightratio * ave_weight;
       my_blocks(nb)->emiss_to_weight = ave_weight;
       // distribute photons within each block
-      //if (pmy_mc->emission_geometry[etype] == EMISVOL) {
-        my_blocks(nb)->ComputeEmissionSampleArray();
-      //} else if (pmy_mc->emission_geometry[etype] == EMISAREA) {
-      //  BoundaryFace face = pmy_mc->emission_face[etype];
-      //  my_blocks(nb)->ComputeEmissionSampleArray(face);
-      //}
+      my_blocks(nb)->ComputeEmissionSampleArray();
     }
 
   } else {
@@ -730,6 +732,12 @@ void MonteCarlo::RunMonteCarlo(Outputs *pouts, Mesh *pmesh,
     if (tmax < 0.)
       tmax = pmy_mesh->dt;
     tint = pmy_mesh->dt;
+    // convert to cgs units
+    Real vel_cgs = pinput->GetOrAddReal("problem","vel_cgs",1.);
+    Real l_cgs = pinput->GetOrAddReal("problem","l_cgs",1.);
+    Real time_cgs = l_cgs/vel_cgs;
+    tint *= time_cgs;
+    tmax *= time_cgs;
   }
 
   // Update MC blocks if needed
@@ -748,8 +756,7 @@ void MonteCarlo::RunMonteCarlo(Outputs *pouts, Mesh *pmesh,
       // Clear Boundary buffers for photons
       pmcb->pphot->ClearBoundary();
     }
-    // reset counters
-    pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
+  
   }
 
    // reset moments/sourcterms for start of new timestep
@@ -764,6 +771,12 @@ void MonteCarlo::RunMonteCarlo(Outputs *pouts, Mesh *pmesh,
   }
 
   for (int etype=0; etype < ntype; etype++) {
+
+      // reset counters
+    for (int nb=0; nb<nblocal; nb++) {
+      MonteCarloBlock *pmcb = my_blocks(nb);
+      pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
+    }
     // Distribute samples to all blocks based on emission properties
     // Sets nphremain and parameters for determining initial photon weights
     DistributeSamples(etype);
@@ -772,7 +785,6 @@ void MonteCarlo::RunMonteCarlo(Outputs *pouts, Mesh *pmesh,
     // Run Monte Carlo until all photons have escaped/been absorbed
     bool photons_remain = true; // True if photons on any process
     while(photons_remain) {
-
       for(int nb=0; nb<nblocal; ++nb){
         if (raytrace_flag)
           my_blocks(nb)->RayTracePhotonsOnBlock(etype);
@@ -860,6 +872,8 @@ bool MonteCarlo::CheckAndBroadCastPhotonsRemaining() {
     nprop += pmcb->pphot->nphot;
     //if (pmcb->nphremain > 0)
     //  printf("rem: %d %d \n",pmcb->pmy_block->gid,pmcb->nphremain);
+    //if (pmcb->pphot->nphot > 0)
+    //  printf("prop: %d %d \n",pmcb->pmy_block->gid,pmcb->pphot->nphot);
   }
 #ifdef MPI_PARALLEL
   MPI_Allreduce(MPI_IN_PLACE,&nprop,1,MPI_INT,MPI_MAX,MPI_COMM_WORLD);

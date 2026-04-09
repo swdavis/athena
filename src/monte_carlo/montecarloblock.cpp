@@ -150,6 +150,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   tfloor_cgs = pin->GetOrAddReal("problem","tfloor_cgs",0.);
   tceiling_cgs = pin->GetOrAddReal("problem","tceiling_cgs",HUGE_NUMBER);
   l_cgs = pin->GetOrAddReal("problem","l_cgs",1.);
+  time_cgs = l_cgs/vel_cgs;
   betamax = pin->GetOrAddReal("problem","betamax",0.999);
 
   // SWD:  stepsize control needs to be modified
@@ -331,9 +332,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   // Set pcoord in ppusher
   ppusher->pcoord = pcoord;
 
-  // Set absorption opacity and method
-  absorption_meth = GetAbsorptionMethodFlag(pin->GetOrAddString("montecarlo","abs_method",
-                                                                "weight"));
+  // Set absorption opacity type
   absorption_opac = GetAbsorptionOpacityFlag(pin->GetOrAddString("montecarlo",
                                                                  "absorption","none"));
   if (absorption_opac == ABSUSER) {
@@ -345,6 +344,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   } else if (absorption_opac == ABSDUST) {
     AbsorptionOpacity = DustAbsorptionOpacity;
   }
+  // Get number of species
+  nspec = pin->GetOrAddInteger("problem","nspec",2);
 
   // Allocate (/initialize) variable arrays needed for evolution/output
   int ncells1 = nx1 + 2*(NGHOST);
@@ -352,8 +353,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   if (nx2 > 1) ncells2 = nx2 + 2*(NGHOST);
   if (nx3 > 1) ncells3 = nx3 + 2*(NGHOST);
   rho.NewAthenaArray(ncells3,ncells2,ncells1);
-  nel.NewAthenaArray(ncells3,ncells2,ncells1);
-  nion.NewAthenaArray(ncells3,ncells2,ncells1);
+  species.NewAthenaArray(nspec,ncells3,ncells2,ncells1);
   tgas.NewAthenaArray(ncells3,ncells2,ncells1);
   if (boosts || tetrads) {
     boost_cmv.NewAthenaArray(ncells3,ncells2,ncells1,4,4);
@@ -363,8 +363,9 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   if (NSCALARS > 0) scalars.NewAthenaArray(ncells3,ncells2,ncells1);
   // moments is 1 (Er) + 3 (Fr) + 9 (Pr) + 1 (Eave) + 1 (net cool)
   nmom = 13;
-  if (mom_flag_lab) moments.NewAthenaArray(nmom,ncells3,ncells2,ncells1);
-  if (mom_flag_com) moments_com.NewAthenaArray(nmom,ncells3,ncells2,ncells1);
+  int ntype = pmy_mc->ntype;
+  if (mom_flag_lab) moments.NewAthenaArray(ntype,nmom,ncells3,ncells2,ncells1);
+  if (mom_flag_com) moments_com.NewAthenaArray(ntype,nmom,ncells3,ncells2,ncells1);
   if (pmy_mc->nuser_mom > 0)
     moments_user.NewAthenaArray(pmy_mc->nuser_mom,ncells3,ncells2,ncells1);
   nsrc = 10;
@@ -428,8 +429,7 @@ MonteCarloBlock::~MonteCarloBlock() {
   //delete ptraj;
 
   rho.DeleteAthenaArray();
-  nel.DeleteAthenaArray();
-  nion.DeleteAthenaArray();
+  species.DeleteAthenaArray();
   tgas.DeleteAthenaArray();
   if (boosts || tetrads) {
     boost_cmv.DeleteAthenaArray();
@@ -473,10 +473,10 @@ void MonteCarloBlock::RayTracePhotonsOnBlock(int etype) {
 
     // user definied photon initialization
     InitializePhoton(pphot,nold,pphot->nphot-1,etype);
-    if (ptraj != nullptr) {
-      for (int ip=nold; ip < pphot->nphot; ip++)
-        ptraj->InitializeTrajectory(pphot->trp[ip]);
-    }
+    //if (ptraj != nullptr) {
+    //  for (int ip=nold; ip < pphot->nphot; ip++)
+    //    ptraj->InitializeTrajectory(pphot->trp[ip]);
+    //}
   }
   int ntot = pphot->nphot;
 
@@ -491,9 +491,9 @@ void MonteCarloBlock::RayTracePhotonsOnBlock(int etype) {
         // User defined completion work
         FinalizePhoton(pphot,ip);
 
-        if (ptraj != nullptr) {
-          ptraj->CompleteTrajectory(pphot->trp[ip]);
-        }
+        //if (ptraj != nullptr) {
+        //  ptraj->CompleteTrajectory(pphot->trp[ip]);
+        //}
       }
       if (pphot->statp[ip] == ESCAPED) {
         // loop over outputs for escaping photons and update
@@ -534,6 +534,9 @@ void MonteCarloBlock::RayTracePhotonsOnBlock(int etype) {
 
 void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
 
+  // Set absorption method for this photon type
+  enum AbsorptionMethodFlag absorption_meth = pmy_mc->absorption_method[etype];
+
   //int nbuf = 0;
   int nold = pphot->nphot;
   int ntot = nold + nphremain;
@@ -570,10 +573,18 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
       }
     }
   }
-
+  //if (pphot->nphot == 1) {
+  //  printf("gid: %d\n",pmy_block->gid);
+  //  printf("%g %g",pcoord->x1f(is),pcoord->x1f(ie+1));
+  //  pphot->PrintPhoton("before",0);
+  //}
   // move all samples to next interaction or boundary
   //printf("%d %d\n",pmy_block->gid, pphot->nphot);
   ppusher->Move(pphot,0,pphot->nphot-1);
+  //if (pphot->nphot == 1) {
+  //  printf("gid: %d\n",pmy_block->gid);
+  //  pphot->PrintPhoton("after",0);
+  //}
   //printf("%d done\n",pmy_block->gid);
   // perform all absorption and scattering related tasks for all samples
   for (int ip=0; ip<pphot->nphot; ip++) {
@@ -583,7 +594,6 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
     Real k1p0 = pphot->k1p[ip];
     Real k2p0 = pphot->k2p[ip];
     Real k3p0 = pphot->k3p[ip];
-
     // account for absorption
     if (pphot->statp[ip] == EVOLVING) {
       if (absorption_meth == ABSWEIGHT) {
@@ -613,6 +623,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
       nscat++;
       pphot->nscp[ip]++;
       if (pphot->nscp[ip] % pmy_mc->checkscat == 0) {
+        pphot->PrintPhoton("check scat",ip);
         // Check for possible infinite loop due to NaN in photon
         if (pphot->IsNanPhoton(ip)) {
           pphot->statp[ip] = DESTROYED;
@@ -685,8 +696,8 @@ void MonteCarloBlock::CoupleMonteCarloToFluid(Real dt) {
 
   if (!coupled) return;
 
-  Real edot_cgs = pmy_mc->time_cgs / (rho_cgs * SQR(vel_cgs));
-  Real pdot_cgs = pmy_mc->time_cgs / (rho_cgs * vel_cgs);
+  Real edot_cgs_inv = time_cgs / (rho_cgs * SQR(vel_cgs));
+  Real pdot_cgs_inv = time_cgs / (rho_cgs * vel_cgs);
 
   NormalizeSourceTerms(true);
 
@@ -695,12 +706,12 @@ void MonteCarloBlock::CoupleMonteCarloToFluid(Real dt) {
       for (int j=pmb->js; j<=pmb->je; ++j) {
 #pragma omp simd
         for (int i=pmb->is; i<=pmb->ie; ++i) {
-          pmb->phydro->u(IEN,k,j,i) += dt * edot_cgs * sourceterms(MCRS0,k,j,i);
-          pmb->phydro->u(IM1,k,j,i) += dt * pdot_cgs * sourceterms(MCRF1,k,j,i)
+          pmb->phydro->u(IEN,k,j,i) += dt * edot_cgs_inv * sourceterms(MCRS0,k,j,i);
+          pmb->phydro->u(IM1,k,j,i) += dt * pdot_cgs_inv * sourceterms(MCRF1,k,j,i)
                                           * pmb->phydro->u(IDN,k,j,i);
-          pmb->phydro->u(IM2,k,j,i) += dt * pdot_cgs * sourceterms(MCRF2,k,j,i)
+          pmb->phydro->u(IM2,k,j,i) += dt * pdot_cgs_inv * sourceterms(MCRF2,k,j,i)
                                           * pmb->phydro->u(IDN,k,j,i);
-          pmb->phydro->u(IM3,k,j,i) += dt * pdot_cgs * sourceterms(MCRF3,k,j,i)
+          pmb->phydro->u(IM3,k,j,i) += dt * pdot_cgs_inv * sourceterms(MCRF3,k,j,i)
                                           * pmb->phydro->u(IDN,k,j,i);
         }
       }
@@ -879,20 +890,16 @@ void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign, int ips, i
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip)
-//! \brief Overload for UpdateMoments with additional wait time argument
+//! \brief Overload for UpdateMoments with additional extinction argument
 
 void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
 
   // Account for attenuation along ray
   Real leff;
-  if (absorption_meth == ABSTAU) {
-    if (fabs(1.-etau) < TINY_NUMBER) {
-      leff = dl;
-    } else {
-      leff = (1.-etau)/pphot->acp[ip];;
-    }
-  } else {
+  if (fabs(1.-etau) < TINY_NUMBER) {
     leff = dl;
+  } else {
+    leff = (1.-etau)/pphot->acp[ip];;
   }
   UpdateMoments(pphot, leff, ip);
 }
@@ -907,6 +914,8 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   // comoving frame (supported already)
   // tetrad frame  (currently lab frame)
   // coordinate frame
+
+  int type = pphot->type[ip];
 
   //dl *= pphot->ep[ip];
   int i1 = pphot->i1p[ip];
@@ -941,21 +950,41 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     k3 = kf[3]/ep;
 
     // Weight moments by time spent in domain
-    weight = pphot->wp[ip] * pphot->ep[ip] / k0 * dl * l_cgs / c_cgs;
+    weight = pphot->wp[ip] * pphot->ep[ip] / k0 * dl / c_cgs;
   } else {
     k0 = pphot->k0p[ip];
     k1 = pphot->k1p[ip];
     k2 = pphot->k2p[ip];
     k3 = pphot->k3p[ip];
-    // Weight moments by time spent in domain
-    weight = pphot->wp[ip] * pphot->ep[ip] * dl * l_cgs / c_cgs;
-  }
 
-  // Normalize k vector if using general pusher in spherical polar coords
-  //if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_pusher_flag)) {
-  //  k2 *= pphot->x1p[ip];
-  //  k3 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
-  //}
+    if (COORDINATE_SYSTEM == "spherical_polar") {
+      Real theta = pphot->x2p[ip];
+      Real phi = pphot->x3p[ip];
+      Real sth = sin(theta);
+      Real cth = cos(theta);
+      Real sph = sin(phi);
+      Real cph = cos(phi);
+      Real nx = sth * cph * k1 + cth * cph * k2 - sph * k3;
+      Real ny = sth * sph * k1 + cth * sph * k2 + cph * k3;
+      Real nz = cth * k1 - sth * k2;
+      theta = pmy_block->pcoord->x2v(i2);
+      phi = pmy_block->pcoord->x3v(i3);
+      sth = sin(theta);
+      cth = cos(theta);
+      sph = sin(phi);
+      cph = cos(phi);
+      k1 = sth * cph * nx + sth * sph * ny + cth * nz;
+      k2 = cth * cph * nx + cth * sph * ny - sth * nz;
+      k3 = -sph * nx + cph * ny;
+      //printf("k: %g %g %g %g %g %g %g %g %g\n",k1,k2,k3,nx,ny,nz,pphot->k1p[ip],pphot->k2p[ip],pphot->k3p[ip]);
+
+      //printf("k: %g %g %g %g %g %g\n",k1,k2,k3,pphot->k1p[ip],pphot->k2p[ip],pphot->k3p[ip]);
+      // SWD: this could be simplified since only phi_1-phi_2 enters,
+      // but would only save two sin/cos evalutations 
+    }
+    // Weight moments by time spent in domain
+    weight = pphot->wp[ip] * pphot->ep[ip] * dl / c_cgs;
+  }
 
   if (mom_flag_lab) {
     if (std::isinf(weight) || std::isnan(weight) || std::isnan(k0) || std::isnan(k1) ||
@@ -969,21 +998,21 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     } else {
       // Add contribution to corresponding moments
       // Energy density
-      moments(MCIER,i3,i2,i1) += weight * k0 * k0;
-      if (std::isnan(moments(MCIER,i3,i2,i1))) {
-        printf("k0: %e weight: %e dl: %e %g\n",k0,weight,dl,moments(MCIER,i3,i2,i1));
+      moments(type,MCIER,i3,i2,i1) += weight * k0 * k0;
+      if (std::isnan(moments(type,MCIER,i3,i2,i1))) {
+        printf("k0: %e weight: %e dl: %e %g\n",k0,weight,dl,moments(type,MCIER,i3,i2,i1));
       }
       // Flux
-      moments(MCIFR1,i3,i2,i1) += weight * k0 * k1 * c_cgs;
-      moments(MCIFR2,i3,i2,i1) += weight * k0 * k2 * c_cgs;
-      moments(MCIFR3,i3,i2,i1) += weight * k0 * k3 * c_cgs;
+      moments(type,MCIFR1,i3,i2,i1) += weight * k0 * k1 * c_cgs;
+      moments(type,MCIFR2,i3,i2,i1) += weight * k0 * k2 * c_cgs;
+      moments(type,MCIFR3,i3,i2,i1) += weight * k0 * k3 * c_cgs;
       // Radiation Pressure
-      moments(MCIPR11,i3,i2,i1) += weight * k1 * k1;
-      moments(MCIPR22,i3,i2,i1) += weight * k2 * k2;
-      moments(MCIPR33,i3,i2,i1) += weight * k3 * k3;
-      moments(MCIPR12,i3,i2,i1) += weight * k1 * k2;
-      moments(MCIPR13,i3,i2,i1) += weight * k1 * k3;
-      moments(MCIPR23,i3,i2,i1) += weight * k2 * k3;
+      moments(type,MCIPR11,i3,i2,i1) += weight * k1 * k1;
+      moments(type,MCIPR22,i3,i2,i1) += weight * k2 * k2;
+      moments(type,MCIPR33,i3,i2,i1) += weight * k3 * k3;
+      moments(type,MCIPR12,i3,i2,i1) += weight * k1 * k2;
+      moments(type,MCIPR13,i3,i2,i1) += weight * k1 * k3;
+      moments(type,MCIPR23,i3,i2,i1) += weight * k2 * k3;
     }
   }
 
@@ -1020,13 +1049,13 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
       k1c = kc[1];
       k2c = kc[2];
       k3c = kc[3];
-      weight = pphot->wp[ip] * pphot->ep[ip] / k0c * dl * l_cgs / c_cgs;
+      weight = pphot->wp[ip] * pphot->ep[ip] / k0c * dl / c_cgs;
     } else {
       Real shift = kc[0]/k0;
       k1c = kc[1]/kc[0];
       k2c = kc[2]/kc[0];
       k3c = kc[3]/kc[0];
-      weight = pphot->wp[ip] * pphot->ep[ip] * dl * SQR(shift) * l_cgs / c_cgs;
+      weight = pphot->wp[ip] * pphot->ep[ip] * dl * SQR(shift) / c_cgs;
     }
 
     //Real dlcom = dl * shift;
@@ -1046,18 +1075,18 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     } else {
       // Add contribution to corresponding moments
       // Energy density
-      moments_com(MCIER,i3,i2,i1) += weight * k0c * k0c;
+      moments_com(type,MCIER,i3,i2,i1) += weight * k0c * k0c;
       // Flux
-      moments_com(MCIFR1,i3,i2,i1) += weight * k0c * k1c * c_cgs;
-      moments_com(MCIFR2,i3,i2,i1) += weight * k0c * k2c * c_cgs;
-      moments_com(MCIFR3,i3,i2,i1) += weight * k0c * k3c * c_cgs;
+      moments_com(type,MCIFR1,i3,i2,i1) += weight * k0c * k1c * c_cgs;
+      moments_com(type,MCIFR2,i3,i2,i1) += weight * k0c * k2c * c_cgs;
+      moments_com(type,MCIFR3,i3,i2,i1) += weight * k0c * k3c * c_cgs;
       // Radiation Pressure
-      moments_com(MCIPR11,i3,i2,i1) += weight * k1c * k1c;
-      moments_com(MCIPR22,i3,i2,i1) += weight * k2c * k2c;
-      moments_com(MCIPR33,i3,i2,i1) += weight * k3c * k3c;
-      moments_com(MCIPR12,i3,i2,i1) += weight * k1c * k2c;
-      moments_com(MCIPR13,i3,i2,i1) += weight * k1c * k3c;
-      moments_com(MCIPR23,i3,i2,i1) += weight * k2c * k3c;
+      moments_com(type,MCIPR11,i3,i2,i1) += weight * k1c * k1c;
+      moments_com(type,MCIPR22,i3,i2,i1) += weight * k2c * k2c;
+      moments_com(type,MCIPR33,i3,i2,i1) += weight * k3c * k3c;
+      moments_com(type,MCIPR12,i3,i2,i1) += weight * k1c * k2c;
+      moments_com(type,MCIPR13,i3,i2,i1) += weight * k1c * k3c;
+      moments_com(type,MCIPR23,i3,i2,i1) += weight * k2c * k3c;
     }
   }
 
@@ -1069,14 +1098,14 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
 
   if (call_srcterms) {
     // Radiative Acceleration from flux (always lab frame)
-    Real weight = pphot->wp[ip] * pphot->ep[ip] * dl * l_cgs / c_cgs;
+    Real weight = pphot->wp[ip] * pphot->ep[ip] * dl / c_cgs;
     Real abs_coef = pphot->acp[ip];
     Real sct_coef = pphot->scp[ip];
     sourceterms(MCRF1,i3,i2,i1) += (sct_coef+abs_coef) * weight * k1;
     sourceterms(MCRF2,i3,i2,i1) += (sct_coef+abs_coef) * weight * k2;
     sourceterms(MCRF3,i3,i2,i1) += (sct_coef+abs_coef) * weight * k3;
 
-    if (absorption_meth == ABSTAU) {
+    if (pmy_mc->absorption_method[pphot->type[ip]] == ABSTAU) {
         Real hplanck = 6.62607015e-27;
         Real threshold = 3.28808816e+15 * hplanck;
         // Update soucterms for ionizing radiation
@@ -1100,6 +1129,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
 void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl, Real k1,
                                                 Real k2, Real k3, Real etau, int ip) {
 
+  int type = pphot->type[ip];
   const Real c_cgs = 2.99792458e10;;
   Real k1p = pphot->k1p[ip];
   Real k2p = pphot->k2p[ip];
@@ -1147,15 +1177,12 @@ void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl,
   }
   // Account for attenuation along ray
   Real leff;
-  if (absorption_meth == ABSTAU) {
-    if (fabs(1.-etau) < TINY_NUMBER) {
-      leff = step;
-    } else {
-      leff = (1.-etau)/abs_coef;
-    }
-  } else {
+  if (fabs(1.-etau) < TINY_NUMBER) {
     leff = step;
+  } else {
+    leff = (1.-etau)/abs_coef;
   }
+
   // Weight moments by time spent in domain
 
   Real weight = pphot->wp[ip] * energy * leff / c_cgs;
@@ -1180,152 +1207,24 @@ void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl,
     if (mom_flag_lab) {
       // Add contribution to corresponding moments
       // Energy density
-      moments(MCIER,k,j,i) += path_weight;
+      moments(type,MCIER,k,j,i) += path_weight;
       // Flux
-      moments(MCIFR1,k,j,i) += weight1 * c_cgs;
-      moments(MCIFR2,k,j,i) += weight2 * c_cgs;
-      moments(MCIFR3,k,j,i) += weight3 * c_cgs;
-
+      moments(type,MCIFR1,k,j,i) += weight1 * c_cgs;
+      moments(type,MCIFR2,k,j,i) += weight2 * c_cgs;
+      moments(type,MCIFR3,k,j,i) += weight3 * c_cgs;
       // Radiation Pressure
       Real weightp = weight1 * k1p;
-      moments(MCIPR11,k,j,i) += weightp;
+      moments(type,MCIPR11,k,j,i) += weightp;
       weightp = weight2 * k2p;
-      moments(MCIPR22,k,j,i) += weightp;
+      moments(type,MCIPR22,k,j,i) += weightp;
       weightp = weight3 * k3p;
-      moments(MCIPR33,k,j,i) += weightp;
+      moments(type,MCIPR33,k,j,i) += weightp;
       weightp = weight1 * k2p;
-      moments(MCIPR12,k,j,i) += weightp;
+      moments(type,MCIPR12,k,j,i) += weightp;
       weightp = weight1 * k3p;
-      moments(MCIPR13,k,j,i)  += weightp;
+      moments(type,MCIPR13,k,j,i)  += weightp;
       weightp = weight2 * k3p;
-      moments(MCIPR23,k,j,i) += weightp;
-      // Photon mean energy
-      //moments(MCIEN,k,j,i) += weight * energy;
-      // Jmean opacity
-      //moments(MCIKJ,k,j,i) += weight * abs_coef;
-    }
-
-    if (call_srcterms) {
-      // Radiative Acceleration from flux
-      sourceterms(MCRF1,k,j,i) += (sct_coef+abs_coef) * weight1;
-      sourceterms(MCRF2,k,j,i) += (sct_coef+abs_coef) * weight2;
-      sourceterms(MCRF3,k,j,i) += (sct_coef+abs_coef) * weight3;
-    }
-  }
-
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::UpdateMomentsOld(Photon *pphot, Real dl, Real etau, int ip)
-//! \brief add contribution to radiation moments in current zone
-// SWD: remove this!
-void MonteCarloBlock::UpdateMomentsOld(Photon *pphot, Real dl, Real pl, Real k1, Real k2,
-                                    Real k3, Real etau, int ip) {
-
-  const Real c_cgs = 2.99792458e10;
-  Real k1p = pphot->k1p[ip];
-  Real k2p = pphot->k2p[ip];
-  Real k3p = pphot->k3p[ip];
-
-  // Normalize k vector if using general pusher in spherical polar coords
-
-  if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_pusher_flag)) {
-    k2p *= pphot->x1p[ip];
-    k3p *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
-  }
-
-  Real energy, abs_coef, sct_coef, step;
-  // BCM: Comoving moments currently do not work with code acceleration
-  if (mom_flag_com) {
-    // boost relevant quanitities to comoving frame
-    energy = pphot->ep[ip];
-    int i1 = pphot->i1p[ip], i2 = pphot->i2p[ip], i3 = pphot->i3p[ip];
-    Real beta[3];
-    for (int i=0; i<3; ++i) {
-      beta[i] = vel(i3,i2,i1,i+1);
-    }
-    Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
-
-    if(beta2 > 0.) {
-      Real gamma = 1. / sqrt(1. - beta2); // assumes v^2 < c^2 checked elsewhere
-      Real bdk = k1p * beta[0] + k2p * beta[1] + k3p * beta[2];
-      Real gonembdk = gamma * (1. - bdk);
-      Real aber = gamma*(1.-gamma*bdk/(gamma+1.));
-
-      energy *= gonembdk;
-      k1p = (k1p - aber * beta[0]) / gonembdk;
-      k2p = (k2p - aber * beta[1]) / gonembdk;
-      k3p = (k3p - aber * beta[2]) / gonembdk;
-      abs_coef = pphot->acp[ip] / gonembdk;
-      sct_coef = pphot->scp[ip] / gonembdk;
-      step = dl * gonembdk;
-    }
-  } else {
-    // Use eulerian values
-    energy = pphot->ep[ip];
-    abs_coef = pphot->acp[ip];
-    sct_coef = pphot->scp[ip];
-    step = dl;
-  }
-  // Account for attenuation along ray
-  Real leff;
-  if (absorption_meth == ABSTAU) {
-    if (fabs(1.-etau) < TINY_NUMBER) {
-      leff = step;
-    } else {
-      leff = (1.-etau)/abs_coef;
-    }
-  } else {
-    leff = step;
-  }
-  // Weight moments by time spent in domain
-
-  Real weight = pphot->wp[ip] * energy * leff / c_cgs;
-  Real path_weight = weight * (pl / dl);
-
-  if ((std::isinf(weight)) || (std::isnan(weight))) {
-    pphot->statp[ip] = DESTROYED;
-    if (pmy_mc->verbose) {
-      pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
-                         " photon destroyed",ip);
-    }
-                        } else {
-    // Higher order moments are weighted by displacement direction vector k
-    Real weight1 = weight * k1;
-    Real weight2 = weight * k2;
-    Real weight3 = weight * k3;
-
-    int i = pphot->i1p[ip];
-    int j = pphot->i2p[ip];
-    int k = pphot->i3p[ip];
-
-    if (mom_flag_lab) {
-      // Add contribution to corresponding moments
-      // Energy density
-      moments(MCIER,k,j,i) += path_weight;
-      // Flux
-      moments(MCIFR1,k,j,i) += weight1 * c_cgs;
-      moments(MCIFR2,k,j,i) += weight2 * c_cgs;
-      moments(MCIFR3,k,j,i) += weight3 * c_cgs;
-
-      // Radiation Pressure
-      Real weightp = weight1 * k1p;
-      moments(MCIPR11,k,j,i) += weightp;
-      weightp = weight2 * k2p;
-      moments(MCIPR22,k,j,i) += weightp;
-      weightp = weight3 * k3p;
-      moments(MCIPR33,k,j,i) += weightp;
-      weightp = weight1 * k2p;
-      moments(MCIPR12,k,j,i) += weightp;
-      weightp = weight1 * k3p;
-      moments(MCIPR13,k,j,i)  += weightp;
-      weightp = weight2 * k3p;
-      moments(MCIPR23,k,j,i) += weightp;
-
-      // Photon mean energy
-      //moments(MCIEN,k,j,i) += weight * energy;
-      // Jmean opacity
-      //moments(MCIKJ,k,j,i) += weight * abs_coef;
+      moments(type,MCIPR23,k,j,i) += weightp;
     }
 
     if (call_srcterms) {
@@ -1346,85 +1245,95 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
 
   // Get integration time
   // Fix for dynamic MC
-  Real dt = pmy_mc->tint;
-  //Real dt = pmy_mc->pmy_mesh->time;
+  Real tint = pmy_mc->tint;
   Real norm;
 
   if (mom_flag_lab) {
-    for (int n=0; n<nmom-3; ++n) {
-      for (int k=ks; k<=ke; ++k) {
-        for (int j=js; j<=je; ++j) {
-          for (int i=is; i<=ie; ++i) {
-            if (normalize) {
-              norm = 1./ (dt * pcoord->vol(k,j,i));
-            } else {
-              norm = dt * pcoord->vol(k,j,i);
+    for (int m=0; m<pmy_mc->ntype; ++m) {
+      for (int n=0; n<nmom-3; ++n) {
+        for (int k=ks; k<=ke; ++k) {
+          for (int j=js; j<=je; ++j) {
+            for (int i=is; i<=ie; ++i) {
+              if (normalize) {
+                norm = 1./ (tint * pcoord->vol(k,j,i));
+              } else {
+                norm = tint * pcoord->vol(k,j,i);
+              }
+              moments(m,n,k,j,i) *= norm;
             }
-            moments(n,k,j,i) *= norm;
           }
         }
       }
     }
     // Copy normalized moments to symmetric elements
-    for (int k=ks; k<=ke; ++k) {
-      for (int j=js; j<=je; ++j) {
-        for (int i=is; i<=ie; ++i) {
-          moments(MCIPR21,k,j,i) = moments(MCIPR12,k,j,i);
-          moments(MCIPR31,k,j,i) = moments(MCIPR13,k,j,i);
-          moments(MCIPR32,k,j,i) = moments(MCIPR23,k,j,i);
+    for (int m=0; m<pmy_mc->ntype; ++m) {
+      for (int k=ks; k<=ke; ++k) {
+        for (int j=js; j<=je; ++j) {
+          for (int i=is; i<=ie; ++i) {
+            moments(m,MCIPR21,k,j,i) = moments(m,MCIPR12,k,j,i);
+            moments(m,MCIPR31,k,j,i) = moments(m,MCIPR13,k,j,i);
+            moments(m,MCIPR32,k,j,i) = moments(m,MCIPR23,k,j,i);
+          }
         }
       }
     }
   } // end if (mom_flag_lab)
+
   if (mom_flag_com) {
-    for (int n=0; n<nmom-3; ++n) {
-      for (int k=ks; k<=ke; ++k) {
-        for (int j=js; j<=je; ++j) {
-          for (int i=is; i<=ie; ++i) {
-            if (normalize)
-              norm = 1./ (dt * pcoord->vol(k,j,i));
-            else
-              norm = dt * pcoord->vol(k,j,i);
-            moments_com(n,k,j,i) *= norm;
+    for (int m=0; m<pmy_mc->ntype; ++m) {
+      for (int n=0; n<nmom-3; ++n) {
+        for (int k=ks; k<=ke; ++k) {
+          for (int j=js; j<=je; ++j) {
+            for (int i=is; i<=ie; ++i) {
+              if (normalize)
+                norm = 1./ (tint * pcoord->vol(k,j,i));
+              else
+                norm = tint * pcoord->vol(k,j,i);
+              moments_com(m,n,k,j,i) *= norm;
+            }
           }
         }
       }
     }
     // Copy normalized moments to symmetric elements
-    for (int k=ks; k<=ke; ++k) {
-      for (int j=js; j<=je; ++j) {
-        for (int i=is; i<=ie; ++i) {
-          moments_com(MCIPR21,k,j,i) = moments_com(MCIPR12,k,j,i);
-          moments_com(MCIPR31,k,j,i) = moments_com(MCIPR13,k,j,i);
-          moments_com(MCIPR32,k,j,i) = moments_com(MCIPR23,k,j,i);
+    for (int m=0; m<pmy_mc->ntype; ++m) {
+      for (int k=ks; k<=ke; ++k) {
+        for (int j=js; j<=je; ++j) {
+          for (int i=is; i<=ie; ++i) {
+            moments_com(m,MCIPR21,k,j,i) = moments_com(m,MCIPR12,k,j,i);
+            moments_com(m,MCIPR31,k,j,i) = moments_com(m,MCIPR13,k,j,i);
+            moments_com(m,MCIPR32,k,j,i) = moments_com(m,MCIPR23,k,j,i);
+          }
         }
       }
     }
-  }
+  } // end if (mom_flag_com)
+
   if (mom_flag_scat) {
     for (int n=0; n<nf_scat; ++n) {
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
             if (normalize)
-              norm = 1./ (dt * pcoord->vol(k,j,i));
+              norm = 1./ (tint * pcoord->vol(k,j,i));
             else
-              norm = dt * pcoord->vol(k,j,i);
+              norm = tint * pcoord->vol(k,j,i);
             moments_scat(n,k,j,i) *= norm;
           }
         }
       }
     }
   }
+
   if (mom_flag_usr) {
     for (int n=0; n<pmy_mc->nuser_mom; ++n) {
       for (int k=ks; k<=ke; ++k) {
         for (int j=js; j<=je; ++j) {
           for (int i=is; i<=ie; ++i) {
             if (normalize)
-              norm = 1./ (dt * pcoord->vol(k,j,i));
+              norm = 1./ (tint * pcoord->vol(k,j,i));
             else
-              norm = dt * pcoord->vol(k,j,i);
+              norm = tint * pcoord->vol(k,j,i);
             moments_user(n,k,j,i) *= norm;
           }
         }
@@ -1440,17 +1349,18 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
 
 void MonteCarloBlock::ResetMoments() {
 
-    // set moments to zero
-  for (int n=0; n<NMOM-5; ++n) {
-    for (int k=ks; k<=ke; ++k) {
-      for (int j=js; j<=je; ++j) {
-        for (int i=is; i<=ie; ++i) {
-          moments(n,k,j,i) = 0.;
+  // set moments to zero
+  for (int m=0; m<pmy_mc->ntype; ++m) {
+    for (int n=0; n<nmom-3; ++n) {
+      for (int k=ks; k<=ke; ++k) {
+        for (int j=js; j<=je; ++j) {
+          for (int i=is; i<=ie; ++i) {
+            moments(m,n,k,j,i) = 0.;
+          }
         }
       }
     }
   }
-
 }
 
 //----------------------------------------------------------------------------------------
@@ -1541,7 +1451,7 @@ void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0,
 void MonteCarloBlock::NormalizeSourceTerms(bool normalize) {
 
   // Get integration time
-  Real dt = pmy_mc->tint;
+  Real tint = pmy_mc->tint;
 
   // Normalize sourcterms
   for (int n=0; n<nsrc; ++n) {
@@ -1549,9 +1459,9 @@ void MonteCarloBlock::NormalizeSourceTerms(bool normalize) {
       for (int j=js; j<=je; ++j) {
         for (int i=is; i<=ie; ++i) {
           if (normalize)
-            sourceterms(n,k,j,i) /= (dt * pcoord->vol(k,j,i));
+            sourceterms(n,k,j,i) /= (tint * pcoord->vol(k,j,i));
           else
-            sourceterms(n,k,j,i) *= (dt * pcoord->vol(k,j,i));
+            sourceterms(n,k,j,i) *= (tint * pcoord->vol(k,j,i));
         }
       }
     }
@@ -1627,7 +1537,7 @@ void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs) {
 void MonteCarloBlock::ComputeEmissionArray(int etype, Real &em_min, Real &em_max, Real &em_tot) {
 
 
-  Real dt = pmy_mc->tint;
+  Real tint = pmy_mc->tint;
   em_min = SQR(HUGE_NUMBER);
   em_max = -HUGE_NUMBER;
   em_tot = 0.;
@@ -1638,8 +1548,8 @@ void MonteCarloBlock::ComputeEmissionArray(int etype, Real &em_min, Real &em_max
       for (int j=js; j<=je; ++j) {
         for (int i=is; i<=ie; ++i) {
           Real vol = pcoord->vol(k,j,i);
-          emission(k,j,i) = GetEmission(this,k,j,i,etype) * dt * vol;
-          //printf("emission[%d %d %d]: %g %g %g %g\n",i,j,k,dt,vol,emission(k,j,i),pmy_mc->GetEmission[etype](this,k,j,i,etype));
+          emission(k,j,i) = GetEmission(this,k,j,i,etype) * tint * vol;
+          //printf("emission[%d %d %d]: %g %g %g %g\n",i,j,k,tint,vol,emission(k,j,i),pmy_mc->GetEmission[etype](this,k,j,i,etype));
           em_tot += emission(k,j,i);
           if (emission(k,j,i) > em_max) em_max = emission(k,j,i);
           if (emission(k,j,i) < em_min) em_min = emission(k,j,i);
@@ -1735,7 +1645,7 @@ void MonteCarloBlock::ComputeEmissionArray(int etype, Real &em_min, Real &em_max
         throw std::runtime_error(msg.str().c_str());
         break;
     }
-    if (physical_boundary) {
+    if (physical_boundary) { // valid boundary on meshblock
       Coordinates *pbcoord = pmy_block->pcoord; // SWD: Maybe should improve this
       for (int k=kl; k<=ku; ++k) {
         for (int j=jl; j<=ju; ++j) {
@@ -1753,9 +1663,10 @@ void MonteCarloBlock::ComputeEmissionArray(int etype, Real &em_min, Real &em_max
               area = pbcoord->GetFace2Area(k,j+1,i);
             else if (iface == 5)
               area = pbcoord->GetFace3Area(k+1,j,i);
-            area *= l_cgs*l_cgs;
-            emission(k,j,i) = GetEmission(this,k,j,i,etype) * dt * area;
-            //printf("emission[%d %d %d %d]: %g %g %g %g\n",pmy_block->gid,i,j,k,dt,area,emission(k,j,i),pmy_mc->GetEmission[etype](this,k,j,i,etype));
+            area *= l_cgs*l_cgs; // convert area to cgs
+            emission(k,j,i) = GetEmission(this,k,j,i,etype) * tint * area;
+            
+            //printf("emission[%d %d %d %d]: %g %g %g %g\n",pmy_block->gid,i,j,k,tint,area,emission(k,j,i),pmy_mc->GetEmission[etype](this,k,j,i,etype));
             em_tot += emission(k,j,i);
             if (emission(k,j,i) > em_max) em_max = emission(k,j,i);
             if (emission(k,j,i) < em_min) em_min = emission(k,j,i);
@@ -2057,6 +1968,25 @@ void MonteCarloBlock::GetNumberDensity() {
     return;
   }
 
+  if (pmy_mc->scattering_meth == SCATRES) {
+    // Default for resonant scattering assumes pure hydrogen
+    // with 100% neutral fraction.
+    Real mp = 1.67262192369e-24;
+    for (int k=ks; k<=ke; ++k) {
+      for (int j=js; j<=je; ++j) {
+        for (int i=is; i<=ie; ++i) {
+          species(0,k,j,i) = rho(k,j,i) / mp;
+        }
+      }
+    }
+    return;
+  }
+
+  // For all other cases, the default assumes a compostion of hydrogen
+  // and helium with a given abundance and fully ionized. We
+  // compute the electron and ion number desnities. This is used
+  // for electron scattering and free-free emission/absorption.
+
   Real heabund = 0.09; //hardcode for now (should be parameter)
   Real mp = 1.67262192369e-24;
 
@@ -2065,8 +1995,8 @@ void MonteCarloBlock::GetNumberDensity() {
       for (int i=is; i<=ie; ++i) {
         Real nh = rho(k,j,i) / (mp*(1.+4.*heabund));
         Real nhe = nh*heabund;
-        nion(k,j,i) = nh + 4. * nhe;
-        nel(k,j,i) = nh + 2. * nhe;
+        species(1,k,j,i) = nh + 4. * nhe; // nion
+        species(0,k,j,i) = nh + 2. * nhe; // nel
       }
     }
   }

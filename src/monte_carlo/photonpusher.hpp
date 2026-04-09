@@ -38,6 +38,7 @@ public:
   Real dl; // current displacement
   int checkmove; // check/terminate move
 
+  MonteCarlo *pmy_mc;
   MonteCarloBlock *pmy_mcb;
   MCCoord *pcoord;
 
@@ -69,8 +70,8 @@ public:
   // functions
   virtual void Move(Photon *pphot, int ips, int ipe);
   virtual Real GetOpticalDepth(MCRandom *pran);
-  virtual Real GetExtinctionCoefficient(Real ac, Real sc);
-  virtual Real ExpTauAbsorption(Real ac, Real dl);
+  virtual Real GetExtinctionCoefficient(Real ac, Real sc, bool abs_tau);
+  virtual Real ExpTauAbsorption(Real ac, Real dl, bool abs_tau);
   virtual void NextFace(Real dx1, Real dx2, Real dx3, int &face, Real &dx);
   virtual void MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
                MonteCarloBlock *pmcb, int face, bool ascend[3], int ip);

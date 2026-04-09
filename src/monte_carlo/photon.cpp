@@ -20,7 +20,7 @@ bool Photon::initialized = false;
 bool Photon::polarized = false;
 bool Photon::general_pusher_flag = false;
 
-int Photon::inscp = -1, Photon::istatp = -1, Photon::itrp = -1;
+int Photon::inscp = -1, Photon::istatp = -1, Photon::ityp = -1;
 int Photon::ii1p = -1, Photon::ii2p = -1, Photon::ii3p = -1;
 int Photon::ix0p = -1, Photon::ix1p = -1, Photon::ix2p = -1, Photon::ix3p = -1;
 int Photon::ik0p = -1, Photon::ik1p = -1, Photon::ik2p = -1, Photon::ik3p = -1;
@@ -47,7 +47,7 @@ Photon::Photon(MonteCarloBlock *pmcb, ParameterInput *pin)
     //user(new std::vector<Real> [pmcb->pmy_mc->nuser_var]),
     //polten(new std::vector<std::complex<Real>> [ncplx]),
     nphot(npar),nscp(intprop[inscp]), statp(intprop[istatp]),
-    trp(intprop[itrp]), i1p(intprop[ii1p]), i2p(intprop[ii2p]), i3p(intprop[ii3p]),
+    type(intprop[ityp]), i1p(intprop[ii1p]), i2p(intprop[ii2p]), i3p(intprop[ii3p]),
     x0p(rp[ix0p]), x1p(rp[ix1p]), x2p(rp[ix2p]), x3p(rp[ix3p]),
     k0p(rp[ik0p]), k1p(rp[ik1p]), k2p(rp[ik2p]), k3p(rp[ik3p]),
     dk0p(rp[idk0p]), dk1p(rp[idk1p]), dk2p(rp[idk2p]),
@@ -115,8 +115,11 @@ void Photon::PrintPhoton(int ip) {
         }
     }
   }
-  std::cout << "opacity [sc] [abs]: " << scp[ip] << " " << acp[ip] << std::endl;
-  std::cout << "dt: " << dtp[ip] << " ";
+  std::cout << "opacity (cgs) [sc] [abs]: " << scp[ip] << " " << acp[ip] << std::endl;
+  Real l_cgs = pmy_mcb->l_cgs;
+  if (l_cgs != 1.0)
+    std::cout << "opacity (dim) [sc] [abs]: " << scp[ip]*l_cgs << " " << acp[ip]*l_cgs << std::endl;
+    std::cout << "dt: " << dtp[ip] << " ";
   if (statp[ip] == EVOLVING)
     std::cout << "EVOLVING" << std::endl;
   else if (statp[ip] == ESCAPED)
@@ -222,7 +225,6 @@ void Photon::PolarizationToCoord(std::complex<Real> ttet[4][4], Real econ[4][4],
 //! \fn Photon::Initialize(MonteCarloBlock *pmcb, ParameterInput *pin)
 //! \brief initializes the Photon class.
 // SWD: Change name to distinguish with InitializePhoton?
-// SWD: make trp a user variable
 
 void Photon::Initialize(MonteCarlo *pmc, ParameterInput *pin) {
 
@@ -234,7 +236,7 @@ void Photon::Initialize(MonteCarlo *pmc, ParameterInput *pin) {
   // Add particle ID and status flags, other int parameters.
   inscp = AddIntProperty("nscp");
   istatp = AddIntProperty("statp");
-  itrp = AddIntProperty("trp");
+  ityp = AddIntProperty("type");
 
   // Add photon position.
   ix0p = AddRealProperty("x0");
@@ -677,19 +679,20 @@ void Photon::GetPositionIndices(int ibegin, int iend) {
     i3p[k] = static_cast<int>(xi3);
     if ((i1p[k] < is-1) || (i1p[k] > ie+1)) {
       //printf("1: %d %d %d %g %g %g %g\n",i1p[k],is,ie,xi1,x1p[k]/l1cgs,pmy_block->block_size.x1min,pmy_block->block_size.x1max);
-      //PrintPhoton("Warning: [GetPostionIndicies], Photon not on block, destroyed",k);
+      PrintPhoton("Warning: [GetPostionIndicies], Photon not on block, destroyed",k);
       statp[k] = DESTROYED;
       continue;
     }
     if ((i2p[k] < js-1) || (i2p[k] > je+1)) {
       //printf("2: %d %d %d %g %g %g %g\n",i2p[k],js,je,xi2,x2p[k]/l2cgs,pmy_block->block_size.x2min,pmy_block->block_size.x2max);
-      //PrintPhoton("Warning: [GetPostionIndicies], Photon not on block, destroyed",k);
+      PrintPhoton("Warning: [GetPostionIndicies], Photon not on block, destroyed",k);
       statp[k] = DESTROYED;
       continue;
     }
     if ((i3p[k] < ks-1) || (i3p[k] > ke+1)) {
-      //printf("3: %d %d %d %g %g %g %g\n",i3p[k],ks,ke,xi3,x3p[k]/l3cgs,pmy_block->block_size.x3min,pmy_block->block_size.x3max);
-      //PrintPhoton("Warning: [GetPostionIndicies], Photon not on block, destroyed",k);
+      //printf("3: %d %d %d %g %g %g %g %g %g\n",i3p[k],ks,ke,xi3,x3p[k]/l3cgs,pmy_block->block_size.x3min,
+      //       pmy_block->block_size.x3max,x2p[k],k3p[k]/ep[k]);
+      PrintPhoton("Warning: [GetPostionIndicies], Photon not on block, destroyed",k);
       statp[k] = DESTROYED;
       continue;
     }

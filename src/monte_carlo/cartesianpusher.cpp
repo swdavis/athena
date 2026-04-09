@@ -38,6 +38,12 @@ void CartesianPusher::Move(Photon *pphot, int ips, int ipe) {
   MonteCarloBlock *pmcb = pmy_mcb;
   MCRandom *pran = pmy_mcb->pran;
   MCCoord *pco = pmy_mcb->pcoord;
+  Real l_cgs = pmcb->l_cgs;
+  Real c_cgs = 2.99792458e10;
+  Real c_code = c_cgs / pmcb->vel_cgs;
+
+  // Check if using continuous absorption (all photon use same method)
+  bool abs_tau = (pmy_mc->absorption_method[pphot->type[ips]] == ABSTAU);
 
   for (int ip=ips; ip<=ipe; ip++) {
 
@@ -50,7 +56,7 @@ void CartesianPusher::Move(Photon *pphot, int ips, int ipe) {
     Real& kz = pphot->k3p[ip];
 
     int iter = 0;
-    Real c_cgs = 2.99792458e10;
+
     // checkmove is needed to account for (near) infinite trajectories that can occur
     // in optically thin, periodic domains.
 
@@ -96,9 +102,10 @@ void CartesianPusher::Move(Photon *pphot, int ips, int ipe) {
 
       int face;
       NextFace(dlx,dly,dlz,face,dl);
-      Real chi = GetExtinctionCoefficient(pphot->acp[ip],pphot->scp[ip]);
+      // set total extinction coefficient
+      Real chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
 
-      if ((chi > 0.) && (dl > tauremaining / chi)) { // Photon remains in zone
+      if ((chi > 0.) && (dl*l_cgs > tauremaining / chi)) { // Photon remains in zone
         bool accel_success = false;
         if (acceleration) {
           Real dist;
@@ -122,15 +129,19 @@ void CartesianPusher::Move(Photon *pphot, int ips, int ipe) {
           if (pphot->statp[ip] != EVOLVING)
             break;
           // compute distance remaining in zone
-          dl = tauremaining/chi;
-          pphot->dtp[ip] -= dl/c_cgs; // SWD: set with k0p instead
+          dl = tauremaining / chi / l_cgs;
+          pphot->dtp[ip] -= dl / c_code; // SWD: set with k0p instead
 
-          //SWD Not implemented now
-          // Account for absorption (if needed) and update moments
-          //Real etaua = ExpTauAbsorption(pphot->acp[ip],dl);
-
+  
           if (pmcb->call_moments) {
-            pmcb->UpdateMoments(pphot,dl,ip);
+            Real dl_cgs = dl * l_cgs;
+            if (abs_tau) {
+              Real etaua = std::exp(-pphot->acp[ip] * dl_cgs);
+              pmcb->UpdateMoments(pphot,dl_cgs,etaua,ip);
+              pphot->wp[ip] *= etaua;
+            } else {
+              pmcb->UpdateMoments(pphot,dl_cgs,ip);
+            }
           }
           //pphot->wp[ip] *= etaua;
           // update position
@@ -145,20 +156,25 @@ void CartesianPusher::Move(Photon *pphot, int ips, int ipe) {
 
       } else { // Photon moves to next zone and reduce tauremaining
         // Account for absorption (if needed) and update moments
-        //Real etaua = ExpTauAbsorption(pphot->acp[ip],dl);
-
         if (pmcb->call_moments) {
-          pmcb->UpdateMoments(pphot,dl,ip);
+          Real dl_cgs = dl * l_cgs;
+          if (abs_tau) {
+            Real etaua = std::exp(-pphot->acp[ip] * dl_cgs);
+            pmcb->UpdateMoments(pphot,dl_cgs,etaua,ip);
+            pphot->wp[ip] *= etaua;
+          } else {
+            pmcb->UpdateMoments(pphot,dl_cgs,ip);
+          }
         }
-        //pphot->wp[ip] *= etaua;
+
         // update position
         pphot->x0p[ip] += pphot->k0p[ip] * dl;
         pphot->x1p[ip] += pphot->k1p[ip] * dl;
         pphot->x2p[ip] += pphot->k2p[ip] * dl;
         pphot->x3p[ip] += pphot->k3p[ip] * dl;
 
-        tauremaining -= chi * dl;
-        pphot->dtp[ip] -= dl/c_cgs;
+        tauremaining -= chi * l_cgs * dl;
+        pphot->dtp[ip] -= dl / c_code;
 
         // Perform any user work
         if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this,ip);

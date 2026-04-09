@@ -162,11 +162,17 @@ void ATHDF5Output::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
       if (output_params.cartesian_vector)
         num_variables[n_dataset] += 3;
     }
-  } else if (variable.compare("mcmom") == 0) {
+  } else if (variable.compare("mclab") == 0) {
+    int ntype = pmb->pmy_mcb->pmy_mc->ntype;
     num_datasets = 1;
     num_variables = new int[num_datasets];
     int n_dataset = 0;
-    num_variables[n_dataset] = NMOM+2; // nmom+2
+    num_variables[n_dataset] = 2 + 13 * ntype; // 2+1+3+9
+  } else if (variable.compare("mccom") == 0) {
+    num_datasets = 1;
+    num_variables = new int[num_datasets];
+    int n_dataset = 0;
+    num_variables[n_dataset] = 13; // 1+3+9
   } else if (variable.compare("mcsrc") == 0) {
     num_datasets = 1;
     num_variables = new int[num_datasets];
