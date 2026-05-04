@@ -60,9 +60,10 @@ Real rho_gz[2];
 Real P_gz[2];
 Real nfrac_gz[2];
 Real user_dt;
-bool flag_point_mass = false;
 int  flag_tidal_gravity;
 bool flag_wind = false;
+bool flag_init_neutral;
+bool flag_update_nh;
 
 // parameters for MC radiation transfer
 Real energy_lya;
@@ -110,11 +111,14 @@ void ThirdOrderTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
               const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
               const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
               AthenaArray<Real> &cons_scalar);
+Real HydrostaticIsothermalDensity(Real r, Real th, Real ph, Real r0, Real a2, int tidal_order);
+Real HydrostaticAdiabaticDensity(Real r, Real th, Real ph, Real r0, Real a2, Real invgm1, int tidal_order);
 
 // user functions for defining scattering and opacities
 void ResonantScattering(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe);
 Real ResonantScatteringOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
 Real BoundFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
+Real ChooseAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip);
 
 // user timestep SWD: not sure why this is used
 Real ConstantTimestep(MeshBlock *pmb);
@@ -155,7 +159,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   // Gravity source term configuration
   gm_planet = pin->GetReal("problem", "GM");
   gm_star = pin->GetReal("problem", "gm_star");
-  sep = pin->GetReal("problem", "orbit_sep")*1.49597871e+13/l_cgs; // cm
+  sep = pin->GetReal("problem", "orbit_sep")*1.49597871e+13/l_cgs;
   flag_tidal_gravity = pin->GetOrAddInteger("problem", "tidal_gravity", 0);
   if (flag_tidal_gravity == 1) {
     EnrollUserExplicitSourceFunction(HillTidalGravity);
@@ -167,12 +171,16 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   // Parameters to set initial atmospheric conditions
   temp0 = pin->GetOrAddReal("problem", "isothermal_temp", 1e4);
   nbase = pin->GetOrAddReal("problem", "nbase", 1.0e10)/n_cgs; // base hydrogen nH density in cm^-3 at rin
-  flag_wind = pin->GetBoolean("problem", "wind");
+  flag_init_neutral = pin->GetOrAddBoolean("problem", "init_neutral", false);
+  flag_wind = pin->GetOrAddBoolean("problem", "wind", true);
 
   // Time evolution
   // Set a constant timestep (best for photoionization equilibrium convergence tests)
   user_dt = pin->GetReal("problem", "user_dt");
   EnrollUserTimeStepFunction(ConstantTimestep);
+
+  // Update ionization fraction
+  flag_update_nh = pin->GetOrAddBoolean("problem", "update_nh", true);
 
   // Boundary conditions
   EnrollUserBoundaryFunction(BoundaryFace::inner_x1, StaticInflowInnerX1);
@@ -193,13 +201,14 @@ void MeshBlock::InitUserMeshBlockData(ParameterInput *pin) {
   // Array for data loaded in from external file
   ruser_meshblock_data[1].NewAthenaArray(6,ncells3,ncells2,ncells1);
 
-  AllocateUserOutputVariables(6);
+  AllocateUserOutputVariables(7);
   SetUserOutputVariableName(0, "vol_emis");
   SetUserOutputVariableName(1, "surf_emis");
   SetUserOutputVariableName(2, "gravsrc_r");
   SetUserOutputVariableName(3, "gravsrc_th");
   SetUserOutputVariableName(4, "gravsrc_ph");
   SetUserOutputVariableName(5, "collisional_cooling");
+  SetUserOutputVariableName(6, "gradP");
   return;
 }
 
@@ -213,6 +222,15 @@ void MeshBlock::UserWorkBeforeOutput(ParameterInput *pin) {
         uov(2,k,j,i) = ruser_meshblock_data[0](0,k,j,i);
         uov(3,k,j,i) = ruser_meshblock_data[0](1,k,j,i);
         uov(4,k,j,i) = ruser_meshblock_data[0](2,k,j,i);
+
+        Real r_m = pcoord->x1f(i);
+        Real r_p = pcoord->x1f(i+1);
+        Real pres_i = phydro->w(IPR,k,j,i);
+        Real pres_im1 = phydro->w(IPR,k,j,i-1);
+        Real pres_ip1 = phydro->w(IPR,k,j,i+1);
+        Real pres_m = 0.5*( pres_im1 + pres_i );
+        Real pres_p = 0.5*( pres_ip1 + pres_i );
+        uov(6,k,j,i) = (pres_p - pres_m) / (r_p - r_m);
       }
     }
   }
@@ -304,9 +322,13 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
 
   // Enroll user functions for handling MC trnasport
   flag_lya_abs = pin->GetOrAddBoolean("problem", "lya_abs", false);
-  EnrollUserOpacityFunction(ResonantScatteringOpacity, flag_lya_abs);
-  EnrollUserOpacityFunction(BoundFreeAbsorptionOpacity, true);
-  EnrollUserScatteringFunction(ResonantScattering);
+  if (!flag_lya_abs) {
+    EnrollUserOpacityFunction(BoundFreeAbsorptionOpacity, true);
+    EnrollUserOpacityFunction(ResonantScatteringOpacity, false);
+    EnrollUserScatteringFunction(ResonantScattering);
+  } else {
+    EnrollUserOpacityFunction(ChooseAbsorptionOpacity, true);
+  }
   EnrollUserGetTemperature(GetIonizationTemperature);
   EnrollUserGetNumberDensity(GetNH);
 
@@ -414,30 +436,55 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         Real r = pcoord->x1v(i);
         Real th = pcoord->x2v(j);
         Real ph = pcoord->x3v(k);
-        Real H = rin / lambda * (SQR(r) / SQR(rin));
-        Real nH = nbase * std::exp(lambda * (rin/r - 1.));
-        Real ion_rate_atten = 1. / (1.0 + std::pow(nH*sigmapi*H, 1.5));
-        Real np = std::sqrt(ion_rate_atten * nH * neq0);
-        Real neutral_frac = nH / (nH + 2.*np);
-        Real mmw = (1. + neutral_frac)/2.;
-        // ^ This will be wrong for the isothermal wind, but no analytic solution
 
-        Real rho;
-        if (flag_wind) {
-          vel1 = a * GetIsowindVelocity(r/rsonic);
-          rho = mdot / (4.0 * PI * r * r * vel1);
-          // Re-assign neutral and ion densities based on new density profile
-          // Doing it this way so that nH + np = rho
-          // If we kept the nH from HSE, we may have places where nH > new rho
-          nH = neutral_frac * rho / mmw;
-          np = (1.-mmw) * rho / mmw;
-        } else {
-          vel1 = 0.0;
-          rho = (nH + np);
+        // Initialize density to hydrostatic profile, with tidal correction
+        //Real rho = nbase * HydrostaticIsothermalDensity(r, th, ph, rin, a2, flag_tidal_gravity+1);
+        Real rho = nbase * HydrostaticAdiabaticDensity(r, th, ph, rin, a2, invgm1, flag_tidal_gravity+1);
+        // adiabatic solution has critical point where density -> zero; correct for this
+        if (rho <= dfloor) {
+          rho = dfloor;
         }
+        printf("rad=%g, the=%g, phi=%g, rho=%g\n", r, th, ph, rho); 
+
+        if (flag_wind) {
+          // Parker wind approximation
+          vel1 = a * std::exp(1.5*(1 - rsonic/r)) * std::sqrt(rsonic/r);
+        } else {
+          vel1 = 0;
+        }
+        vel2 = 0;
+        vel3 = 0;
+
+        // Ionization fractions
+        Real neutral_frac = 1;
+        Real mmw = 1;
+        Real nH = rho;
+        Real np = 0;
+        if (!flag_init_neutral) {
+          // approximation for spherically attenuated ionization
+          nH = nbase * std::exp(lambda * (rin/r - 1.));
+          Real H = rin / lambda * (SQR(r) / SQR(rin));
+          Real ion_rate_atten = 1. / (1.0 + std::pow(nH*sigmapi*H, 1.5));
+          np = std::sqrt(ion_rate_atten * nH * neq0);
+          neutral_frac = nH / (nH + 2.*np);
+          mmw = (1. + neutral_frac)/2.;
+        }
+
+       // if (flag_wind) {
+       //   vel1 = a * GetIsowindVelocity(r/rsonic);
+       //   rho = mdot / (4.0 * PI * r * r * vel1);
+       //   // Re-assign neutral and ion densities based on new density profile
+       //   // Doing it this way so that nH + np = rho
+       //   // If we kept the nH from HSE, we may have places where nH > new rho
+       //   nH = neutral_frac * rho / mmw;
+       //   np = (1.-mmw) * rho / mmw;
+       // } else {
+       //   vel1 = 0.0;
+       //   rho = (nH + np);
+       // }
   
         // SWD: not sure if this need recomputing if !flag_wind
-        mmw = (nH + np)/(2.*np + nH);
+        //mmw = (nH + np)/(2.*np + nH);
         Real a2_mmw = kb_cgs * temp0 / mmw / mp_cgs;
         Real P = rho * a2_mmw / (vel_cgs*vel_cgs);
 
@@ -459,9 +506,6 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
           vel1 = ruser_meshblock_data[1](2,k,j,i);
           vel2 = ruser_meshblock_data[1](3,k,j,i);
           vel3 = ruser_meshblock_data[1](4,k,j,i);
-        } else {
-          vel2 = 0.0;
-          vel3 = 0.0;
         }
 
         // Set corresponding conserved fluid variables for the above
@@ -716,9 +760,9 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
           // Photon is emitted via recombination - should have line center energy
           pphot->ep[ip] = energy_lya;
         }
-        //pphot->ep[ip] = energy_lya;
         break;
       }
+
       case IONIZING: {
         Real nu_phot;
         if (!flag_pow_law) {
@@ -730,7 +774,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
         break;
       }
-    }
+    } // end switch
 
     // Set status flag
     if (pphot->wp[ip] <= 0.0)
@@ -749,6 +793,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 }
 
 void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
+  if (!flag_update_nh)
+    return;
 
   // only update ionization after transfer of ionizing photons
   if (etype != ion_str)
@@ -1062,6 +1108,79 @@ void ThirdOrderTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
 }
 
 
+/* 
+ * Hydrostatic, isothermal density initial condition
+ * Use tidal_order to set order of tidal source expansion
+ * Inputs in code units
+ * Outputs a dimensionless number to multiply by the substellar point base density
+ */
+Real HydrostaticIsothermalDensity(Real r, Real th, Real ph, Real r0, Real a2, int tidal_order) {
+  Real roa  = r  / sep;
+  Real r0oa = r0 / sep;
+  Real xoa = roa * std::sin(th) * std::cos(ph);
+  Real zoa = roa * std::cos(th);
+  Real prefac = gm_star / sep / a2;
+  Real mfrac = gm_planet / gm_star;
+
+  // Point source
+  Real U0 = -mfrac / r0oa;
+  Real U  = -mfrac / roa;
+
+  // Second order (Hill)
+  if (tidal_order > 1) {
+    U0 -= 1.5 * SQR(r0oa);
+    U  -= 0.5 * (3*SQR(xoa) - SQR(zoa));
+  }
+
+  // Third order
+  if (tidal_order > 2) {
+    U0 -= r0oa*r0oa*r0oa;
+    U  -= 0.5 * (3*SQR(roa)*xoa - 5*xoa*xoa*xoa);
+  }
+
+  return std::exp(prefac * (U0 - U));
+}
+
+
+/* 
+ * Hydrostatic, adiabatic density initial condition
+ * Use tidal_order to set order of tidal source expansion
+ * Inputs in code units
+ * Outputs a dimensionless number to multiply by the substellar point base density
+ */
+Real HydrostaticAdiabaticDensity(Real r, Real th, Real ph, Real r0, Real a2, Real invgm1, int tidal_order) {
+  Real roa  = r  / sep;
+  Real r0oa = r0 / sep;
+  Real xoa = roa * std::sin(th) * std::cos(ph);
+  Real zoa = roa * std::cos(th);
+  Real prefac = gm_star / sep / a2 / invgm1;
+  Real mfrac = gm_planet / gm_star;
+
+  // Point source
+  Real U0 = -mfrac / r0oa;
+  Real U  = -mfrac / roa;
+
+  // Second order (Hill)
+  if (tidal_order > 1) {
+    U0 -= 1.5 * SQR(r0oa);
+    U  -= 0.5 * (3*SQR(xoa) - SQR(zoa));
+  }
+
+  // Third order
+  if (tidal_order > 2) {
+    U0 -= r0oa*r0oa*r0oa;
+    U  -= 0.5 * (3*SQR(roa)*xoa - 5*xoa*xoa*xoa);
+  }
+
+  // Correction for critical value
+  Real critical = -prefac * (U0 - U);
+  if (critical >= 1.) {
+    return 0.0;
+  }
+  return std::pow(1. - critical, invgm1);
+}
+
+
 Real VolumeEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype) {
 // Sets the value of the emission array which determines where Lya photons are
 // likely to be emitted. The associated cooling of the gas is handled in
@@ -1236,6 +1355,22 @@ Real ResonantScatteringOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   }
   return opac;
 }
+
+/*
+ * Choose between bound-free or resonant absorption opacity functions
+ * based on photon energy, with cutoff at threshold
+ */
+Real ChooseAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
+  Real h_cgs = MCConstants::h_cgs;
+  Real opac = 0;
+  if (pphot->ep[ip] < numin * h_cgs) {
+    opac = BoundFreeAbsorptionOpacity(pmcb, pphot, ip);
+  } else {
+    opac = ResonantScatteringOpacity(pmcb, pphot, ip);
+  }
+  return opac;
+}
+
 
 // SWD: redo this function?
 void gasdev(MeshBlock *pmb, Real mean, Real sigma, Real &samp) {
@@ -1435,7 +1570,7 @@ void StaticInflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &pr
 
         // fix initial density and pressure
         prim(IDN,k,j,il-i) = rho_gz[il-i];
-        //prim(IPR,k,j,il-i) = pres_gz[il-i];
+        //prim(IPR,k,j,il-i) = P_gz[il-i];
         prim(IPR,k,j,il-i) = prim(IPR,k,j,il) * std::pow(rho_gz[il-i]/prim(IDN,k,j,il), gamma);
 
         // outflow diode for velocity
