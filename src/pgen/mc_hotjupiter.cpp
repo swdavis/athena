@@ -444,7 +444,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         if (rho <= dfloor) {
           rho = dfloor;
         }
-        printf("rad=%g, the=%g, phi=%g, rho=%g\n", r, th, ph, rho); 
+        //printf("rad=%g, the=%g, phi=%g, rho=%g\n", r, th, ph, rho); 
 
         if (flag_wind) {
           // Parker wind approximation
@@ -590,7 +590,6 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etype) {
   // Function called each time a photon is initialized
-
 
   Real h_cgs = MCConstants::h_cgs;
   Real kb_cgs = MCConstants::kb_cgs;
@@ -744,7 +743,6 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
     } // END SWITCH EMIS_GEOMETRY
 
-
     // Set the photon's energy and absorption / scattering opacities
     switch (phot_type) {
 
@@ -786,6 +784,9 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
     // to the values in the emitted zone
     pphot->acp[ip] = AbsorptionOpacity(this,pphot,ip);
     pphot->scp[ip] = ScatteringOpacity(this,pphot,ip);
+
+    // initialize scattering number
+    pphot->nscp[ip] = 0;
 
     //pphot->PrintPhoton(ip);
 
@@ -885,6 +886,14 @@ void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
       }
     }
   }
+}
+
+
+void MonteCarloBlock::FinalizePhoton(Photon *pphot, int ip) {
+
+  // store scatter number
+  pphot->user[0][ip] = pphot->nscp[ip];
+
 }
 
 
