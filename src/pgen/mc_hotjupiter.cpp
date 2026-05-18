@@ -20,6 +20,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <chrono>
 
 // Athena++ headers
 #include "../athena.hpp"
@@ -60,6 +61,7 @@ Real rho_gz[2];
 Real P_gz[2];
 Real nfrac_gz[2];
 Real user_dt;
+bool flag_static_inner;
 int  flag_tidal_gravity;
 bool flag_wind = false;
 bool flag_init_neutral;
@@ -75,6 +77,8 @@ Real chromo_temp, sigmamin;
 bool flag_incident_from_z;
 bool flag_pow_law;
 bool flag_lya_abs;
+// initialization for timing photons
+const auto global_start_time = std::chrono::system_clock::now();
 
 // Flag for performance-saving random deviate sampling using Box-Muller method
 //  which generates two deviates at a time, used for stellar lyman alpha
@@ -132,7 +136,7 @@ void UpdateSourceTerms(MonteCarloBlock *pmcb, Photon *pphot,Real energy0, Real w
                   Real k1p0, Real k2p0, Real k3p0, int ip);
 
 // Boundary Conditions
-void OutflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+void InflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
     Real time, Real dt, int il, int iu, int jl, int ju, int kl, int ku, int ngh);
 void OutflowOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
     Real time, Real dt, int il, int iu, int jl, int ju, int kl, int ku, int ngh);
@@ -183,7 +187,12 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   flag_update_nh = pin->GetOrAddBoolean("problem", "update_nh", true);
 
   // Boundary conditions
-  EnrollUserBoundaryFunction(BoundaryFace::inner_x1, StaticInflowInnerX1);
+  flag_static_inner = pin->GetOrAddBoolean("problem", "static_inner", true);
+  if (flag_static_inner) {
+    EnrollUserBoundaryFunction(BoundaryFace::inner_x1, StaticInflowInnerX1);
+  } else {
+    EnrollUserBoundaryFunction(BoundaryFace::inner_x1, InflowInnerX1);
+  }
   EnrollUserBoundaryFunction(BoundaryFace::outer_x1, OutflowOuterX1);
 
   return;
@@ -318,7 +327,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
 
   EnrollUserSourcetermUpdate(UpdateSourceTerms);
   // Photon user variables for incident and outgoing direction vector and position
-  nuser_var = 1;
+  nuser_var = 2;
 
   // Enroll user functions for handling MC trnasport
   flag_lya_abs = pin->GetOrAddBoolean("problem", "lya_abs", false);
@@ -788,6 +797,11 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
     // initialize scattering number
     pphot->nscp[ip] = 0;
 
+    // initialize start time in ms
+    const auto now = std::chrono::system_clock::now() - global_start_time; 
+    Real diff = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+    pphot->user[1][ip] = diff;
+
     //pphot->PrintPhoton(ip);
 
   } // end loop over ip
@@ -893,6 +907,14 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot, int ip) {
 
   // store scatter number
   pphot->user[0][ip] = pphot->nscp[ip];
+
+  // store wall time elapsed since initialization
+  Real start = pphot->user[1][ip];
+  const auto now = std::chrono::system_clock::now() - global_start_time; 
+  Real diff = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+  Real time_elapsed = diff - start;
+  //printf("time_elapsed=%g\n", time_elapsed);
+  pphot->user[1][ip] = time_elapsed;
 
 }
 
@@ -1572,15 +1594,13 @@ void StaticInflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &pr
   FaceField &b, Real time, Real dt, int il, int iu, int jl, int ju, int kl, int ku,
   int ngh) {
 
-  Real gamma = pmb->peos->GetGamma();
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
       for (int i=1; i<=ngh; ++i) {
 
         // fix initial density and pressure
         prim(IDN,k,j,il-i) = rho_gz[il-i];
-        //prim(IPR,k,j,il-i) = P_gz[il-i];
-        prim(IPR,k,j,il-i) = prim(IPR,k,j,il) * std::pow(rho_gz[il-i]/prim(IDN,k,j,il), gamma);
+        prim(IPR,k,j,il-i) = P_gz[il-i];
 
         // outflow diode for velocity
         prim(IVY,k,j,il-i) = prim(IVY,k,j,il);
@@ -1602,29 +1622,36 @@ void StaticInflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &pr
 
 
 /*
- * Bottom (r_inner) boundary condition: outflow diode
+ * Bottom (r_inner) boundary condition: inflow diode
  * If radial velocity is positive (outwards), copy it
  * If radial velocity is negative (inwards), set it to zero
- * Density, pressure, ionization are fixed to initial values
+ * Density, ionization are fixed to initial values
+ * Pressure is set to isothermal/adiabatic
  * Copy all other vars
 */
-void OutflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
+void InflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
   FaceField &b, Real time, Real dt, int il, int iu, int jl, int ju, int kl, int ku,
   int ngh) {
+
+  Real gamma = pmb->peos->GetGamma();
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
       for (int i=1; i<=ngh; ++i) {
+
+        // fix initial density and pressure
+        prim(IDN,k,j,il-i) = rho_gz[il-i];
+        prim(IPR,k,j,il-i) = prim(IPR,k,j,il) * std::pow(rho_gz[il-i]/prim(IDN,k,j,il), gamma);
+
+        // outflow diode for velocity
+        prim(IVY,k,j,il-i) = prim(IVY,k,j,il);
+        prim(IVZ,k,j,il-i) = prim(IVZ,k,j,il);
         if (prim(IVX,k,j,il) >= 0.0) {
           prim(IVX,k,j,il-i) = prim(IVX,k,j,il);
         } else {
           prim(IVX,k,j,il-i) = 0.0;
         }
-        prim(IVY,k,j,il-i) = prim(IVY,k,j,il);
-        prim(IVZ,k,j,il-i) = prim(IVZ,k,j,il);
 
-        prim(IPR,k,j,il-i) = P_gz[ngh-i];
-        prim(IDN,k,j,il-i) = rho_gz[ngh-i];
-
+        // set neutral fraction to fully neutral
         pmb->pscalars->r(0,k,j,il-i) = 1.0;
         pmb->pscalars->s(0,k,j,il-i) = prim(IDN,k,j,il-i);
       }
