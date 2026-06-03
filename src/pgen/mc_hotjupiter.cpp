@@ -51,9 +51,10 @@ int ion_str = -1, lya_str = -1, lya_rec = -1;
 
 // parameters for hydro integration /grid initialization
 Real n_cgs; // code units for number density
+Real P_cgs;
 Real rin, rout; // inner and outer limits of coordinate system
 Real gm_planet, gm_star, sep, psi;
-Real temp0, nbase;
+Real temp0, nbase, a2;
 Real mdot;
 Real pfloor, dfloor;
 // Ghost zones arrays
@@ -102,7 +103,7 @@ Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype)
 Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
 
 // user gravity source term functions
-void GetTidalAcceleration(Real r, Real th, Real ph, Real rho, Real &a_r, Real &a_th, Real &a_ph);
+void GetTidalAcceleration(Real r, Real th, Real ph, int order, Real &a_r, Real &a_th, Real &a_ph);
 void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,
               const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
               const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
@@ -131,6 +132,9 @@ Real ConstantTimestep(MeshBlock *pmb);
 void GetIonizationTemperature(MonteCarloBlock *pmcb);
 void GetNH(MonteCarloBlock *pmcb);
 
+// user function for photon acceleration
+void CoreSkipping(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher, int ip);
+
 // user function to update source terms for coupling to hydro; handles different types
 void UpdateSourceTerms(MonteCarloBlock *pmcb, Photon *pphot,Real energy0, Real weight0,
                   Real k1p0, Real k2p0, Real k3p0, int ip);
@@ -158,6 +162,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   Real vel_cgs = pin->GetOrAddReal("problem","vel_cgs",1.);
   Real rho_cgs = pin->GetOrAddReal("problem","rho_cgs",1.);
   n_cgs = rho_cgs / MCConstants::mp_cgs;
+  P_cgs = rho_cgs * SQR(vel_cgs);
   Real time_cgs = l_cgs / vel_cgs;
 
   // Gravity source term configuration
@@ -190,8 +195,10 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   flag_static_inner = pin->GetOrAddBoolean("problem", "static_inner", true);
   if (flag_static_inner) {
     EnrollUserBoundaryFunction(BoundaryFace::inner_x1, StaticInflowInnerX1);
+    printf("using static inner boundary condition\n");
   } else {
     EnrollUserBoundaryFunction(BoundaryFace::inner_x1, InflowInnerX1);
+    printf("using dynamic inner boundary condition\n");
   }
   EnrollUserBoundaryFunction(BoundaryFace::outer_x1, OutflowOuterX1);
 
@@ -338,8 +345,10 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
   } else {
     EnrollUserOpacityFunction(ChooseAbsorptionOpacity, true);
   }
+
   EnrollUserGetTemperature(GetIonizationTemperature);
   EnrollUserGetNumberDensity(GetNH);
+  //EnrollUserWorkInMove(CoreSkipping);
 
 }
 
@@ -410,7 +419,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   Real kb_cgs = MCConstants::kb_cgs;
   Real mp_cgs = MCConstants::mp_cgs;
   Real mmw0 = 1.0; // mean molecular weight at base
-  Real a2 = kb_cgs * temp0 / mmw0 / mp_cgs / SQR(vel_cgs);
+  a2 = kb_cgs * temp0 / mmw0 / mp_cgs / SQR(vel_cgs);
   Real a = std::sqrt(a2);  // base sound speed
 
   Real lambda = gm_planet / (rin * a2);
@@ -447,17 +456,25 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         Real ph = pcoord->x3v(k);
 
         // Initialize density to hydrostatic profile, with tidal correction
-        //Real rho = nbase * HydrostaticIsothermalDensity(r, th, ph, rin, a2, flag_tidal_gravity+1);
-        Real rho = nbase * HydrostaticAdiabaticDensity(r, th, ph, rin, a2, invgm1, flag_tidal_gravity+1);
+        Real hydrostatic_profile = HydrostaticIsothermalDensity(r, th, ph, rin, a2, flag_tidal_gravity+1);
+        //Real hydrostatic_profile = HydrostaticAdiabaticDensity(r, th, ph, rin, a2, invgm1, flag_tidal_gravity+1);
+        Real rho = nbase * hydrostatic_profile;
+        Real P = a2 * nbase / gamma * std::pow(hydrostatic_profile, gamma);
+        //printf("rad=%g, the=%g, phi=%g, hydro=%g, rho=%g, pres=%g\n", r*l_cgs, th, ph, hydrostatic_profile, rho*n_cgs, P*P_cgs); 
+
         // adiabatic solution has critical point where density -> zero; correct for this
         if (rho <= dfloor) {
           rho = dfloor;
         }
-        //printf("rad=%g, the=%g, phi=%g, rho=%g\n", r, th, ph, rho); 
+        if (P <= pfloor) {
+          P = pfloor;
+        }
 
         if (flag_wind) {
-          // Parker wind approximation
+          // isothermal Parker wind approximation
           vel1 = a * std::exp(1.5*(1 - rsonic/r)) * std::sqrt(rsonic/r);
+          rho = mdot / (4*PI * SQR(r) * vel1);
+          P = a2 * rho;
         } else {
           vel1 = 0;
         }
@@ -494,14 +511,16 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   
         // SWD: not sure if this need recomputing if !flag_wind
         //mmw = (nH + np)/(2.*np + nH);
-        Real a2_mmw = kb_cgs * temp0 / mmw / mp_cgs;
-        Real P = rho * a2_mmw / (vel_cgs*vel_cgs);
+        //Real a2_mmw = kb_cgs * temp0 / mmw / mp_cgs;
+        //Real P = rho * a2_mmw / (vel_cgs*vel_cgs);
 
+        // CMF: need a better solution for tidal boundary that depends on theta/phi
         // Set global ghost zone constant values for inner boundary
-        if ((r <= rin) && (i < NGHOST)) {
-          rho_gz[i] = rho;
-          P_gz[i] = P;
-        }
+        //if ((r <= rin) && (i < NGHOST)) {
+        //  rho_gz[i] = nbase * hydrostatic_profile;
+        //  P_gz[i] = a2 * nbase / gamma * std::pow(hydrostatic_profile, gamma);
+        //  //printf("boundary: rad=%g, the=%g, phi=%g, hydro=%g, nd=%g, pres=%g\n", r*l_cgs, th, ph, hydrostatic_profile, rho_gz[i]*n_cgs, P_gz[i]*P_cgs); 
+        //}
 
         if (flag_initialize_pressure_from_file) {
           P = ruser_meshblock_data[1](1,k,j,i);
@@ -537,16 +556,10 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
           pscalars->s(0,k,j,i) = nH;
         }
 
-        // SWD: not sure why this has ! in front of it
-        if (!pin->GetBoolean("montecarlo", "dynamic")) {
-          Real a_r, a_th, a_ph;
-          GetTidalAcceleration(r, th, ph, rho, a_r, a_th, a_ph);
-
-          // Update the user output quantities
-          ruser_meshblock_data[0](0,k,j,i) = a_r;
-          ruser_meshblock_data[0](1,k,j,i) = a_th;
-          ruser_meshblock_data[0](2,k,j,i) = a_ph;
-        }
+        GetTidalAcceleration(r, th, ph, flag_tidal_gravity+1,
+          ruser_meshblock_data[0](0,k,j,i),
+          ruser_meshblock_data[0](1,k,j,i),
+          ruser_meshblock_data[0](2,k,j,i));
       }
     }
   }
@@ -807,6 +820,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
   } // end loop over ip
 }
 
+
 void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
   if (!flag_update_nh)
     return;
@@ -866,11 +880,11 @@ void MonteCarloBlock::UserWorkAfterTransfer(int etype) {
 
         // Double-check that the implicit update gives a neutral fraction between 0 and 1 --- NOT guaranteed if dt is large
         Real neutral_frac = update/na;
-        if (neutral_frac > 1.0) {
-          printf("(Block %d) UpdateIonizationFraction: neutral fraction %g is greater than 1.0\n", pmy_block->lid, neutral_frac);
+        if (neutral_frac > 1.0000001) {
+          printf("[WARNING] (Block %d) UpdateIonizationFraction: neutral fraction %g is greater than 1\n", pmy_block->lid, neutral_frac);
           neutral_frac = 1.0;
         } else if (neutral_frac < 0.0) {
-          printf("(Block %d) UpdateIonizationFraction: neutral fraction %g is less than 0.0\n", pmy_block->lid, neutral_frac);
+          printf("[WARNING] (Block %d) UpdateIonizationFraction: neutral fraction %g is less than 0\n", pmy_block->lid, neutral_frac);
           neutral_frac = 0.0;
         }
 
@@ -922,26 +936,51 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot, int ip) {
 // Definitions for namespace functions
 namespace {
 
-void GetTidalAcceleration(Real r, Real th, Real ph, Real rho, Real &a_r, Real &a_th, Real &a_ph) {
+void GetTidalAcceleration(Real r, Real th, Real ph, int order, Real &a_r, Real &a_th, Real &a_ph) {
 
-  Real sth = std::sin(th);
-  Real cth = std::cos(th);//std::sqrt(1.0 - SQR(sth));
+  // point source
+  a_r  = 0;
+  a_th = 0;
+  a_ph = 0;
+  if (order < 2) {
+    return;
+  }
 
-  Real phm = ph - psi;
-  Real sphm = std::sin(phm);
-  Real cphm = std::cos(phm);//std::sqrt(1.0 - SQR(sphm));
+  Real cosph = std::cos(ph);
+  Real sinph = std::sin(ph);
+  Real costh = std::cos(th);
+  Real sinth = std::sin(th);
 
-  Real prefac = gm_star*std::pow(SQR(r)+2.0*sep*r*sth*cphm+SQR(sep),-1.5);
-  a_r = - prefac*(r+sep*sth*cphm)
-        - gm_planet/(SQR(r))
-        + r*SQR(sth)*(gm_star+gm_planet)/(sep*sep*sep)
-        + sth*cphm*gm_star/(SQR(sep));
-  a_th= - prefac*(sep*cth*cphm)
-        + r*sth*cth*(gm_star+gm_planet)/(sep*sep*sep)
-        + cth*cphm*gm_star/(SQR(sep));
-  a_ph= - prefac*(sep*sphm)
-        - sphm*gm_star/(SQR(sep));
-  return;
+  Real x = r * cosph * sinth;
+  Real y = r * sinph * sinth;
+  Real z = r * costh;
+
+  // unit vector conversions
+  Real unit_xr = sinth*cosph;
+  Real unit_xt = costh*cosph;
+  Real unit_xp = -sinph;
+
+  Real unit_yr = sinth*sinph;
+  Real unit_yt = costh*sinph;
+  Real unit_yp = cosph;
+
+  Real unit_zr = costh;
+  Real unit_zt = -sinth;
+
+  // Quadratic (Hill)
+  Real prefac2 = gm_star / (sep*sep*sep);
+  a_r  += prefac2 * (3*x*unit_xr - z*unit_zr);
+  a_th += prefac2 * (3*x*unit_xt - z*unit_zt);
+  a_ph += prefac2 * (3*x*unit_xp);
+  if (order < 3) {
+    return;
+  }
+
+  // Cubic
+  Real prefac3 = 1.5 * prefac2 / sep;
+  a_r  += prefac3 * ((r*r - 3*x*x)*unit_xr + 2*x*y*unit_yr + 2*x*z*unit_zr);
+  a_th += prefac3 * ((r*r - 3*x*x)*unit_xt + 2*x*y*unit_yt + 2*x*z*unit_zt);
+  a_ph += prefac3 * ((r*r - 3*x*x)*unit_xp + 2*x*y*unit_yp);
 }
 
 
@@ -1491,6 +1530,36 @@ void GetNH(MonteCarloBlock *pmcb) {
   }
 }
 
+
+void CoreSkipping(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher, int ip) {
+  //Real nu_lya = MCConstants::nu_lya;
+  //Real h_cgs = MCConstants::h_cgs;
+  Real kb_cgs = MCConstants::kb_cgs;
+  Real mp_cgs = MCConstants::mp_cgs;
+  Real c_cgs = MCConstants::c_cgs;
+  //Real v_th = 1.e6; // need to calculate in cell
+  int i1 = pphot->i1p[ip];
+  int i2 = pphot->i2p[ip];
+  int i3 = pphot->i3p[ip];
+  Real v_th = std::sqrt(kb_cgs/mp_cgs * pmcb->tgas(i3,i2,i1));
+
+  Real x_crit = 8.; // core-wing boundary, see McClellan et al. 2022
+  Real e_crit = energy_lya * (1.0 + x_crit * v_th / c_cgs);
+  Real x = c_cgs/v_th * (pphot->ep[ip]/energy_lya - 1.0);
+
+  // core skip based on photon frequency
+  if ((x < x_crit) && (x > -x_crit)) {
+    printf("core skip: ip=%d, v_th=%g, E=%g, E_crit=%g, x=%g\n", ip, v_th, pphot->ep[ip], e_crit, x);
+    pphot->ep[ip] = e_crit;
+    pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
+    pphot->scp[ip] = pmcb->ScatteringOpacity(pmcb,pphot,ip);
+  } else {
+    //printf("no core skip: ip=%d, v_th=%g, E=%g, E_crit=%g, x=%g\n", ip, v_th, pphot->ep[ip], e_crit, x);
+  }
+
+}
+
+
 void UpdateSourceTerms(MonteCarloBlock *pmcb, Photon *pphot, Real energy0, Real weight0,
                   Real k1p0, Real k2p0, Real k3p0, int ip) {
 
@@ -1593,14 +1662,25 @@ void UpdateSourceTerms(MonteCarloBlock *pmcb, Photon *pphot, Real energy0, Real 
 void StaticInflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
   FaceField &b, Real time, Real dt, int il, int iu, int jl, int ju, int kl, int ku,
   int ngh) {
+  Real gamma = pmb->peos->GetGamma();
+  Real invgm1 = 1/(gamma-1);
 
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
       for (int i=1; i<=ngh; ++i) {
 
+        Real rad = pco->x1v(il-i);
+        Real the = pco->x2v(j);
+        Real phi = pco->x3v(k);
+        //Real hydrostatic_profile = HydrostaticIsothermalDensity(r, th, ph, rin, a2, flag_tidal_gravity+1);
+        Real hydrostatic_profile = HydrostaticAdiabaticDensity(rad, the, phi, rin, a2, invgm1, flag_tidal_gravity+1);
+        Real rho = nbase * hydrostatic_profile;
+        Real P = a2 * nbase / gamma * std::pow(hydrostatic_profile, gamma);
+
         // fix initial density and pressure
-        prim(IDN,k,j,il-i) = rho_gz[il-i];
-        prim(IPR,k,j,il-i) = P_gz[il-i];
+        prim(IDN,k,j,il-i) = rho;
+        prim(IPR,k,j,il-i) = P;
+        //printf("boundary: rad=%g, the=%g, phi=%g, nd=%g, pres=%g\n", pco->x1v(il-i), pco->x2v(j), pco->x3v(k), rho_gz[i]*n_cgs, P_gz[i]*P_cgs); 
 
         // outflow diode for velocity
         prim(IVY,k,j,il-i) = prim(IVY,k,j,il);
