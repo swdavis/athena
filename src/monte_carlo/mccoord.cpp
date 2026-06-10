@@ -49,7 +49,7 @@ MCCoord::MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb) {
   } else {
     // initialize to 0 for flat spacetimes
     bh_mass_ = 0.;
-    bh_mass_ = 0.;
+    bh_spin_ = 0.;
   }
 
   // Allocate volume array
@@ -1166,7 +1166,7 @@ void MCBoyerLindquist::Connect(Real x[4], Real gamma[4][4][4]) {
   gamma[IMC3][IMC0][IMC1] = j/(rho4*delta)*(2.*r2-rho2);
   gamma[IMC3][IMC0][IMC2] = -2.*j*r*cth/(rho4*sth);
 
-  gamma[IMC3][IMC1][IMC3] = gamma[IMC3][IMC0][IMC1];
+  gamma[IMC3][IMC1][IMC0] = gamma[IMC3][IMC0][IMC1];
   gamma[IMC3][IMC1][IMC3] = 1./(rho4*delta)*(r*rho2*(rho2-rs*r)-a*j*sth2*(2.*r2-rho2));
 
   gamma[IMC3][IMC2][IMC0] = gamma[IMC3][IMC0][IMC2];

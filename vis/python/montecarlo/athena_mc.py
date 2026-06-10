@@ -56,6 +56,7 @@ class Photons:
             for i in range(self.nuser):
                 self.user[:,i] = phlist['list'][:,i+self.npars]
 
+
 def read_list(filename, data=True, header=True):
     """
     Faster version of read_list. Read unformated list output and return list
