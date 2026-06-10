@@ -545,10 +545,12 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etype) {
   // Function called each time a photon is initialized
 
+
   Real h_cgs = MCConstants::h_cgs;
   Real kb_cgs = MCConstants::kb_cgs;
   Real c_cgs = MCConstants::c_cgs;
 
+  //printf("InitializePhoton: etype=%d\n", etype);
   EmissionType phot_type;
   EmissionGeometryHJ emis_geometry;
   // Set emission parameters based on etype
@@ -738,6 +740,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
     // to the values in the emitted zone
     pphot->acp[ip] = AbsorptionOpacity(this,pphot,ip);
     pphot->scp[ip] = ScatteringOpacity(this,pphot,ip);
+
+    //pphot->PrintPhoton(ip);
 
   } // end loop over ip
 }
@@ -984,8 +988,8 @@ void ThirdOrderTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
   const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
   AthenaArray<Real> &cons_scalar) {
 	Real prefac2 = gm_star / (sep*sep*sep);
-	Real prefac3 = 3*gm_star / (2*sep*sep*sep*sep);
-	Real omega = std::sqrt((gm_star+gm_planet)/(sep*sep*sep));
+	Real prefac3 = 1.5 * prefac2 / sep;
+	Real omega = std::sqrt((gm_star + gm_planet) / (sep*sep*sep));
 
   for (int k=pmb->ks; k<=pmb->ke; ++k) {
 		Real ph = pmb->pcoord->x3v(k);
@@ -1011,7 +1015,7 @@ void ThirdOrderTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
 
       for (int i=pmb->is; i<=pmb->ie; ++i) {
         Real r = pmb->pcoord->x1v(i);
-				Real rho = prim(IDN,k,j,i);
+				Real rho    = prim(IDN,k,j,i);
 				Real vel_r  = prim(IVX,k,j,i);
 				Real vel_th = prim(IVY,k,j,i);
 				Real vel_ph = prim(IVZ,k,j,i);
@@ -1021,22 +1025,22 @@ void ThirdOrderTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
 
 				// Tidal gravity, second order
         Real a_r  = prefac2 * (3*x*unit_xr - z*unit_zr);
-				Real a_th = prefac2 * (3*x*unit_xt + z*unit_zt);
+				Real a_th = prefac2 * (3*x*unit_xt - z*unit_zt);
 				Real a_ph = prefac2 * (3*x*unit_xp);
 
 				// Tidal gravity, third order
-				a_r  += prefac3 * ((3*r*r - x*x)*unit_xr + 4*x*y*unit_yr + 4*x*z*unit_zr);
-				a_th += prefac3 * ((3*r*r - x*x)*unit_xt + 4*x*y*unit_yt + 4*x*z*unit_zt);
-				a_ph += prefac3 * ((3*r*r - x*x)*unit_xp + 4*x*y*unit_yp);
+				a_r  += prefac3 * ((r*r - 3*x*x)*unit_xr + 2*x*y*unit_yr + 2*x*z*unit_zr);
+				a_th += prefac3 * ((r*r - 3*x*x)*unit_xt + 2*x*y*unit_yt + 2*x*z*unit_zt);
+				a_ph += prefac3 * ((r*r - 3*x*x)*unit_xp + 2*x*y*unit_yp);
 
 				// Coriolis
 				a_r  += 2*omega * vel_ph*sinth;
 				a_th += 2*omega * vel_ph*costh;
 				a_ph -= 2*omega * (vel_r*sinth + vel_th*costh);
 
-        Real src1 = a_r *rho*dt;
-        Real src2 = a_th*rho*dt;
-        Real src3 = a_ph*rho*dt;
+        Real src1 = a_r  * rho * dt;
+        Real src2 = a_th * rho * dt;
+        Real src3 = a_ph * rho * dt;
         cons(IM1,k,j,i) += src1;
         cons(IM2,k,j,i) += src2;
         cons(IM3,k,j,i) += src3;
