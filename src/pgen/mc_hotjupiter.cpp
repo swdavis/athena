@@ -1396,13 +1396,17 @@ void ResonantScattering(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) 
 Real BoundFreeAbsorptionOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 
   Real h_cgs = MCConstants::h_cgs;
+  Real emin = h_cgs * numin;
   Real opac;
   if (pphot->ep[ip] >= numin * h_cgs) {
     int i1 = pphot->i1p[ip];
     int i2 = pphot->i2p[ip];
     int i3 = pphot->i3p[ip];
-    Real energy = pphot->ep[ip];
-    Real xsec = sigmamin * std::pow(energy / h_cgs / numin, -3.0);
+    Real erat = pphot->ep[ip] / emin;
+    Real xsec = sigmamin * std::pow(erat, -3.0);
+    Real epsilon = std::sqrt(erat - 1);
+    Real correction = std::exp(4 - 4*std::atan(epsilon)/epsilon) / std::expm1(-2*PI / epsilon);
+    xsec *= -correction / erat;
     //Real nH = pmcb->pmy_block->pscalars->s(0,i3,i2,i1) * n_cgs;
     Real nH = pmcb->species(0,i3,i2,i1);
     opac = xsec * nH; // opacities in cgs units
