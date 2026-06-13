@@ -182,7 +182,9 @@ void CartesianPusher::Move(Photon *pphot, int ips, int ipe) {
 
         // Perform any user work
         if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this,ip);
-        MovePhotonToNextZone(pphot,pco,pmcb,face,ascend,ip);
+
+        // Only move to next zone if photon is still evolving
+        if (pphot->statp[ip] == EVOLVING) MovePhotonToNextZone(pphot,pco,pmcb,face,ascend,ip);
       }
     }
 

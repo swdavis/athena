@@ -70,9 +70,9 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   Real dopw = nu0 * vth / c;
   Real kappa = ResLinePre() / (mass*sqrt(PI)*dopw);
   Real rho = tau / (kappa * rad0);
-  //printf("kappa: %g %g %g\n",kappa,ResLinePre(),rho/mass);
-  //printf("voigt: %g\n",XsecVoigt(nu0,temp));
-  //printf("rho: %g %g %g %g\n",rho,kappaes,rad0,tau);
+  printf("kappa: %g %g %g\n",kappa,ResLinePre(),rho/mass);
+  printf("voigt: %g\n",XsecVoigt(nu0,temp));
+  printf("rho: %g %g %g %g\n",rho,kappa,rad0,tau);
   // density is non-zero only in sphere
   for (int k=ks; k<=ke; k++) {
     for (int j=js; j<=je; j++) {
@@ -103,7 +103,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 
-  nuser_var = 3;
+  nuser_var = 8;
   // If time is set in problem generator, terminate photon integration based on time
   // but if not terminated based on radius
   Real time = pin->GetOrAddReal("problem","time",-1.);
@@ -158,15 +158,18 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
         i3start = i;
     }
     if ((i1start < 0) || (i2start < 0) || (i3start < 0)) {
-      std::stringstream msg;
-      msg << "### FATAL ERROR in InitUserMonteCarloBlockData" << std::endl
-          << "Origin not found within domain." << std::endl;
-      throw std::runtime_error(msg.str().c_str());
+      //std::stringstream msg;
+      //msg << "### FATAL ERROR in InitUserMonteCarloBlockData" << std::endl
+      //    << "Origin not found within domain." << std::endl;
+      //throw std::runtime_error(msg.str().c_str());
+      nphremain = 0;
+      nphrun = 0;
+    } else {
+      // Set number of samples per block because emmision_flag is set to EMISNONE
+      nphremain = pin->GetInteger("montecarlo", "nphot");
+      nphrun = 0;
     }
   }
-  // Set number of samples per block because emmision_flag is set to EMISNONE
-  nphremain = pin->GetInteger("montecarlo", "nphot");
-  nphrun = 0;
 }
 
 
@@ -241,6 +244,14 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
     pphot->wp[ip] = target_lum / energy0;
     pphot->ep[ip] = energy0;
 
+    // If using spatial escape, set an infinite time limit
+    // Otherwise, initialize dtp to 0
+    if (time0 <= 0.0) {
+      pphot->dtp[ip] = HUGE_NUMBER;
+    } else {
+      pphot->dtp[ip] = 0.0;
+    }
+
     // Initialize Stokes vector
     if (pphot->polarized) {
       pphot->sip[ip] = 1.0;
@@ -259,7 +270,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
     // to the values appropriate in the emitted zone
     pphot->acp[ip] = AbsorptionOpacity(this,pphot,ip);
     pphot->scp[ip] = ScatteringOpacity(this,pphot,ip);
-    //pphot->PrintPhoton(ip);
+    // pphot->PrintPhoton(ip);
   } // loop over ip
 }
 
@@ -272,9 +283,47 @@ namespace {
 void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher,
                      int ip) {
 
-  pphot->user[0][ip] += ppusher->dl * pphot->wp[ip];
-  pphot->user[1][ip] += ppusher->dl * pphot->wp[ip] * pphot->ep[ip];
-  pphot->user[2][ip] += ppusher->dl * pphot->wp[ip] * pphot->acp[ip];
+  // Repeat accumulation of moments in UpdateMoments
+  Real k0,k1,k2,k3,weight;
+  Real ki[4];
+  ki[0] = pphot->k0p[ip];
+  ki[1] = pphot->k1p[ip];
+  ki[2] = pphot->k2p[ip];
+  ki[3] = pphot->k3p[ip];
+  Real x[4];
+  x[0] = pphot->x0p[ip];
+  x[1] = pphot->x1p[ip];
+  x[2] = pphot->x2p[ip];
+  x[3] = pphot->x3p[ip];
+  Real invtet[4][4], kf[4];
+  pmcb->pcoord->InverseTetrad(x,invtet);
+  for (int j=0; j<4; j++) {
+    kf[j] = 0.;
+    for (int i=0; i<4; i++) {
+      kf[j] += invtet[j][i] * ki[i];
+    }
+  }
+  Real ep = pphot->ep[ip];
+  k0 = kf[0]/ep;
+  k1 = kf[1]/ep;
+  k2 = kf[2]/ep;
+  k3 = kf[3]/ep;
+
+  // Weight moments by time spent in domain
+  weight = pphot->wp[ip] * pphot->ep[ip] * ppusher->dl;
+
+  // Track contribution to flux moment in each direction
+  pphot->user[0][ip] += weight * k1;
+  pphot->user[1][ip] += weight * k2;
+  pphot->user[2][ip] += weight * k3;
+
+  // Track contribution to radiative acceleration as well
+  Real c_cgs = 2.99792458e10;
+  pphot->user[3][ip] += (pphot->acp[ip]+pphot->scp[ip]) * weight * k1 * c_cgs;
+  pphot->user[4][ip] += (pphot->acp[ip]+pphot->scp[ip]) * weight * k2 * c_cgs;
+  pphot->user[5][ip] += (pphot->acp[ip]+pphot->scp[ip]) * weight * k3 * c_cgs;
+  pphot->user[6][ip] += (pphot->acp[ip]+pphot->scp[ip]); // inverse mean free path
+  pphot->user[7][ip] += 1; // number of scatterings
 
   // First check radius condition
   Real r = sqrt(SQR(pphot->x1p[ip])+SQR(pphot->x2p[ip])+SQR(pphot->x3p[ip]));
