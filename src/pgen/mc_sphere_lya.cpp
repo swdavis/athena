@@ -66,7 +66,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   Real kb = 1.380649e-16;
   Real mass = 1.660538782e-24;
   Real vth = sqrt(2.*kb*temp/mass);
-  Real nu0 = 2.468e15;
+  Real nu0 = MCConstants::nu_lya;
   Real dopw = nu0 * vth / c;
   Real kappa = ResLinePre() / (mass*sqrt(PI)*dopw);
   Real rho = tau / (kappa * rad0);
@@ -129,7 +129,7 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
   Real mass = 1.660538782e-24;
   Real vth = sqrt( 2. * kb * temp / mass);
   Real c = 2.99792458e10;
-  Real nu0 = 2.468e15;
+  Real nu0 = MCConstants::nu_lya;
   Real dopw = nu0 * vth / c;
   Real lorw = 6.265e8/(4.*PI);
   //printf("dop, lor, a: %e %e %e\n",dopw,lorw,lorw/dopw);
@@ -187,9 +187,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
   for (int ip=ips; ip<=ipe; ip++) {
 
-    pphot->user[0][ip] = 0.;
-    pphot->user[1][ip] = 0.;
-    pphot->user[2][ip] = 0.;
+    for (int n=0; n<pmy_mc->nuser_var; ++n)
+      pphot->user[n][ip] = 0.;
 
     // Set status flag
     pphot->statp[ip] = EVOLVING;
@@ -312,18 +311,21 @@ void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher
   // Weight moments by time spent in domain
   weight = pphot->wp[ip] * pphot->ep[ip] * ppusher->dl;
 
+  // contribution to energy density
+  pphot->user[0][ip] += weight;
+
   // Track contribution to flux moment in each direction
-  pphot->user[0][ip] += weight * k1;
-  pphot->user[1][ip] += weight * k2;
-  pphot->user[2][ip] += weight * k3;
+  pphot->user[1][ip] += weight * k1;
+  pphot->user[2][ip] += weight * k2;
+  pphot->user[3][ip] += weight * k3;
 
   // Track contribution to radiative acceleration as well
   Real c_cgs = 2.99792458e10;
-  pphot->user[3][ip] += (pphot->acp[ip]+pphot->scp[ip]) * weight * k1 * c_cgs;
-  pphot->user[4][ip] += (pphot->acp[ip]+pphot->scp[ip]) * weight * k2 * c_cgs;
-  pphot->user[5][ip] += (pphot->acp[ip]+pphot->scp[ip]) * weight * k3 * c_cgs;
-  pphot->user[6][ip] += (pphot->acp[ip]+pphot->scp[ip]); // inverse mean free path
-  pphot->user[7][ip] += 1; // number of scatterings
+  pphot->user[4][ip] += (pphot->acp[ip]+pphot->scp[ip]) * weight * k1 * c_cgs;
+  pphot->user[5][ip] += (pphot->acp[ip]+pphot->scp[ip]) * weight * k2 * c_cgs;
+  pphot->user[6][ip] += (pphot->acp[ip]+pphot->scp[ip]) * weight * k3 * c_cgs;
+  pphot->user[7][ip] += (pphot->acp[ip]+pphot->scp[ip]) * pphot->wp[ip]; // inverse mean free path
+  pphot->user[8][ip] += pphot->wp[ip]; // number of scatterings
 
   // First check radius condition
   Real r = sqrt(SQR(pphot->x1p[ip])+SQR(pphot->x2p[ip])+SQR(pphot->x3p[ip]));
