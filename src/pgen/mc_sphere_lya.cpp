@@ -103,7 +103,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 
-  nuser_var = 8;
+  nuser_var = 9;
   // If time is set in problem generator, terminate photon integration based on time
   // but if not terminated based on radius
   Real time = pin->GetOrAddReal("problem","time",-1.);
@@ -284,46 +284,28 @@ void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher
 
   // Repeat accumulation of moments in UpdateMoments
   Real k0,k1,k2,k3,weight;
-  Real ki[4];
-  ki[0] = pphot->k0p[ip];
-  ki[1] = pphot->k1p[ip];
-  ki[2] = pphot->k2p[ip];
-  ki[3] = pphot->k3p[ip];
-  Real x[4];
-  x[0] = pphot->x0p[ip];
-  x[1] = pphot->x1p[ip];
-  x[2] = pphot->x2p[ip];
-  x[3] = pphot->x3p[ip];
-  Real invtet[4][4], kf[4];
-  pmcb->pcoord->InverseTetrad(x,invtet);
-  for (int j=0; j<4; j++) {
-    kf[j] = 0.;
-    for (int i=0; i<4; i++) {
-      kf[j] += invtet[j][i] * ki[i];
-    }
-  }
   Real ep = pphot->ep[ip];
-  k0 = kf[0]/ep;
-  k1 = kf[1]/ep;
-  k2 = kf[2]/ep;
-  k3 = kf[3]/ep;
+  k0 = pphot->k0p[0];
+  k1 = pphot->k1p[1];
+  k2 = pphot->k2p[2];
+  k3 = pphot->k2p[3];
 
   // Weight moments by time spent in domain
-  weight = pphot->wp[ip] * pphot->ep[ip] * ppusher->dl;
+  Real c_cgs = 2.99792458e10;
+  weight = pphot->wp[ip] * pphot->ep[ip] * ppusher->dl / c_cgs;
 
   // contribution to energy density
-  pphot->user[0][ip] += weight;
+  pphot->user[0][ip] += weight * k0 * k0;
 
   // Track contribution to flux moment in each direction
-  pphot->user[1][ip] += weight * k1;
-  pphot->user[2][ip] += weight * k2;
-  pphot->user[3][ip] += weight * k3;
+  pphot->user[1][ip] += weight * k0 * k1 * c_cgs;
+  pphot->user[2][ip] += weight * k0 * k2 * c_cgs;
+  pphot->user[3][ip] += weight * k0 * k3 * c_cgs;
 
   // Track contribution to radiative acceleration as well
-  Real c_cgs = 2.99792458e10;
-  pphot->user[4][ip] += (pphot->acp[ip]+pphot->scp[ip]) * weight * k1 * c_cgs;
-  pphot->user[5][ip] += (pphot->acp[ip]+pphot->scp[ip]) * weight * k2 * c_cgs;
-  pphot->user[6][ip] += (pphot->acp[ip]+pphot->scp[ip]) * weight * k3 * c_cgs;
+  pphot->user[4][ip] += (pphot->acp[ip]+pphot->scp[ip]) * weight * k0 * k1;
+  pphot->user[5][ip] += (pphot->acp[ip]+pphot->scp[ip]) * weight * k0 * k2;
+  pphot->user[6][ip] += (pphot->acp[ip]+pphot->scp[ip]) * weight * k0 * k3;
   pphot->user[7][ip] += (pphot->acp[ip]+pphot->scp[ip]) * pphot->wp[ip]; // inverse mean free path
   pphot->user[8][ip] += pphot->wp[ip]; // number of scatterings
 
