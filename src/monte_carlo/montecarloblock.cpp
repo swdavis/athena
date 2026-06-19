@@ -998,7 +998,6 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   if (mom_flag_scat) {
     Real weight_scat, e_scat;
     if (GENERAL_RELATIVITY && boosts) {
-      printf("here\n");
       Real gcov[4][4];
       Real x[4];
       x[IMC0] = pphot->x0p[ip];
