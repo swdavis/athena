@@ -375,6 +375,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     emin_scat = pin->GetReal("montecarlo","emin_scat") * everg;
     emax_scat = pin->GetReal("montecarlo","emax_scat") * everg;
     moments_scat.NewAthenaArray(nf_scat,ncells3,ncells2,ncells1);
+    moments_scat_error.NewAthenaArray(nf_scat,ncells3,ncells2,ncells1);
     dloge_scat = (std::log10(emax_scat/emin_scat))/static_cast<Real>(nf_scat);
     energy_scat.NewAthenaArray(nf_scat+1);
     freq_scat_mid.NewAthenaArray(nf_scat);
@@ -995,33 +996,39 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   // add contribution to scattering source terms
   // SWD: Ultimately want comoving frame values
   if (mom_flag_scat) {
-    
-    Real gcov[4][4];
-    Real x[4];
-    x[IMC0] = pphot->x0p[ip];
-    x[IMC1] = pphot->x1p[ip];
-    x[IMC2] = pphot->x2p[ip];
-    x[IMC3] = pphot->x3p[ip];
-    pcoord->Metric(x, gcov);
-    Real ucon[4];
-    ucon[IMC0] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],0);
-    ucon[IMC1] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],1);
-    ucon[IMC2] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],2);
-    ucon[IMC3] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],3);
-    Real kcon[4];
-    kcon[0] = pphot->k0p[ip];
-    kcon[1] = pphot->k1p[ip];
-    kcon[2] = pphot->k2p[ip];
-    kcon[3] = pphot->k3p[ip];
-    Real e_com = -DotVec(ucon,kcon,gcov);
-    Real weight_com = pphot->wp[ip] * SQR(e_com) / pphot->ep[ip] * kcon[0] * dl * l_cgs;
+    Real weight_scat, e_scat;
+    if (GENERAL_RELATIVITY && boosts) {
+      Real gcov[4][4];
+      Real x[4];
+      x[IMC0] = pphot->x0p[ip];
+      x[IMC1] = pphot->x1p[ip];
+      x[IMC2] = pphot->x2p[ip];
+      x[IMC3] = pphot->x3p[ip];
+      pcoord->Metric(x, gcov);
+      Real ucon[4];
+      ucon[IMC0] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],0);
+      ucon[IMC1] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],1);
+      ucon[IMC2] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],2);
+      ucon[IMC3] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],3);
+      Real kcon[4];
+      kcon[0] = pphot->k0p[ip];
+      kcon[1] = pphot->k1p[ip];
+      kcon[2] = pphot->k2p[ip];
+      kcon[3] = pphot->k3p[ip];
+      e_scat = -DotVec(ucon,kcon,gcov);
+      weight_scat = pphot->wp[ip] * SQR(e_scat) / pphot->ep[ip] * kcon[0] * dl * l_cgs;
+    } else {
+      Real e_scat = pphot->ep[ip];
+      Real weight_scat = weight;
+    }
     //printf("w: %g %g\n",weight,weight_com);
-    Real loge = std::log10(e_com);
+    Real loge = std::log10(e_scat);
     Real log10 = 2.302585092994046;
     int n = std::floor((loge-energy_scat(0))/dloge_scat);
     if (n >= 0 && n < nf_scat) {
       Real norm = c_cgs/(4.*PI*freq_scat_mid(n)*dloge_scat*log10);
-      moments_scat(n,i3,i2,i1) += norm * weight;
+      moments_scat(n,i3,i2,i1) += norm * weight_scat;
+      moments_scat_error(n,i3,i2,i1) += SQR(norm) * SQR(weight_scat);
       //moments_scat(n,i3,i2,i1) += norm * pphot->scp[ip] * weight * k0 * k0;
     }
   }
@@ -1425,9 +1432,13 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
               norm = 1./ (dt * pcoord->vol(k,j,i));
             else
               norm = dt * pcoord->vol(k,j,i);
-            if (moments_scat(n,k,j,i) > 0.0)
-              //printf("norm: %g %g\n",moments_scat(n,k,j,i), norm);
             moments_scat(n,k,j,i) *= norm;
+            if (normalize) {
+              moments_scat_error(n,k,j,i) = std::sqrt(moments_scat_error(n,k,j,i))*norm;
+            } else {
+              Real mom2 = moments_scat_error(n,k,j,i)*norm;
+              moments_scat_error(n,k,j,i) = SQR(mom2); 
+            }
           }
         }
       }

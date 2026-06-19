@@ -857,6 +857,18 @@ void OutputType::LoadOutputData(MeshBlock *pmb) {
         num_vars_++;
       }
     }
+    if (output_params.variable.compare("mcscat") == 0){
+      for (int n = 0; n < pmcb->nf_scat; ++n) {
+        char name[16];
+        std::snprintf(name, sizeof(name), "sscat_err%d", n);
+        pod = new OutputData;
+        pod->type = "SCALARS";
+        pod->name = name;
+        pod->data.InitWithShallowSlice(pmcb->moments_scat_error, 4, n, 1);
+        AppendOutputDataNode(pod);
+        num_vars_++;
+      }
+    }
     // monte carlo netcooling
     if (output_params.variable.compare("mcsrc") == 0 ||
         output_params.variable.compare("Cooling") == 0) {
