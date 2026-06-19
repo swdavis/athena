@@ -1624,10 +1624,14 @@ void Mesh::Initialize(int res_flag, ParameterInput *pin) {
           if (pbval->nblevel[0][1][1] != -1) kl -= NGHOST;
           if (pbval->nblevel[2][1][1] != -1) ku += NGHOST;
         }
-        pmb->peos->ConservedToPrimitive(ph->u, ph->w1, pf->b,
-                                        ph->w, pf->bcc, pmb->pcoord,
-                                        il, iu, jl, ju, kl, ku);
-
+        // SWD: this should be removed evantually, once the mismatch between AthenaK inputs
+        // and athena++ is understood better by me
+        if (!(MONTE_CARLO_ENABLED && std::strcmp(COORDINATE_SYSTEM, "gr_user") == 0)) {
+          pmb->peos->ConservedToPrimitive(ph->u, ph->w1, pf->b,
+                                          ph->w, pf->bcc, pmb->pcoord,
+                                          il, iu, jl, ju, kl, ku);
+        }
+ 
         if (NSCALARS > 0) {
           // r1/r_old for GR is currently unused:
           pmb->peos->PassiveScalarConservedToPrimitive(ps->s, ph->u, ps->r, ps->r,
