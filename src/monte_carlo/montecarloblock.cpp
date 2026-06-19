@@ -915,8 +915,11 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
 
   Real k0,k1,k2,k3,weight;
   const Real c_cgs = 2.99792458e10;
+  Real ktemp, dlep; //SWD: remove
   if (pmy_mc->general_pusher_flag) {
-    dl *= pphot->ep[ip];
+    // SWD: This computes k values in an orthonormal tetrad frame specificed for each
+    // coordinate system. 
+    //dl *= pphot->ep[ip];
     Real ki[4];
     ki[0] = pphot->k0p[ip];
     ki[1] = pphot->k1p[ip];
@@ -942,7 +945,10 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     k3 = kf[3]/ep;
 
     // Weight moments by time spent in domain
-    weight = pphot->wp[ip] * pphot->ep[ip] / k0 * dl * l_cgs / c_cgs;
+    // SWD: the 1/k0 factor looks wrong -- should be k0?
+    dlep = dl * pphot->ep[ip];
+    ktemp = k0;
+    weight = pphot->wp[ip] * pphot->ep[ip] * k0 * dlep * l_cgs / c_cgs;
   } else {
     k0 = pphot->k0p[ip];
     k1 = pphot->k1p[ip];
@@ -951,12 +957,6 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     // Weight moments by time spent in domain
     weight = pphot->wp[ip] * pphot->ep[ip] * dl * l_cgs / c_cgs;
   }
-
-  // Normalize k vector if using general pusher in spherical polar coords
-  //if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_pusher_flag)) {
-  //  k2 *= pphot->x1p[ip];
-  //  k3 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
-  //}
 
   if (mom_flag_lab) {
     if (std::isinf(weight) || std::isnan(weight) || std::isnan(k0) || std::isnan(k1) ||
@@ -991,7 +991,28 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   // add contribution to scattering source terms
   // SWD: Ultimately want comoving frame values
   if (mom_flag_scat) {
-    Real loge = std::log10(pphot->ep[ip]);
+    
+    Real gcov[4][4];
+    Real x[4];
+    x[IMC0] = pphot->x0p[ip];
+    x[IMC1] = pphot->x1p[ip];
+    x[IMC2] = pphot->x2p[ip];
+    x[IMC3] = pphot->x3p[ip];
+    pcoord->Metric(x, gcov);
+    Real ucon[4];
+    ucon[IMC0] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],0);
+    ucon[IMC1] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],1);
+    ucon[IMC2] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],2);
+    ucon[IMC3] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],3);
+    Real kcon[4];
+    kcon[0] = pphot->k0p[ip];
+    kcon[1] = pphot->k1p[ip];
+    kcon[2] = pphot->k2p[ip];
+    kcon[3] = pphot->k3p[ip];
+    Real e_com = -DotVec(ucon,kcon,gcov);
+    Real weight_com = pphot->wp[ip] * SQR(e_com) / pphot->ep[ip] * kcon[0] * dl * l_cgs;
+    //printf("w: %g %g\n",weight,weight_com);
+    Real loge = std::log10(e_com);
     Real log10 = 2.302585092994046;
     int n = std::floor((loge-energy_scat(0))/dloge_scat);
     if (n >= 0 && n < nf_scat) {

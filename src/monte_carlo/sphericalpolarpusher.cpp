@@ -342,6 +342,7 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
         kph = -kx * sph + ky * cph;
         //if (ptraj != NULL) ptraj->AddToTrajectory(pphot,ip);
       }
+      if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this,ip);
 
     } // end while loop
 

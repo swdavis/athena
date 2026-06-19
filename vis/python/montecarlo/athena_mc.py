@@ -44,10 +44,10 @@ class Photons:
         self.x1 = phlist['list'][:,2]
         self.x2 = phlist['list'][:,3]
         self.x3 = phlist['list'][:,4]
-        self.k0 = phlist['list'][:,9]
-        self.k1 = phlist['list'][:,6]
-        self.k2 = phlist['list'][:,7]
-        self.k3 = phlist['list'][:,8]
+        self.k0 = phlist['list'][:,9].copy()
+        self.k1 = phlist['list'][:,6].copy()
+        self.k2 = phlist['list'][:,7].copy()
+        self.k3 = phlist['list'][:,8].copy()
         if self.polarized:
             self.q = phlist['list'][:,10]
             self.u = phlist['list'][:,11]
@@ -55,6 +55,135 @@ class Photons:
         if self.nuser > 0:
             for i in range(self.nuser):
                 self.user[:,i] = phlist['list'][:,i+self.npars]
+
+def ks_cartesian_metric(pos, M, a):
+    """Covariant Kerr-Schild Cartesian metric at pos = [t, x, y, z]."""
+    a2 = a**2
+    x1, x2, x3 = pos[1], pos[2], pos[3]
+    rr2 = x1**2 + x2**2 + x3**2
+    r2 = 0.5 * (rr2 - a2 + np.hypot(rr2 - a2, 2.0 * a * x3))
+    r = np.sqrt(r2)
+    f = 2.0 * M * r2 * r / (r2**2 + a2 * x3**2)
+
+    l = np.array([1.0,
+                  (r * x1 + a * x2) / (r2 + a2),
+                  (r * x2 - a * x1) / (r2 + a2),
+                  x3 / r])
+
+    return np.diag([-1., 1., 1., 1.]) + f * np.outer(l, l)
+
+
+def static_observer_tetrad(pos, M, a):
+    """
+    Orthonormal tetrad for a static (u^i=0) observer at pos.
+    Returns e[a, mu]: row a is the a-th tetrad basis 4-vector (contravariant).
+      e[0] = timelike (observer 4-velocity)
+      e[1..3] = spacelike (Gram-Schmidt from coordinate x, y, z axes)
+    Only valid outside the ergosphere where g_tt < 0.
+    """
+    g = ks_cartesian_metric(pos, M, a)
+    e = np.zeros((4, 4))
+
+    # Timelike: u^mu = (1/sqrt(-g_tt), 0, 0, 0)
+    e[0, 0] = 1.0 / np.sqrt(-g[0, 0])
+
+    # Gram-Schmidt for spatial directions
+    for i in range(1, 4):
+        v = np.zeros(4)
+        v[i] = 1.0
+        for j in range(i):              # subtract projections onto prior basis vectors
+            ej_low = g @ e[j]           # lower index: e_(j)_mu = g_mu_nu e_(j)^nu
+            v -= (np.dot(ej_low, v) / np.dot(ej_low, e[j])) * e[j]
+        v_low = g @ v
+        e[i] = v / np.sqrt(np.dot(v_low, v))
+
+    return e
+
+
+def k_to_tetrad(k, pos, M, a):
+    """
+    Transform photon 4-momentum k^mu (coordinate basis) to the static
+    observer's local tetrad frame in Kerr-Schild Cartesian.
+
+    k^(a) = eta_(a)(a) * g_mu_nu * e_(a)^mu * k^nu
+
+    Returns k_tet where:
+      k_tet[0] = E  (energy measured by observer, positive)
+      k_tet[1:] = local 3-momentum components
+    """
+    g = ks_cartesian_metric(pos, M, a)
+    e = static_observer_tetrad(pos, M, a)
+
+    eta = np.array([-1., 1., 1., 1.])
+    k_tet = np.zeros(4)
+    for a_idx in range(4):
+        e_low = g @ e[a_idx]            # e_(a)_mu
+        k_tet[a_idx] = eta[a_idx] * np.dot(e_low, k)
+    return k_tet
+
+def transform_photons_to_tetrad_old(phots, **kwargs):
+    """
+    Transform photon 4-momenta to static observer tetrad frame.
+    Modifies phots.k0, k1, k2, k3 in place to be the tetrad components.
+    """
+    M = 1.
+    a = kwargs['spin']
+    for i in range(phots.nphot):
+        pos = [phots.x0[i], phots.x1[i], phots.x2[i], phots.x3[i]]
+        k = [phots.k0[i], phots.k1[i], phots.k2[i], phots.k3[i]]
+        k_tet = k_to_tetrad(k, pos, M, a)
+        #print(f"Photon {i}: pos={pos}, k={k} -> k_tet={k_tet/k_tet[0]}")
+        phots.k0[i] = 1.
+        phots.k1[i] = k_tet[1] / k_tet[0]
+        phots.k2[i] = k_tet[2] / k_tet[0]
+        phots.k3[i] = k_tet[3] / k_tet[0]
+
+def transform_photons_to_tetrad(phots, **kwargs):
+    M = 1.
+    a = kwargs['spin']
+    a2 = a**2
+
+    x1, x2, x3 = phots.x1, phots.x2, phots.x3
+    k = np.stack([phots.k0, phots.k1, phots.k2, phots.k3], axis=1)  # (N, 4)
+
+    # --- vectorized metric (N, 4, 4) ---
+    rr2 = x1**2 + x2**2 + x3**2
+    r2  = 0.5 * (rr2 - a2 + np.hypot(rr2 - a2, 2.0 * a * x3))
+    r   = np.sqrt(r2)
+    f   = 2.0 * M * r2 * r / (r2**2 + a2 * x3**2)
+    l   = np.stack([np.ones_like(x1),
+                    (r*x1 + a*x2)/(r2+a2),
+                    (r*x2 - a*x1)/(r2+a2),
+                    x3/r], axis=1)                          # (N, 4)
+    eta_diag = np.diag([-1., 1., 1., 1.])
+    g = eta_diag + f[:, None, None] * np.einsum('ni,nj->nij', l, l)  # (N,4,4)
+
+    # --- vectorized Gram-Schmidt tetrad (N, 4, 4) ---
+    N = g.shape[0]
+    e = np.zeros((N, 4, 4))
+    e[:, 0, 0] = 1.0 / np.sqrt(-g[:, 0, 0])
+    for i in range(1, 4):
+        v = np.zeros((N, 4))
+        v[:, i] = 1.0
+        for j in range(i):
+            ej      = e[:, j, :]
+            ej_low  = np.einsum('nij,nj->ni', g, ej)
+            v -= (np.einsum('ni,ni->n', ej_low, v) /
+                  np.einsum('ni,ni->n', ej_low, ej))[:, None] * ej
+        v_low = np.einsum('nij,nj->ni', g, v)
+        e[:, i, :] = v / np.sqrt(np.einsum('ni,ni->n', v_low, v))[:, None]
+
+    # --- project k into tetrad frame ---
+    eta   = np.array([-1., 1., 1., 1.])
+    e_low = np.einsum('nij,naj->nai', g, e)                  # (N,4,4)
+    k_tet = eta * np.einsum('nai,ni->na', e_low, k)          # (N,4)
+
+    phots.k0[:] = 1.
+    phots.k1[:] = k_tet[:, 1] / k_tet[:, 0]
+    phots.k2[:] = k_tet[:, 2] / k_tet[:, 0]
+    phots.k3[:] = k_tet[:, 3] / k_tet[:, 0]
+
+
 
 def read_list(filename, data=True, header=True):
     """
@@ -1338,6 +1467,9 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     spectrum['nphi'] = nphi
     phifaces = build_bins(phimin,phimax,nphi,False)
     spectrum['phifaces'] = phifaces
+
+    if kwargs['tetrad']:
+        transform_photons_to_tetrad(phots, **kwargs)
 
     if anglebin == 'cartesian':
         mubins, phibins = get_angle_bins_cartesian(phots,nmu,mufaces,nphi,phifaces)

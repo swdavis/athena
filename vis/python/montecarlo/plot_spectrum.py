@@ -55,6 +55,7 @@ def plot_one(spectrum, ax, xunit, yunit, imu, iphi, plterr, **kwargs):
 
     # check for rebinning
     rebinx = kwargs.pop('rebinx')
+    mulegend = kwargs.pop('mulegend')
 
     # plot spectrum as function mu and phi
     mulist = imu_handler(imu)
@@ -65,6 +66,10 @@ def plot_one(spectrum, ax, xunit, yunit, imu, iphi, plterr, **kwargs):
                                          plterr=plterr, xunit=xunit, yunit=yunit, rebinx=rebinx)
             athenamc.make_plot(x, y, yerr=yerr, xlabel=xlabel, ylabel=ylabel, ax=ax, **kwargs)
 
+    if mulegend:
+        nmu = len(mulist)
+
+        ax.legend([f"μ={(mu+0.5)/nmu:.2f}" for mu in mulist])
 
 def plot_blackbody(spectrum, ax, xunit, yunit, bbtemp, bbnorm, imu = None, iphi = None):
     """
@@ -201,6 +206,9 @@ if __name__ == '__main__':
     parser.add_argument('--bbnorm',
         default = None,
         help = 'blackbody normalization')
+    parser.add_argument('-mulegend',
+        action = 'store_true',
+        help = 'add a legend for mu values')
 
     args = parser.parse_args()
     main(**vars(args))
