@@ -998,6 +998,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   if (mom_flag_scat) {
     Real weight_scat, e_scat;
     if (GENERAL_RELATIVITY && boosts) {
+      printf("here\n");
       Real gcov[4][4];
       Real x[4];
       x[IMC0] = pphot->x0p[ip];
@@ -1018,13 +1019,14 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
       e_scat = -DotVec(ucon,kcon,gcov);
       weight_scat = pphot->wp[ip] * SQR(e_scat) / pphot->ep[ip] * kcon[0] * dl * l_cgs;
     } else {
-      Real e_scat = pphot->ep[ip];
-      Real weight_scat = weight;
+      e_scat = pphot->ep[ip];
+      weight_scat = weight;
     }
     //printf("w: %g %g\n",weight,weight_com);
     Real loge = std::log10(e_scat);
     Real log10 = 2.302585092994046;
     int n = std::floor((loge-energy_scat(0))/dloge_scat);
+
     if (n >= 0 && n < nf_scat) {
       Real norm = c_cgs/(4.*PI*freq_scat_mid(n)*dloge_scat*log10);
       moments_scat(n,i3,i2,i1) += norm * weight_scat;
