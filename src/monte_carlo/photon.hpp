@@ -19,7 +19,7 @@
 class MonteCarloBlock;
 
 // photon status identifiers
-enum PhotonStatus {EVOLVING = 0, ESCAPED = 1, ABSORBED = 2, DESTROYED = 3, BUFFERED = 4};
+enum PhotonStatus {EVOLVING = 0, ESCAPED = 1, ABSORBED = 2, DESTROYED = 3, BUFFERED = 4, REMOVED = 5};
 enum {IMC0 = 0, IMC1 = 1, IMC2 = 2, IMC3 = 3};
 //enum {IMC1 = 0, IMC2 = 1, IMC3 = 2, IMC0 = 3};
 
@@ -77,12 +77,9 @@ public:
   std::vector<Real> *user;     //!>   user variable arrays
   std::vector<std::complex<Real>> *polten; //!> polarization tensor
 
-
-
   static bool initialized;
   static bool polarized;
   static bool general_pusher_flag;
-
 
   //#ifdef MPI_PARALLEL
   //static MPI_Comm my_comm;   //!> my MPI communicator

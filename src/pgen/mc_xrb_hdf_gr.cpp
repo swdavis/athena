@@ -841,7 +841,7 @@ void InsideHorizon(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher, 
   }
   Real keverg = 1.602176634e-9;
   if (pphot->ep[ip] > 2.e3*keverg)
-    pphot->statp[ip] = DESTROYED;
+    pphot->statp[ip] = REMOVED;
   return;
 }
 

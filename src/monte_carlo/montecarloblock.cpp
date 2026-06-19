@@ -517,6 +517,9 @@ void MonteCarloBlock::RayTracePhotonsOnBlock(int etype) {
         pphot->RemoveOneParticle(ip);
       } else if (pphot->statp[ip] == BUFFERED) {
         nbuf++;
+      } else if (pphot->statp[ip] == REMOVED) {
+        pphot->RemoveOneParticle(ip);
+        nrem++;
       }
     }
   } // end loop over ip
@@ -670,8 +673,9 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
       } else if (pphot->statp[ip] == DESTROYED) {
         pphot->RemoveOneParticle(ip);
         ndes++;
-      //} else if (pphot->statp[ip] == BUFFERED) {
-      //  nbuf++;
+      } else if (pphot->statp[ip] == REMOVED) {
+        pphot->RemoveOneParticle(ip);
+        nrem++;
       }
     }
   } // End loop over ip

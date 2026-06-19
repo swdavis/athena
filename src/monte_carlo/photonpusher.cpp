@@ -785,7 +785,7 @@ bool PhotonPusher::IsOnBlock(Photon *pphot, int ip) {
   }
   if (!on_block) {
     pphot->statp[ip] = DESTROYED;
-    pphot->PrintPhoton("Warning: [CheckZone], Photon not on block, destoryed",ip);
+    pphot->PrintPhoton("Warning: [CheckZone], Photon not on block, destroyed",ip);
   }
   return on_block;
 }

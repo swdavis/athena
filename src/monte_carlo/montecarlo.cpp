@@ -485,7 +485,7 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
     if (using_bfield) pmcb->GetBField();
  
     // initialize counters to zero
-    pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
+    pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = pmcb->nrem = 0;
     pmcb->loop_max_size = pin->GetOrAddInteger("montecarlo","loop_max_size",10000);
 
     // Call problem generators for Monte Carlo
@@ -749,7 +749,7 @@ void MonteCarlo::RunMonteCarlo(Outputs *pouts, Mesh *pmesh,
       pmcb->pphot->ClearBoundary();
     }
     // reset counters
-    pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = 0;
+    pmcb->nscat = pmcb->nesc = pmcb->nabs = pmcb->ndes = pmcb-> nrem = 0;
   }
 
    // reset moments/sourcterms for start of new timestep
@@ -784,12 +784,13 @@ void MonteCarlo::RunMonteCarlo(Outputs *pouts, Mesh *pmesh,
 
     // Report diagnostic results from all blocks
     int ntot = 0;
-    int64_t nesc = 0, nabs = 0, ndes = 0, nscat = 0;
+    int64_t nesc = 0, nabs = 0, ndes = 0, nscat = 0, nrem = 0;
     for(int nb=0; nb<nblocal; ++nb) {
       MonteCarloBlock *pmcb = my_blocks(nb);
       nesc += pmcb->nesc;
       nabs += pmcb->nabs;
       ndes += pmcb->ndes;
+      nrem += pmcb->nrem;
       nscat += pmcb->nscat;
       ntot += pmcb->nphrun;
     }
@@ -801,12 +802,15 @@ void MonteCarlo::RunMonteCarlo(Outputs *pouts, Mesh *pmesh,
     MPI_Allreduce(MPI_IN_PLACE,&ndes,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
     MPI_Allreduce(MPI_IN_PLACE,&nscat,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
     MPI_Allreduce(MPI_IN_PLACE,&ntot,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE,&nrem,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
   #endif
     if (Globals::my_rank == 0) {
       std::cout  << "ntot: " << ntot
                 << " nesc: " << nesc
                 << " nabs: " << nabs
                 << " ndes: " << ndes;
+      if (nrem > 0)
+        std::cout << " nrem: " << nrem;    
       if (ntot > 0)
         std::cout << " nscat/ntot: "
                   << static_cast<Real>(nscat)/static_cast<Real>(ntot) << std::endl;

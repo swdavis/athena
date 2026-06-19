@@ -324,7 +324,7 @@ public:
 
   int64_t nphrun; // Photons initialized thus far
   int64_t nphremain; // total number of photons to integrate
-  int64_t nabs, nesc, ndes, nscat; // counters
+  int64_t nabs, nesc, ndes, nscat, nrem; // counters
   int loop_max_size;
   int nx1,nx2,nx3;
   int is,ie,js,je,ks,ke;
