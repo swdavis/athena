@@ -76,8 +76,10 @@ Real linewidth_cutoff_energy, linewidth;
 Real numin, mean_nu, nuexp, numinpow, numaxpow;
 Real chromo_temp, sigmamin;
 bool flag_incident_from_z;
+bool flag_incident_from_r;
 bool flag_pow_law;
 bool flag_lya_abs;
+bool flag_core_skipping;
 // initialization for timing photons
 const auto global_start_time = std::chrono::system_clock::now();
 
@@ -118,6 +120,7 @@ void ThirdOrderTidalGravity(MeshBlock *pmb, const Real time, const Real dt,
               AthenaArray<Real> &cons_scalar);
 Real HydrostaticIsothermalDensity(Real r, Real th, Real ph, Real r0, Real a2, int tidal_order);
 Real HydrostaticAdiabaticDensity(Real r, Real th, Real ph, Real r0, Real a2, Real invgm1, int tidal_order);
+Real HydrostaticIonization(Real n_a, Real n_c);
 
 // user functions for defining scattering and opacities
 void ResonantScattering(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe);
@@ -348,7 +351,11 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
 
   EnrollUserGetTemperature(GetIonizationTemperature);
   EnrollUserGetNumberDensity(GetNH);
-  //EnrollUserWorkInMove(CoreSkipping);
+
+  flag_core_skipping = pin->GetOrAddBoolean("problem", "core_skip", false);
+  if (flag_core_skipping) {
+    EnrollUserWorkInMove(CoreSkipping);
+  }
 
 }
 
@@ -428,9 +435,18 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   Real gamma = peos->GetGamma();
   Real invgm1 = 1.0/(gamma - 1.0);
 
-  Real Gamma0 = 4.e-5; // 1/s, photoionization rate coefficient
-  Real alpha = 2.6e-13; // cm^3/s, recombination coefficient
+  // optically thin photoionization rate approximation
+  // assumes power-law flux (-2) and cross section (-3)
+  // normalized to solar flux (1.1e3 erg cm^-2 s^-1)
+  ion_flux = pin->GetReal("problem", "ion_flux");
+  Real Gamma0 = 6.3e-5 * ion_flux / 1.1e3; // s^-1
+
+  // recombination rate coefficient, se Trammell 2011
+  Real alpha = 2.6e-13 * std::pow(temp0*1.e-4, -0.8); // cm^3 s^-1
+
+  // critical density for ionization equilibrium
   Real neq0 = Gamma0 / alpha / n_cgs; // dimensionless
+
   Real sigmapi = 6.e-18; // cm^2, cross section at the ionization edge
   sigmapi /= (mp_cgs/rho_cgs/l_cgs); // convert to code units
 
@@ -487,13 +503,14 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         Real nH = rho;
         Real np = 0;
         if (!flag_init_neutral) {
+          nH = HydrostaticIonization(rho, neq0);
           // approximation for spherically attenuated ionization
-          nH = nbase * std::exp(lambda * (rin/r - 1.));
-          Real H = rin / lambda * (SQR(r) / SQR(rin));
-          Real ion_rate_atten = 1. / (1.0 + std::pow(nH*sigmapi*H, 1.5));
-          np = std::sqrt(ion_rate_atten * nH * neq0);
-          neutral_frac = nH / (nH + 2.*np);
-          mmw = (1. + neutral_frac)/2.;
+          //nH = nbase * std::exp(lambda * (rin/r - 1.));
+          //Real H = rin / lambda * (SQR(r) / SQR(rin));
+          //Real ion_rate_atten = 1. / (1.0 + std::pow(nH*sigmapi*H, 1.5));
+          //np = std::sqrt(ion_rate_atten * nH * neq0);
+          //neutral_frac = nH / (nH + 2.*np);
+          //mmw = (1. + neutral_frac)/2.;
         }
 
        // if (flag_wind) {
@@ -550,9 +567,6 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
         if (flag_initialize_scalar_from_file) {
           pscalars->s(0,k,j,i) = ruser_meshblock_data[1](5,k,j,i)*rho;
         } else {
-          // Initialize presuming optically-thin photoionization rate equilibrium
-					// This passive scalar tracks mass-fraction: s = rho_H, 
-          // r = rho_H / rho = n_H / (n_H + n_p)
           pscalars->s(0,k,j,i) = nH;
         }
 
@@ -576,6 +590,7 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
   // Sources of photons
   flag_incident_from_z = pin->GetOrAddBoolean("problem","incident_from_z",false);
+  flag_incident_from_r = pin->GetOrAddBoolean("problem","incident_from_r",false);
   lya_flux = pin->GetReal("problem","lya_flux");
   ion_flux = pin->GetReal("problem","ion_flux");
 
@@ -705,7 +720,28 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
           pphot->k2p[ip] = std::sin(th);
           pphot->k3p[ip] = 0.0;
 
-        } else { // NOT INCIDENT_FROM_Z
+        } else if (flag_incident_from_r) {
+
+          // uniform sample in cos(th) = mu
+          Real mumin = std::cos(thmin);
+          Real mumax = std::cos(thmax);
+          Real mu = pran->uniform() * (mumax-mumin) + mumin;
+          Real th = std::acos(mu);
+
+          // uniform sample in ph
+          Real ph = pran->uniform() * (phmax-phmin) + phmin;
+
+          pphot->x0p[ip] = 0.0;
+          pphot->x1p[ip] = pmy_block->pmy_mesh->mesh_size.x1max;
+          pphot->x2p[ip] = th;
+          pphot->x3p[ip] = ph;
+            
+          pphot->k0p[ip] = 1.;
+          pphot->k1p[ip] = -1.;
+          pphot->k2p[ip] = 0.0;
+          pphot->k3p[ip] = 0.0;
+
+        } else { // NOT INCIDENT_FROM_Z or R
 
          // Sampling functions for phi and theta within meshblock boundaries
          // Assumes star is in the -x direction (psi = 0)
@@ -1251,6 +1287,18 @@ Real HydrostaticAdiabaticDensity(Real r, Real th, Real ph, Real r0, Real a2, Rea
 }
 
 
+/*
+ * Optically Thin, Hydrostatic Ionization Fraction
+ * Assumes optically thin ionization rate and constant recombination
+*/
+Real HydrostaticIonization(Real n_a, Real n_c) {
+  Real naonc = n_a / n_c;
+  Real ion_factor = 0.5*(std::sqrt(1. + 4*naonc) - 1.);
+  Real nhonc = naonc - ion_factor;
+  return nhonc * n_c;
+}
+
+
 Real VolumeEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype) {
 // Sets the value of the emission array which determines where Lya photons are
 // likely to be emitted. The associated cooling of the gas is handled in
@@ -1308,6 +1356,13 @@ Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype)
       Real nflux = r2*lya_flux/energy_lya/pco->GetFace1Area(k,j,i+1);
       emis = 0.5*nflux*(pco->x3f(k+1)-pco->x3f(k))*(SQR(cthm)-SQR(cthp));
 
+    } else if (flag_incident_from_r) {
+      Real cthm = std::cos(pco->x2f(j));
+      Real cthp = std::cos(pco->x2f(j+1));
+      Real r2 = pco->x1f(i+1)*pco->x1f(i+1);
+      Real nflux = r2*lya_flux/energy_lya/pco->GetFace1Area(k,j,i+1);
+      emis = 0.5*nflux*(pco->x3f(k+1)-pco->x3f(k))*(cthm-cthp);
+
     } else {
       // incident from x direction
       Real phm = pco->x3f(k);
@@ -1351,6 +1406,13 @@ Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i, int e
       Real r2 = pco->x1f(i+1)*pco->x1f(i+1);
       Real nflux = r2 * ion_flux/(h_cgs*mean_nu)/pco->GetFace1Area(k,j,i+1);
       emis = 0.5*nflux*(pco->x3f(k+1)-pco->x3f(k))*(SQR(cthm)-SQR(cthp));
+
+    } else if (flag_incident_from_r) {
+      Real cthm = std::cos(pco->x2f(j));
+      Real cthp = std::cos(pco->x2f(j+1));
+      Real r2 = pco->x1f(i+1)*pco->x1f(i+1);
+      Real nflux = r2*lya_flux/energy_lya/pco->GetFace1Area(k,j,i+1);
+      emis = 0.5*nflux*(pco->x3f(k+1)-pco->x3f(k))*(cthm-cthp);
 
     } else {
       // incident from x direction
@@ -1536,6 +1598,8 @@ void GetNH(MonteCarloBlock *pmcb) {
 
 
 void CoreSkipping(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher, int ip) {
+  MCCoord *pco = pmcb->pcoord;
+  Real l_cgs = pmcb->l_cgs;
   //Real nu_lya = MCConstants::nu_lya;
   //Real h_cgs = MCConstants::h_cgs;
   Real kb_cgs = MCConstants::kb_cgs;
@@ -1546,19 +1610,27 @@ void CoreSkipping(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher, i
   int i2 = pphot->i2p[ip];
   int i3 = pphot->i3p[ip];
   Real v_th = std::sqrt(kb_cgs/mp_cgs * pmcb->tgas(i3,i2,i1));
-
-  Real x_crit = 8.; // core-wing boundary, see McClellan et al. 2022
-  Real e_crit = energy_lya * (1.0 + x_crit * v_th / c_cgs);
   Real x = c_cgs/v_th * (pphot->ep[ip]/energy_lya - 1.0);
 
+  Real x_crit = 3.3; // core-wing boundary, see McClellan et al. 2022
+  Real e_crit = energy_lya * (1.0 + std::copysign(x_crit, x) * v_th / c_cgs);
+
   // core skip based on photon frequency
-  if ((x < x_crit) && (x > -x_crit)) {
-    printf("core skip: ip=%d, v_th=%g, E=%g, E_crit=%g, x=%g\n", ip, v_th, pphot->ep[ip], e_crit, x);
+  //if ((x < x_crit) && (x > -x_crit)) {
+
+  Real dist = pco->dmin(i3,i2,i1) * l_cgs;
+  //Real dist = 0.0;
+  Real taumin = 1000.;
+  Real tauphot = dist * pphot->scp[ip];
+  // core skip based on comoving optical depth
+  if ((x < x_crit) && (x > -x_crit) && (tauphot > taumin)) {
+
+    //printf("core skip: ip=%d, nscat=%d, temp=%g, v_th=%g, E=%g, E_crit=%g, x=%g\n", ip, pphot->nscp[ip], pmcb->tgas(i3,i2,i1), v_th, pphot->ep[ip], e_crit, x);
     pphot->ep[ip] = e_crit;
     pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
     pphot->scp[ip] = pmcb->ScatteringOpacity(pmcb,pphot,ip);
   } else {
-    //printf("no core skip: ip=%d, v_th=%g, E=%g, E_crit=%g, x=%g\n", ip, v_th, pphot->ep[ip], e_crit, x);
+    //printf("no core skip: ip=%d, nscat=%d, temp=%g, v_th=%g, E=%g, E_crit=%g, x=%g\n", ip, pphot->nscp[ip], pmcb->tgas(i3,i2,i1), v_th, pphot->ep[ip], e_crit, x);
   }
 
 }
