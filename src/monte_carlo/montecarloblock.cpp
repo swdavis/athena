@@ -624,7 +624,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
       nscat++;
       pphot->nscp[ip]++;
       if (pphot->nscp[ip] % pmy_mc->checkscat == 0) {
-      #if ((pphot->nscp[ip] % pmy_mc->checkscat == 0) && (pphot->nscp[ip] > 100000)) {
+      //if ((pphot->nscp[ip] % pmy_mc->checkscat == 0) && (pphot->nscp[ip] > 100000)) {
         pphot->PrintPhoton("check scat",ip);
         printf("nu/nu0 - 1 = %g\n", pphot->ep[ip]/(MCConstants::nu_lya * MCConstants::h_cgs) - 1.);
         // Check for possible infinite loop due to NaN in photon
