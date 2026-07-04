@@ -1258,7 +1258,7 @@ def get_bins(xphots, xfaces, nx, uniform=True, log=True):
 
             # get integer bin number
             log_xphots = np.log10(xphots)
-            xbins = ((log_xphots - xlfaces[0]) / xwidth * nx).astype(int)
+            xbins = np.floor((log_xphots - xlfaces[0]) / xwidth * nx).astype(int)
 
             # catch out-of-bounds values
             xbins = np.where((xbins < 0) | (xbins >= nx), -1, xbins)
@@ -1266,7 +1266,7 @@ def get_bins(xphots, xfaces, nx, uniform=True, log=True):
             xwidth = xfaces[nx] - xfaces[0]
 
             # get integer bin number
-            xbins = ((xphots - xfaces[0]) / xwidth * nx).astype(int)
+            xbins = np.floor((xphots - xfaces[0]) / xwidth * nx).astype(int)
 
             # catch out-of-bounds values
             xbins = np.where((xbins < 0) | (xbins >= nx), -1, xbins)
