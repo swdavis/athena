@@ -30,6 +30,7 @@ namespace {
   bool tnorm;
   Real logemin, logemax;
   Real abh, r_hor;
+  Real dcut;
   std::string emission_type;
   // frequency table parameters
   int nfre, nrho, ntem;
@@ -237,6 +238,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
 
 void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
+  dcut = pin->GetOrAddReal("problem", "dcut",1.e-20);
   if (emission_type == "freefree") {
     // Set the energy boundaries for free-free emission
     tnorm = pin->GetOrAddBoolean("problem","tnorm",false);
@@ -961,14 +963,14 @@ void GetNelFloor(MonteCarloBlock *pmcb) {
 
   Real heabund = 0.09; //hardcode for now (should be parameter)
   Real mp = 1.67262192369e-24;
-  Real dcut = 1.e-8*pmcb->rho_cgs; // dfloor
+  Real dmin = dcut*pmcb->rho_cgs; // dfloor
   
   for (int k=pmcb->ks; k<=pmcb->ke; ++k) {
     for (int j=pmcb->js; j<=pmcb->je; ++j) {
       for (int i=pmcb->is; i<=pmcb->ie; ++i) {
         Real rho = pmcb->rho(k,j,i);
 	
-	if (rho < dcut) {
+	if (rho < dmin) {
 	  //printf("rho: %d %d %d %d %g\n",pmcb->pmy_block->gid,k,j,i,rho);
 	  rho = 1.e-30;
 	}
