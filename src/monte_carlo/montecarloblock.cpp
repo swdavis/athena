@@ -2146,9 +2146,6 @@ void MonteCarloBlock::GetVelocity() {
           vel(k,j,i,1) = uu1 - gamma*alpha*gi(I01,i);
           vel(k,j,i,2) = uu2 - gamma*alpha*gi(I02,i);
           vel(k,j,i,3) = uu3 - gamma*alpha*gi(I03,i);
-          Real beta0 = std::sqrt(SQR(vel(k,j,i,1)/vel(k,j,i,0))+SQR(vel(k,j,i,2)/vel(k,j,i,0))+SQR(vel(k,j,i,3)/vel(k,j,i,0)));
-          if (beta0 >= betamax)
-            printf("beta > betamax: %g\n", beta0);
         }
       }
     }
@@ -2434,7 +2431,7 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
       Real k0init = kcopy[IMC0];
 
       Real k[4];
-      TetradToCoordinate(kcopy, k, ecov);
+      TetradToCoordinate(kcopy, k, econ);
       pphot->k0p[ip] = k[IMC0];
       pphot->k1p[ip] = k[IMC1];
       pphot->k2p[ip] = k[IMC2];
