@@ -1016,7 +1016,9 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
       kcon[2] = pphot->k2p[ip];
       kcon[3] = pphot->k3p[ip];
       e_scat = -DotVec(ucon,kcon,gcov);
-      weight_scat = pphot->wp[ip] * SQR(e_scat) / pphot->ep[ip] * kcon[0] * dl * l_cgs;
+      //weight_scat = pphot->wp[ip] * SQR(e_scat) / pphot->ep[ip] * kcon[0] * dl * l_cgs;
+      //printf("weight : %g %g\n",pphot->ep[ip],kcon[0]);
+      weight_scat = pphot->wp[ip] * e_scat * kcon[0] * dl * l_cgs / c_cgs;
     } else {
       e_scat = pphot->ep[ip];
       weight_scat = weight;
