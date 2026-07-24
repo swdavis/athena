@@ -104,6 +104,7 @@ Real GetIsowindVelocity(Real x);
 Real VolumeEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
 Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
 Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
+Real GetProjectedArea(MonteCarloBlock *pmcb, int k, int j, int i);
 
 // user gravity source term functions
 void GetTidalAcceleration(Real r, Real th, Real ph, int order, Real &a_r, Real &a_th, Real &a_ph);
@@ -1444,102 +1445,90 @@ Real VolumeEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype) 
 
 
 Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype) {
+  Real proj_area = GetProjectedArea(pmcb, k, j, i);
+  Real nflux = lya_flux / energy_lya;
 
-  Coordinates *pco = pmcb->pmy_block->pcoord;
+  // number emissivity flux
+  Real emis = nflux * proj_area;
 
-  Real emis = 0.0;
-  if (pco->x1f(i+1) >= rout) {
-    if (flag_incident_from_z) {
-      if (pco->x2v(j) >= PI/2.)
-        return 0.0;
-      Real cthm = std::cos(pco->x2f(j));
-      Real cthp = std::cos(pco->x2f(j+1));
-      Real r2 = pco->x1f(i+1)*pco->x1f(i+1);
-      Real nflux = r2*lya_flux/energy_lya/pco->GetFace1Area(k,j,i+1);
-      emis = 0.5*nflux*(pco->x3f(k+1)-pco->x3f(k))*(SQR(cthm)-SQR(cthp));
+  // normalize to the area of the cell
+  emis /= pmcb->pmy_block->pcoord->GetFace1Area(k,j,i+1);
 
-    } else if (flag_incident_from_r) {
-      Real cthm = std::cos(pco->x2f(j));
-      Real cthp = std::cos(pco->x2f(j+1));
-      Real r2 = pco->x1f(i+1)*pco->x1f(i+1);
-      Real nflux = r2*lya_flux/energy_lya/pco->GetFace1Area(k,j,i+1);
-      emis = 0.5*nflux*(pco->x3f(k+1)-pco->x3f(k))*(cthm-cthp);
-
-    } else {
-      // incident from x direction
-      Real phm = pco->x3f(k);
-      Real php = pco->x3f(k+1);
-      if ((phm < PI/2.) || (php > 3.*PI/2.)) {
-        return 0.0;
-      }
-      Real thm = pco->x2f(j);
-      Real thp = pco->x2f(j+1);
-
-      Real sthm = std::sin(thm);
-      Real cthm = std::cos(thm);
-      Real sthp = std::sin(thp);
-      Real cthp = std::cos(thp);
-      Real sphm = std::sin(phm);
-      Real sphp = std::sin(php);
-      Real r2 = pco->x1f(i+1)*pco->x1f(i+1);
-      Real nflux = r2*lya_flux/energy_lya/pco->GetFace1Area(k,j,i+1);
-      emis = -0.5*nflux*(thp-thm-(std::sin(thp - thm)*std::cos(thp + thm)))*(sphp-sphm);
-
-    }
-  }
   pmcb->pmy_block->user_out_var(1,k,j,i) = emis;
-
   return emis;
 }
 
 
 Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i, int etype) {
-  
-  Coordinates *pco = pmcb->pmy_block->pcoord;
+  Real proj_area = GetProjectedArea(pmcb, k, j, i);
   Real h_cgs = MCConstants::h_cgs;
+  Real nflux = ion_flux / (h_cgs * mean_nu);
 
-  Real emis = 0.0;
+  // number emissivity flux
+  Real emis = nflux * proj_area;
+
+  // normalize to the area of the cell
+  emis /= pmcb->pmy_block->pcoord->GetFace1Area(k,j,i+1);
+
+  pmcb->pmy_block->user_out_var(1,k,j,i) = emis;
+  return emis;
+}
+
+
+/*
+ * Returns the projected area against an incident photon direction at a given cell face
+ * returns zero if the cell is not on the surface
+*/
+Real GetProjectedArea(MonteCarloBlock *pmcb, int k, int j, int i) {
+  Coordinates *pco = pmcb->pmy_block->pcoord;
+  Real proj_area = 0.0;
+
+  // ensure cell is not inside the volume
   if (pco->x1f(i+1) >= rout) {
+
     if (flag_incident_from_z) {
-      if (pco->x2v(j) >= PI/2.)
-        return 0.0;
-      Real cthm = std::cos(pco->x2f(j));
-      Real cthp = std::cos(pco->x2f(j+1));
-      Real r2 = pco->x1f(i+1)*pco->x1f(i+1);
-      Real nflux = r2 * ion_flux/(h_cgs*mean_nu)/pco->GetFace1Area(k,j,i+1);
-      emis = 0.5*nflux*(pco->x3f(k+1)-pco->x3f(k))*(SQR(cthm)-SQR(cthp));
+      // ensure cell is on the dayside
+      if (pco->x2v(j) < PI/2.) {
+        Real cthm = std::cos(pco->x2f(j));
+        Real cthp = std::cos(pco->x2f(j+1));
+        Real r2 = pco->x1f(i+1) * pco->x1f(i+1);
+        Real domega = ( pco->x3f(k+1) - pco->x3f(k) ) * ( SQR(cthm) - SQR(cthp) );
+        proj_area = 0.5*r2 * domega;
+      }
 
     } else if (flag_incident_from_r) {
       Real cthm = std::cos(pco->x2f(j));
       Real cthp = std::cos(pco->x2f(j+1));
-      Real r2 = pco->x1f(i+1)*pco->x1f(i+1);
-      Real nflux = r2*lya_flux/energy_lya/pco->GetFace1Area(k,j,i+1);
-      emis = 0.5*nflux*(pco->x3f(k+1)-pco->x3f(k))*(cthm-cthp);
+      Real r2 = pco->x1f(i+1) * pco->x1f(i+1);
+      Real domega = ( pco->x3f(k+1) - pco->x3f(k) ) * ( cthm - cthp );
+      proj_area = 0.5*r2 * domega;
 
-    } else {
-      // incident from x direction
+    //} else if (flag_finite_star) {
+      // integrate over stellar surface using same grid of theta, phi
+
+    } else { // default incident from x
       Real phm = pco->x3f(k);
       Real php = pco->x3f(k+1);
-      if ((phm < PI/2.) || (php > 3.*PI/2.)) {
-        return 0.0;
+      // ensure cell is on the dayside
+      if ((phm > PI/2.) && (php < 3.*PI/2.)) {
+        Real thm  = pco->x2f(j);
+        Real thp  = pco->x2f(j+1);
+        Real sthm = std::sin(thm);
+        Real cthm = std::cos(thm);
+        Real sthp = std::sin(thp);
+        Real cthp = std::cos(thp);
+        Real sphm = std::sin(phm);
+        Real sphp = std::sin(php);
+        Real r2   = pco->x1f(i+1) * pco->x1f(i+1);
+        Real domega = -( thp - thm - (std::sin(thp - thm) * std::cos(thp + thm)) ) * ( sphp - sphm );
+        proj_area = 0.5*r2 * domega;
       }
-      Real thm = pco->x2f(j);
-      Real thp = pco->x2f(j+1);
-
-      Real sthm = std::sin(thm);
-      Real cthm = std::cos(thm);
-      Real sthp = std::sin(thp);
-      Real cthp = std::cos(thp);
-      Real sphm = std::sin(phm);
-      Real sphp = std::sin(php);
-      Real r2 = pco->x1f(i+1)*pco->x1f(i+1);
-      Real nflux = r2*ion_flux/(h_cgs*mean_nu)/pco->GetFace1Area(k,j,i+1);
-      emis = -0.5*nflux*(thp-thm-(std::sin(thp - thm)*std::cos(thp + thm)))*(sphp-sphm);
     }
   }
 
-  return emis;
+  return proj_area;
 }
+
 
 // SWD: should be able to remove this
 void ResonantScattering(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {  
