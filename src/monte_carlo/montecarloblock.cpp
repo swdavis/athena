@@ -562,7 +562,8 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
 
     // Lorentz transform E, k to Eulerian frame and update opacities
     // only for newly emitted samples
-    if (boosts || tetrads) {
+
+    if ((boosts || tetrads) && pmy_mc->initialze_comoving[etype]) {
       TransformToCoordinate(pphot,nold,pphot->nphot-1);
     }
 
@@ -1717,8 +1718,8 @@ void MonteCarloBlock::ComputeEmissionSampleArray() {
   // sample multinomial distribution
   pran->SampleMultinomial(nphremain,ncells,prob,count);
   // set counts in emit_count_ array
+  int sum = 0;
   for (int k=ks; k<=ke; ++k) {
-    int sum =0;
     for (int j=js; j<=je; ++j) {
       for (int i=is; i<=ie; ++i) {
         int n = (k-ks)*nx2*nx1 + (j-js)*nx1 + i-is;
@@ -1726,6 +1727,12 @@ void MonteCarloBlock::ComputeEmissionSampleArray() {
         sum += count[n];
       }
     }
+  }
+  if (sum != nphremain) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in function [MonteCarloBlock::ComputeEmissionSampleArray]"
+        << std::endl << "Sum of counts does not equal number of photons to emit" << std::endl;
+    throw std::runtime_error(msg.str().c_str());
   }
 
 }

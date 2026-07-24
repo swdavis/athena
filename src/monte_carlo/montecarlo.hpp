@@ -257,6 +257,7 @@ public:
   bool tetrads; // convert from coordinate frame
   bool emission_array;  // Compute and save zone emissivities
   bool *emission_eqwt; // Set initial weights equal
+  bool *initialze_comoving; // Transform from comoving frame for emission
   enum AbsorptionMethodFlag *absorption_method; // absorption method for each emission type
 
   bool polarized;// track photon polarization
