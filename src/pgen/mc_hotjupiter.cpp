@@ -53,7 +53,7 @@ int ion_str = -1, lya_str = -1, lya_rec = -1;
 Real n_cgs; // code units for number density
 Real P_cgs;
 Real rin, rout; // inner and outer limits of coordinate system
-Real gm_planet, gm_star, sep, psi;
+Real gm_planet, gm_star, sep, psi, rstar;
 Real temp0, nbase, a2;
 Real mdot;
 Real pfloor, dfloor;
@@ -77,6 +77,7 @@ Real numin, mean_nu, nuexp, numinpow, numaxpow;
 Real chromo_temp, sigmamin;
 bool flag_incident_from_z;
 bool flag_incident_from_r;
+bool flag_finite_star;
 bool flag_pow_law;
 bool flag_lya_abs;
 bool flag_core_skipping;
@@ -591,6 +592,8 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
   // Sources of photons
   flag_incident_from_z = pin->GetOrAddBoolean("problem","incident_from_z",false);
   flag_incident_from_r = pin->GetOrAddBoolean("problem","incident_from_r",false);
+  flag_finite_star = pin->GetOrAddBoolean("problem","finite_star",false);
+  rstar = pin->GetOrAddReal("problem","rstar",7.e10)/l_cgs;
   lya_flux = pin->GetReal("problem","lya_flux");
   ion_flux = pin->GetReal("problem","ion_flux");
 
@@ -740,6 +743,102 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
           pphot->k1p[ip] = -1.;
           pphot->k2p[ip] = 0.0;
           pphot->k3p[ip] = 0.0;
+
+        } else if (flag_finite_star) {
+          Real rplanet = pmy_block->pmy_mesh->mesh_size.x1max;
+          Real lsp_min2 = SQR(sep - rplanet - rstar);
+          //printf("sep=%g, rplanet=%g, rstar=%g, lspmin=%g\n", sep, rplanet, rstar, std::sqrt(lsp_min2));
+
+          bool reject = true;
+          int niters = 0;
+          Real th, ph, kr, kth, kph;
+          while (reject) {
+            //printf("resampling...\n");
+            niters++;
+            // sampling from a finite star and planet
+            // uniform sampling in cos(theta) = mu within meshblock
+            Real mumin = std::cos(thmin);
+            Real mumax = std::cos(thmax);
+            Real mup = pran->uniform() * (mumax-mumin) + mumin;
+            Real thp = std::acos(mup);
+
+            // uniform sampling in phi within meshblock
+            Real php = pran->uniform() * (phmax-phmin) + phmin;
+
+            // uniform sampling in cos(theta) = mu on the full star
+            Real ths = std::acos(2.*pran->uniform() - 1.);
+
+            // uniform sampling in phi on the full star
+            Real phs = pran->uniform() * 2*PI;
+
+            //printf("sampled thp=%g, php=%g, ths=%g, phs=%g\n", thp, php, ths, phs);
+
+            // compute trig functions
+            Real sinthp = std::sin(thp);
+            Real costhp = std::cos(thp);
+            Real sinphp = std::sin(php);
+            Real cosphp = std::cos(php);
+            Real sinths = std::sin(ths);
+            Real cosths = std::cos(ths);
+            Real sinphs = std::sin(phs);
+            Real cosphs = std::cos(phs);
+
+            // compute star-planet vector and length
+            Real xsp = sep + rplanet*sinthp*cosphp - rstar*sinths*cosphs;
+            Real ysp = rplanet*sinthp*sinphp - rstar*sinths*sinphs;
+            Real zsp = rplanet*costhp - rstar*cosths;
+            Real lsp2 = SQR(xsp) + SQR(ysp) + SQR(zsp);
+            //printf("found xsp=%g, ysp=%g, zsp=%g, lsp=%g\n", xsp, ysp, zsp, std::sqrt(lsp2));
+
+            // compute n dot e_r for planet and star
+            // for speed we don't normalize until the end
+            Real ndoterp = xsp*sinthp*cosphp + ysp*sinthp*sinphp + zsp*cosphp;
+            Real ndoters = xsp*sinths*cosphs + ysp*sinths*sinphs + zsp*cosphs;
+            //printf("found ndoterp=%g, ndoters=%g\n", ndoterp/std::sqrt(lsp2), ndoters/std::sqrt(lsp2));
+
+            // ensure that we are entering the planet
+            if (ndoterp > 0.0) continue;
+
+            // ensure that we are leaving the star
+            if (ndoters < 0.0) continue;
+
+            // compute the comparison function
+            // we normalize here with another factor of lsp2
+            Real fcomp = lsp_min2 / SQR(lsp2) * ndoters * (-ndoterp); 
+            Real rcomp = pran->uniform();
+            //printf("found fcomp=%g, rcomp=%g\n", fcomp, rcomp);
+            if (rcomp > fcomp) continue;
+            reject = false;
+
+            // sampling finished; cleanup
+            th = thp;
+            ph = php;
+            kr = ndoterp;
+            kth = xsp*costhp*cosphp + ysp*costhp*sinphp - zsp*sinthp;
+            kph = -xsp*sinphp + ysp*cosphp;
+            
+            // normalize to unit vectors
+            Real lsp = std::sqrt(lsp2);
+            kr /= lsp;
+            kth /= lsp;
+            kph /= lsp;
+
+            //printf("final th=%g, ph=%g, kr=%g, kth=%g, kph=%g\n", th, ph, kr, kth, kph);
+            printf("niters = %d\n", niters);
+
+          } // end while
+
+          // initialize position
+          pphot->x0p[ip] = 0.0;
+          pphot->x1p[ip] = rplanet;
+          pphot->x2p[ip] = th;
+          pphot->x3p[ip] = ph;
+
+          // initialize direction
+          pphot->k0p[ip] = 1.;
+          pphot->k1p[ip] = kr;
+          pphot->k2p[ip] = kth;
+          pphot->k3p[ip] = kph;
 
         } else { // NOT INCIDENT_FROM_Z or R
 
