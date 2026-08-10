@@ -21,6 +21,8 @@
 #include <stdexcept>
 #include <string>
 #include <chrono>
+#include <gsl/gsl_interp.h>
+#include <gsl/gsl_spline.h>
 
 // Athena++ headers
 #include "../athena.hpp"
@@ -34,6 +36,7 @@
 #include "../monte_carlo/montecarlo.hpp"
 #include "../monte_carlo/photon.hpp"
 #include "../monte_carlo/photonpusher.hpp"
+#include "../monte_carlo/spectrum_reader.hpp"
 #include "../parameter_input.hpp"
 #include "../scalars/scalars.hpp"
 #include "../inputs/hdf5_reader.hpp"
@@ -84,6 +87,16 @@ bool flag_core_skipping;
 // initialization for timing photons
 const auto global_start_time = std::chrono::system_clock::now();
 
+// sampling from finite stellar spectrum
+bool flag_sample_lya;
+Real spectrum_lya_itot; // wavelength-integrated intensity [erg/cm^2/s]
+std::vector<Real> spectrum_lya_wl; // lya wavelengths [cm]
+std::vector<Real> spectrum_lya_cdf; // lya CDF per bin
+
+// gsl interpolation
+gsl_interp_accel *gsl_interp_accel_lya;
+gsl_spline *gsl_spline_lya;
+
 // Flag for performance-saving random deviate sampling using Box-Muller method
 //  which generates two deviates at a time, used for stellar lyman alpha
 int iset = 0; 
@@ -105,6 +118,7 @@ Real VolumeEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
 Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
 Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i, int etype);
 Real GetProjectedArea(MonteCarloBlock *pmcb, int k, int j, int i);
+Real GetProjectedAreaOmegaFiniteStar(MonteCarloBlock *pmcb, int k, int j, int i);
 
 // user gravity source term functions
 void GetTidalAcceleration(Real r, Real th, Real ph, int order, Real &a_r, Real &a_th, Real &a_ph);
@@ -200,10 +214,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   flag_static_inner = pin->GetOrAddBoolean("problem", "static_inner", true);
   if (flag_static_inner) {
     EnrollUserBoundaryFunction(BoundaryFace::inner_x1, StaticInflowInnerX1);
-    printf("using static inner boundary condition\n");
   } else {
     EnrollUserBoundaryFunction(BoundaryFace::inner_x1, InflowInnerX1);
-    printf("using dynamic inner boundary condition\n");
   }
   EnrollUserBoundaryFunction(BoundaryFace::outer_x1, OutflowOuterX1);
 
@@ -361,6 +373,24 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
   if (flag_core_skipping) {
     EnrollUserWorkInMove(CoreSkipping);
   }
+
+  // sampling from an input stellar spectrum
+  flag_sample_lya = pin->GetOrAddBoolean("problem", "sample_lya", false);
+  if (flag_sample_lya) {
+    std::string input_spectrum = pin->GetString("problem", "lya_filename");
+    
+    ReadSpectrumToCDF(input_spectrum, spectrum_lya_wl, spectrum_lya_cdf, spectrum_lya_itot);
+    if (report_setup && (Globals::my_rank == 0)) {
+      std::cout << "Sampling from finite star:" << std::endl;
+      std::cout << "itot: " << spectrum_lya_itot << std::endl;
+    }
+
+    // initialize gsl interpolation objects
+    gsl_interp_accel_lya = gsl_interp_accel_alloc();
+    gsl_spline_lya = gsl_spline_alloc(gsl_interp_linear, spectrum_lya_wl.size());
+    gsl_spline_init(gsl_spline_lya, spectrum_lya_cdf.data(), spectrum_lya_wl.data(), spectrum_lya_wl.size());
+  }
+
 
 }
 
@@ -749,6 +779,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
           pphot->k3p[ip] = 0.0;
 
         } else if (flag_finite_star) {
+          // sampling from a finite star and planet
           Real rplanet = pmy_block->pmy_mesh->mesh_size.x1max;
           Real lsp_min2 = SQR(sep - rplanet - rstar);
           //printf("sep=%g, rplanet=%g, rstar=%g, lspmin=%g\n", sep, rplanet, rstar, std::sqrt(lsp_min2));
@@ -757,9 +788,9 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
           int niters = 0;
           Real th, ph, kr, kth, kph;
           while (reject) {
-            //printf("resampling...\n");
             niters++;
-            // sampling from a finite star and planet
+            if (niters % 100000 == 0) printf("[WARNING] niters=%d in InitializePhoton\n", niters);
+
             // uniform sampling in cos(theta) = mu within meshblock
             Real mumin = std::cos(thmin);
             Real mumax = std::cos(thmax);
@@ -796,8 +827,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
             // compute n dot e_r for planet and star
             // for speed we don't normalize until the end
-            Real ndoterp = xsp*sinthp*cosphp + ysp*sinthp*sinphp + zsp*cosphp;
-            Real ndoters = xsp*sinths*cosphs + ysp*sinths*sinphs + zsp*cosphs;
+            Real ndoterp = xsp*sinthp*cosphp + ysp*sinthp*sinphp + zsp*costhp;
+            Real ndoters = xsp*sinths*cosphs + ysp*sinths*sinphs + zsp*cosths;
             //printf("found ndoterp=%g, ndoters=%g\n", ndoterp/std::sqrt(lsp2), ndoters/std::sqrt(lsp2));
 
             // ensure that we are entering the planet
@@ -827,8 +858,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
             kth /= lsp;
             kph /= lsp;
 
-            //printf("final th=%g, ph=%g, kr=%g, kth=%g, kph=%g\n", th, ph, kr, kth, kph);
-            printf("niters = %d\n", niters);
+           // printf("niters=%d, theta=%g, phi=%g\n", niters, th, ph);
 
           } // end while
 
@@ -909,12 +939,21 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
       case LYA: {
         if (emis_geometry == SURFACE) {
-          Real energy;
-          gasdev(pmy_block, energy_lya,linewidth,energy);
-          while (std::fabs(energy - energy_lya) > linewidth_cutoff_energy) {
+          if (flag_sample_lya) { // sample from input spectrum
+            Real rsample = pran->uniform();
+            Real wl = gsl_spline_eval(gsl_spline_lya, rsample, gsl_interp_accel_lya);
+            
+            pphot->ep[ip] = h_cgs * c_cgs / wl;
+            //printf("rsample=%g, wl=%g, ep=%g\n", rsample, wl, pphot->ep[ip]/energy_lya-1.);
+
+          } else { // gaussian distribution
+            Real energy;
             gasdev(pmy_block, energy_lya,linewidth,energy);
+            while (std::fabs(energy - energy_lya) > linewidth_cutoff_energy) {
+              gasdev(pmy_block, energy_lya,linewidth,energy);
+            }
+            pphot->ep[ip] = energy;
           }
-					pphot->ep[ip] = energy;
         } else {
           // Photon is emitted via recombination - should have line center energy
           pphot->ep[ip] = energy_lya;
@@ -1445,33 +1484,59 @@ Real VolumeEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype) 
 
 
 Real SurfaceEmissivityLya(MonteCarloBlock *pmcb, int k, int j, int i, int etype) {
-  Real proj_area = GetProjectedArea(pmcb, k, j, i);
-  Real nflux = lya_flux / energy_lya;
 
-  // number emissivity flux
-  Real emis = nflux * proj_area;
+  // number of photons intercepted per time through cell
+  Real ndot; // number per time
+  if (flag_finite_star) {
+    Real nintens; // number / area / time / solid angle
+    if (flag_sample_lya) {
+      nintens = spectrum_lya_itot; // itot from integral over spectrum
+    } else {
+      nintens = lya_flux / PI * SQR(sep / rstar); // convert flux to intensity
+    }
+    nintens /= energy_lya;
+    Real area_omega = GetProjectedAreaOmegaFiniteStar(pmcb, k, j, i); // projected area on planet * solid angle on star
+    ndot = nintens * area_omega;
+    
+  } else { // projections along coordinate directions
+    Real nflux0; // number / area / time
+    if (flag_sample_lya) {
+      nflux0 = spectrum_lya_itot * PI * SQR(rstar / sep);
+    } else {
+      nflux0 = lya_flux;
+    }
+    nflux0 /= energy_lya;
+    Real projected_area = GetProjectedArea(pmcb, k, j, i); // projected area on planet
+    ndot = nflux0 * projected_area;
+  }
 
-  // normalize to the area of the cell
-  emis /= pmcb->pmy_block->pcoord->GetFace1Area(k,j,i+1);
-
-  pmcb->pmy_block->user_out_var(1,k,j,i) = emis;
-  return emis;
+  // normalize to the area of the cell for a uniform flux
+  Real nflux = ndot / pmcb->pmy_block->pcoord->GetFace1Area(k,j,i+1); // number / perp area / time
+  pmcb->pmy_block->user_out_var(1,k,j,i) = nflux;
+  return nflux;
 }
 
 
 Real SurfaceEmissivityIonizing(MonteCarloBlock *pmcb, int k, int j, int i, int etype) {
-  Real proj_area = GetProjectedArea(pmcb, k, j, i);
-  Real h_cgs = MCConstants::h_cgs;
-  Real nflux = ion_flux / (h_cgs * mean_nu);
+  Real energy_euv = MCConstants::h_cgs * mean_nu;
 
-  // number emissivity flux
-  Real emis = nflux * proj_area;
+  // number of photons intercepted per time through cell
+  Real ndot; // number per time
+  if (flag_finite_star) {
+    Real nintens = ion_flux / PI * SQR(sep / rstar) / energy_euv; // number / area / time / solid angle
+    Real area_omega = GetProjectedAreaOmegaFiniteStar(pmcb, k, j, i); // projected area on planet * solid angle on star
+    ndot = nintens * area_omega;
+    
+  } else { // projections along coordinate directions
+    Real nflux0 = ion_flux / energy_euv; // number / area / time
+    Real projected_area = GetProjectedArea(pmcb, k, j, i); // projected area on planet
+    ndot = nflux0 * projected_area;
+  }
 
-  // normalize to the area of the cell
-  emis /= pmcb->pmy_block->pcoord->GetFace1Area(k,j,i+1);
-
-  pmcb->pmy_block->user_out_var(1,k,j,i) = emis;
-  return emis;
+  // normalize to the area of the cell for a uniform flux
+  Real nflux = ndot / pmcb->pmy_block->pcoord->GetFace1Area(k,j,i+1); // number / perp area / time
+  pmcb->pmy_block->user_out_var(1,k,j,i) = nflux;
+  return nflux;
 }
 
 
@@ -1503,9 +1568,6 @@ Real GetProjectedArea(MonteCarloBlock *pmcb, int k, int j, int i) {
       Real domega = ( pco->x3f(k+1) - pco->x3f(k) ) * ( cthm - cthp );
       proj_area = 0.5*r2 * domega;
 
-    //} else if (flag_finite_star) {
-      // integrate over stellar surface using same grid of theta, phi
-
     } else { // default incident from x
       Real phm = pco->x3f(k);
       Real php = pco->x3f(k+1);
@@ -1527,6 +1589,81 @@ Real GetProjectedArea(MonteCarloBlock *pmcb, int k, int j, int i) {
   }
 
   return proj_area;
+}
+
+
+Real GetProjectedAreaOmegaFiniteStar(MonteCarloBlock *pmcb, int k, int j, int i) {
+  Coordinates *pco = pmcb->pmy_block->pcoord;
+
+  // ensure cell is not inside the volume
+  if (pco->x1f(i+1) < rout) return 0.;
+
+  // integrate over stellar surface using same grid of theta, phi
+  MeshBlock *pmb = pmcb->pmy_block;
+  Real rplanet = pmb->pmy_mesh->mesh_size.x1max;
+  Real php = pco->x3v(k);
+  //Real thp = pco->x2v(j);
+  Real mumin = std::cos(pco->x2f(j));
+  Real mumax = std::cos(pco->x2f(j+1));
+  Real mup = 0.5 * (mumin + mumax);
+  Real dmup = mumin - mumax;
+  Real thp = std::acos(mup);
+  Real sinphp = std::sin(php);
+  Real cosphp = std::cos(php);
+  Real sinthp = std::sin(thp);
+  Real costhp = std::cos(thp);
+  Real dphp = pco->x3f(k+1) - pco->x3f(k);
+  Real dthp = pco->x2f(j+1) - pco->x2f(j);
+  //Real dAp = SQR(rplanet) * dphp * sinthp * dthp;
+  Real dAp = SQR(rplanet) * dphp * dmup;
+
+  int nk = pmb->pmy_mesh->mesh_size.nx3;
+  int nj = pmb->pmy_mesh->mesh_size.nx2;
+  Real dphs = 2.*PI / nk;
+  Real dmus = 2. / nj;
+  Real dAs = SQR(rstar) * dphs * dmus;
+
+  Real area_omega = 0.0;
+  for (int ks=0; ks<nk; ks++) {
+    Real phs = dphs * (ks + 0.5);
+    Real sinphs = std::sin(phs);
+    Real cosphs = std::cos(phs);
+
+    for (int js=0; js<nj; js++) {
+      Real mus = 1. - dmus * (js + 0.5);
+      Real ths = std::acos(mus);
+      Real sinths = std::sin(ths);
+      Real cosths = std::cos(ths);
+      //printf("dmus=%g, mus=%g, ths=%g, dAs=%g\n", dmus, mus, ths, dAs);
+
+      // compute star-planet vector and length
+      Real xsp = sep + rplanet*sinthp*cosphp - rstar*sinths*cosphs;
+      Real ysp = rplanet*sinthp*sinphp - rstar*sinths*sinphs;
+      Real zsp = rplanet*costhp - rstar*cosths;
+      Real lsp2 = SQR(xsp) + SQR(ysp) + SQR(zsp);
+      //printf("found xsp=%g, ysp=%g, zsp=%g, lsp=%g\n", xsp, ysp, zsp, std::sqrt(lsp2));
+
+      // compute n dot e_r for planet and star
+      // for speed we don't normalize until the end
+      Real ndoterp = xsp*sinthp*cosphp + ysp*sinthp*sinphp + zsp*costhp;
+      Real ndoters = xsp*sinths*cosphs + ysp*sinths*sinphs + zsp*cosths;
+      //printf("found ndoterp=%g, ndoters=%g\n", ndoterp/std::sqrt(lsp2), ndoters/std::sqrt(lsp2));
+
+      // ensure that we are entering the planet
+      if (ndoterp > 0.0) continue;
+
+      // ensure that we are leaving the star
+      if (ndoters < 0.0) continue;
+
+      // add contribution from stellar surface
+      area_omega += ndoters * (-ndoterp) / SQR(lsp2); // solid angle / area
+
+    } // end for js
+  } // end for ks
+
+  area_omega *= dAs * dAp; // area * solid angle
+
+  return area_omega;
 }
 
 
