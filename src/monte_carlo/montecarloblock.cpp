@@ -1060,6 +1060,11 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
       weight = pphot->wp[ip] * pphot->ep[ip] / k0c * dl * l_cgs / c_cgs;
     } else {
       Real shift = kc[0]/k0;
+      // Spatial components are normalized to a unit comoving direction, so the
+      // time component of the comoving propagation direction is unity.  Boosting
+      // T^{mu nu} = C sum w E dl n^mu n^nu with n^mu = (1,nhat) gives
+      // (Lambda n)^mu = shift * (1,nhat_com), and the shift^2 is carried by weight.
+      k0c = 1.;
       k1c = kc[1]/kc[0];
       k2c = kc[2]/kc[0];
       k3c = kc[3]/kc[0];
