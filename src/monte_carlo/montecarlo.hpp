@@ -395,7 +395,6 @@ public:
   void CoupleMonteCarloToFluid(Real dt);  // couple monte carlo to mesh
   void LorentzTransform(Photon *pphot, const Real sign, int ips, int ipe);
   Real LorentzTransformFrequencyShift(Photon *pphot, int ip);
-  void TetradTransform(Photon *pphot, const Real sign, int ips, int ipe);
   void InitializePhoton(Photon *pphot, int ips, int ipe, int etype);
   void FinalizePhoton(Photon *pphot, int ip);
   void UpdateMoments(Photon *pphot, Real dl, Real etau, int ip);
@@ -427,9 +426,6 @@ public:
   void TransformToComoving(Photon *pphot, int ips, int ipe);
   void TransformToCoordinate(Photon *pphot, int ips, int ipe);
   Real FrequencyShiftComoving(Photon *pphot, int ips);
-  void  FrequencyAngleShiftComoving(Photon *pphot, int ip, Real &shift,
-                                    Real &k1, Real &k2, Real &k3);
-  Real FrequencyShiftCoordinate(Photon *pphot, int ips);
   void UserWorkAfterTransfer(int etype);
 
 private:

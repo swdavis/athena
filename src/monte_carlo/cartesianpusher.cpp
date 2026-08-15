@@ -134,7 +134,9 @@ void CartesianPusher::Move(Photon *pphot, int ips, int ipe) {
           }
           //pphot->wp[ip] *= etaua;
           // update position
-          pphot->x0p[ip] += pphot->k0p[ip] * dl;
+          // k0p is the photon energy, not a unit time component: the coordinate time
+          // advance over a path length dl is just dl (in units where c = 1).
+          pphot->x0p[ip] += dl;
           pphot->x1p[ip] += pphot->k1p[ip] * dl;
           pphot->x2p[ip] += pphot->k2p[ip] * dl;
           pphot->x3p[ip] += pphot->k3p[ip] * dl;
@@ -152,7 +154,9 @@ void CartesianPusher::Move(Photon *pphot, int ips, int ipe) {
         }
         //pphot->wp[ip] *= etaua;
         // update position
-        pphot->x0p[ip] += pphot->k0p[ip] * dl;
+        // k0p is the photon energy, not a unit time component: the coordinate time
+          // advance over a path length dl is just dl (in units where c = 1).
+          pphot->x0p[ip] += dl;
         pphot->x1p[ip] += pphot->k1p[ip] * dl;
         pphot->x2p[ip] += pphot->k2p[ip] * dl;
         pphot->x3p[ip] += pphot->k3p[ip] * dl;

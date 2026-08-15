@@ -301,7 +301,9 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
           pphot->x3p[ip] = atan2(y0 + ky * dl,x0 + kx * dl);
           if (pphot->x3p[ip] < 0.)
             pphot->x3p[ip] += 2.*PI;
-          pphot->x0p[ip] += pphot->k0p[ip] * dl;
+          // k0p is the photon energy, not a unit time component: the coordinate time
+          // advance over a path length dl is just dl (in units where c = 1).
+          pphot->x0p[ip] += dl;
 
           // Update k vector
           cth = cos(pphot->x2p[ip]);
@@ -326,7 +328,9 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
         pphot->x3p[ip] = atan2(y0 + ky * dl,x0 + kx * dl);
         if (pphot->x3p[ip] < 0.)
           pphot->x3p[ip] += 2.*PI;
-        pphot->x0p[ip] += pphot->k0p[ip] * dl;
+        // k0p is the photon energy, not a unit time component: the coordinate time
+          // advance over a path length dl is just dl (in units where c = 1).
+          pphot->x0p[ip] += dl;
 
         tauremaining -= chi * dl;
         // move photon to next zone and update angular positions

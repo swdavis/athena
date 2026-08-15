@@ -22,6 +22,62 @@
 #include "../globals.hpp"
 #include "../scalars/scalars.hpp"
 
+namespace {
+
+//----------------------------------------------------------------------------------------
+//! \fn void GetFourVector(Photon *pphot, int ip, bool unit_spatial, Real k[4])
+//! \brief pack the stored photon wavevector into a genuine contravariant four-vector.
+//!
+//! k0p always holds the photon energy in the frame the photon is currently expressed in.
+//! The spatial components are stored one of two ways: as a dimensional k^i (the general
+//! pusher in the coordinate frame), or as a unit propagation direction (everything in the
+//! comoving frame, and the legacy pushers in either frame).  In the latter case the true
+//! four-vector is (E, E*nhat), which is what these helpers reconstruct.  Pass
+//! unit_spatial = true when the spatial components are a unit direction.
+
+inline void GetFourVector(Photon *pphot, int ip, bool unit_spatial, Real k[4]) {
+#ifdef DEBUG
+  // ep and k0p are still separate arrays until iep is aliased to ik0p; until then this
+  // guards the invariant that they always agree.  Harmless (and always true) afterwards.
+  Real eref = pphot->ep[ip];
+  if (std::fabs(pphot->k0p[ip] - eref) > 1.0e-12*std::fabs(eref)) {
+    pphot->PrintPhoton("ep/k0p invariant violated in GetFourVector", ip);
+    std::stringstream msg;
+    msg << "### FATAL ERROR in GetFourVector" << std::endl
+        << "ep = " << eref << " but k0p = " << pphot->k0p[ip] << std::endl;
+    ATHENA_ERROR(msg);
+  }
+#endif
+  Real k0 = pphot->k0p[ip];
+  k[IMC0] = k0;
+  Real scale = unit_spatial ? k0 : 1.0;
+  k[IMC1] = pphot->k1p[ip] * scale;
+  k[IMC2] = pphot->k2p[ip] * scale;
+  k[IMC3] = pphot->k3p[ip] * scale;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void SetFourVector(Photon *pphot, int ip, bool unit_spatial, const Real k[4])
+//! \brief store a four-vector back into the photon, normalizing the spatial part if the
+//! stored representation is a unit direction.
+//!
+//! Reads only from the caller's local array, never from the photon, so it is safe once ep
+//! aliases k0p and the write to k0p is therefore also a write to ep.
+
+inline void SetFourVector(Photon *pphot, int ip, bool unit_spatial, const Real k[4]) {
+  Real inv = unit_spatial ? 1.0/k[IMC0] : 1.0;
+  pphot->k0p[ip] = k[IMC0];
+  // ep is still a distinct array until iep is aliased to ik0p; keeping it in step here is
+  // what lets the two conventions coexist during the changeover.  Becomes a
+  // self-assignment once aliased.
+  pphot->ep[ip] = k[IMC0];
+  pphot->k1p[ip] = k[IMC1] * inv;
+  pphot->k2p[ip] = k[IMC2] * inv;
+  pphot->k3p[ip] = k[IMC3] * inv;
+}
+
+} // namespace
+
 //----------------------------------------------------------------------------------------
 //! MonteCarloBlock constructor, builds MonteCarloBlock from parameter input
 
@@ -801,91 +857,6 @@ Real MonteCarloBlock::LorentzTransformFrequencyShift(Photon *pphot, int ip) {
   return gonembdk;
 }
 
-// SWD: This is an untested modification of Eric's original method, unfinished
-//----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign, int ips,
-//!                                           int ipe)
-//!  \brief Tetrad transform photon packet
-//
-// Does not transform stokes vectors..
-// weight is not transformed either as weight represents number of photons
-// in the packet which is invariant.
-// to_comv: sign = 1.0;
-// to_eulr: sign = -1.0;
-
-void MonteCarloBlock::TetradTransform(Photon *pphot, const Real sign, int ips, int ipe) {
-
-  for (int ip=ips; ip<=ipe; ip++) {
-    // Get velocity of cell
-    int i1 = pphot->i1p[ip], i2 = pphot->i2p[ip], i3 = pphot->i3p[ip];
-    Real beta[3];
-    for (int i=0; i<3; ++i) {
-      beta[i] = sign * vel(i3,i2,i1,i+1);
-    }
-    Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
-    Real gamma = 1. / sqrt(1. - beta2);
-
-    // Define velocity four vector for cell
-    Real ucon[NCOORD];
-    ucon[IMC0] = gamma;
-    ucon[IMC1] = gamma * beta[0];
-    ucon[IMC2] = gamma * beta[1];
-    ucon[IMC3] = gamma * beta[2];
-
-    // get metric values for current position
-    Real gcov[NCOORD][NCOORD];
-    Real x[NCOORD];
-    x[IMC0] = pphot->x0p[ip];
-    x[IMC1] = pphot->x1p[ip];
-    x[IMC2] = pphot->x2p[ip];
-    x[IMC3] = pphot->x3p[ip];
-    pcoord->Metric(x, gcov);
-
-    // create tetrad basis
-    Real econ[NCOORD][NCOORD], ecov[NCOORD][NCOORD];
-    ConstructTetrad(ucon, gcov, econ, ecov);
-
-    if (sign > 0) { // tranforming to comoving frame
-
-      Real kcopy[NCOORD];
-      kcopy[IMC0] = pphot->k0p[ip];
-      kcopy[IMC1] = pphot->k1p[ip];
-      kcopy[IMC2] = pphot->k2p[ip];
-      kcopy[IMC3] = pphot->k3p[ip];
-      Real k[NCOORD];
-      CoordinateToTetrad(kcopy, k, ecov);
-      pphot->k0p[ip] = k[IMC0];
-      pphot->k1p[ip] = k[IMC1];
-      pphot->k2p[ip] = k[IMC2];
-      pphot->k3p[ip] = k[IMC3];
-
-      Real energy_shift = kcopy[IMC0] / k[IMC0];
-      // transform energy and extinction coefficients
-      pphot->ep[ip] *= energy_shift;
-      pphot->acp[ip] *= energy_shift;
-      pphot->scp[ip] *= energy_shift;
-
-    } else { // transforming to coordinate frame
-
-      Real kcopy[NCOORD];
-      kcopy[IMC0] = pphot->k0p[ip];
-      kcopy[IMC1] = pphot->k1p[ip];
-      kcopy[IMC2] = pphot->k2p[ip];
-      kcopy[IMC3] = pphot->k3p[ip];
-      Real k[NCOORD];
-      TetradToCoordinate(kcopy, k, econ); // updates pphot->k
-
-      Real energy_shift = kcopy[IMC0] / pphot->k0p[ip]; // new calculation
-
-      // transform energy and opacities
-      pphot->ep[ip] *= energy_shift;
-      pphot->acp[ip] *= energy_shift;
-      pphot->scp[ip] *= energy_shift;
-    }
-  } // loop over ip
-}
-
-
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip)
 //! \brief Overload for UpdateMoments with additional wait time argument
@@ -958,7 +929,9 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     ktemp = k0;
     weight = pphot->wp[ip] * pphot->ep[ip] * k0 * dlep * l_cgs / c_cgs;
   } else {
-    k0 = pphot->k0p[ip];
+    // Spatial components are a unit direction here, so the propagation four-vector is
+    // n^mu = (1, nhat); k0p holds the energy and is carried by weight instead.
+    k0 = 1.;
     k1 = pphot->k1p[ip];
     k2 = pphot->k2p[ip];
     k3 = pphot->k3p[ip];
@@ -1040,8 +1013,6 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   }
 
   if (mom_flag_com) {
-    // boost relevant quanitities to comoving frame
-    //FrequencyAngleShiftComoving(pphot,ip,shift,k1c,k2c,k3c);
 
     Real ki[4],kc[4];
     ki[0] = k0;
@@ -2337,22 +2308,17 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
       ConstructTetrad(ucon, gcov, econ, ecov);
 
       Real k0init = pphot->k0p[ip];
-      // Transform to comoving tetrad
-      Real kcopy[4];
-      kcopy[IMC0] = pphot->k0p[ip];
-      kcopy[IMC1] = pphot->k1p[ip];
-      kcopy[IMC2] = pphot->k2p[ip];
-      kcopy[IMC3] = pphot->k3p[ip];
-      Real k[4];
+      // Transform to comoving tetrad.  In GR the coordinate-frame spatial components are
+      // dimensional, the comoving ones are a unit direction.
+      Real kcopy[4], k[4];
+      GetFourVector(pphot, ip, false, kcopy);
       CoordinateToTetrad(kcopy, k, ecov);
-      pphot->k0p[ip] = 1.;
-      pphot->k1p[ip] = k[IMC1]/k[IMC0];
-      pphot->k2p[ip] = k[IMC2]/k[IMC0];
-      pphot->k3p[ip] = k[IMC3]/k[IMC0];
 
+      // nufact must be taken from the local array: k0p is the energy, so writing it
+      // below also writes ep.
       Real nufact = k[IMC0]/k0init;
-      printf("com: %g %g %g %g %g %g\n",nufact,k0init,pphot->k0p[ip],pphot->k1p[ip],pphot->k2p[ip],pphot->k3p[ip]);
-      pphot->ep[ip] *= nufact;
+      SetFourVector(pphot, ip, true, k);
+
       pphot->acp[ip] /= nufact;
       pphot->scp[ip] /= nufact;
     }
@@ -2364,13 +2330,13 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
       int i3 = pphot->i3p[ip];
 
       Real k0init = pphot->k0p[ip];
+      // The general pusher stores dimensional spatial components in the coordinate
+      // frame; the legacy pushers store a unit direction.
       Real ki[4], kf[4];
-      if (pmy_mc->general_pusher_flag) {
-        ki[0] = pphot->k0p[ip];
-        ki[1] = pphot->k1p[ip];
-        ki[2] = pphot->k2p[ip];
-        ki[3] = pphot->k3p[ip];
+      GetFourVector(pphot, ip, !pmy_mc->general_pusher_flag, kf);
 
+      if (pmy_mc->general_pusher_flag) {
+        for (int i=0; i<4; i++) ki[i] = kf[i];
         Real x[4], invtet[4][4];
         x[0] = pphot->x0p[ip];
         x[1] = pphot->x1p[ip];
@@ -2383,34 +2349,24 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
             kf[j] += invtet[j][i] * ki[i];
           }
         }
-        pphot->k0p[ip] = kf[0];
-        pphot->k1p[ip] = kf[1];
-        pphot->k2p[ip] = kf[2];
-        pphot->k3p[ip] = kf[3];
       }
       if (boosts) {
-        ki[0] = pphot->k0p[ip];
-        ki[1] = pphot->k1p[ip];
-        ki[2] = pphot->k2p[ip];
-        ki[3] = pphot->k3p[ip];
+        for (int i=0; i<4; i++) ki[i] = kf[i];
         for (int j=0; j<4; j++) {
           kf[j] = 0.;
           for (int i=0; i<4; i++) {
             kf[j] += boost_cmv(i3,i2,i1,j,i) * ki[i];
           }
         }
-        pphot->k0p[ip] = kf[0];
-        pphot->k1p[ip] = kf[1];
-        pphot->k2p[ip] = kf[2];
-        pphot->k3p[ip] = kf[3];
       }
 
-      //pphot->PrintPhoton("to com",ip);
-      Real nufact = pphot->k0p[ip]/k0init;
+      // Take nufact before storing: k0p is the energy, so the store also writes ep.
+      Real nufact = kf[IMC0]/k0init;
+      // comoving frame always keeps a unit propagation direction
+      SetFourVector(pphot, ip, true, kf);
 
-      pphot->k0p[ip] = 1.;
-      // SWD: maybe better to renormalize
       if ((COORDINATE_SYSTEM == "spherical_polar") && pmy_mc->polarized) {
+        // re-express the unit direction in cartesian components for the Stokes algebra
         Real k3[3];
         Real cth = cos(pphot->x2p[ip]);
         Real sth = sin(pphot->x2p[ip]);
@@ -2426,14 +2382,7 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
         pphot->k1p[ip] /= knorm;
         pphot->k2p[ip] /= knorm;
         pphot->k3p[ip] /= knorm;
-      } else {
-        pphot->k1p[ip] = kf[1]/kf[0];
-        pphot->k2p[ip] = kf[2]/kf[0];
-        pphot->k3p[ip] = kf[3]/kf[0];
       }
-      //if (std::isinf(nufact) || std::isnan(nufact))
-      //  pphot->PrintPhoton("to com: nan in boost",ip);
-      pphot->ep[ip] *= nufact;
       pphot->acp[ip] /= nufact;
       pphot->scp[ip] /= nufact;
 
@@ -2469,27 +2418,20 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
       Real econ[4][4], ecov[4][4];
       ConstructTetrad(ucon, gcov, econ, ecov);
 
-      // Transform to comoving tetrad
-      Real kcopy[4];
-      kcopy[IMC0] = pphot->k0p[ip] * pphot->ep[ip];
-      kcopy[IMC1] = pphot->k1p[ip] * pphot->ep[ip];
-      kcopy[IMC2] = pphot->k2p[ip] * pphot->ep[ip];
-      kcopy[IMC3] = pphot->k3p[ip] * pphot->ep[ip];
+      // Transform out of the comoving tetrad.  Comoving stores a unit direction, the GR
+      // coordinate frame stores dimensional components.
+      Real kcopy[4], k[4];
+      GetFourVector(pphot, ip, true, kcopy);
       Real k0init = kcopy[IMC0];
 
-      Real k[4];
       TetradToCoordinate(kcopy, k, econ);
-      pphot->k0p[ip] = k[IMC0];
-      pphot->k1p[ip] = k[IMC1];
-      pphot->k2p[ip] = k[IMC2];
-      pphot->k3p[ip] = k[IMC3];
 
-      Real nufact = pphot->k0p[ip]/k0init;
-      //printf("coord: %g %g %g %g %g\n",nufact,pphot->k0p[ip],pphot->k1p[ip],pphot->k2p[ip],pphot->k3p[ip]);
-      pphot->ep[ip] *= nufact;
+      // nufact must be taken before storing: writing k0p also writes ep.
+      Real nufact = k[IMC0]/k0init;
+      SetFourVector(pphot, ip, false, k);
+
       pphot->acp[ip] /= nufact;
       pphot->scp[ip] /= nufact;
-      //pphot->PrintPhoton("to cord",ip);
     }
   } else {
     for(int ip=ips; ip<=ipe; ip++) {
@@ -2497,12 +2439,8 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
       int i2 = pphot->i2p[ip];
       int i3 = pphot->i3p[ip];
 
-      if (pmy_mc->general_pusher_flag) {
-        pphot->k0p[ip] *= pphot->ep[ip];
-        pphot->k1p[ip] *= pphot->ep[ip];
-        pphot->k2p[ip] *= pphot->ep[ip];
-        pphot->k3p[ip] *= pphot->ep[ip];
-      } else if ((pmy_mc->polarized) && (COORDINATE_SYSTEM == "spherical_polar")) {
+      if (!pmy_mc->general_pusher_flag &&
+          (pmy_mc->polarized) && (COORDINATE_SYSTEM == "spherical_polar")) {
         // rotate cartesian to to spherical polar
         Real k3[3];
         Real cth = cos(pphot->x2p[ip]);
@@ -2522,30 +2460,21 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
       }
 
       Real k0init = pphot->k0p[ip];
+      // comoving frame stores a unit direction
       Real ki[4], kf[4];
+      GetFourVector(pphot, ip, true, kf);
+
       if (boosts) {
-        ki[0] = pphot->k0p[ip];
-        ki[1] = pphot->k1p[ip];
-        ki[2] = pphot->k2p[ip];
-        ki[3] = pphot->k3p[ip];
+        for (int i=0; i<4; i++) ki[i] = kf[i];
         for (int j=0; j<4; j++) {
           kf[j] = 0.;
           for (int i=0; i<4; i++) {
             kf[j] += boost_lab(i3,i2,i1,j,i) * ki[i];
           }
         }
-        pphot->k0p[ip] = kf[0];
-        pphot->k1p[ip] = kf[1];
-        pphot->k2p[ip] = kf[2];
-        pphot->k3p[ip] = kf[3];
       }
-      Real nufact;
       if (pmy_mc->general_pusher_flag) {
-        ki[0] = pphot->k0p[ip];
-        ki[1] = pphot->k1p[ip];
-        ki[2] = pphot->k2p[ip];
-        ki[3] = pphot->k3p[ip];
-
+        for (int i=0; i<4; i++) ki[i] = kf[i];
         Real x[4], tetrad[4][4];
         x[0] = pphot->x0p[ip];
         x[1] = pphot->x1p[ip];
@@ -2558,25 +2487,14 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
             kf[j] += tetrad[j][i] * ki[i];
           }
         }
-        pphot->k0p[ip] = kf[0];
-        pphot->k1p[ip] = kf[1];
-        pphot->k2p[ip] = kf[2];
-        pphot->k3p[ip] = kf[3];
-        nufact = kf[0]/k0init;
-      } else {
-        // spatial components of k are unit vectors
-        nufact = pphot->k0p[ip]/k0init;
-
-        Real knorm = std::sqrt(SQR(pphot->k1p[ip])+SQR(pphot->k2p[ip])+SQR(pphot->k3p[ip]));
-        pphot->k0p[ip] = 1.;
-        pphot->k1p[ip] /= knorm;
-        pphot->k2p[ip] /= knorm;
-        pphot->k3p[ip] /= knorm;
       }
-      //if (std::isinf(nufact) || std::isnan(nufact))
-      //  pphot->PrintPhoton("to cord: nan in boost",ip);
-      // update energy and opacities
-      pphot->ep[ip] *= nufact;
+
+      // Take nufact before storing: writing k0p also writes ep.  The general pusher
+      // keeps dimensional spatial components in the coordinate frame; the legacy
+      // pushers keep a unit direction.
+      Real nufact = kf[IMC0]/k0init;
+      SetFourVector(pphot, ip, !pmy_mc->general_pusher_flag, kf);
+      // update opacities
       pphot->acp[ip] /= nufact;
       pphot->scp[ip] /= nufact;
 
@@ -2612,30 +2530,25 @@ Real  MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip) {
     ConstructTetrad(ucon, gcov, econ, ecov);
 
     Real k0init = pphot->k0p[ip];
-    // Transform to comoving tetrad
-    Real kcopy[4];
-    kcopy[IMC0] = pphot->k0p[ip];
-    kcopy[IMC1] = pphot->k1p[ip];
-    kcopy[IMC2] = pphot->k2p[ip];
-    kcopy[IMC3] = pphot->k3p[ip];
-    Real k[4];
+    // Called from the coordinate frame, where GR keeps dimensional components.
+    Real kcopy[4], k[4];
+    GetFourVector(pphot, ip, false, kcopy);
     CoordinateToTetrad(kcopy, k, ecov);
 
-    Real nufact = k[IMC0]/k0init;
-    return nufact;
+    return k[IMC0]/k0init;
   } else {
     int i1 = pphot->i1p[ip];
     int i2 = pphot->i2p[ip];
     int i3 = pphot->i3p[ip];
 
     Real k0init = pphot->k0p[ip];
+    // Called from the coordinate frame: the general pusher keeps dimensional spatial
+    // components there, the legacy pushers keep a unit direction.
     Real ki[4], kf[4];
-    if (tetrads) {
-      ki[0] = pphot->k0p[ip];
-      ki[1] = pphot->k1p[ip];
-      ki[2] = pphot->k2p[ip];
-      ki[3] = pphot->k3p[ip];
+    GetFourVector(pphot, ip, !pmy_mc->general_pusher_flag, kf);
 
+    if (tetrads) {
+      for (int i=0; i<4; i++) ki[i] = kf[i];
       Real x[4], invtet[4][4];
       x[0] = pphot->x0p[ip];
       x[1] = pphot->x1p[ip];
@@ -2648,11 +2561,6 @@ Real  MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip) {
           kf[j] += invtet[j][i] * ki[i];
         }
       }
-    } else {
-      kf[0] = pphot->k0p[ip];
-      kf[1] = pphot->k1p[ip];
-      kf[2] = pphot->k2p[ip];
-      kf[3] = pphot->k3p[ip];
     }
 
     // Boost from the tetrad frame into the fluid frame.  With boosts disabled the tetrad
@@ -2678,84 +2586,6 @@ Real  MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip) {
   }
 
  }
-
-//----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::FrequencyAngelShiftComoving(Photon *pphot, int ip,
-//             Real &shift, Real &k1, Real &k2, Real &k3) {
-//! \brief frequency shift factor angular aberation from coordinate to comoving
-
-void  MonteCarloBlock::FrequencyAngleShiftComoving(Photon *pphot, int ip, Real &shift,
-                                                   Real &k1, Real &k2, Real &k3) {
-
-    int i1 = pphot->i1p[ip];
-    int i2 = pphot->i2p[ip];
-    int i3 = pphot->i3p[ip];
-
-    Real k0 = pphot->k0p[ip];
-    Real ki[4], kf[4];
-    if (tetrads) {
-      ki[0] = pphot->k0p[ip];
-      ki[1] = pphot->k1p[ip];
-      ki[2] = pphot->k2p[ip];
-      ki[3] = pphot->k3p[ip];
-
-      Real x[4], invtet[4][4];
-      x[0] = pphot->x0p[ip];
-      x[1] = pphot->x1p[ip];
-      x[2] = pphot->x2p[ip];
-      x[3] = pphot->x3p[ip];
-      pcoord->InverseTetrad(x,invtet);
-      for (int j=0; j<4; j++) {
-        kf[j] = 0.;
-        for (int i=0; i<4; i++) {
-          kf[j] += invtet[j][i] * ki[i];
-        }
-      }
-    } else {
-      kf[0] = pphot->k0p[ip];
-      kf[1] = pphot->k1p[ip];
-      kf[2] = pphot->k2p[ip];
-      kf[3] = pphot->k3p[ip];
-    }
-
-    Real ke[4];
-    for (int j=0; j<4; j++) {
-      ke[j] = 0.;
-      for (int i=0; i<4; i++) {
-        ke[j] += boost_cmv(i3,i2,i1,j,i) * kf[i];
-      }
-    }
-    //shift = k1 = k2 = k3 =1.;
-    shift = ke[0]/k0;
-    k1 = ke[1]/ke[0];
-    k2 = ke[2]/ke[0];
-    k3 = ke[3]/ke[0];
-
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn Real MonteCarloBlock::FrequencyShiftCoordinate(Photon *pphot, int ip)
-//! \brief frequency shift factor from coordinate to comoving
-
-Real  MonteCarloBlock::FrequencyShiftCoordinate(Photon *pphot, int ip) {
-
-    int i1 = pphot->i1p[ip];
-    int i2 = pphot->i2p[ip];
-    int i3 = pphot->i3p[ip];
-
-    Real ki[4];
-    ki[0] = pphot->k0p[ip];
-    ki[1] = pphot->k1p[ip];
-    ki[2] = pphot->k2p[ip];
-    ki[3] = pphot->k3p[ip];
-    Real k0 = 0.;
-    for (int i=0; i<4; i++) {
-      k0 += boost_lab(i3,i2,i1,0,i) * ki[i];
-    }
-    return k0/ki[0];
-
- }
-
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::SetBoundaryValues(enum MCBoundaryFlag *input_bcs)

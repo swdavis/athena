@@ -257,8 +257,15 @@ void Photon::Initialize(MonteCarlo *pmc, ParameterInput *pin) {
     idk3p = AddRealProperty("dk3");
   }
 
-  // Add energy, weight, and opacities
-  iep = AddRealProperty("ep");
+  // Add energy, weight, and opacities.
+  //
+  // k0p holds the photon energy in whatever frame the photon is currently expressed in,
+  // which is exactly what ep means, so the two are the same column rather than two
+  // arrays kept in step by hand.  ep survives as a name because the non-relativistic
+  // physics reads far better in terms of an energy than a time component, but writing
+  // either one now writes both.  See GetFourVector/SetFourVector in montecarloblock.cpp
+  // for the storage convention this relies on.
+  iep = ik0p;
   iwp = AddRealProperty("wp");
   iscp = AddRealProperty("scp");
   iacp = AddRealProperty("acp");
