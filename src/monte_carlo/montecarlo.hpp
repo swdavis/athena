@@ -420,6 +420,7 @@ public:
   void GetNumberDensity();
   void GetScalars();
   void GetVelocity();
+  void SetNormalObserver();
   void GetBField();
   void GetTemperature();
   void ComputeTransformations();

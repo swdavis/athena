@@ -359,7 +359,10 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     boost_cmv.NewAthenaArray(ncells3,ncells2,ncells1,4,4);
     boost_lab.NewAthenaArray(ncells3,ncells2,ncells1,4,4);
   }
-  if (boosts) vel.NewAthenaArray(ncells3,ncells2,ncells1,4);
+  // vel holds the four-velocity of the frame the comoving tetrad is built on.  With
+  // boosts enabled that is the fluid; in GR without boosts it is the normal observer,
+  // which is still needed by the GR branches of the frame transformations.
+  if (boosts || GENERAL_RELATIVITY) vel.NewAthenaArray(ncells3,ncells2,ncells1,4);
   if (NSCALARS > 0) scalars.NewAthenaArray(ncells3,ncells2,ncells1);
   // moments is 1 (Er) + 3 (Fr) + 9 (Pr) + 1 (Eave) + 1 (net cool)
   nmom = 13;
@@ -437,7 +440,7 @@ MonteCarloBlock::~MonteCarloBlock() {
     boost_cmv.DeleteAthenaArray();
     boost_lab.DeleteAthenaArray();
   }
-  if (boosts) vel.DeleteAthenaArray();
+  if (boosts || GENERAL_RELATIVITY) vel.DeleteAthenaArray();
   if (NSCALARS > 0) scalars.DeleteAthenaArray();
   if (mom_flag_lab) moments.DeleteAthenaArray();
   if (mom_flag_com) moments_com.DeleteAthenaArray();
@@ -1053,11 +1056,18 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     }
     Real k0c,k1c,k2c,k3c,weight;
     if (pmy_mc->general_pusher_flag) {
-      k0c = kc[0];
-      k1c = kc[1];
-      k2c = kc[2];
-      k3c = kc[3];
-      weight = pphot->wp[ip] * pphot->ep[ip] / k0c * dl * l_cgs / c_cgs;
+      // ki is already normalized by ep above, so kc[0] is the Doppler factor and the
+      // same normalized representation as the legacy branch below applies.  dl is an
+      // affine parameter step -- dx^mu = k^mu dlambda -- so the physical path length
+      // dlep must be used here, exactly as the lab-frame weight does.  Using dl and
+      // dividing by k0c instead cancelled the photon energy out of the weight
+      // altogether, inflating the comoving moments by ~1/ep.
+      Real shift = kc[0];
+      k0c = 1.;
+      k1c = kc[1]/kc[0];
+      k2c = kc[2]/kc[0];
+      k3c = kc[3]/kc[0];
+      weight = pphot->wp[ip] * pphot->ep[ip] * dlep * SQR(shift) * l_cgs / c_cgs;
     } else {
       Real shift = kc[0]/k0;
       // Spatial components are normalized to a unit comoving direction, so the
@@ -2181,6 +2191,36 @@ void MonteCarloBlock::GetVelocity() {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::SetNormalObserver()
+//! \brief fill vel with the four-velocity of the normal (Eulerian) observer.
+//!
+//! Used for general relativistic problems run without boosts.  There is no fluid
+//! velocity to define a comoving frame, but the GR frame transformations still need a
+//! four-velocity to build the tetrad on, and the natural choice is the observer normal
+//! to the spatial slices: n^mu = -alpha g^{mu t} with lapse alpha = 1/sqrt(-g^{tt}).
+//! This is the zero-three-velocity limit of GetVelocity(), and unlike the static
+//! observer it stays well defined inside the ergosphere.
+
+void MonteCarloBlock::SetNormalObserver() {
+
+  AthenaArray<Real> g, gi;
+  g.NewAthenaArray(NMETRIC,ie+1);
+  gi.NewAthenaArray(NMETRIC,ie+1);
+  for (int k=ks; k<=ke; ++k) {
+    for (int j=js; j<=je; ++j) {
+      pmy_block->pcoord->CellMetric(k,j,is,ie,g,gi);
+      for (int i=is; i<=ie; ++i) {
+        Real alpha = 1.0/std::sqrt(-gi(I00,i));
+        vel(k,j,i,0) = -alpha*gi(I00,i);
+        vel(k,j,i,1) = -alpha*gi(I01,i);
+        vel(k,j,i,2) = -alpha*gi(I02,i);
+        vel(k,j,i,3) = -alpha*gi(I03,i);
+      }
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::GetBField()
 //! \brief Make copy of magnetic fields from MeshBlock to MonteCarloBlock.
 
@@ -2551,11 +2591,9 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
 Real  MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip) {
 
   if (GENERAL_RELATIVITY) {
-    // The comoving tetrad is built from the fluid four-velocity, which is only available
-    // when boosts are enabled (vel is left unallocated otherwise).  Without it there is
-    // no defined comoving frame, so report no shift.
-    if (!boosts) return 1.0;
-
+    // vel holds the fluid four-velocity when boosts are on and the normal observer
+    // otherwise, so the tetrad is well defined either way.  With boosts off the shift
+    // returned here is the purely gravitational one.
     Real gcov[4][4];
     Real x[4];
     x[IMC0] = pphot->x0p[ip];
