@@ -560,13 +560,13 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
 
     // user definied photon initialization
     InitializePhoton(pphot,nold,pphot->nphot-1,etype);
-    pphot->PrintPhoton("init com",0);
+
     // Lorentz transform E, k to Eulerian frame and update opacities
     // only for newly emitted samples
     if (boosts || tetrads) {
       TransformToCoordinate(pphot,nold,pphot->nphot-1);
     }
-    pphot->PrintPhoton("init coord",0);
+
     // Update the absorption and scattering extinction coefficients
     if (call_srcterms) {
       // Update source terms to reflect newly emitted samples
@@ -654,8 +654,6 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
       if (pphot->statp[ip] != BUFFERED) {
         // User defined completion work
         FinalizePhoton(pphot,ip);
-        if (ip == 0)
-          pphot->PrintPhoton("final",ip);
       }
 
       if (pphot->statp[ip] == ESCAPED) {
@@ -2548,6 +2546,11 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
 Real  MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip) {
 
   if (GENERAL_RELATIVITY) {
+    // The comoving tetrad is built from the fluid four-velocity, which is only available
+    // when boosts are enabled (vel is left unallocated otherwise).  Without it there is
+    // no defined comoving frame, so report no shift.
+    if (!boosts) return 1.0;
+
     Real gcov[4][4];
     Real x[4];
     x[IMC0] = pphot->x0p[ip];
@@ -2609,9 +2612,17 @@ Real  MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip) {
       kf[3] = pphot->k3p[ip];
     }
 
-    Real k0f = 0.;
-    for (int i=0; i<4; i++) {
-      k0f += boost_cmv(i3,i2,i1,0,i) * kf[i];
+    // Boost from the tetrad frame into the fluid frame.  With boosts disabled the tetrad
+    // frame is already the comoving frame, and boost_cmv has never been filled by
+    // ComputeTransformations(), so it must not be applied here.
+    Real k0f;
+    if (boosts) {
+      k0f = 0.;
+      for (int i=0; i<4; i++) {
+        k0f += boost_cmv(i3,i2,i1,0,i) * kf[i];
+      }
+    } else {
+      k0f = kf[0];
     }
     Real nufact =k0f/k0init;
     /*if (std::isinf(nufact) || std::isnan(nufact)) {

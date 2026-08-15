@@ -165,14 +165,16 @@ void GeneralPusher::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip
     int i1 = pphot->i1p[ip];
     int i2 = pphot->i2p[ip];
     int i3 = pphot->i3p[ip];
-    if (pmcb->boosts) {
+    if (pmcb->boosts || pmcb->tetrads) {
       // Shift photon energy to comoving frame
       //shift = pmy_mcb->LorentzTransformFrequencyShift(pphot,ip);
       shift = pmy_mcb->FrequencyShiftComoving(pphot,ip);
-      Real energy = pphot->ep[ip] * shift;
+      pphot->ep[ip] *= shift;
       // compute opacities in comoving frame
       pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
       pphot->scp[ip] = pmcb->ScatteringOpacity(pmcb,pphot,ip);
+      // Shift energy back to Eulerian frame
+      pphot->ep[ip] /= shift;
       // Shift opaciteis to Eulerian frame
       pphot->acp[ip] *= shift;
       pphot->scp[ip] *= shift;

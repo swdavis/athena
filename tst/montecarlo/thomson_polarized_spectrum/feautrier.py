@@ -268,10 +268,10 @@ def gauleg(x1,x2,n):
     be better implemented in numpy.polynomial.legendre.
     """
 
-    x = range(n+1) # x[0] unused
-    w = range(n+1) # w[0] unused
+    x = np.zeros(n+1) # x[0] unused
+    w = np.zeros(n+1) # w[0] unused
     eps = 3.0E-14
-    m = (n+1)/2
+    m = (n+1)//2
     xm = 0.5*(x2+x1)
     xl = 0.5*(x2-x1)
     for i in range(1,m+1):
