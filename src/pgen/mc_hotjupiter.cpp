@@ -657,7 +657,6 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
         Real mu = 2.*pran->uniform()-1.0;
         Real stheta = std::sqrt(1.0-mu*mu);
         Real phi = 2.*PI*pran->uniform();
-        pphot->k0p[ip] = 1. / c_cgs;
         pphot->k1p[ip] = stheta * std::cos(phi);
         pphot->k2p[ip] = stheta * std::sin(phi);
         pphot->k3p[ip] = mu;
@@ -710,8 +709,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
           // phi position - [0, 2pi]
           pphot->x3p[ip] = ph_samp;
 
-          // Set direction vector - parallel to star-planet separation vector
-          pphot->k0p[ip] = 1.;
+          // Set direction vector - parallel to star-planet separation vector.
+          // k0p is the photon energy and is set from ep further below.
           pphot->k1p[ip] = -std::cos(th);
           pphot->k2p[ip] = std::sin(th);
           pphot->k3p[ip] = 0.0;
@@ -810,8 +809,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
           Real sphm = std::sin(ph - psi);
           Real cphm = std::cos(ph - psi);
 
-          // Set direction vector - parallel to star-planet separation vector
-          pphot->k0p[ip] = 1.;
+          // Set direction vector - parallel to star-planet separation vector.
+          // k0p is the photon energy and is set from ep further below.
           pphot->k1p[ip] = sth*cphm;
           pphot->k2p[ip] = cth*cphm;
           pphot->k3p[ip] = -sphm;

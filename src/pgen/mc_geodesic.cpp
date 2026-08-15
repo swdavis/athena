@@ -187,10 +187,11 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
     Real phi = 2.0 * PI * (static_cast<Real>(iph) + 0.5) / static_cast<Real>(nphi);
 
     pphot->wp[ip] = 1.0;
+    // k0p is the photon energy, so this sets both.  The value is arbitrary: the test
+    // measures fractional drift in k_t and k_phi, which is scale invariant.
     pphot->ep[ip] = 1.0;
 
     // unit direction in the orthonormal tetrad
-    pphot->k0p[ip] = 1.0;
     pphot->k1p[ip] = sth * std::cos(phi);
     pphot->k2p[ip] = cth;
     pphot->k3p[ip] = sth * std::sin(phi);

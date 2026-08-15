@@ -713,6 +713,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
       if (pphot->statp[ip] != BUFFERED) {
         // User defined completion work
         FinalizePhoton(pphot,ip);
+        pphot->PrintPhoton("finalize in transfer",ip);
       }
 
       if (pphot->statp[ip] == ESCAPED) {

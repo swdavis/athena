@@ -640,8 +640,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
       Real sth = sqrt(1. - SQR(cth));
 
 
-      // Initialize wave vector with isotropic distribution
-      pphot->k0p[ip] = 1.;
+      // Initialize wave vector with isotropic distribution.  k0p carries the photon
+      // energy, already sampled into ep above, so it must not be reset here.
       pphot->k1p[ip] = sth*cphi;
       pphot->k2p[ip] = sth*sphi;
       pphot->k3p[ip] = cth;
