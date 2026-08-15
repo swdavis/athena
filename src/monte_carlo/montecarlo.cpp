@@ -187,6 +187,7 @@ enum AbsorptionMethodFlag GetAbsorptionMethodFlag(std::string input_string) {
 //! \brief set scattering flag
 
 enum ScatteringFlag GetScatteringFlag(std::string input_string) {
+
   if (input_string == "user") {
     return SCATUSER;
   } else if (input_string == "none") {

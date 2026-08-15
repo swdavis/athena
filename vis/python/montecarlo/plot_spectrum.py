@@ -57,19 +57,43 @@ def plot_one(spectrum, ax, xunit, yunit, imu, iphi, plterr, **kwargs):
     rebinx = kwargs.pop('rebinx')
     mulegend = kwargs.pop('mulegend')
 
+    writetxt = kwargs.pop('writetxt')
+
     # plot spectrum as function mu and phi
     mulist = imu_handler(imu)
     philist = imu_handler(iphi)
+    if writetxt:
+        txtfile = kwargs.pop('txtfile')
+        if txtfile is None:
+            txtfile = 'out.txt'
+        nmu = len(mulist)
+        nphi =len(philist)
+        nout = 2*nphi*nmu+1
+        nx = spectrum['nx']
+        print(nx,nout)
+        out_arr = np.zeros((nx,nout))
+        counter = 0
+
     for iphv in philist:
         for imuv in mulist:
             x, y, yerr, xlabel, ylabel = athenamc.plot_frequency(spectrum, imuv, iphv,
                                          plterr=plterr, xunit=xunit, yunit=yunit, rebinx=rebinx)
             athenamc.make_plot(x, y, yerr=yerr, xlabel=xlabel, ylabel=ylabel, ax=ax, **kwargs)
 
+            if writetxt:
+                if counter == 0:
+                    out_arr[:,0] = x
+                out_arr[:,2*counter+1] = y
+                out_arr[:,2*counter+2] = yerr
+                counter += 1
+
     if mulegend:
         nmu = len(mulist)
 
         ax.legend([f"μ={(mu+0.5)/nmu:.2f}" for mu in mulist])
+
+    if writetxt:
+        np.savetxt(txtfile, out_arr)
 
 def plot_blackbody(spectrum, ax, xunit, yunit, bbtemp, bbnorm, imu = None, iphi = None):
     """
@@ -209,6 +233,12 @@ if __name__ == '__main__':
     parser.add_argument('-mulegend',
         action = 'store_true',
         help = 'add a legend for mu values')
+    parser.add_argument('-writetxt',
+        action = 'store_true',
+        help = 'write plotted spectra curves to textfile')
+    parser.add_argument('--txtfile',
+        default = None,
+        help = 'output .txt file name')
 
     args = parser.parse_args()
     main(**vars(args))

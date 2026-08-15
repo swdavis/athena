@@ -289,6 +289,7 @@ void GeneralPusher::RK4Step(Photon *pphot, Real step, int ip) {
   kcon[IMC1] = pphot->k1p[ip];
   kcon[IMC2] = pphot->k2p[ip];
   kcon[IMC3] = pphot->k3p[ip];
+  Real k0init = kcon[IMC0];
 
   Real k0[4], gcov[4][4];
   pcoord->Metric(x0, gcov);
@@ -365,7 +366,7 @@ void GeneralPusher::RK4Step(Photon *pphot, Real step, int ip) {
   pphot->k1p[ip] = kcon[IMC1] * factor;
   pphot->k2p[ip] = kcon[IMC2] * factor;
   pphot->k3p[ip] = kcon[IMC3] * factor;
-
+  pphot->ep[ip] *= kcon[IMC0]/k0init;
 }
 
 //----------------------------------------------------------------------------------------

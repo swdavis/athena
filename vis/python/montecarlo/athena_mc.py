@@ -3,6 +3,7 @@ Support for manipulating and plotting Monte Carlo outputs
 """
 
 # standard python modules
+from multiprocessing.resource_sharer import stop
 import struct
 import time
 import math
@@ -428,6 +429,25 @@ def write_list(filename, phlist, header=True, length=None):
     with open(filename, 'ab') as outfile:
         data_array = phlist['list'].astype('>f8')  # big-endian double precision
         outfile.write(data_array.tobytes())
+
+def print_list(infile, start = 0, stop = None):
+    """
+    Print contents of list
+    """
+
+    phlist = read_list(infile, data=True)
+
+    print(f"dt={phlist['dt']:.8e}\n")
+    print(f"length={phlist['length']:d}\n")
+    print(f"npars={phlist['npars']:d}\n")
+    print(f"ntot={phlist['ntot']:d}\n")
+    print(f"polarized={int(phlist['polarized']):d}\n")
+    print(f"coord={phlist['coord']}\n")
+
+    if stop is None:
+        stop = phlist['length']
+    for i in range(start, stop):
+        print(f"Photon {i}: {phlist['list'][i]}")
 
 def get_luminosity_list(phlist):
     """

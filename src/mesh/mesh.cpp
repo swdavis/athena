@@ -1626,7 +1626,7 @@ void Mesh::Initialize(int res_flag, ParameterInput *pin) {
         }
         // SWD: this should be removed evantually, once the mismatch between AthenaK inputs
         // and athena++ is understood better by me
-        if (!(MONTE_CARLO_ENABLED && std::strcmp(COORDINATE_SYSTEM, "gr_user") == 0)) {
+        if (!(MONTE_CARLO_ENABLED && GENERAL_RELATIVITY)) {
           pmb->peos->ConservedToPrimitive(ph->u, ph->w1, pf->b,
                                           ph->w, pf->bcc, pmb->pcoord,
                                           il, iu, jl, ju, kl, ku);

@@ -560,13 +560,13 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
 
     // user definied photon initialization
     InitializePhoton(pphot,nold,pphot->nphot-1,etype);
-
+    pphot->PrintPhoton("init com",0);
     // Lorentz transform E, k to Eulerian frame and update opacities
     // only for newly emitted samples
     if (boosts || tetrads) {
       TransformToCoordinate(pphot,nold,pphot->nphot-1);
     }
-
+    pphot->PrintPhoton("init coord",0);
     // Update the absorption and scattering extinction coefficients
     if (call_srcterms) {
       // Update source terms to reflect newly emitted samples
@@ -654,6 +654,8 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
       if (pphot->statp[ip] != BUFFERED) {
         // User defined completion work
         FinalizePhoton(pphot,ip);
+        if (ip == 0)
+          pphot->PrintPhoton("final",ip);
       }
 
       if (pphot->statp[ip] == ESCAPED) {
@@ -2127,7 +2129,6 @@ void MonteCarloBlock::GetScalars() {
 void MonteCarloBlock::GetVelocity() {
 
   if (GENERAL_RELATIVITY) {
-
     AthenaArray<Real> g, gi;
     g.NewAthenaArray(NMETRIC,ie+1);
     gi.NewAthenaArray(NMETRIC,ie+1);
@@ -2307,7 +2308,7 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
       pphot->k3p[ip] = k[IMC3]/k[IMC0];
 
       Real nufact = k[IMC0]/k0init;
-      //printf("com: %g %g %g %g %g\n",nufact,pphot->k0p[ip],pphot->k1p[ip],pphot->k2p[ip],pphot->k3p[ip]);
+      printf("com: %g %g %g %g %g %g\n",nufact,k0init,pphot->k0p[ip],pphot->k1p[ip],pphot->k2p[ip],pphot->k3p[ip]);
       pphot->ep[ip] *= nufact;
       pphot->acp[ip] /= nufact;
       pphot->scp[ip] /= nufact;
@@ -2421,6 +2422,7 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
       ucon[IMC1] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],1);
       ucon[IMC2] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],2);
       ucon[IMC3] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],3);
+
       Real econ[4][4], ecov[4][4];
       ConstructTetrad(ucon, gcov, econ, ecov);
 
