@@ -15,6 +15,7 @@
 
 // Athena++ headers
 #include "montecarlo.hpp"
+#include "mccoord.hpp"
 #include "mcoutput.hpp"
 #include "photonpusher.hpp"
 #include "../globals.hpp"
@@ -689,6 +690,42 @@ PhotonList::~PhotonList() {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn Real PhotonEnergyAtInfinity(Photon *pphot, int ip)
+//! \brief conserved photon energy -k_t = -g_{t mu} k^mu
+//!
+//! Every metric the Monte Carlo module supports is stationary, so k_t is exactly
+//! conserved along the geodesic, and all of them are asymptotically flat with t
+//! normalized so that g_tt -> -1.  Under those two conditions -k_t is the energy a
+//! distant observer measures, and it inherits the units of ep (erg).
+//!
+//! A user-supplied metric that is not stationary would break the first condition, and
+//! this would silently return a non-conserved quantity.  gr_user is currently always
+//! built as MCKerrSchildCartesian, so there is no such case today.
+
+Real PhotonEnergyAtInfinity(Photon *pphot, int ip) {
+
+  MCCoord *pco = pphot->pmy_mcb->pcoord;
+
+  Real x[4], kcon[4], gcov[4][4];
+  x[IMC0] = pphot->x0p[ip];
+  x[IMC1] = pphot->x1p[ip];
+  x[IMC2] = pphot->x2p[ip];
+  x[IMC3] = pphot->x3p[ip];
+  kcon[IMC0] = pphot->k0p[ip];
+  kcon[IMC1] = pphot->k1p[ip];
+  kcon[IMC2] = pphot->k2p[ip];
+  kcon[IMC3] = pphot->k3p[ip];
+
+  pco->Metric(x, gcov);
+
+  Real kt = 0.;
+  for (int i = 0; i < 4; i++)
+    kt += gcov[IMC0][i] * kcon[i];
+
+  return -kt;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn PhotonList::AddPhoton(Photon *pphot, int ip)
 //! \brief add photon to list
 
@@ -700,7 +737,13 @@ void PhotonList::AddPhoton(Photon *pphot, int ip) {
   }
   int n = 0;
   photons(length,n++) = pphot->wp[ip];
-  photons(length,n++) = pphot->ep[ip];
+  // The energy column carries whatever a distant observer would call the photon energy.
+  // In flat space that is just ep.  Under a GR integration ep holds k^t, a coordinate
+  // component that no observer measures -- in Kerr-Schild g_{tr} is non-zero, so k^t
+  // mixes k_t and k_r and binning a spectrum on it produces an apparent blueshift.  The
+  // conserved -k_t is written instead; k^t remains available in the k0 column below.
+  photons(length,n++) = pmy_mc->relativistic_output
+                        ? PhotonEnergyAtInfinity(pphot,ip) : pphot->ep[ip];
   photons(length,n++) = pphot->x1p[ip];
   photons(length,n++) = pphot->x2p[ip];
   photons(length,n++) = pphot->x3p[ip];
@@ -752,7 +795,7 @@ void PhotonList::WriteList(std::string filename) {
   fprintf(pfile,"length=%d\nnpars=%d\n",length,nparams);
   fprintf(pfile,"ntot=%d\n",nsrun);
   fprintf(pfile,"polarized=%d\n",polarized);
-  fprintf(pfile,"coord=%s\n",COORDINATE_SYSTEM);
+  fprintf(pfile,"coord=%s\n",pmy_mc->geometry_tag.c_str());
   // write data
   int ndata = length*nparams;
   double *data;
@@ -901,7 +944,7 @@ void PhotonTrajectoryList::WriteList(std::string filename) {
   fprintf(pfile,"length=%d\n",length);
   fprintf(pfile,"maxstep=%d\n",maxstep);
   fprintf(pfile,"npars=%d\n",nparams);
-  fprintf(pfile,"coord=%s\n",COORDINATE_SYSTEM);
+  fprintf(pfile,"coord=%s\n",pmy_mc->geometry_tag.c_str());
   int *idata = new int[length];
   for (int i=0; i<length; ++i)
     idata[i] = nsteps[i];
@@ -1123,6 +1166,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         int step_limit = pin->GetOrAddInteger(pib->block_name,"steplimit",10000);
         if (pmc->list_size_init <= 0) pmc->list_size_init = 1;
         ptraj = new PhotonTrajectoryList(pmc->list_size_init+1,step_limit,nuser_out);
+        ptraj->pmy_mc = pmc;
         // Initialize photon list
         ptraj->length = 0;
         ptraj->maxstep = 0;

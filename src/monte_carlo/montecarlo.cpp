@@ -71,6 +71,9 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
     general_pusher_flag = pin->GetOrAddBoolean("montecarlo","general_pusher",false);
   scattering_meth = GetScatteringFlag(pin->GetOrAddString("montecarlo","scattering",
                                                           "none"));
+  // Canonical tag describing the geometry and wavevector convention of the outputs.
+  // Must come after general_pusher_flag is known.
+  SetGeometryTag(pin);
   nuser_var = 0; // photon user variables to zero
   nuser_mom = 0; // user moments
 
@@ -498,6 +501,60 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
     pmcb->MonteCarloProblemGenerator(pin);
   }
 
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::SetGeometryTag(ParameterInput *pin)
+//! \brief build the canonical geometry tag written into photon list/trajectory headers
+//!
+//! COORDINATE_SYSTEM alone does not say enough to interpret an output list.  Three
+//! distinctions are invisible in it:
+//!
+//!   - gr_user is always instantiated as MCKerrSchildCartesian, so the name says nothing
+//!     about the actual metric;
+//!   - kerr-schild with boyerlindquist = true is really Boyer-Lindquist, not Kerr-Schild;
+//!   - cartesian and spherical_polar select GeneralPusher or the legacy pusher depending
+//!     on general_pusher, and the two store the wavevector differently.  The legacy
+//!     pushers keep a unit orthonormal three-vector alongside the energy, while
+//!     GeneralPusher keeps genuine contravariant components -- in spherical coordinates
+//!     k^theta and k^phi then need factors of r and r sin(theta) to be orthonormalized.
+//!
+//! Post-processing has to know all three, so the tag encodes them.  It doubles as a
+//! format discriminator: the tags below are new strings, so a list written before this
+//! change (coord=kerr-schild, gr_user, minkowski, ...) is recognizably the old layout,
+//! in which the energy column held k^t rather than the conserved -k_t.
+
+void MonteCarlo::SetGeometryTag(ParameterInput *pin) {
+
+  bool bl = pin->GetOrAddBoolean("montecarlo","boyerlindquist",false);
+
+  if (COORDINATE_SYSTEM == "cartesian") {
+    geometry_tag = general_pusher_flag ? "cartesian_gp" : "cartesian";
+    relativistic_output = false;
+  } else if (COORDINATE_SYSTEM == "spherical_polar") {
+    geometry_tag = general_pusher_flag ? "spherical_gp" : "spherical_polar";
+    relativistic_output = false;
+  } else if (COORDINATE_SYSTEM == "cylindrical") {
+    geometry_tag = "cylindrical_gp";
+    relativistic_output = false;
+  } else if (COORDINATE_SYSTEM == "minkowski") {
+    geometry_tag = "minkowski_cart";
+    relativistic_output = true;
+  } else if (COORDINATE_SYSTEM == "kerr-schild") {
+    geometry_tag = bl ? "bl_spherical" : "ks_spherical";
+    relativistic_output = true;
+  } else if (COORDINATE_SYSTEM == "gr_user") {
+    geometry_tag = "ks_cartesian";
+    relativistic_output = true;
+  } else {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in MonteCarlo::SetGeometryTag" << std::endl
+        << "No output geometry tag defined for coordinate system "
+        << COORDINATE_SYSTEM << std::endl;
+    ATHENA_ERROR(msg);
+  }
+
+  return;
 }
 
 //----------------------------------------------------------------------------------------

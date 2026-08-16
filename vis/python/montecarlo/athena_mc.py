@@ -12,6 +12,77 @@ import matplotlib.pyplot as plt
 from matplotlib import colors
 from io import BytesIO
 
+# Canonical geometry tags written by MonteCarlo::SetGeometryTag (montecarlo.cpp).
+#
+# Every consumer of a photon list needs three facts that the Athena++ COORDINATE_SYSTEM
+# name does not carry: whether the run was relativistic, what the spatial basis is, and
+# how the wavevector is stored.  The legacy pushers keep a unit orthonormal three-vector
+# alongside the energy; GeneralPusher keeps genuine contravariant components, so in
+# spherical coordinates k^theta and k^phi need factors of r and r sin(theta) before they
+# can be treated as orthonormal.
+#
+#   relativistic : energy column holds the conserved -k_t rather than ep
+#   geometry     : spatial basis, 'cartesian' | 'spherical' | 'cylindrical'
+#   kvec         : 'unit' (orthonormal three-vector) | 'coord' (contravariant components)
+#   metric       : 'minkowski' | 'kerr_schild' | 'boyer_lindquist'
+#   layout       : 'v2' for tags below; 'v1' for pre-tag files, whose energy column held
+#                  k^t in GR runs and whose spherical entries are ambiguous about kvec
+_COORD_TAGS = {
+    'cartesian':      dict(relativistic=False, geometry='cartesian',   kvec='unit',
+                           metric='minkowski',       layout='v2'),
+    'cartesian_gp':   dict(relativistic=False, geometry='cartesian',   kvec='coord',
+                           metric='minkowski',       layout='v2'),
+    'spherical_polar':dict(relativistic=False, geometry='spherical',   kvec='unit',
+                           metric='minkowski',       layout='v2'),
+    'spherical_gp':   dict(relativistic=False, geometry='spherical',   kvec='coord',
+                           metric='minkowski',       layout='v2'),
+    'cylindrical_gp': dict(relativistic=False, geometry='cylindrical', kvec='coord',
+                           metric='minkowski',       layout='v2'),
+    'minkowski_cart': dict(relativistic=True,  geometry='cartesian',   kvec='coord',
+                           metric='minkowski',       layout='v2'),
+    'ks_spherical':   dict(relativistic=True,  geometry='spherical',   kvec='coord',
+                           metric='kerr_schild',     layout='v2'),
+    'ks_cartesian':   dict(relativistic=True,  geometry='cartesian',   kvec='coord',
+                           metric='kerr_schild',     layout='v2'),
+    'bl_spherical':   dict(relativistic=True,  geometry='spherical',   kvec='coord',
+                           metric='boyer_lindquist', layout='v2'),
+}
+
+# Tags written before SetGeometryTag existed.  These were just COORDINATE_SYSTEM, so the
+# pusher is unknowable: 'cartesian' and 'spherical_polar' may hold either convention.  We
+# assume the legacy pusher, which is what those runs almost always used, and the GR ones
+# carried k^t in the energy column rather than -k_t.
+_COORD_TAGS_LEGACY = {
+    'cartesian':       dict(relativistic=False, geometry='cartesian', kvec='unit',
+                            metric='minkowski',   layout='v1'),
+    'spherical_polar': dict(relativistic=False, geometry='spherical', kvec='unit',
+                            metric='minkowski',   layout='v1'),
+    'cylindrical':     dict(relativistic=False, geometry='cylindrical', kvec='coord',
+                            metric='minkowski',   layout='v1'),
+    'minkowski':       dict(relativistic=True,  geometry='cartesian', kvec='coord',
+                            metric='minkowski',   layout='v1'),
+    'kerr-schild':     dict(relativistic=True,  geometry='spherical', kvec='coord',
+                            metric='kerr_schild', layout='v1'),
+    'gr_user':         dict(relativistic=True,  geometry='cartesian', kvec='coord',
+                            metric='kerr_schild', layout='v1'),
+}
+
+
+def coord_properties(coord):
+    """
+    Return how to interpret a photon list, given its coord header tag.
+
+    This is the single place that decides relativistic vs non-relativistic, the spatial
+    basis, and the wavevector convention.  Callers should branch on the returned fields
+    rather than comparing the coord string directly.
+    """
+    if coord in _COORD_TAGS:
+        return dict(_COORD_TAGS[coord])
+    if coord in _COORD_TAGS_LEGACY:
+        return dict(_COORD_TAGS_LEGACY[coord])
+    raise ValueError(f"Unrecognized coord tag '{coord}' in photon list header")
+
+
 #SWD: Maybe photons be rewritten simply as dictionary
 #SWD: Add error control
 class Photons:
@@ -25,6 +96,9 @@ class Photons:
         self.polarized = phlist['polarized']
         self.ntot = phlist['ntot']
         self.coord = phlist['coord']
+        # How to interpret this list: relativistic?, spatial basis, wavevector convention
+        self.props = coord_properties(self.coord)
+        self.relativistic = self.props['relativistic']
         if self.polarized:
             self.npars = self.npars + 2
         ncol = phlist['npars']
@@ -122,7 +196,7 @@ def k_to_tetrad(k, pos, M, a):
         k_tet[a_idx] = eta[a_idx] * np.dot(e_low, k)
     return k_tet
 
-def transform_photons_to_tetrad_old(phots, **kwargs):
+def transform_photons_to_tetrad_slow(phots, **kwargs):
     """
     Transform photon 4-momenta to static observer tetrad frame.
     Modifies phots.k0, k1, k2, k3 in place to be the tetrad components.
@@ -140,6 +214,13 @@ def transform_photons_to_tetrad_old(phots, **kwargs):
         phots.k3[i] = k_tet[3] / k_tet[0]
 
 def transform_photons_to_tetrad(phots, **kwargs):
+    """
+    Transform photon 4-momenta to static observer tetrad frame.
+    Modifies phots.k0, k1, k2, k3 in place to be the tetrad components.
+
+    Only valid for Cartesian Kerr-Schild: ks_cartesian_metric() below treats x1,x2,x3 as
+    x,y,z.  Callers must check photons.props['metric'] and ['geometry'] first.
+    """
     M = 1.
     a = kwargs['spin']
     a2 = a**2
@@ -1310,6 +1391,77 @@ def get_bins_binary_search(xphots, xfaces, nx):
 
     return xbins
 
+def unit_direction_cartesian(photons):
+    """
+    Cartesian components of the photon propagation direction, as a unit vector.
+
+    Handles both wavevector conventions.  Under the legacy pushers k1,k2,k3 are already
+    an orthonormal unit three-vector.  Under GeneralPusher they are contravariant
+    components, so in spherical coordinates k^theta and k^phi carry factors of 1/r and
+    1/(r sin(theta)) that have to be removed before rotating into the Cartesian basis,
+    and in cylindrical coordinates k^phi carries a factor of 1/R.  The result is
+    normalized either way: for a null vector the orthonormal spatial components have norm
+    equal to the time component, not unity.
+    """
+    props = photons.props
+    k1, k2, k3 = photons.k1, photons.k2, photons.k3
+
+    if props['geometry'] == 'spherical':
+        cth = np.cos(photons.x2)
+        sth = np.sin(photons.x2)
+        cph = np.cos(photons.x3)
+        sph = np.sin(photons.x3)
+        if props['kvec'] == 'coord':
+            k2 = k2 * photons.x1
+            k3 = k3 * photons.x1 * sth
+        kx = k1*sth*cph + k2*cth*cph - k3*sph
+        ky = k1*sth*sph + k2*cth*sph + k3*cph
+        kz = k1*cth - k2*sth
+    elif props['geometry'] == 'cylindrical':
+        cph = np.cos(photons.x2)
+        sph = np.sin(photons.x2)
+        if props['kvec'] == 'coord':
+            k2 = k2 * photons.x1
+        kx = k1*cph - k2*sph
+        ky = k1*sph + k2*cph
+        kz = k3
+    else:
+        kx, ky, kz = k1, k2, k3
+
+    norm = np.sqrt(kx*kx + ky*ky + kz*kz)
+    return kx/norm, ky/norm, kz/norm
+
+
+def unit_direction_radial(photons):
+    """
+    Component of the photon propagation direction along the local radial unit vector.
+    """
+    props = photons.props
+
+    if props['geometry'] == 'spherical':
+        k1 = photons.k1
+        if props['kvec'] == 'coord':
+            # only the radial component is needed, but the norm is over all three
+            sth = np.sin(photons.x2)
+            k2 = photons.k2 * photons.x1
+            k3 = photons.k3 * photons.x1 * sth
+            norm = np.sqrt(k1*k1 + k2*k2 + k3*k3)
+            return k1/norm
+        norm = np.sqrt(k1*k1 + photons.k2**2 + photons.k3**2)
+        return k1/norm
+
+    # Cartesian (or cylindrical) positions: build rhat from the position itself
+    kx, ky, kz = unit_direction_cartesian(photons)
+    if props['geometry'] == 'cylindrical':
+        x = photons.x1*np.cos(photons.x2)
+        y = photons.x1*np.sin(photons.x2)
+        z = photons.x3
+    else:
+        x, y, z = photons.x1, photons.x2, photons.x3
+    rnorm = np.sqrt(x*x + y*y + z*z)
+    return (kx*x + ky*y + kz*z)/rnorm
+
+
 def get_angle_bins_cartesian(photons,nmu, mufaces, nphi, phifaces):
     """
     Bin angles in theta, phi defined relative to x,y,z axes
@@ -1327,25 +1479,7 @@ def get_angle_bins_cartesian(photons,nmu, mufaces, nphi, phifaces):
     if (skipmu and skipphi):
         return np.zeros(photons.nphot,dtype=int),np.zeros(photons.nphot,dtype=int)
 
-    if photons.coord == 'spherical_polar':
-        kr = photons.k1
-        kth = photons.k2
-        kph = photons.k3
-        cth = np.cos(photons.x2)
-        sth = np.sin(photons.x2)
-        cph = np.cos(photons.x3)
-        sph = np.sin(photons.x3)
-        if not skipphi:
-            kx = kr*sth*cph + kth*cth*cph - kph*sph
-            ky = kr*sth*sph + kth*cth*sph - kph*cph
-        if not skipmu:
-            kz = kr*cth - kth*sth
-    else:
-        if not skipphi:
-            kx = photons.k1
-            ky = photons.k2
-        if not skipmu:
-            kz = photons.k3
+    kx, ky, kz = unit_direction_cartesian(photons)
 
     if skipmu:
         # return 0
@@ -1378,17 +1512,8 @@ def get_angle_bins_spherical(photons,nmu,mufaces):
     if skipmu:
         return np.zeros(photons.nphot,dtype=int),np.zeros(photons.nphot,dtype=int)
 
-    if photons.coord == 'spherical_polar':
-        kr = photons.k1
-    else:
-        cth = np.cos(photons.x2)
-        sth = np.sin(photons.x2)
-        cph = np.cos(photons.x3)
-        sph = np.sin(photons.x3)
-        kr = sth*(cph*photons.k1+sph*photons.k2)+cth*photons.k3
-
     # Bin based on k_r
-    mu = kr
+    mu = unit_direction_radial(photons)
     mubins = get_bins(mu, mufaces ,nmu, log=False)
 
     # return 0 for phi
@@ -1408,13 +1533,19 @@ def get_angle_bins_hybrid(photons, nmu, mufaces, nphi, phifaces):
         print("Error: this function requires nphi > 1")
         return np.zeros(photons.nphot,dtype=int),np.zeros(photons.nphot,dtype=int)
 
-    if photons.coord != 'spherical_polar':
-        print("Error: this function only works with spherical polar")
+    if photons.props['geometry'] != 'spherical':
+        print("Error: this function only works with spherical geometry")
         return np.zeros(photons.nphot,dtype=int),np.zeros(photons.nphot,dtype=int)
 
     kr = photons.k1
     kth = photons.k2
     kph = photons.k3
+    if photons.props['kvec'] == 'coord':
+        kth = kth * photons.x1
+        kph = kph * photons.x1 * np.sin(photons.x2)
+    knorm = np.sqrt(kr*kr + kth*kth + kph*kph)
+    kr, kth, kph = kr/knorm, kth/knorm, kph/knorm
+
     cth = np.cos(photons.x2)
     sth = np.sin(photons.x2)
     kz = kr*cth - kth*sth
@@ -1489,7 +1620,15 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     spectrum['phifaces'] = phifaces
 
     if kwargs['tetrad']:
+        # transform_photons_to_tetrad assumes Cartesian Kerr-Schild.  Refuse rather than
+        # silently produce garbage for other geometries.
+        if phots.props['metric'] != 'kerr_schild' or phots.props['geometry'] != 'cartesian':
+            raise ValueError(
+                "tetrad=True requires Cartesian Kerr-Schild (coord=ks_cartesian), "
+                f"but this list has coord='{phots.coord}'")
         transform_photons_to_tetrad(phots, **kwargs)
+        # k is now a unit three-vector in the local orthonormal frame
+        phots.props['kvec'] = 'unit'
 
     if anglebin == 'cartesian':
         mubins, phibins = get_angle_bins_cartesian(phots,nmu,mufaces,nphi,phifaces)

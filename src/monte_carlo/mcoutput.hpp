@@ -78,6 +78,13 @@ public:
 };
 
 //----------------------------------------------------------------------------------------
+//! \fn Real PhotonEnergyAtInfinity(Photon *pphot, int ip)
+//! \brief conserved photon energy -k_t, valid for any stationary asymptotically flat
+//! metric.  Used for the energy column of relativistic list output.
+
+Real PhotonEnergyAtInfinity(Photon *pphot, int ip);
+
+//----------------------------------------------------------------------------------------
 //! \class PhotonList
 //! \brief List of output Photon properties
 
@@ -119,6 +126,7 @@ public:
   PhotonTrajectoryList(int init_len_limit, int init_step_limit, int nuser);
   ~PhotonTrajectoryList();
 
+  MonteCarlo *pmy_mc;
   std::string base_name;
 
   int length; // number of trajectories

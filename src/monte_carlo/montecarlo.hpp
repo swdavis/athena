@@ -246,6 +246,12 @@ public:
   bool general_pusher_flag; // Use integration for photon movement
   bool verbose; // print out more information during run
 
+  //! canonical geometry/wavevector tag written to output headers; see SetGeometryTag
+  std::string geometry_tag;
+  //! true when geometry_tag denotes a curved (or at least GR-integrated) spacetime, in
+  //! which case list output reports the conserved energy -k_t rather than k^t
+  bool relativistic_output;
+
   // function pointers
   UserMoveFunc_t UserWorkInMove;
   EmisFunc_t *GetEmission; // array of function pointers
@@ -279,6 +285,7 @@ public:
   void EnrollUserScatteringFunction(ScatFunc_t scatfunc);
   void Initialize(ParameterInput *pinput);
   void InitializeEmission(ParameterInput *pin);
+  void SetGeometryTag(ParameterInput *pin);
   void DistributeSamples(int etype);
   void NormalizeDomainOutputs(bool normalize);
 private:

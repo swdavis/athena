@@ -21,11 +21,6 @@
 //! shift.  general_pusher = true is also required -- Kerr-Schild always integrates with
 //! GeneralPusher, but general_pusher_flag separately selects the four-vector storage
 //! convention used by TransformToCoordinate.
-//!
-//! The escaping photon list carries the conserved energy -k_t in its first user column
-//! (see FinalizePhoton).  Bin the emergent spectrum on that, not on ep: ep holds k^t in
-//! Kerr-Schild coordinates, which is not the energy any observer measures, and binning
-//! on it produces an apparent blueshift.
 //
 //========================================================================================
 
@@ -647,35 +642,6 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 //========================================================================================
 
 void MonteCarloBlock::FinalizePhoton(Photon *pphot, int ip) {
-
-  // Record the conserved photon energy in the first user variable.
-  //
-  // ep (== k0p) holds k^t in Kerr-Schild coordinates, which is neither the energy
-  // measured by a local static observer nor the energy seen at infinity: in Kerr-Schild
-  // g_{tr} is non-zero, so k^t mixes k_t and k_r and the ratio to the observed energy
-  // depends on propagation direction as well as radius.  Binning the photon list on ep
-  // therefore gives a spectrum that is blueshifted rather than redshifted.
-  //
-  // The metric is stationary, so k_t = g_{t mu} k^mu is conserved along the geodesic and
-  // -k_t is the energy measured at infinity.  That is what an emergent spectrum should be
-  // binned on; it lands in the "user" column of the photon list.
-  Real x[4], kcon[4], gcov[4][4];
-  x[IMC0] = pphot->x0p[ip];
-  x[IMC1] = pphot->x1p[ip];
-  x[IMC2] = pphot->x2p[ip];
-  x[IMC3] = pphot->x3p[ip];
-  kcon[IMC0] = pphot->k0p[ip];
-  kcon[IMC1] = pphot->k1p[ip];
-  kcon[IMC2] = pphot->k2p[ip];
-  kcon[IMC3] = pphot->k3p[ip];
-
-  pcoord->Metric(x, gcov);
-
-  Real kt = 0.;
-  for (int i = 0; i < 4; i++)
-    kt += gcov[IMC0][i] * kcon[i];
-
-  pphot->user[0][ip] = -kt;
 
 }
 

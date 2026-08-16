@@ -10,13 +10,8 @@ problem_id = isothgr   # problem ID: basename of output filenames
 # angles for cartesian/minkowski/spherical_polar, so phibin and mubin are left
 # uninitialized and the accumulation writes out of bounds (this segfaults under MPI).
 # Bin the photon list instead, with vis/python/montecarlo/make_spectrum.py.
-#
-# nuser = 1 emits the conserved energy -k_t written by FinalizePhoton.  Bin the emergent
-# spectrum on that column, NOT on the ep/energy column: ep holds k^t in Kerr-Schild
-# coordinates, which no observer measures, and binning on it shows an apparent blueshift.
 <output1>
 file_type = phlist
-nuser     = 1
 
 <output2>
 file_type = hdf5
