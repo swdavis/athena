@@ -84,7 +84,7 @@ Spectrum::Spectrum(Spectrum *pspec) {
 
   // Set pointers
   pmy_mc = pspec->pmy_mc;
-  next == nullptr; // copy is not part of linked list
+  next = nullptr; // copy is not part of linked list
 
   base_name.assign(pspec->base_name);
   range = pspec->range;
@@ -1355,13 +1355,17 @@ void MCOutput::OutputSpectrum(bool wtflag) {
         // Receive spectra from other processes and add to output spectrum
         for(int i=1; i<Globals::nranks; ++i)
           ReceiveMonteCarloSpectrum(pspecout,true);
-        // Add spectrum from this process
-        pspecout->AddSpectrum(pspect);
       } else {
         SendMonteCarloSpectrum(pspect,0);
       }
 #endif
       if (Globals::my_rank == 0) {
+        // Add spectrum from this process.  This has to happen with or without MPI: the
+        // copy constructor allocates pspecout empty and sets nsrun = 0, so a serial run
+        // that skipped this wrote an all-zero spectrum -- WriteSpectrum normalizes by
+        // nsrun/nsamp, which is zero, scaling every bin to zero.
+        pspecout->AddSpectrum(pspect);
+
         std::string filename;
         filename.assign(pspecout->base_name);
         filename.append(".");

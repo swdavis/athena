@@ -613,7 +613,7 @@ void MonteCarlo::DistributeSamples(int etype) {
 #ifdef MPI_PARALLEL
     MPI_Gather(&em_proc,1,MPI_ATHENA_REAL,emiss_proc,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
 #else
-    emis_proc[0] = em_proc;
+    emiss_proc[0] = em_proc;
 #endif
     int count[Globals::nranks];
     // Rank 0 compute the distribution of photons accross all processes and brodcasts

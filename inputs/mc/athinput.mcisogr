@@ -1,0 +1,102 @@
+<comment>
+problem   =  isothermal shell in Kerr-Schild, gravitationally redshifted
+reference =
+configure = --prob=mc_isoth_gr -mc -g -hdf5 --coord=kerr-schild
+
+<job>
+problem_id = isothgr   # problem ID: basename of output filenames
+
+# The spec output type does not support Kerr-Schild: Spectrum::UpdateSpectrum only bins
+# angles for cartesian/minkowski/spherical_polar, so phibin and mubin are left
+# uninitialized and the accumulation writes out of bounds (this segfaults under MPI).
+# Bin the photon list instead, with vis/python/montecarlo/make_spectrum.py.
+#
+# nuser = 1 emits the conserved energy -k_t written by FinalizePhoton.  Bin the emergent
+# spectrum on that column, NOT on the ep/energy column: ep holds k^t in Kerr-Schild
+# coordinates, which no observer measures, and binning on it shows an apparent blueshift.
+<output1>
+file_type = phlist
+nuser     = 1
+
+<output2>
+file_type = hdf5
+variable = prim
+
+<coord>
+m = 1.0 #because our pgen assumes m is 1 in code units
+a = 0.0
+
+# Narrow shell, resolved radially.  The atmosphere fills the whole domain, so the only
+# gravitational redshift captured here is that between the emitting zone and x1max:
+# sqrt(1-2/4)/sqrt(1-2/6) = 0.866 from the base to the outer boundary.  The remaining
+# shift out to infinity, sqrt(1-2/6) = 0.816, must be applied in post-processing.
+#
+# The density scale height is (x1max-x1min)/ln(taumax/taumin) = 0.145 r_g, so nx1 = 256
+# gives ~19 zones per scale height.
+<mesh>
+nx1        = 256       # Number of zones in X1-direction
+x1min      = 4.0       # minimum value of X1
+x1max      = 6.0       # maximum value of X1
+ix1_mc_bc  = absorb  # inner-X1 boundary flag: inward photons are lost to the hole
+ox1_mc_bc  = escape  # outer-X1 boundary flag
+
+nx2        = 16         # Number of zones in X2-direction
+x2min      = 0.      # minimum value of X2
+x2max      = 3.1415926      	      # maximum value of X2
+ix2_mc_bc  = polar  # inner-X2 boundary flag
+ox2_mc_bc  = polar  # outer-X2 boundary flag
+
+nx3        = 16         # Number of zones in X3-direction
+x3min      = 0.0        # minimum value of X3
+x3max      =  6.2831854      	       # maximum value of X3
+ix3_mc_bc  = periodic  # inner-X3 boundary flag
+ox3_mc_bc  = periodic  # outer-X3 boundary flag
+
+<hydro>
+gamma = 1.666666666666667 # gamma = C_p/C_v
+
+<meshblock>
+nx1 = 64
+nx2 = 8
+nx3 = 8
+
+# general_pusher and boosts are both required; the problem generator aborts without them.
+# general_pusher selects the four-vector storage convention (Kerr-Schild always uses
+# GeneralPusher regardless), and boosts is what makes the static-observer velocity set in
+# the problem generator actually reach the comoving tetrad.
+<montecarlo>
+nphot     = 1000000
+iseed     = 121500
+scattering = none
+emission   = freefree
+absorption = freefree
+polarized = false
+general_pusher = true
+boosts    = true
+stepsize  = 0.1
+varystep = true
+
+# taumin/taumax are electron-scattering optical depths at the top and base of the
+# atmosphere, and only set the density normalization -- scattering is off, so what
+# actually thermalizes the radiation is free-free absorption, whose depth falls as nu^-3.
+# The Wien tail therefore escapes from progressively shallower layers and lies above a
+# Planck function; only the band below a few hundred eV is thermalized.
+#
+# Measured colour temperature of the emergent spectrum (fitting E*L_E over 10-200 eV in
+# the conserved energy -k_t), against the 7.07e5 K expected for T_loc = 1e6 K emitted at
+# the base and redshifted to infinity:
+#     taumax = 1e2 -> 6.8e5 K     taumax = 1e3 -> 7.2e5 K     taumax = 1e4 -> 6.9e5 K
+# 1e2 is visibly under-thermalized; beyond 1e3 the statistics degrade instead, because
+# emission goes as rho^2 and is dominated by the base, from which little escapes.
+<problem>
+temp     = 1.0e6       # isothermal temperature
+constdens = false
+taumin   = 1.0e-3
+taumax   = 1.0e3
+ambient  = 1.0e-10     # density outside the shell, relative to the base (must be > 0)
+tnorm   = true
+emin = 0.01            # with tnorm, emin/emax are E/kT
+emax = 30.
+l_cgs = 1476625.0380501247
+vel_cgs = 29979245800.0
+tgas_cgs = 1.08101416735e+13 #c^2/rideal
