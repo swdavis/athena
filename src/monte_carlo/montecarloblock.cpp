@@ -901,8 +901,6 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   // coordinate frame
 
   int type = pphot->type[ip];
-
-  //dl *= pphot->ep[ip];
   int i1 = pphot->i1p[ip];
   int i2 = pphot->i2p[ip];
   int i3 = pphot->i3p[ip];
@@ -940,7 +938,6 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   } else if (pmy_mc->general_pusher_flag) {
     // SWD: This computes k values in an orthonormal tetrad frame specificed for each
     // coordinate system.
-    //dl *= pphot->ep[ip];
     Real ki[4];
     GetFourVector(pphot, ip, false, ki);
     for (int m=0; m<4; m++) kco[m] = ki[m];
@@ -1015,9 +1012,6 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
       // Add contribution to corresponding moments
       // Energy density
       moments(type,MCIER,i3,i2,i1) += weight * k0 * k0;
-      if (std::isnan(moments(type,MCIER,i3,i2,i1))) {
-        printf("k0: %e weight: %e dl: %e %g\n",k0,weight,dl,moments(type,MCIER,i3,i2,i1));
-      }
       // Flux
       moments(type,MCIFR1,i3,i2,i1) += weight * k0 * k1 * c_cgs;
       moments(type,MCIFR2,i3,i2,i1) += weight * k0 * k2 * c_cgs;
@@ -1057,28 +1051,17 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   // SWD: Ultimately want comoving frame values
   if (mom_flag_scat) {
     Real weight_scat, e_scat;
-    if (GENERAL_RELATIVITY && boosts) {
-      Real gcov[4][4];
-      Real x[4];
-      x[IMC0] = pphot->x0p[ip];
-      x[IMC1] = pphot->x1p[ip];
-      x[IMC2] = pphot->x2p[ip];
-      x[IMC3] = pphot->x3p[ip];
-      pcoord->Metric(x, gcov);
-      Real ucon[4];
-      ucon[IMC0] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],0);
-      ucon[IMC1] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],1);
-      ucon[IMC2] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],2);
-      ucon[IMC3] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],3);
-      Real kcon[4];
-      kcon[0] = pphot->k0p[ip];
-      kcon[1] = pphot->k1p[ip];
-      kcon[2] = pphot->k2p[ip];
-      kcon[3] = pphot->k3p[ip];
-      e_scat = -DotVec(ucon,kcon,gcov);
-      //weight_scat = pphot->wp[ip] * SQR(e_scat) / pphot->ep[ip] * kcon[0] * dl * l_cgs;
-      //printf("weight : %g %g\n",pphot->ep[ip],kcon[0]);
-      weight_scat = pphot->wp[ip] * e_scat * kcon[0] * dl / c_cgs;
+    if (gr_tetrad && boosts) {
+      // The comoving energy is the time component of the fluid-tetrad projection, which
+      // is the same -u.k this used to rebuild from scratch with a per-crossing Metric()
+      // evaluation and a 4x4 DotVec.
+      Real pcom[4];
+      for (int a=0; a<4; a++) {
+        pcom[a] = 0.;
+        for (int m=0; m<4; m++) pcom[a] += boost_cmv(i3,i2,i1,a,m) * kco[m];
+      }
+      e_scat = pcom[IMC0];
+      weight_scat = pphot->wp[ip] * e_scat * kco[IMC0] * dl / c_cgs;
     } else {
       e_scat = pphot->ep[ip];
       weight_scat = weight;
@@ -1184,8 +1167,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     sourceterms(MCRF3,i3,i2,i1) += (sct_coef+abs_coef) * weight * k3;
 
     if (pmy_mc->absorption_method[pphot->type[ip]] == ABSTAU) {
-        Real hplanck = 6.62607015e-27;
-        Real threshold = 3.28808816e+15 * hplanck;
+        Real threshold = 3.28808816e+15 * MCConstants::h_cgs;
         // Update soucterms for ionizing radiation
         if (pphot->ep[ip] > threshold) {
           Real weight = pphot->wp[ip] * dl * abs_coef;
@@ -1220,15 +1202,23 @@ void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl,
     k3p *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
   }
 
-  Real energy, abs_coef, sct_coef, step;
+  // Start from the Eulerian values so that every path below leaves all four defined.
+  // The comoving branch used to assign abs_coef, sct_coef and step only inside
+  // if (beta2 > 0.), with no else, so a cell with a fluid exactly at rest fell through
+  // and leff = (1.-etau)/abs_coef read uninitialized stack.
+  Real energy = pphot->ep[ip];
+  Real abs_coef = pphot->acp[ip];
+  Real sct_coef = pphot->scp[ip];
+  Real step = dl;
   // BCM: Comoving moments currently do not work with code acceleration
   if (mom_flag_com) {
     // boost relevant quanitities to comoving frame
-    energy = pphot->ep[ip];
     int i1 = pphot->i1p[ip], i2 = pphot->i2p[ip], i3 = pphot->i3p[ip];
+    // vel holds a four-velocity, so the three-velocity needs the u^0 division -- the
+    // same convention GetDopplerFactor() uses.
     Real beta[3];
     for (int i=0; i<3; ++i) {
-      beta[i] = vel(i3,i2,i1,i+1);
+      beta[i] = vel(i3,i2,i1,i+1)/vel(i3,i2,i1,0);
     }
     Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
 
@@ -1246,12 +1236,6 @@ void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl,
       sct_coef = pphot->scp[ip] / gonembdk;
       step = dl * gonembdk;
     }
-  } else {
-    // Use eulerian values
-    energy = pphot->ep[ip];
-    abs_coef = pphot->acp[ip];
-    sct_coef = pphot->scp[ip];
-    step = dl;
   }
   // Account for attenuation along ray
   Real leff;

@@ -431,8 +431,6 @@ public:
   void UpdateMoments(Photon *pphot, Real dl, int ip);
   void UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl, Real k1, Real k2,
                                  Real k3,Real etau, int ip);
-  void UpdateMomentsOld(Photon *pphot, Real dl, Real pl, Real k1, Real k2, Real k3,
-                        Real etau, int ip);
   void NormalizeMoments(bool normalize);
   void ResetMoments();
   void UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0,
