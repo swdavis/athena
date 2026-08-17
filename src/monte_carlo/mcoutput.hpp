@@ -200,6 +200,7 @@ public:
 
   bool mom_flag_lab;
   bool mom_flag_com;
+  bool mom_flag_coord;
   bool mom_flag_src;
   bool mom_flag_usr;
   bool mom_flag_scat;

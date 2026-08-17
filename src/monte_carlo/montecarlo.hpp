@@ -363,6 +363,7 @@ public:
 
   bool mom_flag_lab; // Compute/output moments
   bool mom_flag_com; // Compute moments in comoving frame
+  bool mom_flag_coord; // Compute moments in the coordinate basis
   bool mom_flag_src; // Compute source terms for output
   bool mom_flag_usr; // Compute user defined monte carlo moments
   bool mom_flag_scat; // Compute scattering source terms
@@ -398,6 +399,7 @@ public:
   AthenaArray<Real> emission;
   AthenaArray<Real> moments;
   AthenaArray<Real> moments_com;
+  AthenaArray<Real> moments_coord;
   AthenaArray<Real> moments_user;
   AthenaArray<Real> moments_scat;
   AthenaArray<Real> moments_scat_error;

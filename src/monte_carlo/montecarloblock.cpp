@@ -121,6 +121,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   // set in mcoutput if output requested
   mom_flag_lab = pmy_mc->pmcout->mom_flag_lab;
   mom_flag_com = pmy_mc->pmcout->mom_flag_com;
+  mom_flag_coord = pmy_mc->pmcout->mom_flag_coord;
   if (mom_flag_com && !boosts) {
     std::stringstream msg;
     msg << "FATAL ERROR: comoving frame moments requested but booosts set to false."
@@ -425,6 +426,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   int ntype = pmy_mc->ntype;
   if (mom_flag_lab) moments.NewAthenaArray(ntype,nmom,ncells3,ncells2,ncells1);
   if (mom_flag_com) moments_com.NewAthenaArray(ntype,nmom,ncells3,ncells2,ncells1);
+  if (mom_flag_coord)
+    moments_coord.NewAthenaArray(ntype,nmom,ncells3,ncells2,ncells1);
   if (pmy_mc->nuser_mom > 0)
     moments_user.NewAthenaArray(pmy_mc->nuser_mom,ncells3,ncells2,ncells1);
   nsrc = 10;
@@ -500,6 +503,7 @@ MonteCarloBlock::~MonteCarloBlock() {
   if (NSCALARS > 0) scalars.DeleteAthenaArray();
   if (mom_flag_lab) moments.DeleteAthenaArray();
   if (mom_flag_com) moments_com.DeleteAthenaArray();
+  if (mom_flag_coord) moments_coord.DeleteAthenaArray();
   if (pmy_mc->nuser_mom > 0) moments_user.DeleteAthenaArray();
   if (call_srcterms) sourceterms.DeleteAthenaArray();
   if (pmy_mc->emission_array) emission.DeleteAthenaArray();
@@ -907,6 +911,9 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   const Real c_cgs = 2.99792458e10;
   Real kco[4];            // coordinate four-vector, kept for the comoving projection
   bool gr_tetrad = false; // boost_lab/boost_cmv hold GR tetrad legs rather than boosts
+  // kco is only meaningful on the general pusher; the legacy pushers store a unit
+  // direction in the local orthonormal basis at the photon, not coordinate components.
+  bool have_kco = pmy_mc->general_pusher_flag;
   if (pmy_mc->general_pusher_flag && GENERAL_RELATIVITY) {
     // Project the coordinate four-vector onto the normal-observer tetrad that
     // ComputeTransformations() stored for this zone.  InverseTetrad is the identity for
@@ -935,10 +942,8 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     // coordinate system.
     //dl *= pphot->ep[ip];
     Real ki[4];
-    ki[0] = pphot->k0p[ip];
-    ki[1] = pphot->k1p[ip];
-    ki[2] = pphot->k2p[ip];
-    ki[3] = pphot->k3p[ip];
+    GetFourVector(pphot, ip, false, ki);
+    for (int m=0; m<4; m++) kco[m] = ki[m];
     Real x[4];
     x[0] = pphot->x0p[ip];
     x[1] = pphot->x1p[ip];
@@ -1024,6 +1029,27 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
       moments(type,MCIPR12,i3,i2,i1) += weight * k1 * k2;
       moments(type,MCIPR13,i3,i2,i1) += weight * k1 * k3;
       moments(type,MCIPR23,i3,i2,i1) += weight * k2 * k3;
+    }
+  }
+
+  // Coordinate-basis moments.  T^{mu nu} = sum w k^mu k^nu dlambda needs no projection
+  // at all, so this is the cheapest of the three bases.  The components are not
+  // orthonormal and are dimensionally inhomogeneous by construction -- k^theta and k^phi
+  // carry inverse length -- which is exactly what makes them the right form to hand to
+  // the GRMHD conservative variables and the radiation four-force.
+  if (mom_flag_coord && have_kco) {
+    Real wc = pphot->wp[ip] * dl / (pphot->ep[ip] * c_cgs);
+    if (!(std::isinf(wc) || std::isnan(wc))) {
+      moments_coord(type,MCIER,i3,i2,i1)   += wc * kco[IMC0]*kco[IMC0];
+      moments_coord(type,MCIFR1,i3,i2,i1)  += wc * kco[IMC0]*kco[IMC1] * c_cgs;
+      moments_coord(type,MCIFR2,i3,i2,i1)  += wc * kco[IMC0]*kco[IMC2] * c_cgs;
+      moments_coord(type,MCIFR3,i3,i2,i1)  += wc * kco[IMC0]*kco[IMC3] * c_cgs;
+      moments_coord(type,MCIPR11,i3,i2,i1) += wc * kco[IMC1]*kco[IMC1];
+      moments_coord(type,MCIPR22,i3,i2,i1) += wc * kco[IMC2]*kco[IMC2];
+      moments_coord(type,MCIPR33,i3,i2,i1) += wc * kco[IMC3]*kco[IMC3];
+      moments_coord(type,MCIPR12,i3,i2,i1) += wc * kco[IMC1]*kco[IMC2];
+      moments_coord(type,MCIPR13,i3,i2,i1) += wc * kco[IMC1]*kco[IMC3];
+      moments_coord(type,MCIPR23,i3,i2,i1) += wc * kco[IMC2]*kco[IMC3];
     }
   }
 
@@ -1355,6 +1381,36 @@ void MonteCarloBlock::NormalizeMoments(bool normalize) {
             moments_com(m,MCIPR21,k,j,i) = moments_com(m,MCIPR12,k,j,i);
             moments_com(m,MCIPR31,k,j,i) = moments_com(m,MCIPR13,k,j,i);
             moments_com(m,MCIPR32,k,j,i) = moments_com(m,MCIPR23,k,j,i);
+          }
+        }
+      }
+    }
+  }
+
+  if (mom_flag_coord) {
+    for (int m=0; m<pmy_mc->ntype; ++m) {
+      for (int n=0; n<nmom-3; ++n) {
+        for (int k=ks; k<=ke; ++k) {
+          for (int j=js; j<=je; ++j) {
+            for (int i=is; i<=ie; ++i) {
+              if (normalize)
+                norm = 1./ (tint * pcoord->vol(k,j,i));
+              else
+                norm = tint * pcoord->vol(k,j,i);
+              moments_coord(m,n,k,j,i) *= norm;
+            }
+          }
+        }
+      }
+    }
+    // Copy normalized moments to symmetric elements
+    for (int m=0; m<pmy_mc->ntype; ++m) {
+      for (int k=ks; k<=ke; ++k) {
+        for (int j=js; j<=je; ++j) {
+          for (int i=is; i<=ie; ++i) {
+            moments_coord(m,MCIPR21,k,j,i) = moments_coord(m,MCIPR12,k,j,i);
+            moments_coord(m,MCIPR31,k,j,i) = moments_coord(m,MCIPR13,k,j,i);
+            moments_coord(m,MCIPR32,k,j,i) = moments_coord(m,MCIPR23,k,j,i);
           }
         }
       }

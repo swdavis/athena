@@ -1016,6 +1016,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
   mom_flag_src = false;
   mom_flag_usr = false;
   mom_flag_com = false;
+  mom_flag_coord = false;
   mom_flag_scat = false;
   pspec = nullptr;
   pphlist = nullptr;
@@ -1190,6 +1191,9 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         } else if (var.compare("mccom") == 0 || var.compare("Ermc0") == 0 ||
                    var.compare("Frmc0") == 0 || var.compare("Prmc0") == 0) {
           mom_flag_com = true;
+        } else if (var.compare("mccoord") == 0 || var.compare("Ermc_coord") == 0 ||
+                   var.compare("Frmc_coord") == 0 || var.compare("Prmc_coord") == 0) {
+          mom_flag_coord = true;
         } else if (var.compare("mcsrc") == 0) {
           mom_flag_src = true;
         } else if (var.compare("mcscat") == 0) {
