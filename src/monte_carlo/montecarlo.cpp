@@ -489,6 +489,7 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
     } else if (GENERAL_RELATIVITY) {
       // no fluid velocity, but the GR tetrad still needs a frame to be built on
       pmcb->SetNormalObserver();
+      pmcb->ComputeTransformations();
     }
     if (NSCALARS > 0) pmcb->GetScalars();
     if (using_bfield) pmcb->GetBField();
@@ -821,6 +822,7 @@ void MonteCarlo::RunMonteCarlo(Outputs *pouts, Mesh *pmesh,
       } else if (GENERAL_RELATIVITY) {
         // no fluid velocity, but the GR tetrad still needs a frame to be built on
         pmcb->SetNormalObserver();
+        pmcb->ComputeTransformations();
       }
       if (NSCALARS > 0) pmcb->GetScalars(); //scalars
       if (using_bfield) pmcb->GetBField();

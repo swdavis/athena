@@ -905,10 +905,34 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
 
   Real k0,k1,k2,k3,weight;
   const Real c_cgs = 2.99792458e10;
-  Real ktemp, dlep; //SWD: remove
-  if (pmy_mc->general_pusher_flag) {
+  Real kco[4];            // coordinate four-vector, kept for the comoving projection
+  bool gr_tetrad = false; // boost_lab/boost_cmv hold GR tetrad legs rather than boosts
+  if (pmy_mc->general_pusher_flag && GENERAL_RELATIVITY) {
+    // Project the coordinate four-vector onto the normal-observer tetrad that
+    // ComputeTransformations() stored for this zone.  InverseTetrad is the identity for
+    // every GR coordinate class, so the old path never left the coordinate basis: k2 and
+    // k3 carried units of inverse length and the flux and pressure sums contracted them
+    // as if they were direction cosines.
+    //
+    // dl arrives from the pusher as step*ep*l_cgs, a coordinate path length.  The path
+    // length in this frame is larger by elab/ep, which is the factor that turns the
+    // accumulation below into the covariant estimator w p^(a) p^(b) dlambda.
+    gr_tetrad = true;
+    GetFourVector(pphot, ip, false, kco);
+    Real plab[4];
+    for (int a=0; a<4; a++) {
+      plab[a] = 0.;
+      for (int m=0; m<4; m++) plab[a] += boost_lab(i3,i2,i1,a,m) * kco[m];
+    }
+    Real elab = plab[IMC0];
+    k0 = 1.;
+    k1 = plab[IMC1]/elab;
+    k2 = plab[IMC2]/elab;
+    k3 = plab[IMC3]/elab;
+    weight = pphot->wp[ip] * elab * (dl * elab / pphot->ep[ip]) / c_cgs;
+  } else if (pmy_mc->general_pusher_flag) {
     // SWD: This computes k values in an orthonormal tetrad frame specificed for each
-    // coordinate system. 
+    // coordinate system.
     //dl *= pphot->ep[ip];
     Real ki[4];
     ki[0] = pphot->k0p[ip];
@@ -935,10 +959,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     k3 = kf[3]/ep;
 
     // Weight moments by time spent in domain
-    // SWD: the 1/k0 factor looks wrong -- should be k0?
-    dlep = dl; // dl already physical cgs path length from pusher
-    ktemp = k0;
-    weight = pphot->wp[ip] * pphot->ep[ip] * k0 * dlep / c_cgs;
+    weight = pphot->wp[ip] * pphot->ep[ip] * k0 * dl / c_cgs;
   } else {
     // Spatial components are a unit direction here, so the propagation four-vector is
     // n^mu = (1, nhat); k0p holds the energy and is carried by weight instead.
@@ -1051,37 +1072,41 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
 
   if (mom_flag_com) {
 
-    Real ki[4],kc[4];
-    ki[0] = k0;
-    ki[1] = k1;
-    ki[2] = k2;
-    ki[3] = k3;
-    for (int j=0; j<4; j++) {
-      kc[j] = 0.;
-      for (int i=0; i<4; i++) {
-        kc[j] += boost_cmv(i3,i2,i1,j,i) * ki[i];
-       }
-    }
     Real k0c,k1c,k2c,k3c,weight;
-    if (pmy_mc->general_pusher_flag) {
-      // ki is already normalized by ep above, so kc[0] is the Doppler factor and the
-      // same normalized representation as the legacy branch below applies.  dl is an
-      // affine parameter step -- dx^mu = k^mu dlambda -- so the physical path length
-      // dlep must be used here, exactly as the lab-frame weight does.  Using dl and
-      // dividing by k0c instead cancelled the photon energy out of the weight
-      // altogether, inflating the comoving moments by ~1/ep.
-      Real shift = kc[0];
+    if (gr_tetrad) {
+      // Project the same coordinate four-vector onto the fluid tetrad.  Going back to
+      // kco rather than boosting the already-normalized lab direction is what makes this
+      // an exact tensor transform of the lab moments: the weights differ by exactly
+      // (ecom/elab)^2, so a fluid at rest reproduces the lab answer identically.
+      Real pcom[4];
+      for (int a=0; a<4; a++) {
+        pcom[a] = 0.;
+        for (int m=0; m<4; m++) pcom[a] += boost_cmv(i3,i2,i1,a,m) * kco[m];
+      }
+      Real ecom = pcom[IMC0];
       k0c = 1.;
-      k1c = kc[1]/kc[0];
-      k2c = kc[2]/kc[0];
-      k3c = kc[3]/kc[0];
-      weight = pphot->wp[ip] * pphot->ep[ip] * dlep * SQR(shift) / c_cgs;
+      k1c = pcom[IMC1]/ecom;
+      k2c = pcom[IMC2]/ecom;
+      k3c = pcom[IMC3]/ecom;
+      weight = pphot->wp[ip] * ecom * (dl * ecom / pphot->ep[ip]) / c_cgs;
     } else {
-      Real shift = kc[0]/k0;
+      Real ki[4],kc[4];
+      ki[0] = k0;
+      ki[1] = k1;
+      ki[2] = k2;
+      ki[3] = k3;
+      for (int j=0; j<4; j++) {
+        kc[j] = 0.;
+        for (int i=0; i<4; i++) {
+          kc[j] += boost_cmv(i3,i2,i1,j,i) * ki[i];
+        }
+      }
       // Spatial components are normalized to a unit comoving direction, so the
       // time component of the comoving propagation direction is unity.  Boosting
       // T^{mu nu} = C sum w E dl n^mu n^nu with n^mu = (1,nhat) gives
       // (Lambda n)^mu = shift * (1,nhat_com), and the shift^2 is carried by weight.
+      // k0 is unity on both pusher paths here, so the shift needs no rescaling.
+      Real shift = kc[0]/k0;
       k0c = 1.;
       k1c = kc[1]/kc[0];
       k2c = kc[2]/kc[0];
@@ -1089,10 +1114,6 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
       weight = pphot->wp[ip] * pphot->ep[ip] * dl * SQR(shift) / c_cgs;
     }
 
-    //Real dlcom = dl * shift;
-    //Real ecom = pphot->ep[ip] * shift;
-
-    //Real weight = pphot->wp[ip] * ecom * dlcom / c_cgs;
     if (std::isinf(weight) || std::isnan(weight) ||
         std::isinf(k1c) || std::isnan(k1c) ||
         std::isinf(k2c) || std::isnan(k2c) ||
@@ -2200,6 +2221,62 @@ void MonteCarloBlock::GetTemperature() {
 //! \brief compute transformation matrices between comoving frame and lab frame
 
 void MonteCarloBlock::ComputeTransformations() {
+
+  if (GENERAL_RELATIVITY) {
+    // In GR the map to an orthonormal frame is not a flat Lorentz boost.  vel holds a
+    // coordinate-frame four-velocity, so treating its components as gamma and
+    // gamma*beta -- which is what the flat branch below does -- is not a Lorentz
+    // transformation at all: for a static observer in Kerr-Schild the spatial part picks
+    // up the shift vector and the components fail the Minkowski norm.  Instead store the
+    // covariant legs of two tetrads, so that one matrix multiply carries a coordinate
+    // four-vector straight to orthonormal components:
+    //
+    //   boost_lab -> normal (Eulerian) observer; the basis lab moments are reported in.
+    //   boost_cmv -> the frame vel is built on: the fluid with boosts enabled, and the
+    //                normal observer without, in which case the two agree by construction.
+    //
+    // Both are evaluated at the zone centre, which is where the fluid velocity already
+    // lives, so the moments are built in a single well defined per-zone frame.
+    AthenaArray<Real> g, gi;
+    g.NewAthenaArray(NMETRIC,ie+1);
+    gi.NewAthenaArray(NMETRIC,ie+1);
+    for (int k=ks; k<=ke; k++) {
+      for (int j=js; j<=je; j++) {
+        pmy_block->pcoord->CellMetric(k,j,is,ie,g,gi);
+        for (int i=is; i<=ie; i++) {
+          Real x[4];
+          x[IMC0] = 0.;
+          x[IMC1] = pmy_block->pcoord->x1v(i);
+          x[IMC2] = pmy_block->pcoord->x2v(j);
+          x[IMC3] = pmy_block->pcoord->x3v(k);
+          Real gcov[4][4];
+          pcoord->Metric(x, gcov);
+          Real econ[4][4], ecov[4][4];
+
+          // normal observer, n^mu = -alpha g^{mu t}
+          Real alpha = 1.0/std::sqrt(-gi(I00,i));
+          Real ncon[4];
+          ncon[IMC0] = -alpha*gi(I00,i);
+          ncon[IMC1] = -alpha*gi(I01,i);
+          ncon[IMC2] = -alpha*gi(I02,i);
+          ncon[IMC3] = -alpha*gi(I03,i);
+          ConstructTetrad(ncon, gcov, econ, ecov);
+          for (int a=0; a<4; a++)
+            for (int m=0; m<4; m++) boost_lab(k,j,i,a,m) = ecov[a][m];
+
+          // frame vel is built on
+          Real ucon[4];
+          for (int m=0; m<4; m++) ucon[m] = vel(k,j,i,m);
+          ConstructTetrad(ucon, gcov, econ, ecov);
+          for (int a=0; a<4; a++)
+            for (int m=0; m<4; m++) boost_cmv(k,j,i,a,m) = ecov[a][m];
+        }
+      }
+    }
+    g.DeleteAthenaArray();
+    gi.DeleteAthenaArray();
+    return;
+  }
 
   // loop over all cells on block
   for (int k=ks; k<=ke; k++) {
