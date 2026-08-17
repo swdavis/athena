@@ -626,7 +626,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
     // Lorentz transform E, k to Eulerian frame and update opacities
     // only for newly emitted samples
 
-    if ((boosts || tetrads) && pmy_mc->initialze_comoving[etype]) {
+    if ((boosts || tetrads) && pmy_mc->initialize_comoving[etype]) {
       TransformToCoordinate(pphot,nold,pphot->nphot-1);
     }
 

@@ -580,7 +580,7 @@ void MonteCarlo::InitializeEmission(ParameterInput *pin) {
   }
   nsamptype = new int64_t[ntype];
   emission_eqwt = new bool[ntype];
-  initialze_comoving = new bool[ntype];
+  initialize_comoving = new bool[ntype];
   std::string abs_def = pin->GetOrAddString("montecarlo","abs_method","weight");
   absorption_method = new AbsorptionMethodFlag[ntype];
   GetEmission = new EmisFunc_t[ntype];
@@ -591,7 +591,7 @@ void MonteCarlo::InitializeEmission(ParameterInput *pin) {
     GetEmission[0] = nullptr; // left unset
     nsamptype[0] = nsamp = pin->GetInteger("montecarlo","nphot");
     emission_eqwt[0] = pin->GetOrAddBoolean("montecarlo","equal_weight",false);
-    initialze_comoving[0] = pin->GetOrAddBoolean("montecarlo","initialze_comoving",true);
+    initialize_comoving[0] = pin->GetOrAddBoolean("montecarlo","initialize_comoving",true);
     absorption_method[0] = GetAbsorptionMethodFlag(abs_def);
     emission_geometry[0] = GetEmissionGeometry(pin->GetOrAddString("montecarlo","emission_geometry","none"));
     emission_array = false; // do not allocate memory for array;
@@ -599,7 +599,7 @@ void MonteCarlo::InitializeEmission(ParameterInput *pin) {
     GetEmission[0] = nullptr; // must be set in InitUserMonteCarloData
     nsamptype[0] = nsamp = pin->GetInteger("montecarlo","nphot");
     emission_eqwt[0] = pin->GetOrAddBoolean("montecarlo","equal_weight",false);
-    initialze_comoving[0] = pin->GetOrAddBoolean("montecarlo","initialze_comoving",true);
+    initialize_comoving[0] = pin->GetOrAddBoolean("montecarlo","initialize_comoving",true);
     absorption_method[0] = GetAbsorptionMethodFlag(abs_def);
     emission_geometry[0] = GetEmissionGeometry(pin->GetOrAddString("montecarlo","emission_geometry","volume"));
     if (emission_geometry[0] == EMISAREA)
@@ -609,7 +609,7 @@ void MonteCarlo::InitializeEmission(ParameterInput *pin) {
     GetEmission[0] = GetEmissionFreeFree;
     nsamptype[0] = nsamp = pin->GetInteger("montecarlo","nphot");
     emission_eqwt[0] = pin->GetOrAddBoolean("montecarlo","equal_weight",false);
-    initialze_comoving[0] = pin->GetOrAddBoolean("montecarlo","initialze_comoving",true);
+    initialize_comoving[0] = pin->GetOrAddBoolean("montecarlo","initialize_comoving",true);
     absorption_method[0] = GetAbsorptionMethodFlag(abs_def);
     emission_geometry[0] = EMISVOL; // Must be volumetric
     emission_array = true; // allocate memory for array
@@ -617,7 +617,7 @@ void MonteCarlo::InitializeEmission(ParameterInput *pin) {
     GetEmission[0] = GetEmissionBlackbody;
     nsamptype[0] = nsamp = pin->GetInteger("montecarlo","nphot");
     emission_eqwt[0] = pin->GetOrAddBoolean("montecarlo","equal_weight",false);
-    initialze_comoving[0] = pin->GetOrAddBoolean("montecarlo","initialze_comoving",true);
+    initialize_comoving[0] = pin->GetOrAddBoolean("montecarlo","initialize_comoving",true);
     absorption_method[0] = GetAbsorptionMethodFlag(abs_def);
     emission_geometry[0] = EMISAREA; // Must be areal
     emission_face[0] = SetEmissionSurface(pin->GetString("montecarlo","emission_face"));

@@ -244,9 +244,9 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
     ion_str = etype;
     nsamp = nsamptype[etype] = nion;
     emission_eqwt[etype] = pin->GetOrAddBoolean("problem", "ion_eqwt",true);
-    initialze_comoving[etype] = false; // ions initialized in lab frame
+    initialize_comoving[etype] = false; // ions initialized in lab frame
     std::string abs_meth = pin->GetOrAddString("problem","ion_str_abs","tau");
-    absorption_method[0] = GetAbsorptionMethodFlag(abs_meth);
+    absorption_method[etype] = GetAbsorptionMethodFlag(abs_meth);
     EnrollUserEmissionFunction(SurfaceEmissivityIonizing,etype);
     emission_geometry[etype] = EMISAREA;
     emission_face[etype] = SetEmissionSurface("outer_x1");
@@ -264,7 +264,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
     lya_str = etype;
     nsamp += nsamptype[etype] = nlyastr;
     emission_eqwt[etype] = pin->GetOrAddBoolean("problem", "lys_eqwt",true);
-    initialze_comoving[etype] = false; // stellar  initialized in lab frame
+    initialize_comoving[etype] = false; // stellar  initialized in lab frame
     std::string abs_meth = pin->GetOrAddString("problem","lya_str_abs","weight");
     absorption_method[etype] = GetAbsorptionMethodFlag(abs_meth);
     emission_geometry[etype] = EMISAREA;
@@ -284,7 +284,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
     lya_rec = etype;
     nsamp += nsamptype[etype] = nlyarec;
     emission_eqwt[etype] = pin->GetOrAddBoolean("problem", "lyr_eqwt",false);
-    initialze_comoving[etype] = true; // recomb. lyman alpha initialized in comoving frame
+    initialize_comoving[etype] = true; // recomb. lyman alpha initialized in comoving frame
     std::string abs_meth = pin->GetOrAddString("problem","lya_rec_abs","weight");
     absorption_method[etype] = GetAbsorptionMethodFlag(abs_meth);
     emission_geometry[etype] = EMISVOL;
