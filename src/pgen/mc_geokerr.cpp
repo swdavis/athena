@@ -198,7 +198,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
     // Set the initial photon direction assuming "isotropic" emission
     pphot->ep[ip] = 1.0;
-    pphot->trp[ip] = iphot;
+    pphot->type[ip] = iphot;
     int ith = iphot / 4;
     int iph = iphot % 4;
     Real cth = muk + 0.2 * static_cast<Real>(ith);

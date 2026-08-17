@@ -35,7 +35,7 @@ void ScatterIsotropic(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
 
     Real phi = 2.*PI * pran->uniform();
     Real cphi = cos(phi);
-    Real sphi = sqrt(1. - SQR(cphi));
+    Real sphi = sin(phi);
 
     Real cth = 2. * pran->uniform() - 1.;
     Real sth = sqrt(1. - SQR(cth));
@@ -65,7 +65,7 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int 
 
   for (int ip=ips; ip<=ipe; ip++) {
 
-    Real norm = pphot->sip[0];
+    Real norm = pphot->sip[ip];
     Real stokes[3];
     stokes[0] = 1.;
     stokes[1] = pphot->sqp[ip] / norm;
@@ -256,7 +256,7 @@ void ScatterThomsonUnpolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, in
 
       cths = k1 * k1p + k2 * k2p + k3 * k3p;
 
-    } while(pran->uniform() > SQR(cths));
+    } while(pran->uniform() > 0.5*(1+SQR(cths)));
 
     k1 = k1p;
     k2 = k2p;
@@ -390,7 +390,7 @@ void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
       v2 = sinv * sin(phiv);
 
       // Calculate v . k
-      Real vdotk = kx * v1 + ky * v2 + kz * v3;
+      vdotk = kx * v1 + ky * v2 + kz * v3;
 
       // Draw momentum from random distribution and calculate gamma,v/c,x
       // sigma^ and test for acceptance
@@ -530,43 +530,28 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe
   MCRandom *pran = pmcb->pran;
 
   for (int ip=ips; ip<=ipe; ip++) {
-    // SWD: Assumes k is unit vector -- needs to be generalized
+
     Real &kx = pphot->k1p[ip];
     Real &ky = pphot->k2p[ip];
     Real &kz = pphot->k3p[ip];
-
-    bool sphnorm = false;
-    if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_pusher_flag)) {
-      sphnorm = true;
-      ky *= pphot->x1p[ip];
-      kz *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
-
-      // BCM: Temporary fix for NaN photons
-      Real norm = sqrt(SQR(kx) + SQR(ky) + SQR(kz));
-      if (norm > 1.) {
-        kx /= norm;
-        ky /= norm;
-        kz /= norm;
-      }
-    }
 
     int &i1 = pphot->i1p[ip];
     int &i2 = pphot->i2p[ip];
     int &i3 = pphot->i3p[ip];
 
     // Compute atom thermal velocity
-    Real kb = 1.380649e-16;
-    Real mass = 1.660538782e-24;
+    Real kb = MCConstants::kb_cgs;
+    Real mass = MCConstants::mH_cgs;
     Real tgas = pmcb->tgas(i3,i2,i1);
     Real vth = sqrt( 2 * kb * tgas / mass );
 
     // Compute a and x
-    Real nu0 = 2.468e15;
-    Real c = 2.99792458e10;
+    Real nu0 = MCConstants::nu_lya;
+    Real c = MCConstants::c_cgs;
     Real doppwidth = nu0 * vth / c;
-    Real lorwidth = 6.265e8/(4.*PI);
+    Real lorwidth = MCConstants::lorwidth_lya;
     Real a = lorwidth / doppwidth;
-    Real h = 6.62607015e-27;
+    Real h = MCConstants::h_cgs;
     Real nu = pphot->ep[ip] / h;
     Real x = (nu - nu0) / doppwidth;
 
@@ -601,10 +586,6 @@ void ScatterResonanceLine(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe
     Real sgam = sqrt(1. - SQR(cgam));
     pphot->ep[ip] = h * (nu + nu0 * ( (cgam - 1.) * vpar + sgam * vperp ) / c);
 
-    if (sphnorm) {
-      ky /= pphot->x1p[ip];
-      kz /= pphot->x1p[ip] * sin(pphot->x2p[ip]);
-    }
     //printf("nu: %g %g %g %g %g %g\n", pphot->ep[i]/h, nu, cgam, vpar, vperp, vth);
 
   } // end loop over ip
@@ -626,8 +607,8 @@ void ScatterDust(MonteCarloBlock *pmcb, Photon *pphot, int ips, int ipe) {
   Real sc = 1.; //asymmentry of circular polariztion ---- idk what value for this
   for (int ip=ips; ip<=ipe; ip++) {
 
-    Real norm = pphot->sip[0];
-    Real stokes[3];
+    Real norm = pphot->sip[ip];
+    Real stokes[4];
     stokes[0] = 1.;
     stokes[1] = pphot->sqp[ip] / norm;
     stokes[2] = pphot->sup[ip] / norm;

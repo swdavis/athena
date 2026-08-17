@@ -764,10 +764,10 @@ void PhotonList::AddPhoton(Photon *pphot, int ip) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PhotonList::WriteList(std::string filename)
+//! \fn void PhotonList::WriteList(std::string filename, Real tint_out)
 //! \brief write photon list to binary file
 
-void PhotonList::WriteList(std::string filename) {
+void PhotonList::WriteList(std::string filename, Real tint_out) {
   // Since list lengths are variable each process writes its own list
 
   // open file for output
@@ -782,16 +782,7 @@ void PhotonList::WriteList(std::string filename) {
   }
 
   // write header information
-  Real tint;
-  if (pmy_mc->dynamic) {
-    Real time = pmy_mc->pmy_mesh->time;
-    tint = (time - last_time) * pmy_mc->time_cgs;
-  } else {
-    // enforce monte carlo tint as integration time
-    tint = pmy_mc->tint;
-  }
-
-  fprintf(pfile,"dt=%.8e\n",tint);
+  fprintf(pfile,"dt=%.8e\n",tint_out);
   fprintf(pfile,"length=%d\nnpars=%d\n",length,nparams);
   fprintf(pfile,"ntot=%d\n",nsrun);
   fprintf(pfile,"polarized=%d\n",polarized);
@@ -906,7 +897,7 @@ void PhotonTrajectoryList::CompleteTrajectory(int itraj) {
 
 void PhotonTrajectoryList::AddToTrajectory(Photon *pphot, int ip) {
 
-  int itr = pphot->trp[ip];
+  int itr = 0; //pphot->trp[ip]; SWD: removed trp
   int &step = nsteps[itr];
   if (step >= step_limit)
     return;
@@ -1018,6 +1009,9 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
   std::stringstream msg;
   InputBlock *pib = pin->pfirst_block;
 
+  Real vel_cgs = pin->GetOrAddReal("problem","vel_cgs",1.);
+  Real l_cgs = pin->GetOrAddReal("problem","l_cgs",1.);
+  time_cgs = l_cgs / vel_cgs;
   mom_flag_lab = false;
   mom_flag_src = false;
   mom_flag_usr = false;
@@ -1060,6 +1054,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         if (pmc->dynamic) {
           pspec->dt = pin->GetReal(pib->block_name,"dt");
         } else {
+          // input should be in code units
           pspec->dt = pin->GetOrAddReal("montecarlo","tint",1.);
         }
         pspec->last_time = pmy_mc->pmy_mesh->time;
@@ -1131,6 +1126,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         if (pmc->dynamic) {
           pphlist->dt = pin->GetReal(pib->block_name,"dt");
         } else {
+          // input should be in code units
           pphlist->dt = pin->GetOrAddReal("montecarlo","tint",1.);
         }
         pphlist->last_time = pmy_mc->pmy_mesh->time;
@@ -1224,10 +1220,10 @@ MCOutput::~MCOutput() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void Spectrum::WriteSpectrum(std::string fname)
+//! \fn void Spectrum::WriteSpectrum(std::string fname, Real tint_out)
 //! \brief output intensity spectrum in original mcgrid format
 
-void Spectrum::WriteSpectrum(std::string fname) {
+void Spectrum::WriteSpectrum(std::string fname, Real tint_out) {
 
   // open file for output
   FILE *pfile;
@@ -1245,15 +1241,7 @@ void Spectrum::WriteSpectrum(std::string fname) {
   int nmu = range.ncth;
   int nphi = range.nphi;
 
-  Real tint;
-  if (pmy_mc->dynamic) {
-    Real time = pmy_mc->pmy_mesh->time;
-    tint = (time - last_time) * pmy_mc->time_cgs;
-  } else {
-    // enforce monte carlo tint as integration time
-    tint = pmy_mc->tint;
-  }
-  fprintf(pfile,"dt=%.8e\n",tint);
+  fprintf(pfile,"dt=%.8e\n",tint_out);
   fprintf(pfile,"nx=%d\n",ne);
   fprintf(pfile,"nmu=%d\n",nmu);
   fprintf(pfile,"nphi=%d\n",nphi);
@@ -1312,7 +1300,7 @@ void Spectrum::WriteSpectrum(std::string fname) {
     for(int j=0; j<nmu; ++j) {
       Real mumid = (static_cast<Real>(j)+0.5)/static_cast<Real>(nmu);
       for(int i=0; i<ne; ++i) {
-        Real fac2 = fac1*emid[i]/(mumid*dnu[i]*tint);
+        Real fac2 = fac1*emid[i]/(mumid*dnu[i]*tint_out);
         intens(0,k,j,i) = static_cast<double>(intensity(k,j,i)*fac2);
         errors(0,k,j,i) = sqrt(intensity_sq(k,j,i)*SQR(fac2));
       }
@@ -1417,7 +1405,14 @@ void MCOutput::OutputSpectrum(bool wtflag) {
         file_number << std::setw(5) << std::setfill('0') << pspecout->output_number;
         filename.append(file_number.str());
         filename.append(".spec");
-        pspecout->WriteSpectrum(filename);
+        // compute integration time in cgs
+        Real tint_out;
+        if (pmy_mc->dynamic) {
+          tint_out = (time - pspect->last_time) * time_cgs;
+        } else {
+          tint_out = pmy_mc->tint;
+        }
+        pspecout->WriteSpectrum(filename,tint_out);
         if (pspecout != nullptr)
           delete pspecout;
       }
@@ -1543,6 +1538,7 @@ void MCOutput::OutputPhotonList(bool wtflag) {
   Real tlim = pmy_mc->pmy_mesh->tlim;
   if ( (time >= pphlist->last_time+pphlist->dt) || (time == tstart) || (time >= tlim)
        || wtflag ) {
+    // construct file name
     std::string filename;
     filename.assign(pphlist->base_name);
     filename.append(".");
@@ -1550,7 +1546,14 @@ void MCOutput::OutputPhotonList(bool wtflag) {
     file_number << std::setw(5) << std::setfill('0') << pphlist->output_number;
     filename.append(file_number.str());
     filename.append(".list");
-    pphlist->WriteList(filename);
+    // compute integration time in cgs
+    Real tint_out;
+    if (pmy_mc->dynamic) {
+      tint_out = (time - pphlist->last_time) * time_cgs;
+    } else {
+      tint_out = pmy_mc->tint;
+    }
+    pphlist->WriteList(filename,tint_out);
     pphlist->output_number++;
     // Reset list length and ntot to 0
     // List outputs are not cumulative

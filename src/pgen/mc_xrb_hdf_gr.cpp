@@ -976,8 +976,8 @@ void GetNelFloor(MonteCarloBlock *pmcb) {
 	}
         Real nh = rho / (mp*(1.+4.*heabund));
         Real nhe = nh*heabund;
-	pmcb->nion(k,j,i) = nh + 4. * nhe;
-        pmcb->nel(k,j,i) = nh + 2. * nhe;
+	pmcb->species(1,k,j,i) = nh + 4. * nhe;
+        pmcb->species(0,k,j,i) = nh + 2. * nhe;
       }
     }
   }
@@ -995,7 +995,7 @@ void GetNel(MonteCarloBlock *pmcb) {
         Real nh = rho / (mp*(1.+4.*heabund));
         Real nhe = nh*heabund;
         //nion(k,j,i) = nh + 4. * nhe;
-        pmcb->nel(k,j,i) = nh + 2. * nhe;
+        pmcb->species(0,k,j,i) = nh + 2. * nhe;
 
         Real tgas = pmcb->tgas(k,j,i);
         Real ld = log10(rho);
@@ -1026,7 +1026,7 @@ void GetNel(MonteCarloBlock *pmcb) {
         }
         if(jj < 0) {
           jj = 00;
-          pmcb->nel(k,j,i) = 0.; //below T grid, assume neutral
+          pmcb->species(0,k,j,i) = 0.; //below T grid, assume neutral
           continue;
         }
         xj = (tgas-temp_grid(jj))/(temp_grid(jj+1)-temp_grid(jj));
@@ -1034,7 +1034,7 @@ void GetNel(MonteCarloBlock *pmcb) {
                 +xj*ross_gray_tab(jj+1,ii) ) + xi*( (1.-xj)*ross_gray_tab(jj,ii+1)
                 +xj*ross_gray_tab(jj+1,ii+1) );
         if ((tgas < 1.e5) && (ross < 0.34)) {
-          pmcb->nel(k,j,i) = 0.; // assume neutral
+          pmcb->species(0,k,j,i) = 0.; // assume neutral
           //printf("%d %d %g %g %g %g\n",jj,ii,tgas,rho,ross,ross_gray_tab(jj,ii));
         }
       } // loop over i

@@ -54,7 +54,7 @@ public:
   int nphot_limit;
   int &nphot;
 
-  static int istatp, inscp, itrp;
+  static int istatp, inscp, ityp;
   static int ii1p, ii2p, ii3p;
   static int ix0p, ix1p, ix2p, ix3p;
   static int ik0p, ik1p, ik2p, ik3p;
@@ -65,8 +65,7 @@ public:
   static int ipolp;
   static int idtp;
 
-  // SWD: turn trp into a user variable?
-  std::vector<int> &statp, &nscp, &trp;
+  std::vector<int> &statp, &nscp, &type;
   std::vector<int> &i1p, &i2p, &i3p;
   std::vector<Real> &x0p, &x1p, &x2p, &x3p;
   std::vector<Real> &k0p, &k1p, &k2p, &k3p;

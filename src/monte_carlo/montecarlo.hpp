@@ -40,9 +40,30 @@ class MCBoundaryValues;
 class MCOutoupt;
 class MCCoord;
 
-// SWD: Make into a general MACRO set by configure?
-// SWD: or make a paramter that is set
-#define NMOM 15
+//! \brief Physical constants defined in c.g.s.
+namespace MCConstants {
+
+static const Real kb_cgs = 1.380649e-16; // Boltzmann constant
+static const Real c_cgs = 2.99792458e+10; //  speed of light
+static const Real h_cgs = 6.62607015e-27; // Planck's constant
+static const Real ec = 4.80320425e-10; // elementary charge in esu
+static const Real mp_cgs = 1.67262192595e-24; // proton mass
+static const Real me_cgs = 9.1093837139e-28; // electron mass
+static const Real amu_cgs = 1.660538782e-24; // atomic mass unit
+static const Real mH_cgs = 1.007825 * amu_cgs; // mass of hydrogen
+static const Real mec2 = me_cgs * c_cgs * c_cgs;
+static const Real kmec2 = kb_cgs / (me_cgs * c_cgs * c_cgs); 
+static const Real ev_to_erg = 1.602176634e-12; 
+static const Real sigmat = 6.652487051e-25; // Thomson cross section
+static const Real res_osc = PI*ec*ec / (me_cgs*c_cgs); // classic oscillator
+static const Real lambda_lya = 1215.6701; // Lya wavelength in angstroms
+static const Real nu_lya = 1.e8 * c_cgs / lambda_lya;  // frequency of Lya
+static const Real lambda_ly_edge = 912.0; // ionization edge wavelength in angstroms
+static const Real energy_ly_edge = h_cgs * 1.e8 * c_cgs / lambda_ly_edge; // energy of Lyman edge
+static const Real lorwidth_lya = 6.265e8/(4.*PI); // natural line width of Lya
+static const Real oscf_lya = 0.4164; // oscilator strength for Lya
+
+} // namespace MCConstants
 
 // Flags for controlling monte carlo emission, scattering, absorption, bcs
 enum EmissionFlag {EMISUSER = 0, EMISNONE = 1, EMISFF = 2, EMISBB = 3, MULTI = 4};
@@ -205,7 +226,6 @@ public:
 
   Real tint;   // Monte Carlo timestep
   Real tmax;   // Maximum evolution time
-  Real time_cgs; // conversion of time to cgs units
   Real weightratio; // used for setting minimum weight for absorption
 
   int ntype; // number of emission types 
@@ -237,7 +257,8 @@ public:
   bool tetrads; // convert from coordinate frame
   bool emission_array;  // Compute and save zone emissivities
   bool *emission_eqwt; // Set initial weights equal
-  
+  enum AbsorptionMethodFlag *absorption_method; // absorption method for each emission type
+
   bool polarized;// track photon polarization
   bool acceleration;  // use MRW acceleration
   bool computedmin;
@@ -336,9 +357,9 @@ public:
   int nx1,nx2,nx3;
   int is,ie,js,je,ks,ke;
   int nsrc, nmom; // # of elements in sourcterm, moments arrays
+  int nspec;
   int nf_scat;
 
-  bool weighted_absorption; // flag controling how absorption is handled
   bool mom_flag_lab; // Compute/output moments
   bool mom_flag_com; // Compute moments in comoving frame
   bool mom_flag_src; // Compute source terms for output
@@ -356,7 +377,7 @@ public:
   bool time_acc;  // use MRW acceleration with time limit
 
   // Set flags
-  enum AbsorptionMethodFlag absorption_meth;
+
   enum AbsorptionOpacityFlag absorption_opac;
   enum ScatteringFlag scattering_meth;
 
@@ -366,7 +387,7 @@ public:
   bool orthotet_flag; // use orthonormal tetrad for TransferPhotons()
   bool varystep_flag; // use variable (true) or constant (false) step
 
-  Real rho_cgs, vel_cgs, tgas_cgs, tfloor_cgs, tceiling_cgs, l_cgs;
+  Real rho_cgs, vel_cgs, tgas_cgs, tfloor_cgs, tceiling_cgs, l_cgs, time_cgs;
   Real betamax;
   Real stepsize;
   Real minweight;
@@ -384,8 +405,7 @@ public:
   AthenaArray<Real> sourceterms;
   AthenaArray<Real> scalars;
   AthenaArray<Real> rho;
-  AthenaArray<Real> nel;
-  AthenaArray<Real> nion;
+  AthenaArray<Real> species;
   AthenaArray<Real> tgas;
   AthenaArray<Real> vel;
   AthenaArray<Real> bcc;
