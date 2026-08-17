@@ -1,7 +1,33 @@
 <comment>
-problem   =  isothermal shell in Kerr-Schild, gravitationally redshifted
+problem   =  isothermal blackbody shell in Kerr-Schild, gravitationally redshifted
 reference =
 configure = --prob=mc_isoth_gr -mc -g -hdf5 --coord=kerr-schild
+
+# Validates the relativistic luminosity scaling
+#
+#     L_inf = 4 pi R^2 sigma T^4 alpha^2 ,      alpha = sqrt(1 - 2M/R)
+#
+# one factor of alpha from the photon redshift and one from time dilation of the emission
+# rate.  Measured at R = 6 (this file):
+#
+#     L measured = 3.6855e+34    predicted = 3.7242e+34    ratio = 0.990
+#
+# and repeating the run at R = 6, 8, 12, 20 and fitting L/(4 pi R^2 sigma T^4) ~ alpha^m
+# gives m = 2.042 +/- 0.096, i.e. alpha^2 at 0.4 sigma and alpha^4 excluded at 20 sigma.
+# The fitted normalization is 1.0011 +/- 0.0054, which also confirms Kirchhoff: the
+# emergent flux only saturates at sigma T^4 if j_nu / alpha_nu = B_nu, and the free-free
+# emissivity (eta0, emission.cpp) and opacity (ffnrm, opacity.cpp) are coded as separate
+# constants that happen to agree to 5e-5.
+#
+# The design point that makes R well defined is CONSTANT density with a sharp outer edge.
+# An exponential atmosphere buries the tau_ff = 1 surface somewhere inside the shell, so
+# the effective emitting radius is not x1max and the comparison above becomes degenerate:
+# 36*(2/3)^2 = 16 and r^2-2r = 16 at r = 5.12, so "alpha^4 at R=6" and "alpha^2 at r=5.12"
+# are arithmetically indistinguishable.  With uniform density the photosphere sits at
+# x1max to within one mean free path, tau_ff^-1 = 1% of the shell thickness.
+#
+# For the exponential-atmosphere variant instead, set constdens = false and supply
+# taumin/taumax (electron-scattering optical depths at the top and base).
 
 <job>
 problem_id = isothgr   # problem ID: basename of output filenames
@@ -9,10 +35,12 @@ problem_id = isothgr   # problem ID: basename of output filenames
 # The spec output type does not support Kerr-Schild: Spectrum::UpdateSpectrum only bins
 # angles for cartesian/minkowski/spherical_polar, so phibin and mubin are left
 # uninitialized and the accumulation writes out of bounds (this segfaults under MPI).
-# Bin the photon list instead, with vis/python/montecarlo/make_spectrum.py.
+# Bin the photon list instead, with vis/python/montecarlo/make_spectrum.py.  The energy
+# column of the list already carries the conserved -k_t, the energy at infinity.
 <output1>
 file_type = phlist
 
+# not part of the validation run; drop this block if configuring without -hdf5
 <output2>
 file_type = hdf5
 variable = prim
@@ -21,46 +49,47 @@ variable = prim
 m = 1.0 #because our pgen assumes m is 1 in code units
 a = 0.0
 
-# Narrow shell, resolved radially.  The atmosphere fills the whole domain, so the only
-# gravitational redshift captured here is that between the emitting zone and x1max:
-# sqrt(1-2/4)/sqrt(1-2/6) = 0.866 from the base to the outer boundary.  The remaining
-# shift out to infinity, sqrt(1-2/6) = 0.816, must be applied in post-processing.
+# Thin shell just inside R = 6.  The thickness only has to be many mean free paths; it is
+# kept small so that little volume is wasted emitting photons that are reabsorbed before
+# reaching the surface.  x1max IS the emitting radius, so alpha^2 = 1 - 2/6 = 2/3 exactly.
 #
-# The density scale height is (x1max-x1min)/ln(taumax/taumin) = 0.145 r_g, so nx1 = 256
-# gives ~19 zones per scale height.
+# Inward-going photons are lost to the hole (absorb).  With tau_ff ~ 100 across the shell
+# they are almost all reabsorbed first, so the inner boundary has no effect on the
+# emergent luminosity and the shell behaves as a semi-infinite atmosphere from outside.
 <mesh>
-nx1        = 256       # Number of zones in X1-direction
-x1min      = 4.0       # minimum value of X1
+nx1        = 128       # Number of zones in X1-direction
+x1min      = 5.95      # minimum value of X1
 x1max      = 6.0       # maximum value of X1
 ix1_mc_bc  = absorb  # inner-X1 boundary flag: inward photons are lost to the hole
 ox1_mc_bc  = escape  # outer-X1 boundary flag
 
-nx2        = 16         # Number of zones in X2-direction
+nx2        = 8          # Number of zones in X2-direction
 x2min      = 0.      # minimum value of X2
-x2max      = 3.1415926      	      # maximum value of X2
+x2max      = 3.14159265358979      	      # maximum value of X2
 ix2_mc_bc  = polar  # inner-X2 boundary flag
 ox2_mc_bc  = polar  # outer-X2 boundary flag
 
-nx3        = 16         # Number of zones in X3-direction
+nx3        = 8          # Number of zones in X3-direction
 x3min      = 0.0        # minimum value of X3
-x3max      =  6.2831854      	       # maximum value of X3
+x3max      = 6.28318530717959      	       # maximum value of X3
 ix3_mc_bc  = periodic  # inner-X3 boundary flag
 ox3_mc_bc  = periodic  # outer-X3 boundary flag
 
 <hydro>
 gamma = 1.666666666666667 # gamma = C_p/C_v
 
+# 4 x 2 x 2 = 16 blocks, so this runs on up to 16 ranks
 <meshblock>
-nx1 = 64
-nx2 = 8
-nx3 = 8
+nx1 = 32
+nx2 = 4
+nx3 = 4
 
 # general_pusher and boosts are both required; the problem generator aborts without them.
 # general_pusher selects the four-vector storage convention (Kerr-Schild always uses
 # GeneralPusher regardless), and boosts is what makes the static-observer velocity set in
 # the problem generator actually reach the comoving tetrad.
 <montecarlo>
-nphot     = 1000000
+nphot     = 4000000
 iseed     = 121500
 scattering = none
 emission   = freefree
@@ -71,27 +100,27 @@ boosts    = true
 stepsize  = 0.1
 varystep = true
 
-# taumin/taumax are electron-scattering optical depths at the top and base of the
-# atmosphere, and only set the density normalization -- scattering is off, so what
-# actually thermalizes the radiation is free-free absorption, whose depth falls as nu^-3.
-# The Wien tail therefore escapes from progressively shallower layers and lies above a
-# Planck function; only the band below a few hundred eV is thermalized.
+# dens is chosen so the free-free optical depth across the shell is ~100 at the Planck
+# peak (243 eV for T = 1e6 K), which is thick enough that the emergent flux is sigma T^4
+# and thin enough that ~4% of emitted packets escape.  Raising it shrinks the Wien-tail
+# systematic -- above x ~ 13 the shell is thin and leaks ~0.07% of sigma T^4 -- but costs
+# escape fraction, and so statistics, linearly.
 #
-# Measured colour temperature of the emergent spectrum (fitting E*L_E over 10-200 eV in
-# the conserved energy -k_t), against the 7.07e5 K expected for T_loc = 1e6 K emitted at
-# the base and redshifted to infinity:
-#     taumax = 1e2 -> 6.8e5 K     taumax = 1e3 -> 7.2e5 K     taumax = 1e4 -> 6.9e5 K
-# 1e2 is visibly under-thermalized; beyond 1e3 the statistics degrade instead, because
-# emission goes as rho^2 and is dominated by the base, from which little escapes.
+# emin/emax are narrowed from the usual 0.01/30 because packets below x ~ 0.3 are far too
+# thick to escape and are pure waste.  The truncation discards a known 0.12% of the Planck
+# integral, which must be divided out when comparing against sigma T^4.
+#
+# ambient = 1 keeps the density uniform in the ghost zones outside [xlow,xhigh]; it must
+# never be zero, since GetTemperature() would form 0/0 and the NaN poisons the emission
+# array through eta0/sqrt(0).
 <problem>
 temp     = 1.0e6       # isothermal temperature
-constdens = false
-taumin   = 1.0e-3
-taumax   = 1.0e3
-ambient  = 1.0e-10     # density outside the shell, relative to the base (must be > 0)
+constdens = true
+dens     = 1.5974e-3   # g/cm^3, gives tau_ff ~ 100 at the spectral peak
+ambient  = 1.0         # density outside the shell, relative to the base (must be > 0)
 tnorm   = true
-emin = 0.01            # with tnorm, emin/emax are E/kT
-emax = 30.
+emin = 0.3             # with tnorm, emin/emax are E/kT
+emax = 20.
 l_cgs = 1476625.0380501247
 vel_cgs = 29979245800.0
 tgas_cgs = 1.08101416735e+13 #c^2/rideal
