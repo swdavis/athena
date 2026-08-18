@@ -3,13 +3,17 @@
 // Copyright(C) 2014 James M. Stone <jmstone@princeton.edu> and other code contributors
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
-//! \file frames.cpp
+//! \file photon_frames.cpp
 //! \brief projecting photons and radiation moments between reference frames.
 //!
 //! Three frames are in play.  MCFRAME_LAB and MCFRAME_COMOVING are orthonormal: in general
 //! relativity the tetrads of the normal (Eulerian) observer and of the frame vel is built
 //! on, and in flat spacetime the Eulerian frame and its Lorentz boost.  MCFRAME_COORD is
 //! the raw coordinate basis.
+//!
+//! The geometric primitives these are built on -- ConstructTetrad and the vector algebra
+//! that supports it -- are the layer below, in tetrad.cpp.  Nothing there knows about
+//! photons or mesh blocks; everything here does.
 //!
 //! Two operations live here and are easy to conflate.  PhotonFrames projects a single
 //! photon, per crossing; ComovingFrameMatrix and DeriveComovingMoments transform an
@@ -25,6 +29,7 @@
 
 // Athena++ headers
 #include "montecarlo.hpp"
+#include "tetrad.hpp"
 #include "photon.hpp"
 #include "../athena.hpp"
 #include "../athena_arrays.hpp"

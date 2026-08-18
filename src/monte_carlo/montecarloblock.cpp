@@ -13,6 +13,7 @@
 
 // Athena++ headers
 #include "montecarlo.hpp"
+#include "tetrad.hpp"
 #include "photon.hpp"
 #include "photonpusher.hpp"
 #include "../athena.hpp"

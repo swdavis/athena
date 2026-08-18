@@ -24,6 +24,7 @@
 #include "mcbvals.hpp"
 #include "mcoutput.hpp"
 #include "mccoord.hpp"
+#include "tetrad.hpp"
 
 // GSL library
 #if GSL
@@ -235,29 +236,6 @@ void GetZonePositionSphericalPolar(Photon *pphot, MCRandom *pran, MCCoord *pco, 
 void GetZonePositionCylindrical(Photon *pphot, MCRandom *pran, MCCoord *pco, int ip);
 void GetZonePositionCartesianFace(Photon *pphot, MCRandom *pran, MCCoord *pcoord,
                                   BoundaryFace face, int ip);
-//------------------ prototypes for frame_transformations.cpp functions ------------------
-// SWD:  Add these to MCCoord class, utils, keep here?
-void ConstructTetrad(Real ucon[4], Real gcov[4][4],
-                     Real econ[4][4], Real ecov[4][4]);
-void ConstructTetrad(Real ucon[4], Real vcon[4], Real gcov[4][4],
-                     Real econ[4][4], Real ecov[4][4]);
-void ConstructTetrad(Real ucon[4], Real vcon[4], Real wcon[4],
-                     Real gcov[4][4], Real econ[4][4],
-                     Real ecov[4][4]);
-void InitializeLeviCivita(Real levi[4][4][4][4]);
-void ImposeRightHanded(Real econ[4][4], Real gcov[4][4]);
-Real KroneckerDelta(int i, int j);
-void ProjectVecSub(Real ucon[4], Real vcon[4], Real gcov[4][4]);
-Real DotVec(Real ucon[4], Real vcon[4], Real gcov[4][4]);
-void NormalizeVec(Real ucon[4], Real gcov[4][4]);
-void ConToCov(Real ucon[4], Real ucov[4], Real gcov[4][4]);
-void CovToCon(Real ucov[4], Real ucon[4], Real gcon[4][4]);
-void CoordinateToTetrad(Real ucoord[4],Real utet[4],Real ecov[4][4]);
-void TetradToCoordinate(Real utet[4],Real ucoord[4],Real econ[4][4]);
-void StokesToTensor(Real stokes[4], std::complex<Real> tensor[4][4]);
-void TensorToStokes(std::complex<Real> tensor[4][4], Real stokes[4]);
-void LorentzBoostVector(Real vel[4], Real kold[4]);
-
 //---------------------- prototypes for setting flags ------------------------------------
 enum MCBoundaryFlag GetMCBoundaryFlag(std::string input_string);
 enum EmissionFlag GetEmissionFlag(std::string input_string);

@@ -11,7 +11,6 @@
 // * inverse metric for spherical polar and cylindrical
 // * remove zeroing of metric,connection at top?
 // * remove extraneous variable definitions
-// * conversion to cgs units for black hole metrics?
 
 // Athena++ headers
 #include "../athena.hpp"

@@ -3,13 +3,14 @@
 // Copyright(C) 2014 James M. Stone <jmstone@princeton.edu> and other code contributors
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
-//! \file frame_transformations.hpp
+//! \file tetrad.cpp
 //! \brief implementation of functions for constructing and transforming tetrad frames
 
 // C++ libraries
 #include <complex>
 
 // Athena++ classes headers
+#include "tetrad.hpp"
 #include "montecarlo.hpp"
 
 #define SMALL_NUMBER 1.e-30

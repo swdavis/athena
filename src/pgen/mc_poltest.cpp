@@ -19,6 +19,7 @@
 #include "../hydro/hydro.hpp"
 #include "../mesh/mesh.hpp"
 #include "../monte_carlo/montecarlo.hpp"
+#include "../monte_carlo/tetrad.hpp"
 #include "../monte_carlo/photon.hpp"
 #include "../monte_carlo/photonpusher.hpp"
 #include "../globals.hpp"
