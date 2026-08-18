@@ -168,11 +168,17 @@ void ATHDF5Output::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
     num_variables = new int[num_datasets];
     int n_dataset = 0;
     num_variables[n_dataset] = 2 + 13 * ntype; // 2+1+3+9
-  } else if (variable.compare("mccom") == 0) {
+  } else if (variable.compare("mccom") == 0 || variable.compare("mccoord") == 0) {
+    // One Ermc, three Frmc and nine Prmc per emission type.  This has to match the
+    // number of variable names built below, because the write buffer is sized from
+    // num_variables while the dataspace is sized from num_vars_; a short count here is a
+    // heap overflow rather than a wrong label.  It was previously a bare 13, which
+    // undercounted by a factor of ntype whenever more than one emission type was in use.
+    int ntype = pmb->pmy_mcb->pmy_mc->ntype;
     num_datasets = 1;
     num_variables = new int[num_datasets];
     int n_dataset = 0;
-    num_variables[n_dataset] = 13; // 1+3+9
+    num_variables[n_dataset] = 13 * ntype; // 1+3+9 per type
   } else if (variable.compare("mcsrc") == 0) {
     num_datasets = 1;
     num_variables = new int[num_datasets];
