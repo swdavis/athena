@@ -136,30 +136,6 @@ void PhotonFrames::Fill(MCFrame f) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::AccumulateMoments(...)
-//! \brief add one photon's contribution to a moment array in a given frame
-//!
-//! The covariant estimator T^(a)(b) = sum w p^(a) p^(b) dlambda, written in terms of the
-//! energy and unit direction PhotonFrames returns.  Every basis goes through here, so the
-//! three cannot drift apart the way the lab and comoving paths once did, and it shares the
-//! MomentSlot table with the frame transform below, which is its inverse.
-
-void MonteCarloBlock::AccumulateMoments(AthenaArray<Real> &mom, int type,
-                                        int i3, int i2, int i1,
-                                        const PhotonFrameState &s, Real wp) {
-  const Real c_cgs = MCConstants::c_cgs;
-  Real weight = wp * s.e * s.dl / c_cgs;
-  const Real p[4] = {1., s.n[0], s.n[1], s.n[2]};
-  for (int a=0; a<4; ++a) {
-    for (int b=a; b<4; ++b) {
-      Real v = weight * p[a] * p[b];
-      if (MomentNeedsC(a,b)) v *= c_cgs;
-      mom(type,MomentSlot[a][b],i3,i2,i1) += v;
-    }
-  }
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::ComovingFrameMatrix(...)
 //! \brief the lab -> comoving transformation for one zone
 //!

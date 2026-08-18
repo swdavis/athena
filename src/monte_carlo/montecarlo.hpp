@@ -28,6 +28,7 @@
 // GSL library
 #if GSL
 #include <gsl/gsl_randist.h>
+
 #endif
 
 class Mesh;
@@ -160,12 +161,12 @@ enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
 //! mapping in one table is what stops the accumulation and the frame transform, which are
 //! inverses of each other, from drifting apart.  The 0i entries carry the extra factor of
 //! c; MomentNeedsC() says which those are.
-const int MomentSlot[4][4] = {{MCIER, MCIFR1, MCIFR2, MCIFR3},
+constexpr int MomentSlot[4][4] = {{MCIER, MCIFR1, MCIFR2, MCIFR3},
                               {MCIFR1, MCIPR11, MCIPR12, MCIPR13},
                               {MCIFR2, MCIPR12, MCIPR22, MCIPR23},
                               {MCIFR3, MCIPR13, MCIPR23, MCIPR33}};
 
-inline bool MomentNeedsC(int a, int b) { return (a == 0) != (b == 0); }
+constexpr bool MomentNeedsC(int a, int b) { return (a == 0) != (b == 0); }
 enum SourceTermFlag {MCRS0 = 0, MCRS1=1, MCRS2=2, MCRS3=3, MCRF0=4, MCRF1=5,
                      MCRF2=6, MCRF3=7, MCNABS=8};
 //----------------------------------------------------------------------------------------
@@ -555,5 +556,36 @@ private:
   AthenaArray<int> emit_count_; // used for emission
   void SetBoundaryValues(enum MCBoundaryFlag *input_bcs);
 };
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::AccumulateMoments(...)
+//! \brief add one photon's contribution to a moment array in a given frame
+//!
+//! The covariant estimator T^(a)(b) = sum w p^(a) p^(b) dlambda, written in terms of the
+//! energy and unit direction PhotonFrames returns.  Every basis goes through here, so the
+//! three cannot drift apart the way the lab and comoving paths once did, and it shares the
+//! MomentSlot table with DeriveComovingMoments, which is its inverse.
+//!
+//! Defined here rather than in frames.cpp because it runs once per zone crossing -- a few
+//! hundred thousand times in even a small run -- and measurably loses about a percent when
+//! it cannot inline into UpdateMoments across a translation unit boundary.
+
+inline void MonteCarloBlock::AccumulateMoments(AthenaArray<Real> &mom, int type,
+                                               int i3, int i2, int i1,
+                                               const PhotonFrameState &s, Real wp) {
+  const Real c_cgs = MCConstants::c_cgs;
+  Real weight = wp * s.e * s.dl / c_cgs;
+  const Real *n = s.n;
+  // Split by whether the component carries the extra factor of c rather than testing it
+  // per component; the branch inside the loop costs about a percent of total runtime.
+  mom(type,MomentSlot[0][0],i3,i2,i1) += weight;
+  Real wc = weight * c_cgs;
+  for (int b=1; b<4; ++b)
+    mom(type,MomentSlot[0][b],i3,i2,i1) += wc * n[b-1];
+  for (int a=1; a<4; ++a)
+    for (int b=a; b<4; ++b)
+      mom(type,MomentSlot[a][b],i3,i2,i1) += weight * n[a-1] * n[b-1];
+}
+
 
 #endif // MONTECARLO_HPP
