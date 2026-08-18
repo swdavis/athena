@@ -89,11 +89,20 @@ def read_moments(rundir, tag):
     return np.array(rows), hdr
 
 
+# Ermc + Frmc1..3 + the nine Prmc components.  The tab writer emits the pressure as a
+# nine-column slice under a single "Prmc" header word, so the header has fewer names than
+# the data has columns and name matching silently picks up only Prmc11.  The moment block
+# is always the trailing NMOMENT columns, which is what makes this robust; mclab carries
+# tgas and rho ahead of it while mccom and mccoord do not.
+NMOMENT = 13
+
+
 def moment_columns(arr, hdr):
-    """Return the moment columns only, dropping index and coordinate columns."""
-    keep = [i for i, c in enumerate(hdr)
-            if c.startswith(("Ermc", "Frmc", "Prmc"))]
-    return arr[:, keep]
+    """Return the moment columns only, dropping index, coordinate and extra columns."""
+    if arr.shape[1] < NMOMENT:
+        raise RuntimeError("expected at least {0} columns, got {1}"
+                           .format(NMOMENT, arr.shape[1]))
+    return arr[:, -NMOMENT:]
 
 
 def max_rel(a, b):

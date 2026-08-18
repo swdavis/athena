@@ -133,7 +133,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   mom_flag_scat = pmy_mc->pmcout->mom_flag_scat;
 
   call_srcterms = coupled || mom_flag_src;
-  call_moments = mom_flag_lab || mom_flag_com || call_srcterms || mom_flag_usr;
+  call_moments = mom_flag_lab || mom_flag_com || mom_flag_coord || call_srcterms
+                 || mom_flag_usr;
   // Set boundary values for this block
   SetBoundaryValues(pmy_mc->mc_bcs);
 
@@ -160,11 +161,16 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
                 << "S" << std::endl;
     }
   }
+  // Check if moments requested and set accordingly
+  mom_flag_lab = pmy_mc->pmcout->mom_flag_lab;
+  mom_flag_com = pmy_mc->pmcout->mom_flag_com;
+  mom_flag_coord = pmy_mc->pmcout->mom_flag_coord;
   mom_flag_src = pmy_mc->pmcout->mom_flag_src;
   mom_flag_usr = pmy_mc->pmcout->mom_flag_usr || (pmy_mc->nuser_mom > 0);
 
   call_srcterms = coupled || mom_flag_src;
-  call_moments = mom_flag_lab || mom_flag_com || call_srcterms || mom_flag_usr;
+  call_moments = mom_flag_lab || mom_flag_com || mom_flag_coord || call_srcterms
+                 || mom_flag_usr;
   // Set boundary values for this block
   SetBoundaryValues(pmy_mc->mc_bcs);
 
@@ -895,29 +901,19 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
 
 void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
 
-  // SWD Needs to add support for moments in three bases:
-  // comoving frame (supported already)
-  // tetrad frame  (currently lab frame)
-  // coordinate frame
-
   int type = pphot->type[ip];
   int i1 = pphot->i1p[ip];
   int i2 = pphot->i2p[ip];
   int i3 = pphot->i3p[ip];
 
   Real k0,k1,k2,k3,weight;
-  const Real c_cgs = 2.99792458e10;
-  Real kco[4];            // coordinate four-vector, kept for the comoving projection
-  bool gr_tetrad = false; // boost_lab/boost_cmv hold GR tetrad legs rather than boosts
-  // kco is only meaningful on the general pusher; the legacy pushers store a unit
-  // direction in the local orthonormal basis at the photon, not coordinate components.
+  const Real c_cgs = MCConstants::c_cgs;
+  Real kco[4]; // coordinate four-vector
+  bool gr_tetrad = false; // boost_lab/boost_cmv hold GR tetrad legs rather than boosts  
   bool have_kco = pmy_mc->general_pusher_flag;
   if (pmy_mc->general_pusher_flag && GENERAL_RELATIVITY) {
     // Project the coordinate four-vector onto the normal-observer tetrad that
-    // ComputeTransformations() stored for this zone.  InverseTetrad is the identity for
-    // every GR coordinate class, so the old path never left the coordinate basis: k2 and
-    // k3 carried units of inverse length and the flux and pressure sums contracted them
-    // as if they were direction cosines.
+    // ComputeTransformations() stored for this zone. 
     //
     // dl arrives from the pusher as step*ep*l_cgs, a coordinate path length.  The path
     // length in this frame is larger by elab/ep, which is the factor that turns the
@@ -927,7 +923,8 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     Real plab[4];
     for (int a=0; a<4; a++) {
       plab[a] = 0.;
-      for (int m=0; m<4; m++) plab[a] += boost_lab(i3,i2,i1,a,m) * kco[m];
+      for (int m=0; m<4; m++)
+        plab[a] += boost_lab(i3,i2,i1,a,m) * kco[m];
     }
     Real elab = plab[IMC0];
     k0 = 1.;
@@ -936,11 +933,12 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     k3 = plab[IMC3]/elab;
     weight = pphot->wp[ip] * elab * (dl * elab / pphot->ep[ip]) / c_cgs;
   } else if (pmy_mc->general_pusher_flag) {
-    // SWD: This computes k values in an orthonormal tetrad frame specificed for each
+    // Computes k values in an orthonormal tetrad frame specificed for each
     // coordinate system.
     Real ki[4];
     GetFourVector(pphot, ip, false, ki);
-    for (int m=0; m<4; m++) kco[m] = ki[m];
+    for (int m=0; m<4; m++)
+      kco[m] = ki[m];
     Real x[4];
     x[0] = pphot->x0p[ip];
     x[1] = pphot->x1p[ip];
@@ -964,7 +962,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     weight = pphot->wp[ip] * pphot->ep[ip] * k0 * dl / c_cgs;
   } else {
     // Spatial components are a unit direction here, so the propagation four-vector is
-    // n^mu = (1, nhat); k0p holds the energy and is carried by weight instead.
+    // n^mu = (1, nhat)
     k0 = 1.;
     k1 = pphot->k1p[ip];
     k2 = pphot->k2p[ip];
@@ -989,9 +987,6 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
       k1 = sth * cph * nx + sth * sph * ny + cth * nz;
       k2 = cth * cph * nx + cth * sph * ny - sth * nz;
       k3 = -sph * nx + cph * ny;
-      //printf("k: %g %g %g %g %g %g %g %g %g\n",k1,k2,k3,nx,ny,nz,pphot->k1p[ip],pphot->k2p[ip],pphot->k3p[ip]);
-
-      //printf("k: %g %g %g %g %g %g\n",k1,k2,k3,pphot->k1p[ip],pphot->k2p[ip],pphot->k3p[ip]);
       // SWD: this could be simplified since only phi_1-phi_2 enters,
       // but would only save two sin/cos evalutations 
     }
@@ -2290,9 +2285,9 @@ void MonteCarloBlock::ComputeTransformations() {
           x[IMC2] = pmy_block->pcoord->x2v(j);
           x[IMC3] = pmy_block->pcoord->x3v(k);
           Real gcov[4][4];
-          pcoord->Metric(x, gcov);
+          pcoord->Metric(x, gcov); 
           Real econ[4][4], ecov[4][4];
-
+          // gcov defined at x, g, gi defined at cell center
           // normal observer, n^mu = -alpha g^{mu t}
           Real alpha = 1.0/std::sqrt(-gi(I00,i));
           Real ncon[4];
@@ -2326,8 +2321,6 @@ void MonteCarloBlock::ComputeTransformations() {
         boost_lab(k,j,i,0,0) = vel(k,j,i,0);
         for (int m=1; m<4; m++) {
           boost_cmv(k,j,i,0,m) = -vel(k,j,i,m);
-          //if (std::isnan(boost_cmv(k,j,i,0,m)))
-          //    printf("boost: %d %d %d %g\n",k,j,i,vel(k,j,i,m));
           boost_lab(k,j,i,0,m) = vel(k,j,i,m);
         }
         for (int l=1; l<4; l++) {
@@ -2340,15 +2333,6 @@ void MonteCarloBlock::ComputeTransformations() {
           boost_cmv(k,j,i,l,l) += 1.;
           boost_lab(k,j,i,l,l) += 1.;
         }
-        /*for (int l=0; l<4; l++) {
-          for (int m=0; m<4; m++) {
-            Real sum = 0.;
-            for (int n=0; n<4; n++) {
-              sum += boost_cmv(k,j,i,l,n)*boost_lab(k,j,i,n,m);
-            }
-            printf("%d %d %g\n",l,m,sum);
-          }
-          }*/
       } // loop over i
     } // loop over j
   } // loop over k
