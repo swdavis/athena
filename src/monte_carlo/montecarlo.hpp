@@ -478,7 +478,7 @@ private:
 //! three cannot drift apart the way the lab and comoving paths once did, and it shares the
 //! MomentSlot table with DeriveComovingMoments, which is its inverse.
 //!
-//! Defined here rather than in frames.cpp because it runs once per zone crossing -- a few
+//! Defined here rather than in photon_frames.cpp because it runs once per zone crossing -- a few
 //! hundred thousand times in even a small run -- and measurably loses about a percent when
 //! it cannot inline into UpdateMoments across a translation unit boundary.
 
