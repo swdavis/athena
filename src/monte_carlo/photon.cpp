@@ -78,7 +78,7 @@ Photon::~Photon() {
 //! \fn void Photon::PrintPhoton(std::stringstream msg, int ip)
 //! \brief print key photon properites with message
 
-void Photon::PrintPhoton(const std::string &msg, int ip) {
+void Photon::PrintPhoton(const std::string &msg, int ip) const {
   std::cout << "----------------------------" << std::endl;
   std::cout << "** " << msg << " **" << std::endl;
   PrintPhoton(ip);
@@ -88,7 +88,7 @@ void Photon::PrintPhoton(const std::string &msg, int ip) {
 //! \fn void Photon::PrintPhoton(int ip)
 //! \brief print key photon properites, primarily for debugging
 
-void Photon::PrintPhoton(int ip) {
+void Photon::PrintPhoton(int ip) const {
 
   Real keverg = 1.602176634e-9;
   std::cout << "----------------------------" << std::endl

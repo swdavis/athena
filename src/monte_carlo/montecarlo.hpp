@@ -582,15 +582,34 @@ inline void MonteCarloBlock::AccumulateMoments(AthenaArray<Real> &mom, int type,
   const Real c_cgs = MCConstants::c_cgs;
   Real weight = wp * s.e * s.dl / c_cgs;
   const Real *n = s.n;
+  // All ten components share (type,i3,i2,i1) and differ only in the moment slot, which is
+  // the second index, so resolve the address once and step by the slot stride.  The
+  // five-dimensional index arithmetic was 2.7% of total instructions when it was repeated
+  // per component.  Layout is pdata_[i + nx1*(j + nx2*(k + nx3*(n + nx4*m)))], so
+  // consecutive slots sit nx1*nx2*nx3 apart.
+  Real *base = &mom(type,0,i3,i2,i1);
+  const int stride = mom.GetDim1()*mom.GetDim2()*mom.GetDim3();
+#ifdef DEBUG
+  // This is the one place that depends on AthenaArray's internal layout.  If that ever
+  // changes the arithmetic below goes silently wrong, so assert the stride rather than
+  // trusting it.
+  if (&mom(type,1,i3,i2,i1) - base != stride) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in AccumulateMoments" << std::endl
+        << "moment slot stride is " << (&mom(type,1,i3,i2,i1) - base)
+        << " but the layout assumption gives " << stride << std::endl;
+    ATHENA_ERROR(msg);
+  }
+#endif
   // Split by whether the component carries the extra factor of c rather than testing it
   // per component; the branch inside the loop costs about a percent of total runtime.
-  mom(type,MomentSlot[0][0],i3,i2,i1) += weight;
+  base[MomentSlot[0][0]*stride] += weight;
   Real wc = weight * c_cgs;
   for (int b=1; b<4; ++b)
-    mom(type,MomentSlot[0][b],i3,i2,i1) += wc * n[b-1];
+    base[MomentSlot[0][b]*stride] += wc * n[b-1];
   for (int a=1; a<4; ++a)
     for (int b=a; b<4; ++b)
-      mom(type,MomentSlot[a][b],i3,i2,i1) += weight * n[a-1] * n[b-1];
+      base[MomentSlot[a][b]*stride] += weight * n[a-1] * n[b-1];
 }
 
 
