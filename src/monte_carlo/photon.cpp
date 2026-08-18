@@ -848,3 +848,53 @@ inline int CheckSide(int xi, int xi1, int xi2) {
   if (xi > xi2) return +1;
   return 0;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void Photon::GetFourVector(int ip, bool unit_spatial, Real k[4]) const
+//! \brief pack the stored photon wavevector into a genuine contravariant four-vector.
+//!
+//! k0p always holds the photon energy in the frame the photon is currently expressed in.
+//! The spatial components are stored one of two ways: as a dimensional k^i (the general
+//! pusher in the coordinate frame), or as a unit propagation direction (everything in the
+//! comoving frame, and the legacy pushers in either frame).  In the latter case the true
+//! four-vector is (E, E*nhat), which is what these helpers reconstruct.  Pass
+//! unit_spatial = true when the spatial components are a unit direction.
+
+void Photon::GetFourVector(int ip, bool unit_spatial, Real k[4]) const {
+#ifdef DEBUG
+  // ep and k0p are still separate arrays until iep is aliased to ik0p; until then this
+  // guards the invariant that they always agree.  Harmless (and always true) afterwards.
+  Real eref = ep[ip];
+  if (std::fabs(k0p[ip] - eref) > 1.0e-12*std::fabs(eref)) {
+    PrintPhoton("ep/k0p invariant violated in GetFourVector", ip);
+    std::stringstream msg;
+    msg << "### FATAL ERROR in GetFourVector" << std::endl
+        << "ep = " << eref << " but k0p = " << k0p[ip] << std::endl;
+    ATHENA_ERROR(msg);
+  }
+#endif
+  Real k0 = k0p[ip];
+  k[IMC0] = k0;
+  Real scale = unit_spatial ? k0 : 1.0;
+  k[IMC1] = k1p[ip] * scale;
+  k[IMC2] = k2p[ip] * scale;
+  k[IMC3] = k3p[ip] * scale;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Photon::SetFourVector(int ip, bool unit_spatial, const Real k[4])
+//! \brief store a four-vector back into the photon, normalizing the spatial part if the
+//! stored representation is a unit direction.
+//!
+//! Reads only from the caller's local array, never from the photon, so it is safe once ep
+//! aliases k0p and the write to k0p is therefore also a write to ep.
+
+void Photon::SetFourVector(int ip, bool unit_spatial, const Real k[4]) {
+  Real inv = unit_spatial ? 1.0/k[IMC0] : 1.0;
+  k0p[ip] = k[IMC0];
+
+  ep[ip] = k[IMC0];
+  k1p[ip] = k[IMC1] * inv;
+  k2p[ip] = k[IMC2] * inv;
+  k3p[ip] = k[IMC3] * inv;
+}

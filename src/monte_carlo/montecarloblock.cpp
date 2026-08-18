@@ -23,231 +23,6 @@
 #include "../globals.hpp"
 #include "../scalars/scalars.hpp"
 
-namespace {
-
-//----------------------------------------------------------------------------------------
-//! \fn void GetFourVector(Photon *pphot, int ip, bool unit_spatial, Real k[4])
-//! \brief pack the stored photon wavevector into a genuine contravariant four-vector.
-//!
-//! k0p always holds the photon energy in the frame the photon is currently expressed in.
-//! The spatial components are stored one of two ways: as a dimensional k^i (the general
-//! pusher in the coordinate frame), or as a unit propagation direction (everything in the
-//! comoving frame, and the legacy pushers in either frame).  In the latter case the true
-//! four-vector is (E, E*nhat), which is what these helpers reconstruct.  Pass
-//! unit_spatial = true when the spatial components are a unit direction.
-
-inline void GetFourVector(Photon *pphot, int ip, bool unit_spatial, Real k[4]) {
-#ifdef DEBUG
-  // ep and k0p are still separate arrays until iep is aliased to ik0p; until then this
-  // guards the invariant that they always agree.  Harmless (and always true) afterwards.
-  Real eref = pphot->ep[ip];
-  if (std::fabs(pphot->k0p[ip] - eref) > 1.0e-12*std::fabs(eref)) {
-    pphot->PrintPhoton("ep/k0p invariant violated in GetFourVector", ip);
-    std::stringstream msg;
-    msg << "### FATAL ERROR in GetFourVector" << std::endl
-        << "ep = " << eref << " but k0p = " << pphot->k0p[ip] << std::endl;
-    ATHENA_ERROR(msg);
-  }
-#endif
-  Real k0 = pphot->k0p[ip];
-  k[IMC0] = k0;
-  Real scale = unit_spatial ? k0 : 1.0;
-  k[IMC1] = pphot->k1p[ip] * scale;
-  k[IMC2] = pphot->k2p[ip] * scale;
-  k[IMC3] = pphot->k3p[ip] * scale;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void SetFourVector(Photon *pphot, int ip, bool unit_spatial, const Real k[4])
-//! \brief store a four-vector back into the photon, normalizing the spatial part if the
-//! stored representation is a unit direction.
-//!
-//! Reads only from the caller's local array, never from the photon, so it is safe once ep
-//! aliases k0p and the write to k0p is therefore also a write to ep.
-
-inline void SetFourVector(Photon *pphot, int ip, bool unit_spatial, const Real k[4]) {
-  Real inv = unit_spatial ? 1.0/k[IMC0] : 1.0;
-  pphot->k0p[ip] = k[IMC0];
-
-  pphot->ep[ip] = k[IMC0];
-  pphot->k1p[ip] = k[IMC1] * inv;
-  pphot->k2p[ip] = k[IMC2] * inv;
-  pphot->k3p[ip] = k[IMC3] * inv;
-}
-
-
-//----------------------------------------------------------------------------------------
-//! \class PhotonFrames
-//! \brief projects one photon into whichever frames are asked for, at most once each.
-//!
-//! The frame logic used to be open-coded at the head of UpdateMoments, which meant any
-//! other consumer wanting comoving quantities had to reimplement the tetrad projection.
-//! Every frame bug found in this code came from exactly that: a convention reimplemented
-//! somewhere new.  Holding it in one place, and caching per call, also means a run with
-//! several comoving user moments pays for one projection rather than one per function.
-
-class PhotonFrames {
- public:
-  PhotonFrames(MonteCarloBlock *pmcb, Photon *pphot, int ip, Real dl)
-      : pmcb_(pmcb), pphot_(pphot), ip_(ip), dl_(dl) {
-    general_ = pmcb->pmy_mc->general_pusher_flag;
-    gr_tetrad_ = general_ && GENERAL_RELATIVITY;
-    if (general_) GetFourVector(pphot, ip, false, kco_);
-    for (int f=0; f<MCFRAME_N; ++f) done_[f] = false;
-  }
-
-  //! the coordinate basis needs a coordinate four-vector, which only the general pusher
-  //! stores; the legacy pushers keep a unit direction in the local orthonormal basis.
-  bool Available(MCFrame f) const { return (f != MCFRAME_COORD) || general_; }
-
-  const Real *Coordinate4Vector() const { return kco_; }
-  bool GRTetrad() const { return gr_tetrad_; }
-
-  const PhotonFrameState &Get(MCFrame f) {
-    if (!done_[f]) { Fill(f); done_[f] = true; }
-    return st_[f];
-  }
-
- private:
-  void Fill(MCFrame f);
-
-  MonteCarloBlock *pmcb_;
-  Photon *pphot_;
-  int ip_;
-  Real dl_;        //!> coordinate path length, as handed in by the pusher
-  Real kco_[4];    //!> coordinate four-vector; general pusher only
-  bool general_, gr_tetrad_;
-  bool done_[MCFRAME_N];
-  PhotonFrameState st_[MCFRAME_N];
-};
-
-void PhotonFrames::Fill(MCFrame f) {
-  PhotonFrameState &s = st_[f];
-  const Real ep = pphot_->ep[ip_];
-  const int i1 = pphot_->i1p[ip_], i2 = pphot_->i2p[ip_], i3 = pphot_->i3p[ip_];
-
-  if (f == MCFRAME_COORD) {
-    // Not orthonormal: n holds k^i/k^0 and is deliberately not normalised.
-    s.e = kco_[IMC0];
-    for (int i=0; i<3; ++i) s.n[i] = kco_[IMC1+i]/ep;
-    s.dl = dl_;
-    return;
-  }
-
-  if (gr_tetrad_) {
-    // One matrix multiply carries the coordinate four-vector to orthonormal components.
-    const AthenaArray<Real> &m = (f == MCFRAME_LAB) ? pmcb_->boost_lab : pmcb_->boost_cmv;
-    Real p[4];
-    for (int a=0; a<4; ++a) {
-      p[a] = 0.;
-      for (int b=0; b<4; ++b) p[a] += m(i3,i2,i1,a,b) * kco_[b];
-    }
-    // k is null at the photon to machine precision, but the tetrad is orthonormal with
-    // respect to the metric at the zone centre, so the projection is not exactly null.
-    // Normalising by the spatial magnitude keeps n a genuine direction and the moment
-    // tensor exactly traceless; the energy comes from the time component.
-    Real mag = std::sqrt(SQR(p[IMC1]) + SQR(p[IMC2]) + SQR(p[IMC3]));
-    s.e = p[IMC0];
-    for (int i=0; i<3; ++i) s.n[i] = p[IMC1+i]/mag;
-    s.dl = dl_ * s.e / ep;
-    return;
-  }
-
-  // ---- flat spacetime ----
-  if (f == MCFRAME_LAB) {
-    if (general_) {
-      Real x[4] = {pphot_->x0p[ip_], pphot_->x1p[ip_], pphot_->x2p[ip_], pphot_->x3p[ip_]};
-      Real invtet[4][4], kf[4];
-      pmcb_->pcoord->InverseTetrad(x, invtet);
-      for (int a=0; a<4; ++a) {
-        kf[a] = 0.;
-        for (int b=0; b<4; ++b) kf[a] += invtet[a][b] * kco_[b];
-      }
-      // The tetrad time leg is unity for every flat coordinate system, so kf[0] == ep and
-      // dividing the spatial parts by ep is the same unit direction the legacy pushers
-      // store.  Kept in this form rather than normalised by the spatial magnitude so the
-      // arithmetic is unchanged from before this was factored out.
-      s.e = kf[IMC0];
-      for (int i=0; i<3; ++i) s.n[i] = kf[IMC1+i]/ep;
-    } else {
-      s.e = ep;
-      s.n[0] = pphot_->k1p[ip_];
-      s.n[1] = pphot_->k2p[ip_];
-      s.n[2] = pphot_->k3p[ip_];
-      if (std::strcmp(COORDINATE_SYSTEM, "spherical_polar") == 0) {
-        // Re-express the direction in the orthonormal basis at the zone centre, which is
-        // the basis the moments are accumulated in.
-        Real sth = std::sin(pphot_->x2p[ip_]), cth = std::cos(pphot_->x2p[ip_]);
-        Real sph = std::sin(pphot_->x3p[ip_]), cph = std::cos(pphot_->x3p[ip_]);
-        Real nx = sth*cph*s.n[0] + cth*cph*s.n[1] - sph*s.n[2];
-        Real ny = sth*sph*s.n[0] + cth*sph*s.n[1] + cph*s.n[2];
-        Real nz = cth*s.n[0] - sth*s.n[1];
-        sth = std::sin(pmcb_->pmy_block->pcoord->x2v(i2));
-        cth = std::cos(pmcb_->pmy_block->pcoord->x2v(i2));
-        sph = std::sin(pmcb_->pmy_block->pcoord->x3v(i3));
-        cph = std::cos(pmcb_->pmy_block->pcoord->x3v(i3));
-        s.n[0] = sth*cph*nx + sth*sph*ny + cth*nz;
-        s.n[1] = cth*cph*nx + cth*sph*ny - sth*nz;
-        s.n[2] = -sph*nx + cph*ny;
-      }
-    }
-    s.dl = dl_;
-    return;
-  }
-
-  // comoving in flat spacetime: boost the lab direction, which is where boost_cmv acts
-  const PhotonFrameState &lab = Get(MCFRAME_LAB);
-  Real ki[4] = {1., lab.n[0], lab.n[1], lab.n[2]};
-  Real kc[4];
-  for (int a=0; a<4; ++a) {
-    kc[a] = 0.;
-    for (int b=0; b<4; ++b) kc[a] += pmcb_->boost_cmv(i3,i2,i1,a,b) * ki[b];
-  }
-  Real shift = kc[IMC0];
-  s.e = ep * shift;
-  for (int i=0; i<3; ++i) s.n[i] = kc[IMC1+i]/kc[IMC0];
-  s.dl = dl_ * shift;
-}
-
-
-//----------------------------------------------------------------------------------------
-//! \fn void AccumulateMoments(...)
-//! \brief add one photon's contribution to a moment array in a given frame
-//!
-//! This is the covariant estimator T^(a)(b) = sum w p^(a) p^(b) dlambda, written in terms
-//! of the energy and unit direction that PhotonFrames returns.  Every basis uses it, so
-//! the three cannot drift apart the way the lab and comoving paths once did.
-
-inline void AccumulateMoments(AthenaArray<Real> &mom, int type,
-                              int i3, int i2, int i1,
-                              const PhotonFrameState &s, Real wp, Real c_cgs) {
-  Real weight = wp * s.e * s.dl / c_cgs;
-  const Real *n = s.n;
-  mom(type,MCIER,i3,i2,i1)   += weight;
-  mom(type,MCIFR1,i3,i2,i1)  += weight * n[0] * c_cgs;
-  mom(type,MCIFR2,i3,i2,i1)  += weight * n[1] * c_cgs;
-  mom(type,MCIFR3,i3,i2,i1)  += weight * n[2] * c_cgs;
-  mom(type,MCIPR11,i3,i2,i1) += weight * n[0] * n[0];
-  mom(type,MCIPR22,i3,i2,i1) += weight * n[1] * n[1];
-  mom(type,MCIPR33,i3,i2,i1) += weight * n[2] * n[2];
-  mom(type,MCIPR12,i3,i2,i1) += weight * n[0] * n[1];
-  mom(type,MCIPR13,i3,i2,i1) += weight * n[0] * n[2];
-  mom(type,MCIPR23,i3,i2,i1) += weight * n[1] * n[2];
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn bool FrameStateFinite(const PhotonFrameState &s, Real wp)
-//! \brief guard against a photon whose projection has gone bad
-
-inline bool FrameStateFinite(const PhotonFrameState &s, Real wp) {
-  Real weight = wp * s.e * s.dl;
-  return !(std::isinf(weight) || std::isnan(weight)
-           || std::isnan(s.n[0]) || std::isinf(s.n[0])
-           || std::isnan(s.n[1]) || std::isinf(s.n[1])
-           || std::isnan(s.n[2]) || std::isinf(s.n[2]));
-}
-
-} // namespace
 
 //----------------------------------------------------------------------------------------
 //! MonteCarloBlock constructor, builds MonteCarloBlock from parameter input
@@ -1095,7 +870,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
 
   if (mom_flag_lab) {
     const PhotonFrameState &s = frames.Get(MCFRAME_LAB);
-    if (!FrameStateFinite(s, wp)) {
+    if (!s.Finite(wp)) {
       pphot->statp[ip] = DESTROYED;
       if (pmy_mc->verbose) {
         pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
@@ -1103,15 +878,15 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
       }
       return;
     }
-    AccumulateMoments(moments, type, i3, i2, i1, s, wp, c_cgs);
+    AccumulateMoments(moments, type, i3, i2, i1, s, wp);
   }
 
   // Coordinate basis.  Needs no projection at all, so it is the cheapest of the three;
   // only the general pusher stores the coordinate four-vector it is built from.
   if (mom_flag_coord && frames.Available(MCFRAME_COORD)) {
     const PhotonFrameState &s = frames.Get(MCFRAME_COORD);
-    if (FrameStateFinite(s, wp))
-      AccumulateMoments(moments_coord, type, i3, i2, i1, s, wp, c_cgs);
+    if (s.Finite(wp))
+      AccumulateMoments(moments_coord, type, i3, i2, i1, s, wp);
   }
 
   // add contribution to scattering source terms
@@ -1143,7 +918,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
 
   if (mom_flag_com && accumulate_com) {
     const PhotonFrameState &s = frames.Get(MCFRAME_COMOVING);
-    if (!FrameStateFinite(s, wp)) {
+    if (!s.Finite(wp)) {
       pphot->statp[ip] = DESTROYED;
       if (pmy_mc->verbose) {
         pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
@@ -1151,7 +926,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
       }
       return;
     }
-    AccumulateMoments(moments_com, type, i3, i2, i1, s, wp, c_cgs);
+    AccumulateMoments(moments_com, type, i3, i2, i1, s, wp);
   }
 
   if (mom_flag_usr) {
@@ -1308,121 +1083,6 @@ void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl,
 //! \fn void MonteCarloBlock::NormalizeMoments(bool normalize)
 //! \brief (un)normalized moments for output and copy symmetric elements
 
-
-//----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::ComovingFrameMatrix(...)
-//! \brief the lab -> comoving transformation for one zone
-//!
-//! Both frames are orthonormal at the same event, so this is a Lorentz transformation.
-//! In general relativity it must be composed from the two tetrads rather than rebuilt as
-//! a pure boost from beta: the Gram-Schmidt legs are grown from the same coordinate trial
-//! vectors against different timelike directions, so the map is a boost composed with a
-//! rotation whenever the fluid velocity has all three spatial components.  A pure boost
-//! would leave Er correct, being a scalar, while silently rotating flux and pressure.
-
-void MonteCarloBlock::ComovingFrameMatrix(int k, int j, int i, const AthenaArray<Real> &g,
-                                          const AthenaArray<Real> &gi, Real lam[4][4]) {
-  if (!GENERAL_RELATIVITY) {
-    // boost_cmv already maps lab-frame components to the comoving frame.
-    for (int a=0; a<4; ++a)
-      for (int b=0; b<4; ++b) lam[a][b] = boost_cmv(k,j,i,a,b);
-    return;
-  }
-
-  Real x[4];
-  x[IMC0] = 0.;
-  x[IMC1] = pmy_block->pcoord->x1v(i);
-  x[IMC2] = pmy_block->pcoord->x2v(j);
-  x[IMC3] = pmy_block->pcoord->x3v(k);
-  Real gcov[4][4];
-  pcoord->Metric(x, gcov);
-
-  Real alpha = 1.0/std::sqrt(-gi(I00,i));
-  Real ncon[4];
-  ncon[IMC0] = -alpha*gi(I00,i);
-  ncon[IMC1] = -alpha*gi(I01,i);
-  ncon[IMC2] = -alpha*gi(I02,i);
-  ncon[IMC3] = -alpha*gi(I03,i);
-  Real econL[4][4], ecovL[4][4];
-  ConstructTetrad(ncon, gcov, econL, ecovL);
-
-  Real ucon[4];
-  for (int m=0; m<4; ++m) ucon[m] = vel(k,j,i,m);
-  Real econF[4][4], ecovF[4][4];
-  ConstructTetrad(ucon, gcov, econF, ecovF);
-
-  for (int a=0; a<4; ++a) {
-    for (int b=0; b<4; ++b) {
-      lam[a][b] = 0.;
-      for (int m=0; m<4; ++m) lam[a][b] += ecovF[a][m] * econL[b][m];
-    }
-  }
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void MonteCarloBlock::DeriveComovingMoments()
-//! \brief fill moments_com by transforming the accumulated lab moments
-//!
-//! The moments are a rank two tensor and the transformation is the same matrix for every
-//! photon in the zone, so sum Lp Lp == L (sum p p) L exactly.  Deriving is therefore not
-//! an approximation of accumulating, and it removes the second per-photon projection --
-//! measured at 5% of runtime on the general pusher and 12% on the legacy pusher.
-
-void MonteCarloBlock::DeriveComovingMoments() {
-  const Real c_cgs = MCConstants::c_cgs;
-  AthenaArray<Real> g, gi;
-  if (GENERAL_RELATIVITY) {
-    g.NewAthenaArray(NMETRIC,ie+1);
-    gi.NewAthenaArray(NMETRIC,ie+1);
-  }
-  for (int k=ks; k<=ke; ++k) {
-    for (int j=js; j<=je; ++j) {
-      if (GENERAL_RELATIVITY) pmy_block->pcoord->CellMetric(k,j,is,ie,g,gi);
-      for (int i=is; i<=ie; ++i) {
-        Real lam[4][4];
-        ComovingFrameMatrix(k,j,i,g,gi,lam);
-        for (int m=0; m<pmy_mc->ntype; ++m) {
-          // stored convention: Er = T^00, Frmc_i = c T^0i, Prmc_ij = T^ij
-          Real T[4][4];
-          T[0][0] = moments(m,MCIER,k,j,i);
-          T[0][1] = T[1][0] = moments(m,MCIFR1,k,j,i)/c_cgs;
-          T[0][2] = T[2][0] = moments(m,MCIFR2,k,j,i)/c_cgs;
-          T[0][3] = T[3][0] = moments(m,MCIFR3,k,j,i)/c_cgs;
-          T[1][1] = moments(m,MCIPR11,k,j,i);
-          T[2][2] = moments(m,MCIPR22,k,j,i);
-          T[3][3] = moments(m,MCIPR33,k,j,i);
-          T[1][2] = T[2][1] = moments(m,MCIPR12,k,j,i);
-          T[1][3] = T[3][1] = moments(m,MCIPR13,k,j,i);
-          T[2][3] = T[3][2] = moments(m,MCIPR23,k,j,i);
-
-          Real T1[4][4], U[4][4];
-          for (int a=0; a<4; ++a)
-            for (int b=0; b<4; ++b) {
-              T1[a][b] = 0.;
-              for (int c=0; c<4; ++c) T1[a][b] += lam[a][c]*T[c][b];
-            }
-          for (int a=0; a<4; ++a)
-            for (int b=0; b<4; ++b) {
-              U[a][b] = 0.;
-              for (int c=0; c<4; ++c) U[a][b] += T1[a][c]*lam[b][c];
-            }
-
-          moments_com(m,MCIER,k,j,i)   = U[0][0];
-          moments_com(m,MCIFR1,k,j,i)  = U[0][1]*c_cgs;
-          moments_com(m,MCIFR2,k,j,i)  = U[0][2]*c_cgs;
-          moments_com(m,MCIFR3,k,j,i)  = U[0][3]*c_cgs;
-          moments_com(m,MCIPR11,k,j,i) = U[1][1];
-          moments_com(m,MCIPR22,k,j,i) = U[2][2];
-          moments_com(m,MCIPR33,k,j,i) = U[3][3];
-          moments_com(m,MCIPR12,k,j,i) = U[1][2];
-          moments_com(m,MCIPR13,k,j,i) = U[1][3];
-          moments_com(m,MCIPR23,k,j,i) = U[2][3];
-        }
-      }
-    }
-  }
-  if (GENERAL_RELATIVITY) { g.DeleteAthenaArray(); gi.DeleteAthenaArray(); }
-}
 
 void MonteCarloBlock::NormalizeMoments(bool normalize) {
 
@@ -2501,13 +2161,13 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
       // Transform to comoving tetrad.  In GR the coordinate-frame spatial components are
       // dimensional, the comoving ones are a unit direction.
       Real kcopy[4], k[4];
-      GetFourVector(pphot, ip, false, kcopy);
+      pphot->GetFourVector(ip, false, kcopy);
       CoordinateToTetrad(kcopy, k, ecov);
 
       // nufact must be taken from the local array: k0p is the energy, so writing it
       // below also writes ep.
       Real nufact = k[IMC0]/k0init;
-      SetFourVector(pphot, ip, true, k);
+      pphot->SetFourVector(ip, true, k);
 
       pphot->acp[ip] /= nufact;
       pphot->scp[ip] /= nufact;
@@ -2523,7 +2183,7 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
       // The general pusher stores dimensional spatial components in the coordinate
       // frame; the legacy pushers store a unit direction.
       Real ki[4], kf[4];
-      GetFourVector(pphot, ip, !pmy_mc->general_pusher_flag, kf);
+      pphot->GetFourVector(ip, !pmy_mc->general_pusher_flag, kf);
 
       if (pmy_mc->general_pusher_flag) {
         for (int i=0; i<4; i++) ki[i] = kf[i];
@@ -2553,7 +2213,7 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
       // Take nufact before storing: k0p is the energy, so the store also writes ep.
       Real nufact = kf[IMC0]/k0init;
       // comoving frame always keeps a unit propagation direction
-      SetFourVector(pphot, ip, true, kf);
+      pphot->SetFourVector(ip, true, kf);
 
       if ((COORDINATE_SYSTEM == "spherical_polar") && pmy_mc->polarized) {
         // re-express the unit direction in cartesian components for the Stokes algebra
@@ -2611,14 +2271,14 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
       // Transform out of the comoving tetrad.  Comoving stores a unit direction, the GR
       // coordinate frame stores dimensional components.
       Real kcopy[4], k[4];
-      GetFourVector(pphot, ip, true, kcopy);
+      pphot->GetFourVector(ip, true, kcopy);
       Real k0init = kcopy[IMC0];
 
       TetradToCoordinate(kcopy, k, econ);
 
       // nufact must be taken before storing: writing k0p also writes ep.
       Real nufact = k[IMC0]/k0init;
-      SetFourVector(pphot, ip, false, k);
+      pphot->SetFourVector(ip, false, k);
 
       pphot->acp[ip] /= nufact;
       pphot->scp[ip] /= nufact;
@@ -2652,7 +2312,7 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
       Real k0init = pphot->k0p[ip];
       // comoving frame stores a unit direction
       Real ki[4], kf[4];
-      GetFourVector(pphot, ip, true, kf);
+      pphot->GetFourVector(ip, true, kf);
 
       if (boosts) {
         for (int i=0; i<4; i++) ki[i] = kf[i];
@@ -2683,7 +2343,7 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
       // keeps dimensional spatial components in the coordinate frame; the legacy
       // pushers keep a unit direction.
       Real nufact = kf[IMC0]/k0init;
-      SetFourVector(pphot, ip, !pmy_mc->general_pusher_flag, kf);
+      pphot->SetFourVector(ip, !pmy_mc->general_pusher_flag, kf);
       // update opacities
       pphot->acp[ip] /= nufact;
       pphot->scp[ip] /= nufact;
@@ -2722,7 +2382,7 @@ Real  MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip) {
     Real k0init = pphot->k0p[ip];
     // Called from the coordinate frame, where GR keeps dimensional components.
     Real kcopy[4], k[4];
-    GetFourVector(pphot, ip, false, kcopy);
+    pphot->GetFourVector(ip, false, kcopy);
     CoordinateToTetrad(kcopy, k, ecov);
 
     return k[IMC0]/k0init;
@@ -2735,7 +2395,7 @@ Real  MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip) {
     // Called from the coordinate frame: the general pusher keeps dimensional spatial
     // components there, the legacy pushers keep a unit direction.
     Real ki[4], kf[4];
-    GetFourVector(pphot, ip, !pmy_mc->general_pusher_flag, kf);
+    pphot->GetFourVector(ip, !pmy_mc->general_pusher_flag, kf);
 
     if (tetrads) {
       for (int i=0; i<4; i++) ki[i] = kf[i];

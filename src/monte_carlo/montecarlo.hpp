@@ -11,6 +11,7 @@
 // Current design focusses on implementing static post-processing so these class
 // implementations will evolve.
 
+#include <cmath>    // isnan, isinf
 #include <sstream>
 #include <complex>
 #include <random>
@@ -98,11 +99,73 @@ struct PhotonFrameState {
   Real e;     //!> photon energy in this frame
   Real n[3];  //!> propagation direction in this frame
   Real dl;    //!> path length in this frame
+
+  //! guard against a photon whose projection has gone bad
+  bool Finite(Real wp) const {
+    Real weight = wp * e * dl;
+    return !(std::isinf(weight) || std::isnan(weight)
+             || std::isnan(n[0]) || std::isinf(n[0])
+             || std::isnan(n[1]) || std::isinf(n[1])
+             || std::isnan(n[2]) || std::isinf(n[2]));
+  }
+};
+
+
+//----------------------------------------------------------------------------------------
+//! \class PhotonFrames
+//! \brief projects one photon into whichever frames are asked for, at most once each.
+//!
+//! The frame logic used to be open-coded at the head of UpdateMoments, which meant any
+//! other consumer wanting comoving quantities had to reimplement the tetrad projection.
+//! Every frame bug found in this code came from exactly that: a convention reimplemented
+//! somewhere new.  Caching per call also means a run with several comoving user moments
+//! pays for one projection rather than one per function.
+
+class PhotonFrames {
+ public:
+  PhotonFrames(MonteCarloBlock *pmcb, Photon *pphot, int ip, Real dl);
+
+  //! the coordinate basis needs a coordinate four-vector, which only the general pusher
+  //! stores; the legacy pushers keep a unit direction in the local orthonormal basis.
+  bool Available(MCFrame f) const { return (f != MCFRAME_COORD) || general_; }
+  bool GRTetrad() const { return gr_tetrad_; }
+  const Real *Coordinate4Vector() const { return kco_; }
+
+  const PhotonFrameState &Get(MCFrame f) {
+    if (!done_[f]) { Fill(f); done_[f] = true; }
+    return st_[f];
+  }
+
+ private:
+  void Fill(MCFrame f);
+
+  MonteCarloBlock *pmcb_;
+  Photon *pphot_;
+  int ip_;
+  Real dl_;        //!> coordinate path length, as handed in by the pusher
+  Real kco_[4];    //!> coordinate four-vector; general pusher only
+  bool general_, gr_tetrad_;
+  bool done_[MCFRAME_N];
+  PhotonFrameState st_[MCFRAME_N];
 };
 
 // Array indices for monte carlo radiation moments
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
       MCIPR12=7, MCIPR13=8, MCIPR23=9, MCIPR21=10, MCIPR31=11, MCIPR32=12};
+
+//----------------------------------------------------------------------------------------
+//! \brief storage slot for each component of the moment tensor.
+//!
+//! The moment arrays hold Er = T^00, Frmc_i = c T^0i and Prmc_ij = T^ij.  Keeping that
+//! mapping in one table is what stops the accumulation and the frame transform, which are
+//! inverses of each other, from drifting apart.  The 0i entries carry the extra factor of
+//! c; MomentNeedsC() says which those are.
+const int MomentSlot[4][4] = {{MCIER, MCIFR1, MCIFR2, MCIFR3},
+                              {MCIFR1, MCIPR11, MCIPR12, MCIPR13},
+                              {MCIFR2, MCIPR12, MCIPR22, MCIPR23},
+                              {MCIFR3, MCIPR13, MCIPR23, MCIPR33}};
+
+inline bool MomentNeedsC(int a, int b) { return (a == 0) != (b == 0); }
 enum SourceTermFlag {MCRS0 = 0, MCRS1=1, MCRS2=2, MCRS3=3, MCRF0=4, MCRF1=5,
                      MCRF2=6, MCRF3=7, MCNABS=8};
 //----------------------------------------------------------------------------------------
@@ -458,6 +521,8 @@ public:
   void UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl, Real k1, Real k2,
                                  Real k3,Real etau, int ip);
   void NormalizeMoments(bool normalize);
+  void AccumulateMoments(AthenaArray<Real> &mom, int type, int i3, int i2, int i1,
+                         const PhotonFrameState &s, Real wp);
   void ComovingFrameMatrix(int k, int j, int i, const AthenaArray<Real> &g,
                            const AthenaArray<Real> &gi, Real lam[4][4]);
   void DeriveComovingMoments();

@@ -35,6 +35,12 @@ public:
   // public functions
   //void RemoveOneParticle(int k);
   void PrintPhoton(const std::string &msg, int ip);
+
+  //! pack/unpack the stored wavevector as a genuine contravariant four-vector.  The
+  //! spatial components are stored either as a dimensional k^i or as a unit direction,
+  //! and these hide that difference from everything that just wants the four-vector.
+  void GetFourVector(int ip, bool unit_spatial, Real k[4]) const;
+  void SetFourVector(int ip, bool unit_spatial, const Real k[4]);
   void PrintPhoton(int ip);
   bool IsNanPhoton(int ip);
   void PolarizationToTetrad(std::complex<Real> ttet[4][4], Real ecov[4][4], const int ip);
