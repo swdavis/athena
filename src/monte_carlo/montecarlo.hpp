@@ -75,6 +75,31 @@ enum ScatteringFlag {SCATUSER = 0, SCATNONE =1, SCATISO = 2, SCATTHOM = 3, SCATC
 enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY = 2,
                      MC_DESTROY_BNDRY = 3, MC_POLAR_BNDRY = 4, MC_REFLECT_BNDRY = 5,
                      MC_USER_BNDRY = 6, MC_BLOCK_BNDRY = 7};
+//! \brief the frames radiation moments can be reported in.
+//!
+//! MCFRAME_LAB and MCFRAME_COMOVING are orthonormal: in general relativity they are the
+//! tetrads of the normal (Eulerian) observer and of the frame vel is built on, and in flat
+//! spacetime they are the Eulerian frame and its Lorentz boost.  MCFRAME_COORD is the raw
+//! coordinate basis, which is not orthonormal -- its components are dimensionally
+//! inhomogeneous by construction, which is what makes them the right form to hand to the
+//! GRMHD conservative variables.
+enum MCFrame {MCFRAME_LAB = 0, MCFRAME_COMOVING = 1, MCFRAME_COORD = 2, MCFRAME_N = 3};
+
+//----------------------------------------------------------------------------------------
+//! \struct PhotonFrameState
+//! \brief a photon's energy, propagation direction and path length in one frame
+//!
+//! dl belongs here rather than being passed alongside: the pushers hand UpdateMoments a
+//! coordinate path length, and the length in any other frame differs by that frame's
+//! energy over ep.  Handing a caller a frame-correct energy next to a coordinate dl moves
+//! that trap rather than removing it.  n is a unit vector in the orthonormal frames; in
+//! MCFRAME_COORD it holds k^i/k^0 and is not normalised.
+struct PhotonFrameState {
+  Real e;     //!> photon energy in this frame
+  Real n[3];  //!> propagation direction in this frame
+  Real dl;    //!> path length in this frame
+};
+
 // Array indices for monte carlo radiation moments
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
       MCIPR12=7, MCIPR13=8, MCIPR23=9, MCIPR21=10, MCIPR31=11, MCIPR32=12};

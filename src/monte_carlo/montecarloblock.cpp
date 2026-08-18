@@ -7,6 +7,7 @@
 //! \brief implementation of functions in class MonteCarloBlock
 
 // C++ headers
+#include <cstring>   // strcmp
 #include <iostream>
 #include <stdexcept>  // runtime_error
 
@@ -67,13 +68,183 @@ inline void GetFourVector(Photon *pphot, int ip, bool unit_spatial, Real k[4]) {
 inline void SetFourVector(Photon *pphot, int ip, bool unit_spatial, const Real k[4]) {
   Real inv = unit_spatial ? 1.0/k[IMC0] : 1.0;
   pphot->k0p[ip] = k[IMC0];
-  // ep is still a distinct array until iep is aliased to ik0p; keeping it in step here is
-  // what lets the two conventions coexist during the changeover.  Becomes a
-  // self-assignment once aliased.
+
   pphot->ep[ip] = k[IMC0];
   pphot->k1p[ip] = k[IMC1] * inv;
   pphot->k2p[ip] = k[IMC2] * inv;
   pphot->k3p[ip] = k[IMC3] * inv;
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \class PhotonFrames
+//! \brief projects one photon into whichever frames are asked for, at most once each.
+//!
+//! The frame logic used to be open-coded at the head of UpdateMoments, which meant any
+//! other consumer wanting comoving quantities had to reimplement the tetrad projection.
+//! Every frame bug found in this code came from exactly that: a convention reimplemented
+//! somewhere new.  Holding it in one place, and caching per call, also means a run with
+//! several comoving user moments pays for one projection rather than one per function.
+
+class PhotonFrames {
+ public:
+  PhotonFrames(MonteCarloBlock *pmcb, Photon *pphot, int ip, Real dl)
+      : pmcb_(pmcb), pphot_(pphot), ip_(ip), dl_(dl) {
+    general_ = pmcb->pmy_mc->general_pusher_flag;
+    gr_tetrad_ = general_ && GENERAL_RELATIVITY;
+    if (general_) GetFourVector(pphot, ip, false, kco_);
+    for (int f=0; f<MCFRAME_N; ++f) done_[f] = false;
+  }
+
+  //! the coordinate basis needs a coordinate four-vector, which only the general pusher
+  //! stores; the legacy pushers keep a unit direction in the local orthonormal basis.
+  bool Available(MCFrame f) const { return (f != MCFRAME_COORD) || general_; }
+
+  const Real *Coordinate4Vector() const { return kco_; }
+  bool GRTetrad() const { return gr_tetrad_; }
+
+  const PhotonFrameState &Get(MCFrame f) {
+    if (!done_[f]) { Fill(f); done_[f] = true; }
+    return st_[f];
+  }
+
+ private:
+  void Fill(MCFrame f);
+
+  MonteCarloBlock *pmcb_;
+  Photon *pphot_;
+  int ip_;
+  Real dl_;        //!> coordinate path length, as handed in by the pusher
+  Real kco_[4];    //!> coordinate four-vector; general pusher only
+  bool general_, gr_tetrad_;
+  bool done_[MCFRAME_N];
+  PhotonFrameState st_[MCFRAME_N];
+};
+
+void PhotonFrames::Fill(MCFrame f) {
+  PhotonFrameState &s = st_[f];
+  const Real ep = pphot_->ep[ip_];
+  const int i1 = pphot_->i1p[ip_], i2 = pphot_->i2p[ip_], i3 = pphot_->i3p[ip_];
+
+  if (f == MCFRAME_COORD) {
+    // Not orthonormal: n holds k^i/k^0 and is deliberately not normalised.
+    s.e = kco_[IMC0];
+    for (int i=0; i<3; ++i) s.n[i] = kco_[IMC1+i]/ep;
+    s.dl = dl_;
+    return;
+  }
+
+  if (gr_tetrad_) {
+    // One matrix multiply carries the coordinate four-vector to orthonormal components.
+    const AthenaArray<Real> &m = (f == MCFRAME_LAB) ? pmcb_->boost_lab : pmcb_->boost_cmv;
+    Real p[4];
+    for (int a=0; a<4; ++a) {
+      p[a] = 0.;
+      for (int b=0; b<4; ++b) p[a] += m(i3,i2,i1,a,b) * kco_[b];
+    }
+    // k is null at the photon to machine precision, but the tetrad is orthonormal with
+    // respect to the metric at the zone centre, so the projection is not exactly null.
+    // Normalising by the spatial magnitude keeps n a genuine direction and the moment
+    // tensor exactly traceless; the energy comes from the time component.
+    Real mag = std::sqrt(SQR(p[IMC1]) + SQR(p[IMC2]) + SQR(p[IMC3]));
+    s.e = p[IMC0];
+    for (int i=0; i<3; ++i) s.n[i] = p[IMC1+i]/mag;
+    s.dl = dl_ * s.e / ep;
+    return;
+  }
+
+  // ---- flat spacetime ----
+  if (f == MCFRAME_LAB) {
+    if (general_) {
+      Real x[4] = {pphot_->x0p[ip_], pphot_->x1p[ip_], pphot_->x2p[ip_], pphot_->x3p[ip_]};
+      Real invtet[4][4], kf[4];
+      pmcb_->pcoord->InverseTetrad(x, invtet);
+      for (int a=0; a<4; ++a) {
+        kf[a] = 0.;
+        for (int b=0; b<4; ++b) kf[a] += invtet[a][b] * kco_[b];
+      }
+      // The tetrad time leg is unity for every flat coordinate system, so kf[0] == ep and
+      // dividing the spatial parts by ep is the same unit direction the legacy pushers
+      // store.  Kept in this form rather than normalised by the spatial magnitude so the
+      // arithmetic is unchanged from before this was factored out.
+      s.e = kf[IMC0];
+      for (int i=0; i<3; ++i) s.n[i] = kf[IMC1+i]/ep;
+    } else {
+      s.e = ep;
+      s.n[0] = pphot_->k1p[ip_];
+      s.n[1] = pphot_->k2p[ip_];
+      s.n[2] = pphot_->k3p[ip_];
+      if (std::strcmp(COORDINATE_SYSTEM, "spherical_polar") == 0) {
+        // Re-express the direction in the orthonormal basis at the zone centre, which is
+        // the basis the moments are accumulated in.
+        Real sth = std::sin(pphot_->x2p[ip_]), cth = std::cos(pphot_->x2p[ip_]);
+        Real sph = std::sin(pphot_->x3p[ip_]), cph = std::cos(pphot_->x3p[ip_]);
+        Real nx = sth*cph*s.n[0] + cth*cph*s.n[1] - sph*s.n[2];
+        Real ny = sth*sph*s.n[0] + cth*sph*s.n[1] + cph*s.n[2];
+        Real nz = cth*s.n[0] - sth*s.n[1];
+        sth = std::sin(pmcb_->pmy_block->pcoord->x2v(i2));
+        cth = std::cos(pmcb_->pmy_block->pcoord->x2v(i2));
+        sph = std::sin(pmcb_->pmy_block->pcoord->x3v(i3));
+        cph = std::cos(pmcb_->pmy_block->pcoord->x3v(i3));
+        s.n[0] = sth*cph*nx + sth*sph*ny + cth*nz;
+        s.n[1] = cth*cph*nx + cth*sph*ny - sth*nz;
+        s.n[2] = -sph*nx + cph*ny;
+      }
+    }
+    s.dl = dl_;
+    return;
+  }
+
+  // comoving in flat spacetime: boost the lab direction, which is where boost_cmv acts
+  const PhotonFrameState &lab = Get(MCFRAME_LAB);
+  Real ki[4] = {1., lab.n[0], lab.n[1], lab.n[2]};
+  Real kc[4];
+  for (int a=0; a<4; ++a) {
+    kc[a] = 0.;
+    for (int b=0; b<4; ++b) kc[a] += pmcb_->boost_cmv(i3,i2,i1,a,b) * ki[b];
+  }
+  Real shift = kc[IMC0];
+  s.e = ep * shift;
+  for (int i=0; i<3; ++i) s.n[i] = kc[IMC1+i]/kc[IMC0];
+  s.dl = dl_ * shift;
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void AccumulateMoments(...)
+//! \brief add one photon's contribution to a moment array in a given frame
+//!
+//! This is the covariant estimator T^(a)(b) = sum w p^(a) p^(b) dlambda, written in terms
+//! of the energy and unit direction that PhotonFrames returns.  Every basis uses it, so
+//! the three cannot drift apart the way the lab and comoving paths once did.
+
+inline void AccumulateMoments(AthenaArray<Real> &mom, int type,
+                              int i3, int i2, int i1,
+                              const PhotonFrameState &s, Real wp, Real c_cgs) {
+  Real weight = wp * s.e * s.dl / c_cgs;
+  const Real *n = s.n;
+  mom(type,MCIER,i3,i2,i1)   += weight;
+  mom(type,MCIFR1,i3,i2,i1)  += weight * n[0] * c_cgs;
+  mom(type,MCIFR2,i3,i2,i1)  += weight * n[1] * c_cgs;
+  mom(type,MCIFR3,i3,i2,i1)  += weight * n[2] * c_cgs;
+  mom(type,MCIPR11,i3,i2,i1) += weight * n[0] * n[0];
+  mom(type,MCIPR22,i3,i2,i1) += weight * n[1] * n[1];
+  mom(type,MCIPR33,i3,i2,i1) += weight * n[2] * n[2];
+  mom(type,MCIPR12,i3,i2,i1) += weight * n[0] * n[1];
+  mom(type,MCIPR13,i3,i2,i1) += weight * n[0] * n[2];
+  mom(type,MCIPR23,i3,i2,i1) += weight * n[1] * n[2];
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn bool FrameStateFinite(const PhotonFrameState &s, Real wp)
+//! \brief guard against a photon whose projection has gone bad
+
+inline bool FrameStateFinite(const PhotonFrameState &s, Real wp) {
+  Real weight = wp * s.e * s.dl;
+  return !(std::isinf(weight) || std::isnan(weight)
+           || std::isnan(s.n[0]) || std::isinf(s.n[0])
+           || std::isnan(s.n[1]) || std::isinf(s.n[1])
+           || std::isnan(s.n[2]) || std::isinf(s.n[2]));
 }
 
 } // namespace
@@ -906,169 +1077,46 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   int i2 = pphot->i2p[ip];
   int i3 = pphot->i3p[ip];
 
-  Real k0,k1,k2,k3,weight;
   const Real c_cgs = MCConstants::c_cgs;
-  Real kco[4]; // coordinate four-vector
-  bool gr_tetrad = false; // boost_lab/boost_cmv hold GR tetrad legs rather than boosts  
-  bool have_kco = pmy_mc->general_pusher_flag;
-  if (pmy_mc->general_pusher_flag && GENERAL_RELATIVITY) {
-    // Project the coordinate four-vector onto the normal-observer tetrad that
-    // ComputeTransformations() stored for this zone. 
-    //
-    // dl arrives from the pusher as step*ep*l_cgs, a coordinate path length.  The path
-    // length in this frame is larger by elab/ep, which is the factor that turns the
-    // accumulation below into the covariant estimator w p^(a) p^(b) dlambda.
-    gr_tetrad = true;
-    GetFourVector(pphot, ip, false, kco);
-    Real plab[4];
-    for (int a=0; a<4; a++) {
-      plab[a] = 0.;
-      for (int m=0; m<4; m++)
-        plab[a] += boost_lab(i3,i2,i1,a,m) * kco[m];
-    }
-    Real elab = plab[IMC0];
-    // k is null to machine precision at the photon, but the tetrad is orthonormal with
-    // respect to the metric at the zone centre, so the projection is not exactly null and
-    // plab[IMC1..3] / elab is not exactly a unit vector -- off by the cell-scale variation
-    // of the metric, which is ~10% for the coarse angular cells these problems use.
-    // Normalising by the spatial magnitude instead keeps n a genuine direction, which is
-    // what the legacy pushers store by construction, and keeps the moment tensor exactly
-    // traceless (Er = P11+P22+P33) as a null-photon stress tensor must be.  The energy
-    // still comes from the time component, which is accurate to ~1e-4.
-    Real nlab = std::sqrt(SQR(plab[IMC1]) + SQR(plab[IMC2]) + SQR(plab[IMC3]));
-    k0 = 1.;
-    k1 = plab[IMC1]/nlab;
-    k2 = plab[IMC2]/nlab;
-    k3 = plab[IMC3]/nlab;
-    weight = pphot->wp[ip] * elab * (dl * elab / pphot->ep[ip]) / c_cgs;
-  } else if (pmy_mc->general_pusher_flag) {
-    // Computes k values in an orthonormal tetrad frame specificed for each
-    // coordinate system.
-    Real ki[4];
-    GetFourVector(pphot, ip, false, ki);
-    for (int m=0; m<4; m++)
-      kco[m] = ki[m];
-    Real x[4];
-    x[0] = pphot->x0p[ip];
-    x[1] = pphot->x1p[ip];
-    x[2] = pphot->x2p[ip];
-    x[3] = pphot->x3p[ip];
-    Real invtet[4][4], kf[4];
-    pcoord->InverseTetrad(x,invtet);
-    for (int j=0; j<4; j++) {
-      kf[j] = 0.;
-      for (int i=0; i<4; i++) {
-        kf[j] += invtet[j][i] * ki[i];
-      }
-    }
-    Real ep = pphot->ep[ip];
-    k0 = kf[0]/ep;
-    k1 = kf[1]/ep;
-    k2 = kf[2]/ep;
-    k3 = kf[3]/ep;
+  const Real wp = pphot->wp[ip];
 
-    // Weight moments by time spent in domain
-    weight = pphot->wp[ip] * pphot->ep[ip] * k0 * dl / c_cgs;
-  } else {
-    // Spatial components are a unit direction here, so the propagation four-vector is
-    // n^mu = (1, nhat)
-    k0 = 1.;
-    k1 = pphot->k1p[ip];
-    k2 = pphot->k2p[ip];
-    k3 = pphot->k3p[ip];
-
-    if (COORDINATE_SYSTEM == "spherical_polar") {
-      Real theta = pphot->x2p[ip];
-      Real phi = pphot->x3p[ip];
-      Real sth = sin(theta);
-      Real cth = cos(theta);
-      Real sph = sin(phi);
-      Real cph = cos(phi);
-      Real nx = sth * cph * k1 + cth * cph * k2 - sph * k3;
-      Real ny = sth * sph * k1 + cth * sph * k2 + cph * k3;
-      Real nz = cth * k1 - sth * k2;
-      theta = pmy_block->pcoord->x2v(i2);
-      phi = pmy_block->pcoord->x3v(i3);
-      sth = sin(theta);
-      cth = cos(theta);
-      sph = sin(phi);
-      cph = cos(phi);
-      k1 = sth * cph * nx + sth * sph * ny + cth * nz;
-      k2 = cth * cph * nx + cth * sph * ny - sth * nz;
-      k3 = -sph * nx + cph * ny;
-      // SWD: this could be simplified since only phi_1-phi_2 enters,
-      // but would only save two sin/cos evalutations 
-    }
-    // Weight moments by time spent in domain
-    weight = pphot->wp[ip] * pphot->ep[ip] * dl / c_cgs;
-  }
+  // Projects this photon into whichever frames are asked for below, at most once each.
+  PhotonFrames frames(this, pphot, ip, dl);
 
   if (mom_flag_lab) {
-    if (std::isinf(weight) || std::isnan(weight) || std::isnan(k0) || std::isnan(k1) ||
-        std::isnan(k2) || std::isnan(k3)) {
+    const PhotonFrameState &s = frames.Get(MCFRAME_LAB);
+    if (!FrameStateFinite(s, wp)) {
       pphot->statp[ip] = DESTROYED;
       if (pmy_mc->verbose) {
-        pphot->PrintPhoton ("Warning: Nan/Inf encountered in UpdateMoments(),"
-                            " photon destroyed",ip);
+        pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
+                           " photon destroyed",ip);
       }
       return;
-    } else {
-      // Add contribution to corresponding moments
-      // Energy density
-      moments(type,MCIER,i3,i2,i1) += weight * k0 * k0;
-      // Flux
-      moments(type,MCIFR1,i3,i2,i1) += weight * k0 * k1 * c_cgs;
-      moments(type,MCIFR2,i3,i2,i1) += weight * k0 * k2 * c_cgs;
-      moments(type,MCIFR3,i3,i2,i1) += weight * k0 * k3 * c_cgs;
-      // Radiation Pressure
-      moments(type,MCIPR11,i3,i2,i1) += weight * k1 * k1;
-      moments(type,MCIPR22,i3,i2,i1) += weight * k2 * k2;
-      moments(type,MCIPR33,i3,i2,i1) += weight * k3 * k3;
-      moments(type,MCIPR12,i3,i2,i1) += weight * k1 * k2;
-      moments(type,MCIPR13,i3,i2,i1) += weight * k1 * k3;
-      moments(type,MCIPR23,i3,i2,i1) += weight * k2 * k3;
     }
+    AccumulateMoments(moments, type, i3, i2, i1, s, wp, c_cgs);
   }
 
-  // Coordinate-basis moments.  T^{mu nu} = sum w k^mu k^nu dlambda needs no projection
-  // at all, so this is the cheapest of the three bases.  The components are not
-  // orthonormal and are dimensionally inhomogeneous by construction -- k^theta and k^phi
-  // carry inverse length -- which is exactly what makes them the right form to hand to
-  // the GRMHD conservative variables and the radiation four-force.
-  if (mom_flag_coord && have_kco) {
-    Real wc = pphot->wp[ip] * dl / (pphot->ep[ip] * c_cgs);
-    if (!(std::isinf(wc) || std::isnan(wc))) {
-      moments_coord(type,MCIER,i3,i2,i1)   += wc * kco[IMC0]*kco[IMC0];
-      moments_coord(type,MCIFR1,i3,i2,i1)  += wc * kco[IMC0]*kco[IMC1] * c_cgs;
-      moments_coord(type,MCIFR2,i3,i2,i1)  += wc * kco[IMC0]*kco[IMC2] * c_cgs;
-      moments_coord(type,MCIFR3,i3,i2,i1)  += wc * kco[IMC0]*kco[IMC3] * c_cgs;
-      moments_coord(type,MCIPR11,i3,i2,i1) += wc * kco[IMC1]*kco[IMC1];
-      moments_coord(type,MCIPR22,i3,i2,i1) += wc * kco[IMC2]*kco[IMC2];
-      moments_coord(type,MCIPR33,i3,i2,i1) += wc * kco[IMC3]*kco[IMC3];
-      moments_coord(type,MCIPR12,i3,i2,i1) += wc * kco[IMC1]*kco[IMC2];
-      moments_coord(type,MCIPR13,i3,i2,i1) += wc * kco[IMC1]*kco[IMC3];
-      moments_coord(type,MCIPR23,i3,i2,i1) += wc * kco[IMC2]*kco[IMC3];
-    }
+  // Coordinate basis.  Needs no projection at all, so it is the cheapest of the three;
+  // only the general pusher stores the coordinate four-vector it is built from.
+  if (mom_flag_coord && frames.Available(MCFRAME_COORD)) {
+    const PhotonFrameState &s = frames.Get(MCFRAME_COORD);
+    if (FrameStateFinite(s, wp))
+      AccumulateMoments(moments_coord, type, i3, i2, i1, s, wp, c_cgs);
   }
 
   // add contribution to scattering source terms
   // SWD: Ultimately want comoving frame values
   if (mom_flag_scat) {
     Real weight_scat, e_scat;
-    if (gr_tetrad && boosts) {
-      // The comoving energy is the time component of the fluid-tetrad projection, which
-      // is the same -u.k this used to rebuild from scratch with a per-crossing Metric()
-      // evaluation and a 4x4 DotVec.
-      Real pcom[4];
-      for (int a=0; a<4; a++) {
-        pcom[a] = 0.;
-        for (int m=0; m<4; m++) pcom[a] += boost_cmv(i3,i2,i1,a,m) * kco[m];
-      }
-      e_scat = pcom[IMC0];
-      weight_scat = pphot->wp[ip] * e_scat * kco[IMC0] * dl / c_cgs;
+    if (frames.GRTetrad() && boosts) {
+      // The comoving energy is the time component of the fluid-frame projection.
+      const PhotonFrameState &sc = frames.Get(MCFRAME_COMOVING);
+      e_scat = sc.e;
+      weight_scat = wp * e_scat * frames.Coordinate4Vector()[IMC0] * dl / c_cgs;
     } else {
+      const PhotonFrameState &sl = frames.Get(MCFRAME_LAB);
       e_scat = pphot->ep[ip];
-      weight_scat = weight;
+      weight_scat = wp * sl.e * sl.dl / c_cgs;
     }
     //printf("w: %g %g\n",weight,weight_com);
     Real loge = std::log10(e_scat);
@@ -1084,77 +1132,16 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   }
 
   if (mom_flag_com) {
-
-    Real k0c,k1c,k2c,k3c,weight;
-    if (gr_tetrad) {
-      // Project the same coordinate four-vector onto the fluid tetrad.  Going back to
-      // kco rather than boosting the already-normalized lab direction is what makes this
-      // an exact tensor transform of the lab moments: the weights differ by exactly
-      // (ecom/elab)^2, so a fluid at rest reproduces the lab answer identically.
-      Real pcom[4];
-      for (int a=0; a<4; a++) {
-        pcom[a] = 0.;
-        for (int m=0; m<4; m++) pcom[a] += boost_cmv(i3,i2,i1,a,m) * kco[m];
-      }
-      Real ecom = pcom[IMC0];
-      // unit direction, for the same reason as the lab branch above
-      Real ncom = std::sqrt(SQR(pcom[IMC1]) + SQR(pcom[IMC2]) + SQR(pcom[IMC3]));
-      k0c = 1.;
-      k1c = pcom[IMC1]/ncom;
-      k2c = pcom[IMC2]/ncom;
-      k3c = pcom[IMC3]/ncom;
-      weight = pphot->wp[ip] * ecom * (dl * ecom / pphot->ep[ip]) / c_cgs;
-    } else {
-      Real ki[4],kc[4];
-      ki[0] = k0;
-      ki[1] = k1;
-      ki[2] = k2;
-      ki[3] = k3;
-      for (int j=0; j<4; j++) {
-        kc[j] = 0.;
-        for (int i=0; i<4; i++) {
-          kc[j] += boost_cmv(i3,i2,i1,j,i) * ki[i];
-        }
-      }
-      // Spatial components are normalized to a unit comoving direction, so the
-      // time component of the comoving propagation direction is unity.  Boosting
-      // T^{mu nu} = C sum w E dl n^mu n^nu with n^mu = (1,nhat) gives
-      // (Lambda n)^mu = shift * (1,nhat_com), and the shift^2 is carried by weight.
-      // k0 is unity on both pusher paths here, so the shift needs no rescaling.
-      Real shift = kc[0]/k0;
-      k0c = 1.;
-      k1c = kc[1]/kc[0];
-      k2c = kc[2]/kc[0];
-      k3c = kc[3]/kc[0];
-      weight = pphot->wp[ip] * pphot->ep[ip] * dl * SQR(shift) / c_cgs;
-    }
-
-    if (std::isinf(weight) || std::isnan(weight) ||
-        std::isinf(k1c) || std::isnan(k1c) ||
-        std::isinf(k2c) || std::isnan(k2c) ||
-        std::isinf(k3c) || std::isnan(k3c) ) {
+    const PhotonFrameState &s = frames.Get(MCFRAME_COMOVING);
+    if (!FrameStateFinite(s, wp)) {
       pphot->statp[ip] = DESTROYED;
       if (pmy_mc->verbose) {
         pphot->PrintPhoton("Warning: Nan/Inf encountered in UpdateMoments(),"
                            " comoving frame",ip);
       }
       return;
-    } else {
-      // Add contribution to corresponding moments
-      // Energy density
-      moments_com(type,MCIER,i3,i2,i1) += weight * k0c * k0c;
-      // Flux
-      moments_com(type,MCIFR1,i3,i2,i1) += weight * k0c * k1c * c_cgs;
-      moments_com(type,MCIFR2,i3,i2,i1) += weight * k0c * k2c * c_cgs;
-      moments_com(type,MCIFR3,i3,i2,i1) += weight * k0c * k3c * c_cgs;
-      // Radiation Pressure
-      moments_com(type,MCIPR11,i3,i2,i1) += weight * k1c * k1c;
-      moments_com(type,MCIPR22,i3,i2,i1) += weight * k2c * k2c;
-      moments_com(type,MCIPR33,i3,i2,i1) += weight * k3c * k3c;
-      moments_com(type,MCIPR12,i3,i2,i1) += weight * k1c * k2c;
-      moments_com(type,MCIPR13,i3,i2,i1) += weight * k1c * k3c;
-      moments_com(type,MCIPR23,i3,i2,i1) += weight * k2c * k3c;
     }
+    AccumulateMoments(moments_com, type, i3, i2, i1, s, wp, c_cgs);
   }
 
   if (mom_flag_usr) {
@@ -1168,9 +1155,11 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     Real weight = pphot->wp[ip] * pphot->ep[ip] * dl / c_cgs;
     Real abs_coef = pphot->acp[ip];
     Real sct_coef = pphot->scp[ip];
-    sourceterms(MCRF1,i3,i2,i1) += (sct_coef+abs_coef) * weight * k1;
-    sourceterms(MCRF2,i3,i2,i1) += (sct_coef+abs_coef) * weight * k2;
-    sourceterms(MCRF3,i3,i2,i1) += (sct_coef+abs_coef) * weight * k3;
+    // radiative force follows the lab-frame propagation direction
+    const Real *nl = frames.Get(MCFRAME_LAB).n;
+    sourceterms(MCRF1,i3,i2,i1) += (sct_coef+abs_coef) * weight * nl[0];
+    sourceterms(MCRF2,i3,i2,i1) += (sct_coef+abs_coef) * weight * nl[1];
+    sourceterms(MCRF3,i3,i2,i1) += (sct_coef+abs_coef) * weight * nl[2];
 
     if (pmy_mc->absorption_method[pphot->type[ip]] == ABSTAU) {
         Real threshold = 3.28808816e+15 * MCConstants::h_cgs;
@@ -2308,14 +2297,16 @@ void MonteCarloBlock::ComputeTransformations() {
           ncon[IMC3] = -alpha*gi(I03,i);
           ConstructTetrad(ncon, gcov, econ, ecov);
           for (int a=0; a<4; a++)
-            for (int m=0; m<4; m++) boost_lab(k,j,i,a,m) = ecov[a][m];
+            for (int m=0; m<4; m++)
+              boost_lab(k,j,i,a,m) = ecov[a][m];
 
           // frame vel is built on
           Real ucon[4];
           for (int m=0; m<4; m++) ucon[m] = vel(k,j,i,m);
           ConstructTetrad(ucon, gcov, econ, ecov);
           for (int a=0; a<4; a++)
-            for (int m=0; m<4; m++) boost_cmv(k,j,i,a,m) = ecov[a][m];
+            for (int m=0; m<4; m++)
+              boost_cmv(k,j,i,a,m) = ecov[a][m];
         }
       }
     }
