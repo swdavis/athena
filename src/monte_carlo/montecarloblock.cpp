@@ -927,10 +927,19 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
         plab[a] += boost_lab(i3,i2,i1,a,m) * kco[m];
     }
     Real elab = plab[IMC0];
+    // k is null to machine precision at the photon, but the tetrad is orthonormal with
+    // respect to the metric at the zone centre, so the projection is not exactly null and
+    // plab[IMC1..3] / elab is not exactly a unit vector -- off by the cell-scale variation
+    // of the metric, which is ~10% for the coarse angular cells these problems use.
+    // Normalising by the spatial magnitude instead keeps n a genuine direction, which is
+    // what the legacy pushers store by construction, and keeps the moment tensor exactly
+    // traceless (Er = P11+P22+P33) as a null-photon stress tensor must be.  The energy
+    // still comes from the time component, which is accurate to ~1e-4.
+    Real nlab = std::sqrt(SQR(plab[IMC1]) + SQR(plab[IMC2]) + SQR(plab[IMC3]));
     k0 = 1.;
-    k1 = plab[IMC1]/elab;
-    k2 = plab[IMC2]/elab;
-    k3 = plab[IMC3]/elab;
+    k1 = plab[IMC1]/nlab;
+    k2 = plab[IMC2]/nlab;
+    k3 = plab[IMC3]/nlab;
     weight = pphot->wp[ip] * elab * (dl * elab / pphot->ep[ip]) / c_cgs;
   } else if (pmy_mc->general_pusher_flag) {
     // Computes k values in an orthonormal tetrad frame specificed for each
@@ -1088,10 +1097,12 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
         for (int m=0; m<4; m++) pcom[a] += boost_cmv(i3,i2,i1,a,m) * kco[m];
       }
       Real ecom = pcom[IMC0];
+      // unit direction, for the same reason as the lab branch above
+      Real ncom = std::sqrt(SQR(pcom[IMC1]) + SQR(pcom[IMC2]) + SQR(pcom[IMC3]));
       k0c = 1.;
-      k1c = pcom[IMC1]/ecom;
-      k2c = pcom[IMC2]/ecom;
-      k3c = pcom[IMC3]/ecom;
+      k1c = pcom[IMC1]/ncom;
+      k2c = pcom[IMC2]/ncom;
+      k3c = pcom[IMC3]/ncom;
       weight = pphot->wp[ip] * ecom * (dl * ecom / pphot->ep[ip]) / c_cgs;
     } else {
       Real ki[4],kc[4];

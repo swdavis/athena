@@ -19,6 +19,18 @@ comoving moments went unnoticed precisely because no test compared the two.
             difference.  This is the same claim tst/montecarlo/minkowski makes, checked
             here directly against the cartesian run rather than against a blackbody.
 
+  traceless The stress tensor of a gas of null particles is traceless, so in any
+            orthonormal basis Er must equal P11+P22+P33.  This is the check with real
+            teeth in curved spacetime: the tetrad is orthonormal with respect to the
+            metric at the zone centre while k is null at the photon, so normalising the
+            direction by the time component rather than by the spatial magnitude breaks
+            it by the cell-scale variation of the metric -- 3e-2 for the angular
+            resolution the shell problem uses.
+
+  redshift  The normal observer in Kerr-Schild measures n_mu n_nu T^{mu nu} = alpha^2 T^tt,
+            so Ermc_lab / Ermc_coord must equal 1/(1+2M/r).  This ties the tetrad
+            projection to the coordinate accumulation, which share no code.
+
 Deliberately uses tab output rather than hdf5 so it runs without an HDF5 build.
 
 Usage:
@@ -27,6 +39,7 @@ Usage:
 
 import argparse
 import glob
+import re
 import os
 import sys
 import numpy as np
@@ -95,6 +108,11 @@ def read_moments(rundir, tag):
 # is always the trailing NMOMENT columns, which is what makes this robust; mclab carries
 # tgas and rho ahead of it while mccom and mccoord do not.
 NMOMENT = 13
+# The tab writer emits limited digits, so exact identities land near 1e-6 rather than at
+# round-off.  The redshift check additionally carries the cell-centring difference between
+# the zone-centred tetrad and the photon-position coordinate accumulation.
+TRACE_TOL = 1.0e-4
+REDSHIFT_TOL = 1.0e-4
 
 
 def moment_columns(arr, hdr):
@@ -109,6 +127,40 @@ def max_rel(a, b):
     den = np.maximum(np.abs(a), np.abs(b))
     den[den == 0.0] = 1.0
     return float(np.max(np.abs(a - b) / den))
+
+
+def write_gr_athinput(src, path, nphot, iseed):
+    """Reuse the repository's Kerr-Schild shell input, with tab moment outputs."""
+    ref = os.path.join(src, "inputs", "mc", "athinput.mcisogr")
+    text = open(ref).read()
+    # drop every existing output block; hdf5 is not assumed to be available
+    text = re.sub(r"<output\d+>.*?(?=<[a-z])", "", text, flags=re.S)
+    text = re.sub(r"^nphot\s*=.*$", "nphot = {0:d}".format(nphot), text, flags=re.M)
+    text = re.sub(r"^iseed\s*=.*$", "iseed = {0:d}".format(iseed), text, flags=re.M)
+    outs = ""
+    for i, (var, tag) in enumerate((("mclab", "lab"), ("mccom", "com"),
+                                    ("mccoord", "crd")), start=1):
+        outs += ("<output{0}>\nfile_type = tab\nvariable = {1}\nid = {2}\n"
+                 "dt = 1.0\n\n".format(i, var, tag))
+    open(path, "w").write(outs + text)
+
+
+def build_and_run_gr(src, workdir, nphot, iseed):
+    import subprocess
+    subprocess.call(["make", "clean"], cwd=src,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.check_call(["python", "configure.py", "--prob=mc_isoth_gr",
+                           "--coord=kerr-schild", "-mc", "-g"],
+                          cwd=src, stdout=subprocess.DEVNULL)
+    subprocess.check_call(["make", "-j8"], cwd=src,
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    os.makedirs(workdir, exist_ok=True)
+    inp = os.path.join(workdir, "athinput.frames_gr")
+    write_gr_athinput(src, inp, nphot, iseed)
+    with open(os.path.join(workdir, "run.log"), "w") as log:
+        subprocess.check_call([os.path.join(src, "bin", "athena"), "-i", inp],
+                              cwd=workdir, stdout=log, stderr=subprocess.STDOUT)
+    return workdir
 
 
 def build_and_run(src, kind, vel, workdir, nphot, iseed):
@@ -175,6 +227,36 @@ def main(**kwargs):
             print("{0:<34}{1:>14.3e}   {2}".format(
                 "pushers   " + label + "  " + tag + "  cart==mink", d,
                 "PASS" if ok else "FAIL"))
+
+    # traceless: Er == P11+P22+P33 in any orthonormal basis, for a null-photon gas
+    gr = build_and_run_gr(src, os.path.join(work, "gr"), nphot, iseed)
+    for label, rundir, tags in (("flat", runs["mink_boost"], ("lab", "com")),
+                                ("kerr-schild", gr, ("lab", "com"))):
+        for tag in tags:
+            a, h = read_moments(rundir, tag)
+            M = moment_columns(a, h)
+            er, ptr = M[:, 0], M[:, 4] + M[:, 5] + M[:, 6]
+            scale = np.abs(er) + np.abs(M[:, 4]) + np.abs(M[:, 5]) + np.abs(M[:, 6])
+            keep = scale > 0
+            d = float(np.max(np.abs(er - ptr)[keep] / scale[keep]))
+            ok = d < TRACE_TOL
+            failures += [] if ok else ["traceless/" + label + "/" + tag]
+            print("{0:<34}{1:>14.3e}   {2}".format(
+                "traceless " + label + "  " + tag, d, "PASS" if ok else "FAIL"))
+
+    # redshift: Ermc_lab / Ermc_coord == alpha^2 = 1/(1+2M/r) for Kerr-Schild with a = 0
+    lab, hl = read_moments(gr, "lab")
+    crd, hc = read_moments(gr, "crd")
+    rad = crd[:, hc.index("x1v")]
+    el = moment_columns(lab, hl)[:, 0]
+    ec = moment_columns(crd, hc)[:, 0]
+    keep = ec > 0
+    alpha2 = 1.0 / (1.0 + 2.0 / rad)
+    d = float(np.max(np.abs(el[keep] / ec[keep] - alpha2[keep]) / alpha2[keep]))
+    ok = d < REDSHIFT_TOL
+    failures += [] if ok else ["redshift"]
+    print("{0:<34}{1:>14.3e}   {2}".format(
+        "redshift  kerr-schild  lab/coord", d, "PASS" if ok else "FAIL"))
 
     print("-" * 66)
     if failures:
