@@ -389,6 +389,7 @@ public:
   bool mom_flag_lab; // Compute/output moments
   bool mom_flag_com; // Compute moments in comoving frame
   bool mom_flag_coord; // Compute moments in the coordinate basis
+  bool accumulate_com; // accumulate comoving moments directly rather than deriving them
   bool mom_flag_src; // Compute source terms for output
   bool mom_flag_usr; // Compute user defined monte carlo moments
   bool mom_flag_scat; // Compute scattering source terms
@@ -457,6 +458,9 @@ public:
   void UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl, Real k1, Real k2,
                                  Real k3,Real etau, int ip);
   void NormalizeMoments(bool normalize);
+  void ComovingFrameMatrix(int k, int j, int i, const AthenaArray<Real> &g,
+                           const AthenaArray<Real> &gi, Real lam[4][4]);
+  void DeriveComovingMoments();
   void ResetMoments();
   void UpdateSourceTerms(Photon *pphot, Real energy0, Real weight0,
                          Real k1p0, Real k2p0, Real k3p0, int ip);

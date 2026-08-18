@@ -31,6 +31,15 @@ comoving moments went unnoticed precisely because no test compared the two.
             so Ermc_lab / Ermc_coord must equal 1/(1+2M/r).  This ties the tetrad
             projection to the coordinate accumulation, which share no code.
 
+  derived   The comoving moments are a per-zone tensor transform of the lab moments, so
+            deriving them at output must reproduce accumulating them photon by photon --
+            sum L p L p == L (sum p p) L, exactly, because the transform is the same matrix
+            for every photon in the zone.  Checked in flat spacetime, where it is an
+            identity.  It is deliberately not checked in curved spacetime: there the
+            accumulated path renormalises each photon direction to unit in the comoving
+            frame, which the tensor transform cannot replicate, and the two differ by the
+            cell-centring error.  That difference is a useful diagnostic but not a bound.
+
 Deliberately uses tab output rather than hdf5 so it runs without an HDF5 build.
 
 Usage:
@@ -50,7 +59,7 @@ DENS = 1.0e-10
 PGAS_CODE = 1.0e-6
 
 
-def write_athinput(path, kind, vel, nphot, iseed):
+def write_athinput(path, kind, vel, nphot, iseed, accumulate_comoving=False):
     """kind is 'cart' (legacy pusher) or 'mink' (general pusher, GR machinery)."""
     general = "true" if kind == "mink" else "false"
     pid = "mciso" if kind == "cart" else "mcmink"
@@ -73,7 +82,9 @@ def write_athinput(path, kind, vel, nphot, iseed):
           "varystep = true", "abs_method = weight",
           # boosts stay on even at zero velocity: that is what makes the comoving
           # transform run and the identity meaningful rather than vacuous.
-          "boosts = true", "", "<problem>"]
+          "boosts = true",
+          "accumulate_comoving = " + ("true" if accumulate_comoving else "false"),
+          "", "<problem>"]
     if kind == "cart":
         o += ["temp = {0:e}".format(TGAS), "dens = {0:e}".format(DENS),
               "velocity = {0:e}".format(vel), "constdens = true"]
@@ -163,7 +174,8 @@ def build_and_run_gr(src, workdir, nphot, iseed):
     return workdir
 
 
-def build_and_run(src, kind, vel, workdir, nphot, iseed):
+def build_and_run(src, kind, vel, workdir, nphot, iseed,
+                  accumulate_comoving=False):
     import subprocess
     athena_path = os.path.join(src, "bin")
     prob, coord, extra = (("mc_isoth", "cartesian", []) if kind == "cart"
@@ -180,7 +192,7 @@ def build_and_run(src, kind, vel, workdir, nphot, iseed):
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     os.makedirs(workdir, exist_ok=True)
     inp = os.path.join(workdir, "athinput.frames")
-    write_athinput(inp, kind, vel, nphot, iseed)
+    write_athinput(inp, kind, vel, nphot, iseed, accumulate_comoving)
     with open(os.path.join(workdir, "run.log"), "w") as log:
         subprocess.check_call([os.path.join(athena_path, "athena"), "-i", inp],
                               cwd=workdir, stdout=log, stderr=subprocess.STDOUT)
@@ -243,6 +255,17 @@ def main(**kwargs):
             failures += [] if ok else ["traceless/" + label + "/" + tag]
             print("{0:<34}{1:>14.3e}   {2}".format(
                 "traceless " + label + "  " + tag, d, "PASS" if ok else "FAIL"))
+
+    # derived: in flat spacetime, deriving the comoving moments must reproduce accumulating
+    acc = build_and_run(src, "cart", 0.1, os.path.join(work, "cart_boost_acc"),
+                        nphot, iseed, accumulate_comoving=True)
+    a, ha = read_moments(acc, "com")
+    b, hb = read_moments(runs["cart_boost"], "com")
+    d = max_rel(moment_columns(a, ha), moment_columns(b, hb))
+    ok = d < tol
+    failures += [] if ok else ["derived"]
+    print("{0:<34}{1:>14.3e}   {2}".format(
+        "derived   flat  accum==derived", d, "PASS" if ok else "FAIL"))
 
     # redshift: Ermc_lab / Ermc_coord == alpha^2 = 1/(1+2M/r) for Kerr-Schild with a = 0
     lab, hl = read_moments(gr, "lab")
