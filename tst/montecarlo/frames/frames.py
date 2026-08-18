@@ -48,6 +48,7 @@ Usage:
 
 import argparse
 import glob
+import math
 import re
 import os
 import sys
@@ -60,18 +61,34 @@ PGAS_CODE = 1.0e-6
 
 
 def write_athinput(path, kind, vel, nphot, iseed, accumulate_comoving=False):
-    """kind is 'cart' (legacy pusher) or 'mink' (general pusher, GR machinery)."""
+    """kind is 'cart' (legacy pusher), 'mink' (general pusher, GR machinery) or
+    'sphr' (legacy pusher in spherical-polar, where the direction is rotated into the
+    zone-centre orthonormal basis before it is accumulated)."""
     general = "true" if kind == "mink" else "false"
-    pid = "mciso" if kind == "cart" else "mcmink"
+    pid = {"cart": "mciso", "mink": "mcmink", "sphr": "mcsphr",
+           }[kind]
     o = ["<job>", "problem_id = " + pid, "",
          "<output1>", "file_type = tab", "variable = mclab", "id = lab", "dt = 1.0", "",
          "<output2>", "file_type = tab", "variable = mccom", "id = com", "dt = 1.0", "",
          "<time>", "cfl_number = 0.3", "nlim = 1", "tlim = 1.0", "", "<mesh>"]
-    for d in (1, 2, 3):
-        o += ["nx{0} = 8".format(d),
-              "x{0}min = -5.0e10".format(d), "x{0}max = 5.0e10".format(d),
-              "ix{0}_bc = periodic".format(d), "ox{0}_bc = periodic".format(d),
-              "ix{0}_mc_bc = periodic".format(d), "ox{0}_mc_bc = periodic".format(d), ""]
+    if kind == "sphr":
+        # A shell rather than a box.  The angular cells are deliberately coarse, since
+        # that is where the rotation into the zone-centre basis actually does something.
+        o += ["nx1 = 8", "x1min = 1.0e10", "x1max = 2.0e10",
+              "ix1_bc = outflow", "ox1_bc = outflow",
+              "ix1_mc_bc = escape", "ox1_mc_bc = escape", "",
+              "nx2 = 8", "x2min = 0.0", "x2max = {0!r}".format(math.pi),
+              "ix2_bc = polar", "ox2_bc = polar",
+              "ix2_mc_bc = polar", "ox2_mc_bc = polar", "",
+              "nx3 = 8", "x3min = 0.0", "x3max = {0!r}".format(2.0*math.pi),
+              "ix3_bc = periodic", "ox3_bc = periodic",
+              "ix3_mc_bc = periodic", "ox3_mc_bc = periodic", ""]
+    else:
+        for d in (1, 2, 3):
+            o += ["nx{0} = 8".format(d),
+                  "x{0}min = -5.0e10".format(d), "x{0}max = 5.0e10".format(d),
+                  "ix{0}_bc = periodic".format(d), "ox{0}_bc = periodic".format(d),
+                  "ix{0}_mc_bc = periodic".format(d), "ox{0}_mc_bc = periodic".format(d), ""]
     o += ["<meshblock>", "nx1 = 4", "nx2 = 4", "nx3 = 4", "",
           "<hydro>", "gamma = 1.666666666666667", "",
           "<montecarlo>",
@@ -85,9 +102,11 @@ def write_athinput(path, kind, vel, nphot, iseed, accumulate_comoving=False):
           "boosts = true",
           "accumulate_comoving = " + ("true" if accumulate_comoving else "false"),
           "", "<problem>"]
-    if kind == "cart":
+    if kind in ("cart", "sphr"):
         o += ["temp = {0:e}".format(TGAS), "dens = {0:e}".format(DENS),
               "velocity = {0:e}".format(vel), "constdens = true"]
+        if kind == "sphr":
+            o += ["radial = true"]
     else:
         o += ["dens_code = 1.0", "pgas_code = {0:e}".format(PGAS_CODE),
               "rho_cgs = {0:e}".format(DENS),
@@ -178,8 +197,9 @@ def build_and_run(src, kind, vel, workdir, nphot, iseed,
                   accumulate_comoving=False):
     import subprocess
     athena_path = os.path.join(src, "bin")
-    prob, coord, extra = (("mc_isoth", "cartesian", []) if kind == "cart"
-                          else ("mc_isoth_mink", "minkowski", ["-g"]))
+    prob, coord, extra = {"cart": ("mc_isoth", "cartesian", []),
+                          "sphr": ("mc_isoth", "spherical_polar", []),
+                          "mink": ("mc_isoth_mink", "minkowski", ["-g"])}[kind]
     # configure.py rewrites src/defs.hpp, which the Makefile does not track as a
     # dependency, so a stale build would silently link objects from the previous
     # coordinate system.
@@ -209,7 +229,7 @@ def main(**kwargs):
 
     failures = []
     runs = {}
-    for kind in ("cart", "mink"):
+    for kind in ("cart", "mink", "sphr"):
         for vel, label in ((0.0, "zero"), (0.1, "boost")):
             name = "{0}_{1}".format(kind, label)
             runs[name] = build_and_run(src, kind, vel,
@@ -219,7 +239,7 @@ def main(**kwargs):
     print("-" * 66)
 
     # identity: fluid at rest => comoving moments equal lab moments
-    for name in ("cart_zero", "mink_zero"):
+    for name in ("cart_zero", "mink_zero", "sphr_zero"):
         lab, hl = read_moments(runs[name], "lab")
         com, hc = read_moments(runs[name], "com")
         d = max_rel(moment_columns(lab, hl), moment_columns(com, hc))
@@ -243,6 +263,7 @@ def main(**kwargs):
     # traceless: Er == P11+P22+P33 in any orthonormal basis, for a null-photon gas
     gr = build_and_run_gr(src, os.path.join(work, "gr"), nphot, iseed)
     for label, rundir, tags in (("flat", runs["mink_boost"], ("lab", "com")),
+                                ("spherical", runs["sphr_boost"], ("lab", "com")),
                                 ("kerr-schild", gr, ("lab", "com"))):
         for tag in tags:
             a, h = read_moments(rundir, tag)
@@ -266,6 +287,16 @@ def main(**kwargs):
     failures += [] if ok else ["derived"]
     print("{0:<34}{1:>14.3e}   {2}".format(
         "derived   flat  accum==derived", d, "PASS" if ok else "FAIL"))
+
+    accs = build_and_run(src, "sphr", 0.1, os.path.join(work, "sphr_boost_acc"),
+                         nphot, iseed, accumulate_comoving=True)
+    a, ha = read_moments(accs, "com")
+    b, hb = read_moments(runs["sphr_boost"], "com")
+    d = max_rel(moment_columns(a, ha), moment_columns(b, hb))
+    ok = d < tol
+    failures += [] if ok else ["derived/spherical"]
+    print("{0:<34}{1:>14.3e}   {2}".format(
+        "derived   spherical  accum==derived", d, "PASS" if ok else "FAIL"))
 
     # redshift: Ermc_lab / Ermc_coord == alpha^2 = 1/(1+2M/r) for Kerr-Schild with a = 0
     lab, hl = read_moments(gr, "lab")
