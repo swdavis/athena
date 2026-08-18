@@ -181,8 +181,12 @@ typedef void (*ScatFunc_t)(MonteCarloBlock *pmcb, Photon *phot, int ips, int ipe
 typedef void (*UserMoveFunc_t)(MonteCarloBlock *pmcb, Photon *phot, PhotonPusher *ppusher,
                                int ip);
 typedef void (*GetZonePos_t)(Photon *phot, MCRandom *pran, MCCoord *pco, int ip);
-typedef void (*UserMomentFunc_t)(MonteCarloBlock *pmcb, Photon *phot, Real dl, int ip,
-                                 int imom);
+//! User moment functions receive the photon already projected into the frame they were
+//! enrolled with, so they never have to reimplement a tetrad projection.  pphot is still
+//! passed for weight, type and anything else photon-specific; anything frame-dependent
+//! should come from the PhotonFrameState, including the path length.
+typedef void (*UserMomentFunc_t)(MonteCarloBlock *pmcb, Photon *pphot, int ip, int imom,
+                                 const PhotonFrameState &s);
 typedef void (*UserSourcetermFunc_t)(MonteCarloBlock *pmcb, Photon *pphot,
                                     Real energy0, Real weight0, Real k1p0,
                                     Real k2p0, Real k3p0, int ip);
@@ -374,6 +378,7 @@ public:
   OpacFunc_t UserAbsorptionOpacity;
   std::string *user_moment_names;
   UserMomentFunc_t *user_moment_func;
+  MCFrame *user_moment_frame; // frame each user moment is accumulated in
   UserSourcetermFunc_t UserSourcetermFunc;
 
   // functions
@@ -391,7 +396,8 @@ public:
   void EnrollUserWorkInMove(UserMoveFunc_t userfunc);
   void EnrollUserOpacityFunction(OpacFunc_t opacfunc, bool abs);
   void AllocateUserMoments(int n);
-  void EnrollUserMoment(int i, UserMomentFunc_t my_func, const char *name);
+  void EnrollUserMoment(int i, UserMomentFunc_t my_func, const char *name,
+                        MCFrame frame = MCFRAME_LAB);
   void EnrollUserSourcetermUpdate(UserSourcetermFunc_t my_func);
   void EnrollUserScatteringFunction(ScatFunc_t scatfunc);
   void Initialize(ParameterInput *pinput);

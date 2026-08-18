@@ -55,8 +55,10 @@
 namespace {
 bool tnorm;
 Real logemin, logemax;
-void JMeanOpacity(MonteCarloBlock *pmcb, Photon *pphot, Real dl, int ip, int imom);
-void AverageEnergy(MonteCarloBlock *pmcb, Photon *pphot, Real dl, int ip, int imom);
+void JMeanOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip, int imom,
+                  const PhotonFrameState &s);
+void AverageEnergy(MonteCarloBlock *pmcb, Photon *pphot, int ip, int imom,
+                  const PhotonFrameState &s);
 } // namespace
 
 //========================================================================================
@@ -195,26 +197,28 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
 
 namespace {
 
-void JMeanOpacity(MonteCarloBlock *pmcb, Photon *pphot, Real dl, int ip, int imom) {
+void JMeanOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip, int imom,
+                  const PhotonFrameState &s) {
 
   int i1 = pphot->i1p[ip];
   int i2 = pphot->i2p[ip];
   int i3 = pphot->i3p[ip];
 
-  const Real c_cgs = 2.99792458e10;
-  Real weight = pphot->ep[ip]*pphot->wp[ip]*dl/c_cgs;
+  // energy and path length come from the frame this moment was enrolled with
+  Real weight = pphot->wp[ip]*s.e*s.dl/MCConstants::c_cgs;
   pmcb->moments_user(imom,i3,i2,i1) += weight*pphot->acp[ip];
 }
 
-void AverageEnergy(MonteCarloBlock *pmcb, Photon *pphot, Real dl, int ip, int imom) {
+void AverageEnergy(MonteCarloBlock *pmcb, Photon *pphot, int ip, int imom,
+                  const PhotonFrameState &s) {
 
   int i1 = pphot->i1p[ip];
   int i2 = pphot->i2p[ip];
   int i3 = pphot->i3p[ip];
 
-  const Real c_cgs = 2.99792458e10;
-  Real weight = pphot->ep[ip]*pphot->wp[ip]*dl/c_cgs;
-  pmcb->moments_user(imom,i3,i2,i1) += weight*pphot->ep[ip];
+  // energy and path length come from the frame this moment was enrolled with
+  Real weight = pphot->wp[ip]*s.e*s.dl/MCConstants::c_cgs;
+  pmcb->moments_user(imom,i3,i2,i1) += weight*s.e;
 }
 
 } // namespace

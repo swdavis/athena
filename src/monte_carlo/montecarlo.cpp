@@ -39,6 +39,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   UserScatteringOpacity=nullptr;
   user_moment_names=nullptr;
   user_moment_func=nullptr;
+  user_moment_frame=nullptr;
   UserAbsorptionOpacity=nullptr;
   UserSourcetermFunc=nullptr;
 
@@ -394,6 +395,8 @@ void MonteCarlo::AllocateUserMoments(int n) {
   nuser_mom = n;
   user_moment_names = new std::string[n];
   user_moment_func = new UserMomentFunc_t[n];
+  user_moment_frame = new MCFrame[n];
+  for (int i=0; i<n; ++i) user_moment_frame[i] = MCFRAME_LAB;
 }
 
 //----------------------------------------------------------------------------------------
@@ -401,7 +404,8 @@ void MonteCarlo::AllocateUserMoments(int n) {
 //                                        const char *name)
 //! \brief Enroll a user-defined history output function and set its name
 
-void MonteCarlo::EnrollUserMoment(int i, UserMomentFunc_t my_func, const char *name) {
+void MonteCarlo::EnrollUserMoment(int i, UserMomentFunc_t my_func, const char *name,
+                                  MCFrame frame) {
 
   std::stringstream msg;
   if (i >= nuser_mom) {
@@ -412,6 +416,7 @@ void MonteCarlo::EnrollUserMoment(int i, UserMomentFunc_t my_func, const char *n
   }
   user_moment_names[i] = name;
   user_moment_func[i] = my_func;
+  user_moment_frame[i] = frame;
 
 }
 

@@ -930,8 +930,11 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   }
 
   if (mom_flag_usr) {
+    // PhotonFrames caches, so several user moments sharing a frame cost one projection.
     for (int i=0; i<pmy_mc->nuser_mom; i++) {
-      pmy_mc->user_moment_func[i](this,pphot,dl,ip,i);
+      MCFrame f = pmy_mc->user_moment_frame[i];
+      if (!frames.Available(f)) continue;
+      pmy_mc->user_moment_func[i](this,pphot,ip,i,frames.Get(f));
     }
   }
 

@@ -52,8 +52,10 @@ namespace {
   // dimensionless optical depth
   Real DensityProfile(Real x, Real xl, Real xh, Real taul, Real tauh, Real kap);
   Real l_cgs;
-  void JMeanOpacity(MonteCarloBlock *pmcb, Photon *pphot, Real dl, int ip, int imom);
-  void AverageEnergy(MonteCarloBlock *pmcb, Photon *pphot, Real dl, int ip, int imom);
+  void JMeanOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip, int imom,
+                    const PhotonFrameState &s);
+  void AverageEnergy(MonteCarloBlock *pmcb, Photon *pphot, int ip, int imom,
+                     const PhotonFrameState &s);
 
   // frequency table parameters
   std::string emission_type;
@@ -661,41 +663,41 @@ Real DensityProfile(Real x, Real xl, Real xh, Real taul, Real tauh, Real kap) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real PathWeight(Photon *pphot, Real dl, int ip)
-//! \brief energy-density weight for a path segment, in cgs
+//----------------------------------------------------------------------------------------
+//! \fn void JMeanOpacity(...)
+//! \brief opacity-weighted mean intensity
 //!
-//! UpdateMoments hands the user moment functions the raw step dl, which under the general
-//! pusher is an affine parameter -- dx^mu = k^mu dlambda -- not a length.  The physical
-//! coordinate path length is dl*ep, matching the dlep the built-in moments use.  The
-//! l_cgs factor converts that to cm, since the coordinates are gravitational radii.
-//!
-//! This is a coordinate-frame estimator: unlike moments(MCIER) it omits the tetrad time
-//! component k^0, so it is a diagnostic rather than a frame-consistent energy density.
+//! s carries the photon energy and path length in the frame this moment was enrolled
+//! with, so the affine-parameter conversion no longer has to be rebuilt here.  The
+//! PathWeight() helper this replaced was a coordinate-frame estimator that omitted the
+//! tetrad time component, and was documented as a diagnostic rather than a
+//! frame-consistent energy density.
 
-Real PathWeight(Photon *pphot, Real dl, int ip) {
-
-  const Real c_cgs = 2.99792458e10;
-  Real dlep = (pphot->general_pusher_flag) ? dl*pphot->ep[ip] : dl;
-  return pphot->ep[ip]*pphot->wp[ip]*dlep*l_cgs/c_cgs;
-}
-
-void JMeanOpacity(MonteCarloBlock *pmcb, Photon *pphot, Real dl, int ip, int imom) {
+void JMeanOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip, int imom,
+                  const PhotonFrameState &s) {
 
   int i1 = pphot->i1p[ip];
   int i2 = pphot->i2p[ip];
   int i3 = pphot->i3p[ip];
 
-  pmcb->moments_user(imom,i3,i2,i1) += PathWeight(pphot,dl,ip)*pphot->acp[ip];
+  Real weight = pphot->wp[ip]*s.e*s.dl/MCConstants::c_cgs;
+  pmcb->moments_user(imom,i3,i2,i1) += weight*pphot->acp[ip];
 
 }
 
-void AverageEnergy(MonteCarloBlock *pmcb, Photon *pphot, Real dl, int ip, int imom) {
+//----------------------------------------------------------------------------------------
+//! \fn void AverageEnergy(...)
+//! \brief energy-weighted mean photon energy
+
+void AverageEnergy(MonteCarloBlock *pmcb, Photon *pphot, int ip, int imom,
+                   const PhotonFrameState &s) {
 
   int i1 = pphot->i1p[ip];
   int i2 = pphot->i2p[ip];
   int i3 = pphot->i3p[ip];
 
-  pmcb->moments_user(imom,i3,i2,i1) += PathWeight(pphot,dl,ip)*pphot->ep[ip];
+  Real weight = pphot->wp[ip]*s.e*s.dl/MCConstants::c_cgs;
+  pmcb->moments_user(imom,i3,i2,i1) += weight*s.e;
 
 }
 
