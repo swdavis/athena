@@ -207,8 +207,15 @@ void ATHDF5Output::WriteOutputFile(Mesh *pm, ParameterInput *pin, bool flag) {
       std::strncpy(dataset_names[n_dataset_names++], "cons", max_name_length+1);
     if (MAGNETIC_FIELDS_ENABLED)
       std::strncpy(dataset_names[n_dataset_names++], "B", max_name_length+1);
-  } else if (variable.compare("mcmom") == 0) {
-    std::strncpy(dataset_names[n_dataset_names++], "mcmom", max_name_length+1);
+  } else if (variable.compare("mclab") == 0 || variable.compare("mccom") == 0
+             || variable.compare("mccoord") == 0) {
+    // Name the dataset after the basis the moments are reported in.  This branch used to
+    // test for "mcmom", a name nothing produces -- it predates the split into separate
+    // lab and comoving variables -- so all three fell through to the final else and were
+    // written into a dataset called "hydro".  Readers select by variable name and
+    // enumerate DatasetNames from the file attributes, so they are unaffected; only code
+    // that asked for the "hydro" dataset by hand would notice.
+    std::strncpy(dataset_names[n_dataset_names++], variable.c_str(), max_name_length+1);
   } else if (variable.compare("mcsrc") == 0) {
     std::strncpy(dataset_names[n_dataset_names++], "mcsrc", max_name_length+1);
   } else if (variable.compare("mcscat") == 0) {
