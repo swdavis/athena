@@ -24,6 +24,7 @@
 #include "mcbvals.hpp"
 #include "mcoutput.hpp"
 #include "mccoord.hpp"
+#include "photon_frames.hpp"
 #include "tetrad.hpp"
 
 // GSL library
@@ -78,79 +79,6 @@ enum ScatteringFlag {SCATUSER = 0, SCATNONE =1, SCATISO = 2, SCATTHOM = 3, SCATC
 enum MCBoundaryFlag {MC_PERIODIC_BNDRY = 0, MC_ESCAPE_BNDRY = 1, MC_ABSORB_BNDRY = 2,
                      MC_DESTROY_BNDRY = 3, MC_POLAR_BNDRY = 4, MC_REFLECT_BNDRY = 5,
                      MC_USER_BNDRY = 6, MC_BLOCK_BNDRY = 7};
-//! \brief the frames radiation moments can be reported in.
-//!
-//! MCFRAME_LAB and MCFRAME_COMOVING are orthonormal: in general relativity they are the
-//! tetrads of the normal (Eulerian) observer and of the frame vel is built on, and in flat
-//! spacetime they are the Eulerian frame and its Lorentz boost.  MCFRAME_COORD is the raw
-//! coordinate basis, which is not orthonormal -- its components are dimensionally
-//! inhomogeneous by construction, which is what makes them the right form to hand to the
-//! GRMHD conservative variables.
-enum MCFrame {MCFRAME_LAB = 0, MCFRAME_COMOVING = 1, MCFRAME_COORD = 2, MCFRAME_N = 3};
-
-//----------------------------------------------------------------------------------------
-//! \struct PhotonFrameState
-//! \brief a photon's energy, propagation direction and path length in one frame
-//!
-//! dl belongs here rather than being passed alongside: the pushers hand UpdateMoments a
-//! coordinate path length, and the length in any other frame differs by that frame's
-//! energy over ep.  Handing a caller a frame-correct energy next to a coordinate dl moves
-//! that trap rather than removing it.  n is a unit vector in the orthonormal frames; in
-//! MCFRAME_COORD it holds k^i/k^0 and is not normalised.
-struct PhotonFrameState {
-  Real e;     //!> photon energy in this frame
-  Real n[3];  //!> propagation direction in this frame
-  Real dl;    //!> path length in this frame
-
-  //! guard against a photon whose projection has gone bad
-  bool Finite(Real wp) const {
-    Real weight = wp * e * dl;
-    return !(std::isinf(weight) || std::isnan(weight)
-             || std::isnan(n[0]) || std::isinf(n[0])
-             || std::isnan(n[1]) || std::isinf(n[1])
-             || std::isnan(n[2]) || std::isinf(n[2]));
-  }
-};
-
-
-//----------------------------------------------------------------------------------------
-//! \class PhotonFrames
-//! \brief projects one photon into whichever frames are asked for, at most once each.
-//!
-//! The frame logic used to be open-coded at the head of UpdateMoments, which meant any
-//! other consumer wanting comoving quantities had to reimplement the tetrad projection.
-//! Every frame bug found in this code came from exactly that: a convention reimplemented
-//! somewhere new.  Caching per call also means a run with several comoving user moments
-//! pays for one projection rather than one per function.
-
-class PhotonFrames {
- public:
-  PhotonFrames(MonteCarloBlock *pmcb, Photon *pphot, int ip, Real dl);
-
-  //! the coordinate basis needs a coordinate four-vector, which only the general pusher
-  //! stores; the legacy pushers keep a unit direction in the local orthonormal basis.
-  bool Available(MCFrame f) const { return (f != MCFRAME_COORD) || general_; }
-  bool GRTetrad() const { return gr_tetrad_; }
-  const Real *Coordinate4Vector() const { return kco_; }
-
-  const PhotonFrameState &Get(MCFrame f) {
-    if (!done_[f]) { Fill(f); done_[f] = true; }
-    return st_[f];
-  }
-
- private:
-  void Fill(MCFrame f);
-
-  MonteCarloBlock *pmcb_;
-  Photon *pphot_;
-  int ip_;
-  Real dl_;        //!> coordinate path length, as handed in by the pusher
-  Real kco_[4];    //!> coordinate four-vector; general pusher only
-  bool general_, gr_tetrad_;
-  bool done_[MCFRAME_N];
-  PhotonFrameState st_[MCFRAME_N];
-};
-
 // Array indices for monte carlo radiation moments
 enum {MCIER=0, MCIFR1=1, MCIFR2=2, MCIFR3=3, MCIPR11=4, MCIPR22=5, MCIPR33=6,
       MCIPR12=7, MCIPR13=8, MCIPR23=9, MCIPR21=10, MCIPR31=11, MCIPR32=12};

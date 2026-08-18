@@ -28,6 +28,7 @@
 #include <cstring>   // strcmp
 
 // Athena++ headers
+#include "photon_frames.hpp"
 #include "montecarlo.hpp"
 #include "tetrad.hpp"
 #include "photon.hpp"
