@@ -16,7 +16,12 @@
 \begin{abstract}
 This note records the frame transformations used by the Monte Carlo radiation transport
 module and the estimator used to accumulate radiation moments. It is written to be read
-alongside \texttt{src/monte\_carlo/frames.cpp} and the \texttt{UpdateMoments} routine in
+alongside the source. The material is split across three files by layer:
+\texttt{src/monte\_carlo/tetrad.cpp} holds the geometric primitives of
+Sec.~\ref{sec:construct}, acting on bare four-vectors and a metric;
+\texttt{src/monte\_carlo/photon\_frames.cpp} applies them to photons and to accumulated
+moments, as in Secs.~\ref{sec:project} and \ref{sec:transform}; and the estimator of
+Sec.~\ref{sec:accumulate} is assembled in the \texttt{UpdateMoments} routine of
 \texttt{src/monte\_carlo/montecarloblock.cpp}. The emphasis is on which quantity is
 expressed in which frame, since almost every defect found in this code has come from a
 frame convention being reimplemented in a second place and drifting from the first.
@@ -84,6 +89,7 @@ are dimensionally inhomogeneous by construction, since $k^\theta$ and $k^\phi$ c
 inverse length, and no attempt is made to normalise them.
 
 \section{Frame construction}
+\label{sec:construct}
 
 \subsection{General relativity}
 
@@ -186,6 +192,7 @@ in the same structure as the energy rather than passed alongside it: handing a c
 frame-correct energy next to a coordinate path length simply relocates the trap.
 
 \section{Moment accumulation}
+\label{sec:accumulate}
 
 The radiation stress tensor is accumulated with the covariant estimator
 \begin{equation}
