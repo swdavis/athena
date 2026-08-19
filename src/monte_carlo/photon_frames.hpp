@@ -8,15 +8,14 @@
 //! \file photon_frames.hpp
 //! \brief the frames a photon can be expressed in, and the projection into them.
 //!
-//! This is the layer that applies the geometric primitives of tetrad.hpp to Monte Carlo
-//! quantities.  Nothing in tetrad.hpp knows about photons or mesh blocks; everything here
+//! This is the layer that applies functions in tetrad.hpp to Monte Carloquantities.
+//! Nothing in tetrad.hpp knows about photons or mesh blocks; everything here
 //! does.  Implemented in photon_frames.cpp.
 //!
 //! MCFrame and PhotonFrameState are part of the user-facing interface: a user moment
 //! function declares the frame it wants at enrollment and receives a PhotonFrameState
-//! already projected into it.  PhotonFrames itself is internal -- UpdateMoments builds one
-//! per call and the caching is what keeps several user moments sharing a frame down to a
-//! single projection.
+//! already projected into it.  PhotonFrames itself is internal so UpdateMoments builds one
+//! per call and the caching allows several user moments to sharing a frame
 
 // C++ headers
 #include <cmath>    // isnan, isinf
@@ -41,15 +40,14 @@ enum MCFrame {MCFRAME_LAB = 0, MCFRAME_COMOVING = 1, MCFRAME_COORD = 2, MCFRAME_
 //! \struct PhotonFrameState
 //! \brief a photon's energy, propagation direction and path length in one frame
 //!
-//! dl belongs here rather than being passed alongside: the pushers hand UpdateMoments a
-//! coordinate path length, and the length in any other frame differs by that frame's
-//! energy over ep.  Handing a caller a frame-correct energy next to a coordinate dl moves
-//! that trap rather than removing it.  n is a unit vector in the orthonormal frames; in
-//! MCFRAME_COORD it holds k^i/k^0 and is not normalised.
+//! Photon pushers pass UpdateMoments a coordinate path length, and the length in any other
+//! frame differs by that frame's energy over ep. n is a unit vector in the orthonormal frames;
+//  in MCFRAME_COORD it holds k^i/k^0 and is not normalised.
+
 struct PhotonFrameState {
-  Real e;     //!> photon energy in this frame
-  Real n[3];  //!> propagation direction in this frame
-  Real dl;    //!> path length in this frame
+  Real e;     // photon energy in this frame
+  Real n[3];  // propagation direction in this frame
+  Real dl;    // path length in this frame
 
   //! guard against a photon whose projection has gone bad
   bool Finite(Real wp) const {
@@ -66,18 +64,15 @@ struct PhotonFrameState {
 //! \class PhotonFrames
 //! \brief projects one photon into whichever frames are asked for, at most once each.
 //!
-//! The frame logic used to be open-coded at the head of UpdateMoments, which meant any
-//! other consumer wanting comoving quantities had to reimplement the tetrad projection.
-//! Every frame bug found in this code came from exactly that: a convention reimplemented
-//! somewhere new.  Caching per call also means a run with several comoving user moments
-//! pays for one projection rather than one per function.
+//! Caching per call also means a run with several comoving user moments pays for one
+//! projection rather than one per function.
 
 class PhotonFrames {
  public:
   PhotonFrames(MonteCarloBlock *pmcb, Photon *pphot, int ip, Real dl);
 
-  //! the coordinate basis needs a coordinate four-vector, which only the general pusher
-  //! stores; the legacy pushers keep a unit direction in the local orthonormal basis.
+  // coordinate basis needs a coordinate four-vector, which only the general pusher
+  // stores; the legacy pushers keep a unit direction in the local orthonormal basis.
   bool Available(MCFrame f) const { return (f != MCFRAME_COORD) || general_; }
   bool GRTetrad() const { return gr_tetrad_; }
   const Real *Coordinate4Vector() const { return kco_; }
@@ -93,8 +88,8 @@ class PhotonFrames {
   MonteCarloBlock *pmcb_;
   Photon *pphot_;
   int ip_;
-  Real dl_;        //!> coordinate path length, as handed in by the pusher
-  Real kco_[4];    //!> coordinate four-vector; general pusher only
+  Real dl_;        // coordinate path length, as handed in by the pusher
+  Real kco_[4];    // coordinate four-vector; general pusher only
   bool general_, gr_tetrad_;
   bool done_[MCFRAME_N];
   PhotonFrameState st_[MCFRAME_N];

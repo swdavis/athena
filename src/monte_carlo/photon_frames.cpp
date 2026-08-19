@@ -6,20 +6,13 @@
 //! \file photon_frames.cpp
 //! \brief projecting photons and radiation moments between reference frames.
 //!
-//! Three frames are in play.  MCFRAME_LAB and MCFRAME_COMOVING are orthonormal: in general
-//! relativity the tetrads of the normal (Eulerian) observer and of the frame vel is built
-//! on, and in flat spacetime the Eulerian frame and its Lorentz boost.  MCFRAME_COORD is
-//! the raw coordinate basis.
-//!
-//! The geometric primitives these are built on -- ConstructTetrad and the vector algebra
-//! that supports it -- are the layer below, in tetrad.cpp.  Nothing there knows about
-//! photons or mesh blocks; everything here does.
+//! MCFRAME_LAB and MCFRAME_COMOVING are orthonormal: in general relativity the tetrads of
+//! the normal (Eulerian) observer and of the frame vel is built on, and in flat spacetime
+//! the Eulerian frame and its Lorentz boost.  MCFRAME_COORD is the coordinate basis.
 //!
 //! Two operations live here and are easy to conflate.  PhotonFrames projects a single
 //! photon, per crossing; ComovingFrameMatrix and DeriveComovingMoments transform an
-//! accumulated tensor, once per zone at output.  The second is exact -- the transform is
-//! the same matrix for every photon in the zone -- which is what lets the comoving moments
-//! be derived rather than accumulated.
+//! accumulated tensor, once per zone at output.
 
 // C headers
 
@@ -143,7 +136,7 @@ void PhotonFrames::Fill(MCFrame f) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::ComovingFrameMatrix(...)
-//! \brief the lab -> comoving transformation for one zone
+//! \brief the lab to comoving transformation for one zone
 //!
 //! Both frames are orthonormal at the same event, so this is a Lorentz transformation.
 //! In general relativity it must be composed from the two tetrads rather than rebuilt as

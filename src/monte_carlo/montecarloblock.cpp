@@ -42,7 +42,6 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   }
 
   // Construct pointer to photon
-  //pphot  = new Photon(this,pmy_mc->nuser_var,pmy_mc->max_phots_init);
   pphot  = new Photon(this,pin);
 
   // Initialize to nullptr and set below
@@ -52,15 +51,13 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   // get seed and intitialize randon number generator
   int rank = Globals::my_rank;
   int iseed = pmy_mc->iseed+pmy_block->gid*10;  // temporary solution
-  //printf(" MonteCarloBlock gid %d rank %d iseed %d\n",pmy_block->gid,rank,iseed);
-
+ 
   pran = new MCRandom(iseed);
 
   next=nullptr;
 
   // SWD: eliminate some or all of these?
   // set local flags based on monte_carlo
-  // set in monte carlo
   boosts = pmy_mc->boosts;
   coupled = pmy_mc->coupled;
   acceleration = pmy_mc->acceleration;
@@ -69,10 +66,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   mom_flag_lab = pmy_mc->pmcout->mom_flag_lab;
   mom_flag_com = pmy_mc->pmcout->mom_flag_com;
   mom_flag_coord = pmy_mc->pmcout->mom_flag_coord;
-  // Comoving moments are a per-zone tensor transform of the lab moments, so deriving them
-  // at output is exact and skips a second projection per photon.  Keeping the direct
-  // accumulation available is what lets the derivation be checked against an independent
-  // path; it is the only such check it will ever have.
+  // Comoving moments currently computed from lab moments. This flag accumulates them directly
   accumulate_com = pin->GetOrAddBoolean("montecarlo","accumulate_comoving",false);
   if (mom_flag_com && !boosts) {
     std::stringstream msg;
@@ -83,47 +77,6 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   mom_flag_src = pmy_mc->pmcout->mom_flag_src;
   mom_flag_usr = pmy_mc->pmcout->mom_flag_usr || (pmy_mc->nuser_mom > 0);
   mom_flag_scat = pmy_mc->pmcout->mom_flag_scat;
-
-  call_srcterms = coupled || mom_flag_src;
-  call_moments = mom_flag_lab || mom_flag_com || mom_flag_coord || call_srcterms
-                 || mom_flag_usr;
-  // Set boundary values for this block
-  SetBoundaryValues(pmy_mc->mc_bcs);
-
-  // Initialize pbval after mcb_bcs is set
-  pbval = new MCBoundaryValues(this,pin);
-
-  // Setup outputs
-  pspec = pmy_mc->pmcout->pspec;
-  pphlist = pmy_mc->pmcout->pphlist;
-  ptraj = pmy_mc->pmcout->ptraj;
-
-  // set local mesh parameters to correspond to mesh block
-  if (pmb != nullptr) {
-    is = pmb->is; ie = pmb->ie;
-    js = pmb->js; je = pmb->je;
-    ks = pmb->ks; ke = pmb->ke;
-    nx1 = pmb->block_size.nx1;
-    nx2 = pmb->block_size.nx2;
-    nx3 = pmb->block_size.nx3;
-  } else {
-    if (pblsize == nullptr) {
-      std::stringstream msg;
-      std::cout << "Warning: comoving frame moments requested but booosts set to false.\n"
-                << "S" << std::endl;
-    }
-  }
-  // Check if moments requested and set accordingly
-  mom_flag_lab = pmy_mc->pmcout->mom_flag_lab;
-  mom_flag_com = pmy_mc->pmcout->mom_flag_com;
-  mom_flag_coord = pmy_mc->pmcout->mom_flag_coord;
-  // Comoving moments are a per-zone tensor transform of the lab moments, so deriving them
-  // at output is exact and skips a second projection per photon.  Keeping the direct
-  // accumulation available is what lets the derivation be checked against an independent
-  // path; it is the only such check it will ever have.
-  accumulate_com = pin->GetOrAddBoolean("montecarlo","accumulate_comoving",false);
-  mom_flag_src = pmy_mc->pmcout->mom_flag_src;
-  mom_flag_usr = pmy_mc->pmcout->mom_flag_usr || (pmy_mc->nuser_mom > 0);
 
   call_srcterms = coupled || mom_flag_src;
   call_moments = mom_flag_lab || mom_flag_com || mom_flag_coord || call_srcterms
@@ -882,16 +835,15 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
     AccumulateMoments(moments, type, i3, i2, i1, s, wp);
   }
 
-  // Coordinate basis.  Needs no projection at all, so it is the cheapest of the three;
-  // only the general pusher stores the coordinate four-vector it is built from.
+  // Coordinate basis moments. Note that only the general pusher stores the coordinate four-vector
+  // it is built from.
   if (mom_flag_coord && frames.Available(MCFRAME_COORD)) {
     const PhotonFrameState &s = frames.Get(MCFRAME_COORD);
     if (s.Finite(wp))
       AccumulateMoments(moments_coord, type, i3, i2, i1, s, wp);
   }
 
-  // add contribution to scattering source terms
-  // SWD: Ultimately want comoving frame values
+  // Mean intensities for evaluating scattering source terms
   if (mom_flag_scat) {
     Real weight_scat, e_scat;
     if (frames.GRTetrad() && boosts) {
@@ -904,7 +856,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
       e_scat = pphot->ep[ip];
       weight_scat = wp * sl.e * sl.dl / c_cgs;
     }
-    //printf("w: %g %g\n",weight,weight_com);
+
     Real loge = std::log10(e_scat);
     Real log10 = 2.302585092994046;
     int n = std::floor((loge-energy_scat(0))/dloge_scat);
