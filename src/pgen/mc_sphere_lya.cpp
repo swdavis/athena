@@ -34,11 +34,34 @@ namespace {
   // Global variables
   Real rad0,time0;
   Real energy0;
-  int i1start,i2start,i3start;
 
   // function headers
+  bool LocateOriginCell(MCCoord *pcoord, int is, int ie, int js, int je, int ks, int ke,
+                        int &i1start, int &i2start, int &i3start);
   void SphericalEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonPusher *ppusher, int ip);
   void TimedEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonPusher *ppusher, int ip);
+
+  // Find the cell containing the source.  The lower face is excluded so that
+  // an origin on a MeshBlock face belongs to exactly one of the neighboring blocks.
+  bool LocateOriginCell(MCCoord *pcoord, int is, int ie, int js, int je, int ks, int ke,
+                        int &i1start, int &i2start, int &i3start) {
+    i1start = -1;
+    for (int i=is; i<=ie; ++i) {
+      if ((0. > pcoord->x1f(i)) && (0. <= pcoord->x1f(i+1))) i1start = i;
+    }
+
+    i2start = -1;
+    for (int i=js; i<=je; ++i) {
+      if ((0. > pcoord->x2f(i)) && (0. <= pcoord->x2f(i+1))) i2start = i;
+    }
+
+    i3start = -1;
+    for (int i=ks; i<=ke; ++i) {
+      if ((0. > pcoord->x3f(i)) && (0. <= pcoord->x3f(i+1))) i3start = i;
+    }
+
+    return (i1start >= 0) && (i2start >= 0) && (i3start >= 0);
+  }
 }
 
 //========================================================================================
@@ -140,24 +163,9 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
   time0 = pin->GetOrAddReal("problem","time",-1.);
 
   if (COORDINATE_SYSTEM == "cartesian") {
-    // Deterime cell of initial photon, which is asssumed to include
-    // if origin if more than one cell is specified for each direction
-    i1start = -1;
-    for(int i=is; i<=ie; i++) {
-      if ((0. > pcoord->x1f(i)) && (0. <= pcoord->x1f(i+1)))
-        i1start = i;
-    }
-    i2start = -1;
-    for(int i=js; i<=je; i++) {
-      if ((0. > pcoord->x2f(i)) && (0. <= pcoord->x2f(i+1)))
-        i2start = i;
-    }
-    i3start = -1;
-    for(int i=ks; i<=ke; i++) {
-      if ((0. > pcoord->x3f(i)) && (0. <= pcoord->x3f(i+1)))
-        i3start = i;
-    }
-    if ((i1start < 0) || (i2start < 0) || (i3start < 0)) {
+    int i1start, i2start, i3start;
+    if (!LocateOriginCell(pcoord, is, ie, js, je, ks, ke,
+                          i1start, i2start, i3start)) {
       //std::stringstream msg;
       //msg << "### FATAL ERROR in InitUserMonteCarloBlockData" << std::endl
       //    << "Origin not found within domain." << std::endl;
@@ -179,6 +187,13 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 //========================================================================================
 
 void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etype) {
+
+  int i1start, i2start, i3start;
+  if (COORDINATE_SYSTEM == "cartesian"
+      && !LocateOriginCell(pcoord, is, ie, js, je, ks, ke,
+                           i1start, i2start, i3start)) {
+    throw std::runtime_error("InitializePhoton called on a MeshBlock without the origin");
+  }
 
   if (COORDINATE_SYSTEM == "spherical_polar") {
     Real nx2 = static_cast<Real>(je-js+1);
