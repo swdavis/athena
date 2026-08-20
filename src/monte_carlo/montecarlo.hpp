@@ -131,7 +131,6 @@ void GenerateComptonTable(int io);
 Real ComptonCrossSection(Real energy, Real theta);
 Real Maxwell(Real theta, Real gamma);
 Real KleinNishina(Real x);
-Real ResLinePre();
 Real XsecLorentzian(Real nu);
 Real XsecDoppler(Real nu, Real tgas);
 Real XsecVoigt(Real nu, Real tgas);

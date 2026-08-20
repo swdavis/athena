@@ -85,16 +85,11 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   Real gamma = peos->GetGamma();
   vel *= c;
 
-  Real kb = 1.380649e-16;
-  Real mass = 1.660538782e-24;
-  Real vth = sqrt(2.*kb*temp/mass);
-  Real nu0 = MCConstants::nu_lya;
-  Real dopw = nu0 * vth / c;
-  Real kappa = ResLinePre() / (mass*sqrt(PI)*dopw);
-  Real rho = tau / (kappa * rad0);
-  printf("kappa: %g %g %g\n",kappa,ResLinePre(),rho/mass);
-  printf("voigt: %g\n",XsecVoigt(nu0,temp));
-  printf("rho: %g %g %g %g\n",rho,kappa,rad0,tau);
+  const Real sigma0 = XsecVoigt(MCConstants::nu_lya, temp);
+  const Real nH = tau / (rad0 * sigma0);
+  const Real rho = nH * MCConstants::mH_cgs;
+  printf("sigma0: %g nH: %g rho: %g radius: %g tau: %g\n",
+         sigma0, nH, rho, rad0, tau);
   // density is non-zero only in sphere
   for (int k=ks; k<=ke; k++) {
     for (int j=js; j<=je; j++) {
@@ -145,16 +140,9 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 
   Real x0 = pin->GetReal("problem","x0");
   Real temp = pin->GetReal("problem","temp");
-  Real kb = 1.380649e-16;
-  Real mass = 1.660538782e-24;
-  Real vth = sqrt( 2. * kb * temp / mass);
-  Real c = 2.99792458e10;
-  Real nu0 = MCConstants::nu_lya;
-  Real dopw = nu0 * vth / c;
-  Real lorw = 6.265e8/(4.*PI);
-  //printf("dop, lor, a: %e %e %e\n",dopw,lorw,lorw/dopw);
-  Real h = 6.62607015e-27;
-  energy0 = h * (nu0 + dopw * x0);
+  const Real vth = sqrt(2. * MCConstants::kb_cgs * temp / MCConstants::mH_cgs);
+  const Real dopw = MCConstants::nu_lya * vth / MCConstants::c_cgs;
+  energy0 = MCConstants::h_cgs * (MCConstants::nu_lya + dopw * x0);
 
   rad0 = pin->GetReal("problem","radius");
   time0 = pin->GetOrAddReal("problem","time",-1.);
