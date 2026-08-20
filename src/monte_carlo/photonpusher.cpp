@@ -24,6 +24,7 @@ PhotonPusher::PhotonPusher(MonteCarloBlock *pmcb) {
   pmy_mc = pmcb->pmy_mc;
   pcoord = NULL;
   UserWorkInMove = pmcb->pmy_mc->UserWorkInMove;
+  UserEscapeDistance = pmcb->pmy_mc->UserEscapeDistance;
   checkmove = pmcb->pmy_mc->checkmove;
 
   // MRW acceleration

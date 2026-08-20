@@ -39,7 +39,9 @@ namespace {
   // function headers
   bool LocateOriginCell(MCCoord *pcoord, int is, int ie, int js, int je, int ks, int ke,
                         int &i1start, int &i2start, int &i3start);
-  void SphericalEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonPusher *ppusher, int ip);
+  Real DistanceToSphere(MonteCarloBlock *pmcb, Photon *phot, int ip);
+  void AccumulateUserEstimators(MonteCarloBlock *pmcb, Photon *phot,
+                                PhotonPusher *ppusher, int ip);
 
   // Find the cell containing the source.  The lower face is excluded so that
   // an origin on a MeshBlock face belongs to exactly one of the neighboring blocks.
@@ -61,6 +63,20 @@ namespace {
     }
 
     return (i1start >= 0) && (i2start >= 0) && (i3start >= 0);
+  }
+
+  // Return the forward ray distance from an interior point to the spherical surface.
+  Real DistanceToSphere(MonteCarloBlock *, Photon *pphot, int ip) {
+    const Real b = pphot->x1p[ip] * pphot->k1p[ip]
+                 + pphot->x2p[ip] * pphot->k2p[ip]
+                 + pphot->x3p[ip] * pphot->k3p[ip];
+    Real discriminant = SQR(b) + SQR(rad0)
+                      - SQR(pphot->x1p[ip])
+                      - SQR(pphot->x2p[ip])
+                      - SQR(pphot->x3p[ip]);
+    discriminant = (discriminant > 0.) ? discriminant : 0.;
+    const Real distance = -b + sqrt(discriminant);
+    return (distance > 0.) ? distance : 0.;
   }
 }
 
@@ -125,7 +141,8 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
   }
 
   nuser_var = 9;
-  EnrollUserWorkInMove(SphericalEscape);
+  EnrollUserEscapeDistance(DistanceToSphere);
+  EnrollUserWorkInMove(AccumulateUserEstimators);
 }
 
 //========================================================================================
@@ -233,35 +250,16 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
 namespace {
 
-// Mark photons escaped at the fixed spherical surface and accumulate user estimators.
-void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher,
-                     int ip) {
+// Accumulate user estimators for the completed movement.  The Cartesian pusher has already
+// truncated a final segment at the sphere and marked the packet escaped when applicable.
+void AccumulateUserEstimators(MonteCarloBlock *pmcb, Photon *pphot,
+                              PhotonPusher *ppusher, int ip) {
 
   const Real k1 = pphot->k1p[ip];
   const Real k2 = pphot->k2p[ip];
   const Real k3 = pphot->k3p[ip];
 
-  // Restrict the final movement segment to the portion inside the sphere.  The distance
-  // r-R is only the distance back to the surface for a radial ray; solve the ray-sphere
-  // intersection for the general case.
-  Real dl = ppusher->dl;
-  Real r = sqrt(SQR(pphot->x1p[ip]) + SQR(pphot->x2p[ip]) + SQR(pphot->x3p[ip]));
-  if (r >= rad0) {
-    Real b = pphot->x1p[ip] * k1 + pphot->x2p[ip] * k2 + pphot->x3p[ip] * k3;
-    Real discriminant = SQR(b) - (SQR(r) - SQR(rad0));
-    discriminant = (discriminant > 0.) ? discriminant : 0.;
-    Real dr = b - sqrt(discriminant);
-    dr = (dr > 0.) ? dr : 0.;
-    dr = (dr < dl) ? dr : dl;
-
-    dl -= dr;
-    pphot->x0p[ip] -= dr;
-    pphot->x1p[ip] -= k1 * dr;
-    pphot->x2p[ip] -= k2 * dr;
-    pphot->x3p[ip] -= k3 * dr;
-
-    pphot->statp[ip] = ESCAPED;
-  }
+  const Real dl = ppusher->dl;
 
   // Match the lab-frame path-length estimator used by AccumulateMoments.  k0p now aliases
   // ep, so it must not appear as an additional factor in these non-relativistic moments.
