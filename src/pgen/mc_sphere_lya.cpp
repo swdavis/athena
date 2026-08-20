@@ -282,47 +282,48 @@ namespace {
 void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher,
                      int ip) {
 
-  // Repeat accumulation of moments in UpdateMoments
-  Real k0,k1,k2,k3,weight;
-  Real ep = pphot->ep[ip];
-  k0 = pphot->k0p[ip];
-  k1 = pphot->k1p[ip];
-  k2 = pphot->k2p[ip];
-  k3 = pphot->k3p[ip];
+  const Real k1 = pphot->k1p[ip];
+  const Real k2 = pphot->k2p[ip];
+  const Real k3 = pphot->k3p[ip];
 
-  // Weight moments by time spent in domain
-  Real c_cgs = 2.99792458e10;
-  weight = pphot->wp[ip] * pphot->ep[ip] * ppusher->dl / c_cgs;
-
-  // contribution to energy density
-  pphot->user[0][ip] += weight * k0 * k0;
-
-  // Track contribution to flux moment in each direction
-  pphot->user[1][ip] += weight * k0 * k1 * c_cgs;
-  pphot->user[2][ip] += weight * k0 * k2 * c_cgs;
-  pphot->user[3][ip] += weight * k0 * k3 * c_cgs;
-
-  // Track contribution to radiative acceleration as well
-  pphot->user[4][ip] += (pphot->acp[ip]+pphot->scp[ip]) * weight * k0 * k1;
-  pphot->user[5][ip] += (pphot->acp[ip]+pphot->scp[ip]) * weight * k0 * k2;
-  pphot->user[6][ip] += (pphot->acp[ip]+pphot->scp[ip]) * weight * k0 * k3;
-  pphot->user[7][ip] += (pphot->acp[ip]+pphot->scp[ip]) * pphot->wp[ip]; // inverse mean free path
-  pphot->user[8][ip] += pphot->wp[ip]; // number of scatterings
-
-  // First check radius condition
-  Real r = sqrt(SQR(pphot->x1p[ip])+SQR(pphot->x2p[ip])+SQR(pphot->x3p[ip]));
+  // Restrict the final movement segment to the portion inside the sphere.  The distance
+  // r-R is only the distance back to the surface for a radial ray; solve the ray-sphere
+  // intersection for the general case.
+  Real dl = ppusher->dl;
+  Real r = sqrt(SQR(pphot->x1p[ip]) + SQR(pphot->x2p[ip]) + SQR(pphot->x3p[ip]));
   if (r >= rad0) {
-    Real dr = r-rad0;
-    // assume cartesian for now
-    pphot->x0p[ip] -= dr/2.99792458e10;
-    pphot->x1p[ip] -= pphot->k1p[ip]*dr;
-    pphot->x2p[ip] -= pphot->k2p[ip]*dr;
-    pphot->x3p[ip] -= pphot->k3p[ip]*dr;
+    Real b = pphot->x1p[ip] * k1 + pphot->x2p[ip] * k2 + pphot->x3p[ip] * k3;
+    Real discriminant = SQR(b) - (SQR(r) - SQR(rad0));
+    discriminant = (discriminant > 0.) ? discriminant : 0.;
+    Real dr = b - sqrt(discriminant);
+    dr = (dr > 0.) ? dr : 0.;
+    dr = (dr < dl) ? dr : dl;
+
+    dl -= dr;
+    pphot->x0p[ip] -= dr;
+    pphot->x1p[ip] -= k1 * dr;
+    pphot->x2p[ip] -= k2 * dr;
+    pphot->x3p[ip] -= k3 * dr;
 
     pphot->statp[ip] = ESCAPED;
-    //pphot->face = BoundaryFace::undef;
   }
 
+  // Match the lab-frame path-length estimator used by AccumulateMoments.  k0p now aliases
+  // ep, so it must not appear as an additional factor in these non-relativistic moments.
+  const Real c_cgs = MCConstants::c_cgs;
+  const Real dl_cgs = dl * pmcb->l_cgs;
+  const Real weight = pphot->wp[ip] * pphot->ep[ip] * dl_cgs / c_cgs;
+  const Real extinction = pphot->acp[ip] + pphot->scp[ip];
+
+  pphot->user[0][ip] += weight;
+  pphot->user[1][ip] += weight * k1 * c_cgs;
+  pphot->user[2][ip] += weight * k2 * c_cgs;
+  pphot->user[3][ip] += weight * k3 * c_cgs;
+  pphot->user[4][ip] += extinction * weight * k1;
+  pphot->user[5][ip] += extinction * weight * k2;
+  pphot->user[6][ip] += extinction * weight * k3;
+  pphot->user[7][ip] += extinction * pphot->wp[ip]; // opacity sum per movement segment
+  pphot->user[8][ip] += pphot->wp[ip]; // weighted number of movement segments
 }
 
 // Used to test photons radial distributions after a fixed travel time
