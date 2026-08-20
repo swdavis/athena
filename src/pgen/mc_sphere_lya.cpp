@@ -33,14 +33,13 @@
 
 namespace {
   // Global variables
-  Real rad0,time0;
+  Real rad0;
   Real energy0;
 
   // function headers
   bool LocateOriginCell(MCCoord *pcoord, int is, int ie, int js, int je, int ks, int ke,
                         int &i1start, int &i2start, int &i3start);
   void SphericalEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonPusher *ppusher, int ip);
-  void TimedEscape(MonteCarloBlock *pmcb, Photon *phot, PhotonPusher *ppusher, int ip);
 
   // Find the cell containing the source.  The lower face is excluded so that
   // an origin on a MeshBlock face belongs to exactly one of the neighboring blocks.
@@ -120,15 +119,13 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
 void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
 
-  nuser_var = 9;
-  // If time is set in problem generator, terminate photon integration based on time
-  // but if not terminated based on radius
-  Real time = pin->GetOrAddReal("problem","time",-1.);
-  if (time > 0.) {
-    EnrollUserWorkInMove(TimedEscape);
-  } else {
-    EnrollUserWorkInMove(SphericalEscape);
+  if (pin->DoesParameterExist("problem", "time")) {
+    throw std::runtime_error(
+        "mc_sphere_lya does not support problem/time; photons evolve until spatial escape");
   }
+
+  nuser_var = 9;
+  EnrollUserWorkInMove(SphericalEscape);
 }
 
 //========================================================================================
@@ -145,7 +142,6 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
   energy0 = MCConstants::h_cgs * (MCConstants::nu_lya + dopw * x0);
 
   rad0 = pin->GetReal("problem","radius");
-  time0 = pin->GetOrAddReal("problem","time",-1.);
 
   int i1start, i2start, i3start;
   if (!LocateOriginCell(pcoord, is, ie, js, je, ks, ke,
@@ -187,7 +183,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
     pphot->x1p[ip] = 0.;
     pphot->x2p[ip] = 0.;
     pphot->x3p[ip] = 0.;
-    pphot->x0p[ip] = 0.; //time
+    pphot->x0p[ip] = 0.; // path length
 
     // Generate initial angle parameters
     Real phi = 2. * PI * pran->uniform();
@@ -208,13 +204,8 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
     pphot->wp[ip] = target_lum / energy0;
     pphot->ep[ip] = energy0;
 
-    // If using spatial escape, set an infinite time limit
-    // Otherwise, initialize dtp to 0
-    if (time0 <= 0.0) {
-      pphot->dtp[ip] = HUGE_NUMBER;
-    } else {
-      pphot->dtp[ip] = 0.0;
-    }
+    // Evolve until the packet crosses the spherical escape surface.
+    pphot->dtp[ip] = HUGE_NUMBER;
 
     // Initialize Stokes vector
     if (pphot->polarized) {
@@ -242,8 +233,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
 namespace {
 
-// Used to evalue photons time distribution as fixed spherical
-// escape surface
+// Mark photons escaped at the fixed spherical surface and accumulate user estimators.
 void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher,
                      int ip) {
 
@@ -289,36 +279,6 @@ void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher
   pphot->user[6][ip] += extinction * weight * k3;
   pphot->user[7][ip] += extinction * pphot->wp[ip]; // opacity sum per movement segment
   pphot->user[8][ip] += pphot->wp[ip]; // weighted number of movement segments
-}
-
-// Used to test photons radial distributions after a fixed travel time
-void TimedEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher,
-                 int ip) {
-
-  // First check radius condition
-  Real r = sqrt(SQR(pphot->x1p[ip])+SQR(pphot->x2p[ip])+SQR(pphot->x3p[ip]));
-  if (r >= rad0) {
-    Real dr = r-rad0;
-    // assume cartesian for now
-    pphot->x0p[ip] -= dr/2.99792458e10;
-    pphot->x1p[ip] -= pphot->k1p[ip]*dr;
-    pphot->x2p[ip] -= pphot->k2p[ip]*dr;
-    pphot->x3p[ip] -= pphot->k3p[ip]*dr;
-
-    pphot->statp[ip] = ESCAPED;
-    //pphot->face = BoundaryFace::undef;
-  }
-  // Then check time condition -- ensures time is not over estimated
-  if (pphot->x0p[ip] >= time0) {
-    Real dt = pphot->x0p[ip] - time0;
-    pphot->x0p[ip] -= dt;
-    pphot->x1p[ip] -= pphot->k1p[ip]*dt*2.99792458e10;
-    pphot->x2p[ip] -= pphot->k2p[ip]*dt*2.99792458e10;
-    pphot->x3p[ip] -= pphot->k3p[ip]*dt*2.99792458e10;
-
-    pphot->statp[ip] = ESCAPED;
-    //pphot->face = BoundaryFace::undef;
-  }
 }
 
 } //namespace
