@@ -4,14 +4,15 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file mc_sphere_lya.cpp
-//  \brief Problem generator for monte carlo through uniform isothermal sphere with lyman
-//         alpha scattering
+//  \brief Problem generator for monte carlo through a uniform isothermal sphere on a
+//         Cartesian grid with lyman alpha scattering
 //
 //========================================================================================
 
 // C/C++ headers
 #include <iostream>
 #include <stdexcept>
+#include <string>
 
 // Athena++ headers
 #include "../athena.hpp"
@@ -71,17 +72,15 @@ namespace {
 
 void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 
+  if (std::string(COORDINATE_SYSTEM) != "cartesian") {
+    throw std::runtime_error("mc_sphere_lya requires Cartesian coordinates");
+  }
+
   Real rideal = 8.314e7;
   Real c = 2.99792458e10;
   Real temp = pin->GetReal("problem","temp");
   Real tau = pin->GetReal("problem","tau");
-  Real rad0;
-  if (COORDINATE_SYSTEM == "cartesian") {
-    rad0 = pin->GetReal("problem","radius");
-  } else if (COORDINATE_SYSTEM == "spherical_polar") {
-    rad0 = pcoord->x1f(ie+1);
-    printf("rad0: %g\n",rad0);
-  }
+  Real rad0 = pin->GetReal("problem","radius");
   Real vel = pin->GetOrAddReal("problem","velocity",0.);
   Real gamma = peos->GetGamma();
   vel *= c;
@@ -133,9 +132,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
   if (time > 0.) {
     EnrollUserWorkInMove(TimedEscape);
   } else {
-    if (COORDINATE_SYSTEM == "cartesian") {
-      EnrollUserWorkInMove(SphericalEscape);
-    }
+    EnrollUserWorkInMove(SphericalEscape);
   }
 }
 
@@ -162,21 +159,15 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
   rad0 = pin->GetReal("problem","radius");
   time0 = pin->GetOrAddReal("problem","time",-1.);
 
-  if (COORDINATE_SYSTEM == "cartesian") {
-    int i1start, i2start, i3start;
-    if (!LocateOriginCell(pcoord, is, ie, js, je, ks, ke,
-                          i1start, i2start, i3start)) {
-      //std::stringstream msg;
-      //msg << "### FATAL ERROR in InitUserMonteCarloBlockData" << std::endl
-      //    << "Origin not found within domain." << std::endl;
-      //throw std::runtime_error(msg.str().c_str());
-      nphremain = 0;
-      nphrun = 0;
-    } else {
-      // Set number of samples per block because emmision_flag is set to EMISNONE
-      nphremain = pin->GetInteger("montecarlo", "nphot");
-      nphrun = 0;
-    }
+  int i1start, i2start, i3start;
+  if (!LocateOriginCell(pcoord, is, ie, js, je, ks, ke,
+                        i1start, i2start, i3start)) {
+    nphremain = 0;
+    nphrun = 0;
+  } else {
+    // Set number of samples per block because emmision_flag is set to EMISNONE
+    nphremain = pin->GetInteger("montecarlo", "nphot");
+    nphrun = 0;
   }
 }
 
@@ -189,15 +180,9 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
 void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etype) {
 
   int i1start, i2start, i3start;
-  if (COORDINATE_SYSTEM == "cartesian"
-      && !LocateOriginCell(pcoord, is, ie, js, je, ks, ke,
-                           i1start, i2start, i3start)) {
+  if (!LocateOriginCell(pcoord, is, ie, js, je, ks, ke,
+                        i1start, i2start, i3start)) {
     throw std::runtime_error("InitializePhoton called on a MeshBlock without the origin");
-  }
-
-  if (COORDINATE_SYSTEM == "spherical_polar") {
-    Real nx2 = static_cast<Real>(je-js+1);
-    Real nx3 = static_cast<Real>(ke-ks+1);
   }
 
   for (int ip=ips; ip<=ipe; ip++) {
@@ -207,50 +192,27 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
     // Set status flag
     pphot->statp[ip] = EVOLVING;
-    int i1,i2,i3;
-    if (COORDINATE_SYSTEM == "cartesian") {
-      // Initialize photon at the origin
-      pphot->i1p[ip] = i1 = i1start;
-      pphot->i2p[ip] = i2 = i2start;
-      pphot->i3p[ip] = i3 = i3start;
-      pphot->x1p[ip] = 0.;
-      pphot->x2p[ip] = 0.;
-      pphot->x3p[ip] = 0.;
-      pphot->x0p[ip] = 0.; //time
+    // Initialize photon at the origin
+    pphot->i1p[ip] = i1start;
+    pphot->i2p[ip] = i2start;
+    pphot->i3p[ip] = i3start;
+    pphot->x1p[ip] = 0.;
+    pphot->x2p[ip] = 0.;
+    pphot->x3p[ip] = 0.;
+    pphot->x0p[ip] = 0.; //time
 
-      // Generate initial angle parameters
-      Real phi = 2. * PI * pran->uniform();
-      Real cphi = cos(phi);
-      Real sphi = sin(phi);
-      Real cth = 2. * pran->uniform() - 1.;
-      Real sth = sqrt(1. - SQR(cth));
-      // Initialize wave vector with isotropic distribution
-      pphot->k1p[ip] = sth*cphi;
-      pphot->k2p[ip] = sth*sphi;
-      pphot->k3p[ip] = cth;
-      // k0p is the photon energy (set via ep); the light-travel time bookkeeping
-      // below now divides by c explicitly instead of stashing 1/c in k0p.
-
-    } else if (COORDINATE_SYSTEM == "spherical_polar") {
-      pphot->i1p[ip] = i1 = is;
-      pphot->i2p[ip] = i2 = static_cast<int>(pran->uniform()*nx2)+js;
-      pphot->i3p[ip] = i3 = static_cast<int>(pran->uniform()*nx3)+ks;
-      // Obtain initial position within zone, assumes r(is) << r(is+1)
-      pphot->x1p[ip] = pcoord->x1f(pphot->i1p[ip]) * 100.; // at inner edge
-      Real cthh = cos(pcoord->x2f(pphot->i2p[ip]));
-      Real cthl = cos(pcoord->x2f(pphot->i2p[ip]+1));
-      Real cth = cthl + pran->uniform() * (cthh-cthl);
-      pphot->x2p[ip] = acos(cth);
-      Real pl = pcoord->x3f(pphot->i3p[ip]); Real dp = pcoord->x3f(pphot->i3p[ip]+1)-pl;
-      pphot->x3p[ip] = pl+pran->uniform()*dp;
-      pphot->x0p[ip] = 0.; //time
-      // Initialize wave vector so that it is parallel with r direction
-      pphot->k1p[ip] = 1.0;
-      pphot->k2p[ip] = 0.;
-      pphot->k3p[ip] = 0.;
-      // k0p is the photon energy (set via ep); the light-travel time bookkeeping
-      // below now divides by c explicitly instead of stashing 1/c in k0p.
-    }
+    // Generate initial angle parameters
+    Real phi = 2. * PI * pran->uniform();
+    Real cphi = cos(phi);
+    Real sphi = sin(phi);
+    Real cth = 2. * pran->uniform() - 1.;
+    Real sth = sqrt(1. - SQR(cth));
+    // Initialize wave vector with isotropic distribution
+    pphot->k1p[ip] = sth*cphi;
+    pphot->k2p[ip] = sth*sphi;
+    pphot->k3p[ip] = cth;
+    // k0p is the photon energy (set via ep); the light-travel time bookkeeping
+    // below now divides by c explicitly instead of stashing 1/c in k0p.
 
     // Initialize Photon weights, energy, direction, polarization
     // TODO: Make this an input rather than hardcoding
