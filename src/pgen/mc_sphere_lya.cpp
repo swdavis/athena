@@ -36,6 +36,18 @@ namespace {
   Real rad0;
   Real energy0;
 
+  enum UserEstimatorIndex {
+    PATH_ENERGY = 0,
+    FLUX1,
+    FLUX2,
+    FLUX3,
+    FORCE_MOMENT1,
+    FORCE_MOMENT2,
+    FORCE_MOMENT3,
+    PATH_EXTINCTION,
+    NUM_ESTIMATORS
+  };
+
   // function headers
   bool LocateOriginCell(MCCoord *pcoord, int is, int ie, int js, int je, int ks, int ke,
                         int &i1start, int &i2start, int &i3start);
@@ -147,7 +159,7 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
         "bookkeeping and estimators are not yet validated");
   }
 
-  nuser_var = 9;
+  nuser_var = NUM_ESTIMATORS;
   EnrollUserEscapeDistance(DistanceToSphere);
   EnrollUserWorkInMove(AccumulateUserEstimators);
 }
@@ -197,6 +209,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
     for (int n=0; n<pmy_mc->nuser_var; ++n)
       pphot->user[n][ip] = 0.;
+    pphot->nscp[ip] = 0;
 
     // Set status flag
     pphot->statp[ip] = EVOLVING;
@@ -275,15 +288,15 @@ void AccumulateUserEstimators(MonteCarloBlock *pmcb, Photon *pphot,
   const Real weight = pphot->wp[ip] * pphot->ep[ip] * dl_cgs / c_cgs;
   const Real extinction = pphot->acp[ip] + pphot->scp[ip];
 
-  pphot->user[0][ip] += weight;
-  pphot->user[1][ip] += weight * k1 * c_cgs;
-  pphot->user[2][ip] += weight * k2 * c_cgs;
-  pphot->user[3][ip] += weight * k3 * c_cgs;
-  pphot->user[4][ip] += extinction * weight * k1;
-  pphot->user[5][ip] += extinction * weight * k2;
-  pphot->user[6][ip] += extinction * weight * k3;
-  pphot->user[7][ip] += extinction * pphot->wp[ip]; // opacity sum per movement segment
-  pphot->user[8][ip] += pphot->wp[ip]; // weighted number of movement segments
+  pphot->user[PATH_ENERGY][ip] += weight;
+  pphot->user[FLUX1][ip] += weight * k1 * c_cgs;
+  pphot->user[FLUX2][ip] += weight * k2 * c_cgs;
+  pphot->user[FLUX3][ip] += weight * k3 * c_cgs;
+  pphot->user[FORCE_MOMENT1][ip] += extinction * weight * k1;
+  pphot->user[FORCE_MOMENT2][ip] += extinction * weight * k2;
+  pphot->user[FORCE_MOMENT3][ip] += extinction * weight * k3;
+  // Together with PATH_ENERGY, this forms the scalar path-weighted mean extinction.
+  pphot->user[PATH_EXTINCTION][ip] += extinction * weight;
 }
 
 } //namespace

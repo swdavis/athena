@@ -99,6 +99,9 @@ class Photons:
         # How to interpret this list: relativistic?, spatial basis, wavevector convention
         self.props = coord_properties(self.coord)
         self.relativistic = self.props['relativistic']
+        self.has_nscp = phlist.get('nscp', False)
+        if self.has_nscp:
+            self.npars = self.npars + 1
         if self.polarized:
             self.npars = self.npars + 2
         ncol = phlist['npars']
@@ -123,10 +126,14 @@ class Photons:
         self.k1 = phlist['list'][:,6].copy()
         self.k2 = phlist['list'][:,7].copy()
         self.k3 = phlist['list'][:,8].copy()
+        standard_offset = 10
+        if self.has_nscp:
+            self.nscp = phlist['list'][:,standard_offset].astype(np.int64)
+            standard_offset += 1
         if self.polarized:
-            self.q = phlist['list'][:,10]
-            self.u = phlist['list'][:,11]
-            #self.v = phlist['list'][:,12]
+            self.q = phlist['list'][:,standard_offset]
+            self.u = phlist['list'][:,standard_offset+1]
+            # Stokes v is not written to photon lists.
         if self.nuser > 0:
             for i in range(self.nuser):
                 self.user[:,i] = phlist['list'][:,i+self.npars]
@@ -315,6 +322,10 @@ def read_list(filename, data=True, header=True):
         phlist['npars'] = parse_line_value("npars=", int)
         phlist['ntot'] = parse_line_value("ntot=", int)
         phlist['polarized'] = bool(parse_line_value("polarized=", int))
+        if raw_data_ascii.startswith("nscp=", current_index):
+            phlist['nscp'] = bool(parse_line_value("nscp=", int))
+        else:
+            phlist['nscp'] = False
 
         # Handle coord separately as it's a string
         current_index = skip_string("coord=")
@@ -439,6 +450,10 @@ def read_list_generator(filename, chunk_size=None):
     phlist['npars'] = parse_line_value("npars=", int)
     phlist['ntot'] = parse_line_value("ntot=", int)
     phlist['polarized'] = bool(parse_line_value("polarized=", int))
+    if raw_data_ascii.startswith("nscp=", current_index):
+        phlist['nscp'] = bool(parse_line_value("nscp=", int))
+    else:
+        phlist['nscp'] = False
     
     skip_string("coord=")
     end_of_line_index = raw_data_ascii.find('\n', current_index)
@@ -504,6 +519,8 @@ def write_list(filename, phlist, header=True, length=None):
             outfile.write(f"npars={phlist['npars']:d}\n")
             outfile.write(f"ntot={phlist['ntot']:d}\n")
             outfile.write(f"polarized={int(phlist['polarized']):d}\n")
+            if phlist.get('nscp', False):
+                outfile.write("nscp=1\n")
             outfile.write(f"coord={phlist['coord']}\n")
 
     # Append binary data using numpy's tobytes() - faster than struct.pack
