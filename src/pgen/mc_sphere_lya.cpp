@@ -10,6 +10,8 @@
 //========================================================================================
 
 // C/C++ headers
+#include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -45,13 +47,28 @@ namespace {
     FORCE_MOMENT2,
     FORCE_MOMENT3,
     PATH_EXTINCTION,
-    NUM_ESTIMATORS
+    NUM_BASE_ESTIMATORS
+  };
+
+  constexpr int NUM_FREQUENCY_BINS = 24;
+  constexpr int FREQUENCY_PATH_ENERGY_OFFSET = NUM_BASE_ESTIMATORS;
+  constexpr int FREQUENCY_PATH_EXTINCTION_OFFSET =
+      FREQUENCY_PATH_ENERGY_OFFSET + NUM_FREQUENCY_BINS;
+  constexpr int NUM_ESTIMATORS = FREQUENCY_PATH_EXTINCTION_OFFSET + NUM_FREQUENCY_BINS;
+
+  // Finite upper edges of the |x| bins.  Resolve the Doppler core at dx=0.5, the expected
+  // escape-frequency range at dx=1, and retain a broad-wing bin before the final overflow.
+  const Real FREQUENCY_BIN_UPPER_EDGES[NUM_FREQUENCY_BINS - 1] = {
+    0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0,
+    5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+    13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 24.0
   };
 
   // function headers
   bool LocateOriginCell(MCCoord *pcoord, int is, int ie, int js, int je, int ks, int ke,
                         int &i1start, int &i2start, int &i3start);
   Real DistanceToSphere(MonteCarloBlock *pmcb, Photon *phot, int ip);
+  int FrequencyBin(MonteCarloBlock *pmcb, Photon *phot, int ip);
   void AccumulateUserEstimators(MonteCarloBlock *pmcb, Photon *phot,
                                 PhotonPusher *ppusher, int ip);
 
@@ -89,6 +106,29 @@ namespace {
     discriminant = (discriminant > 0.) ? discriminant : 0.;
     const Real distance = -b + sqrt(discriminant);
     return (distance > 0.) ? distance : 0.;
+  }
+
+  // Return the |x| bin for the packet frequency used by the segment opacity.  Opacities
+  // are evaluated in the comoving frame when transformations are enabled.
+  int FrequencyBin(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
+    Real energy = pphot->ep[ip];
+    if (pmcb->boosts || pmcb->tetrads) {
+      energy *= pmcb->FrequencyShiftComoving(pphot, ip);
+    }
+
+    const int i1 = pphot->i1p[ip];
+    const int i2 = pphot->i2p[ip];
+    const int i3 = pphot->i3p[ip];
+    const Real temp = pmcb->tgas(i3, i2, i1);
+    const Real vth = sqrt(2. * MCConstants::kb_cgs * temp / MCConstants::mH_cgs);
+    const Real dopw = MCConstants::nu_lya * vth / MCConstants::c_cgs;
+    const Real x = (energy / MCConstants::h_cgs - MCConstants::nu_lya) / dopw;
+    if (!std::isfinite(x)) return -1;
+
+    const Real abs_x = std::fabs(x);
+    const Real *end = FREQUENCY_BIN_UPPER_EDGES + NUM_FREQUENCY_BINS - 1;
+    return static_cast<int>(std::upper_bound(FREQUENCY_BIN_UPPER_EDGES, end, abs_x)
+                            - FREQUENCY_BIN_UPPER_EDGES);
   }
 }
 
@@ -297,6 +337,13 @@ void AccumulateUserEstimators(MonteCarloBlock *pmcb, Photon *pphot,
   pphot->user[FORCE_MOMENT3][ip] += extinction * weight * k3;
   // Together with PATH_ENERGY, this forms the scalar path-weighted mean extinction.
   pphot->user[PATH_EXTINCTION][ip] += extinction * weight;
+
+  const int frequency_bin = FrequencyBin(pmcb, pphot, ip);
+  if (frequency_bin >= 0) {
+    pphot->user[FREQUENCY_PATH_ENERGY_OFFSET + frequency_bin][ip] += weight;
+    pphot->user[FREQUENCY_PATH_EXTINCTION_OFFSET + frequency_bin][ip]
+        += extinction * weight;
+  }
 }
 
 } //namespace
