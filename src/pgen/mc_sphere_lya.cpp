@@ -140,6 +140,13 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin){
         "mc_sphere_lya does not support problem/time; photons evolve until spatial escape");
   }
 
+  // MRW hook
+  if (acceleration) {
+    throw std::runtime_error(
+        "mc_sphere_lya does not support montecarlo/acceleration; MRW resonance "
+        "bookkeeping and estimators are not yet validated");
+  }
+
   nuser_var = 9;
   EnrollUserEscapeDistance(DistanceToSphere);
   EnrollUserWorkInMove(AccumulateUserEstimators);
