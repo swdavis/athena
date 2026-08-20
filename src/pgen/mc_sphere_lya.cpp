@@ -285,10 +285,10 @@ void SphericalEscape(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher
   // Repeat accumulation of moments in UpdateMoments
   Real k0,k1,k2,k3,weight;
   Real ep = pphot->ep[ip];
-  k0 = pphot->k0p[0];
-  k1 = pphot->k1p[1];
-  k2 = pphot->k2p[2];
-  k3 = pphot->k2p[3];
+  k0 = pphot->k0p[ip];
+  k1 = pphot->k1p[ip];
+  k2 = pphot->k2p[ip];
+  k3 = pphot->k3p[ip];
 
   // Weight moments by time spent in domain
   Real c_cgs = 2.99792458e10;
