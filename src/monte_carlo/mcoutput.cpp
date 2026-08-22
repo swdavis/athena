@@ -203,7 +203,7 @@ bool Spectrum::AngleBinsCartesian(Real k[4], int &phibin, int &cthbin) {
   Real kz = k[IMC3];
 
   Real ctheta, phi, stheta;
-  if (COORDINATE_SYSTEM == "cartesian") {
+  if (pmy_mc->topology == MCTOPO_CARTESIAN) {
     // Set ctheta, phi according to face
     switch(face) {
       case BoundaryFace::inner_x1:
@@ -259,7 +259,7 @@ bool Spectrum::AngleBinsCartesian(Real k[4], int &phibin, int &cthbin) {
         throw std::runtime_error(msg.str().c_str());
         break;
     }
-  } else if (COORDINATE_SYSTEM == "spherical_polar") {
+  } else if (pmy_mc->topology == MCTOPO_SPHERICAL) {
     if (kz >= 0.0) {
       ctheta = kz;
       stheta = sqrt(SQR(kx)+SQR(ky));
@@ -273,6 +273,13 @@ bool Spectrum::AngleBinsCartesian(Real k[4], int &phibin, int &cthbin) {
       if(ky < 0.0)
         phi = 2 * PI - phi;
     }
+  } else {
+    // Previously fell through with ctheta, phi and stheta uninitialized.
+    std::stringstream msg;
+    msg << "### FATAL ERROR in function [Spectrum::AngleBinsCartesian]" << std::endl
+        << "No angle binning defined for the topology of coordinate system "
+        << GetMCCoordSystemName(pmy_mc->coord_system) << std::endl;
+    throw std::runtime_error(msg.str().c_str());
   }
 
   // Get ctheta bin
@@ -368,8 +375,8 @@ bool Spectrum::AngleBinsSphericalPolar(Real k[4], int &phibin, int &cthbin) {
       break;
     default:
       std::stringstream msg;
-      msg << "### FATAL ERROR in function [Spectrum::AngleBinsCartesian]" << std::endl
-          << "Face not valid" << std::endl;
+      msg << "### FATAL ERROR in function [Spectrum::AngleBinsSphericalPolar]"
+          << std::endl << "Face not valid" << std::endl;
       throw std::runtime_error(msg.str().c_str());
       break;
   }
@@ -467,17 +474,20 @@ void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
     int phibin, mubin;
     if (polar_axis) {
       Real kcart[4];
-      if ((COORDINATE_SYSTEM == "cartesian") || (COORDINATE_SYSTEM == "minkowski"))  {
+      // Was keyed on cartesian || minkowski, which left kcart uninitialized for the
+      // Cartesian Kerr-Schild case (gr_user); it shares this topology and belongs here.
+      if (pmy_mc->topology == MCTOPO_CARTESIAN)  {
         kcart[IMC1] = pphot->k1p[ip];
         kcart[IMC2] = pphot->k2p[ip];
         kcart[IMC3] = pphot->k3p[ip];
-      } else  if (COORDINATE_SYSTEM == "spherical_polar") {
+      } else  if (pmy_mc->topology == MCTOPO_SPHERICAL) {
         Real cth = cos(pphot->x2p[ip]);
         Real sth = sin(pphot->x2p[ip]);
         Real cph = cos(pphot->x3p[ip]);
         Real sph = sin(pphot->x3p[ip]);
         Real kr, kth, kph;
-        // SWD: This should be adjusted
+        // Flat orthonormalization.  Only valid because the MCOutput constructor refuses
+        // spec output for a curved metric; see the note there.
         if (pphot->pmy_mcb->pmy_mc->general_pusher_flag) {
           kr = pphot->k1p[ip];
           kth = pphot->k2p[ip]*pphot->x1p[ip];
@@ -491,20 +501,29 @@ void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
         kcart[IMC1] = kr*sth*cph + kth*cth*cph - kph*sph;
         kcart[IMC2] = kr*sth*sph + kth*cth*sph + kph*cph;
         kcart[IMC3] = kr*cth - kth*sth;
+      } else {
+        // SWD: Add cylindrical
+        std::stringstream msg;
+        msg << "### FATAL ERROR in function [Spectrum::UpdateSpectrum]" << std::endl
+            << "polar_axis spectra are not implemented for coordinate system "
+            << GetMCCoordSystemName(pmy_mc->coord_system) << std::endl;
+        throw std::runtime_error(msg.str().c_str());
       }
-      // SWD: Add cylindrical
       if (!AngleBinsCartesian(kcart,phibin,mubin))
         return;
     } else {
-      if (COORDINATE_SYSTEM == "spherical_polar") {
+      if (pmy_mc->topology == MCTOPO_SPHERICAL) {
         Real ksph[4];
-        // SWD: This should be adjusted
+        // Flat orthonormalization.  Only valid because the MCOutput constructor refuses
+        // spec output for a curved metric; see the note there.
         if (pphot->pmy_mcb->pmy_mc->general_pusher_flag) {
           ksph[IMC1] = pphot->k1p[ip];
           ksph[IMC2] = pphot->k2p[ip]*pphot->x1p[ip];
           ksph[IMC3] = pphot->k3p[ip]*pphot->x1p[ip]*sin(pphot->x2p[ip]);
           Real norm = sqrt(SQR(ksph[IMC1])+SQR(ksph[IMC2])+SQR(ksph[IMC3]));
-          for (int i=0; i<4; ++i)
+          // from IMC1: ksph[IMC0] is never set, and AngleBinsSphericalPolar reads only
+          // the spatial components
+          for (int i=IMC1; i<4; ++i)
             ksph[i] /= norm;
         } else {
           ksph[IMC1] = pphot->k1p[ip];
@@ -513,6 +532,14 @@ void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
         }
         if(!AngleBinsSphericalPolar(ksph,phibin,mubin))
             return;
+      } else {
+        // Previously fell through and binned with phibin and mubin uninitialized.
+        std::stringstream msg;
+        msg << "### FATAL ERROR in function [Spectrum::UpdateSpectrum]" << std::endl
+            << "Spectra with polar_axis = false require a spherical topology; coordinate "
+            << "system " << GetMCCoordSystemName(pmy_mc->coord_system) << " has none."
+            << std::endl;
+        throw std::runtime_error(msg.str().c_str());
       }
     } // if (polar_axis) else
 
@@ -1032,6 +1059,33 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
       std::string type = pin->GetString(pib->block_name,"file_type");
 
       if (type.compare("spec") == 0) {
+        // Refused up front rather than per photon, so the run fails at setup instead of
+        // after the transfer has started.
+        //
+        // Spectrum angle binning orthonormalizes the wavevector with the flat scale
+        // factors (r, r sin(theta), and unity in the radial and cartesian directions) and
+        // then treats the result as a unit direction.  That is exact only for a diagonal
+        // metric with g_rr = 1.  In Kerr-Schild g_rr = 1 + 2M/r, g_tr does not vanish,
+        // and the normal observer has n^r < 0, so the direction that comes out is off by
+        // to ~20 degrees at r = 6M -- large enough that photons with mu < 0.35 are
+        // classified as ingoing and silently dropped.  The energy axis is wrong in the
+        // same way: it bins ep = k^t rather than the conserved -k_t.
+        //
+        // Doing this properly means projecting through the normal-observer tetrad, which
+        // MonteCarloBlock::boost_lab already holds per zone.  Until then the photon list
+        // is the supported route: it stores -k_t directly, and
+        // vis/python/montecarlo/make_spectrum.py bins it.
+        if (pmc->curved_metric) {
+          std::stringstream msg;
+          msg << "### FATAL ERROR in MCOutput constructor" << std::endl
+              << "spec output is not supported for coordinate system "
+              << GetMCCoordSystemName(pmc->coord_system) << "." << std::endl
+              << "Angle and energy binning assume a flat metric and are substantially "
+              << "wrong in a curved one." << std::endl
+              << "Use file_type = phlist and bin it with "
+              << "vis/python/montecarlo/make_spectrum.py instead." << std::endl;
+          ATHENA_ERROR(msg);
+        }
         // set momentum range and polarization, logarithmic flags for spectrum constructor
         MomentumRange range;
         range.ne = pin->GetInteger(pib->block_name,"ne");
@@ -1097,8 +1151,12 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
           pspec->x3max = pin->GetReal(pib->block_name,"x3max");
           pspec->coordinates = true;
         }
-        // Set axis for determining output angles
-        if (COORDINATE_SYSTEM == "cartesian")
+        // Set axis for determining output angles.  A Cartesian-topology grid has no
+        // polar axis of its own, so escape angles have to be binned against the
+        // Cartesian axes; the alternative branch of UpdateSpectrum has nothing to use.
+        // Previously tested cartesian only, which left minkowski and gr_user defaulting
+        // to polar_axis = false and then binning uninitialized angle indices.
+        if (pmc->topology == MCTOPO_CARTESIAN)
           pspec->polar_axis = true;
         else
           pspec->polar_axis = pin->GetOrAddBoolean(pib->block_name,"polar_axis",false);

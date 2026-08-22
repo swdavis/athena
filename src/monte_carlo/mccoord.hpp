@@ -10,9 +10,56 @@
 
 // Athena++ classes headers
 #include "../athena.hpp"
-#include "montecarlo.hpp"
 
 #define NCOORD 4
+
+// The enums below are defined ahead of the montecarlo.hpp include deliberately.  That
+// header includes this one and declares members of these types, so they have to be
+// complete before it is processed.
+
+//----------------------------------------------------------------------------------------
+//! \brief which metric the Monte Carlo module is integrating on.
+//!
+//! COORDINATE_SYSTEM is not enough on its own.  It is a bare string literal, so the
+//! comparisons `COORDINATE_SYSTEM == "cartesian"` scattered through the module are
+//! pointer comparisons with unspecified behaviour, and more importantly "gr_user" says
+//! nothing at all about the metric -- it was silently taken to mean Cartesian
+//! Kerr-Schild.  MCCoordSystem names the metric outright; see
+//! MonteCarlo::SetCoordinateSystem for how it is resolved from the configure-time
+//! coordinate system plus <montecarlo>/mc_coord.
+
+enum MCCoordSystem {
+  MCCOORD_CARTESIAN = 0,
+  MCCOORD_CYLINDRICAL = 1,
+  MCCOORD_SPHERICAL_POLAR = 2,
+  MCCOORD_MINKOWSKI = 3,
+  MCCOORD_KERR_SCHILD = 4,
+  MCCOORD_BOYER_LINDQUIST = 5,
+  MCCOORD_KERR_SCHILD_CARTESIAN = 6
+};
+
+//----------------------------------------------------------------------------------------
+//! \brief shape of the coordinate triple (x1,x2,x3), independent of the metric.
+//!
+//! The metric and the grid topology are separate facts and the module needs both.
+//! Kerr-Schild in Cartesian form is a curved metric on an (x,y,z) grid, so code that
+//! orthonormalises directions, converts wavevectors for output or bins escape angles has
+//! to branch on this rather than on MCCoordSystem.
+
+enum MCTopology {
+  MCTOPO_CARTESIAN = 0,
+  MCTOPO_CYLINDRICAL = 1,
+  MCTOPO_SPHERICAL = 2
+};
+
+//! \brief grid topology implied by a given metric
+MCTopology GetMCTopology(MCCoordSystem c);
+//! \brief true when the metric is not flat in the coordinates being integrated
+bool IsMCMetricCurved(MCCoordSystem c);
+//! \brief human-readable name, used in error messages and for <montecarlo>/mc_coord
+const char *GetMCCoordSystemName(MCCoordSystem c);
+
+#include "montecarlo.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \class MCCoord

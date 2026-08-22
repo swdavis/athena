@@ -267,6 +267,13 @@ public:
   bool general_pusher_flag; // Use integration for photon movement
   bool verbose; // print out more information during run
 
+  //! which metric the module integrates on; see SetCoordinateSystem
+  MCCoordSystem coord_system;
+  //! shape of (x1,x2,x3); derived from coord_system, cached because it is read per photon
+  MCTopology topology;
+  //! true when coord_system is a curved spacetime; derived from coord_system
+  bool curved_metric;
+
   //! canonical geometry/wavevector tag written to output headers; see SetGeometryTag
   std::string geometry_tag;
   //! true when geometry_tag denotes a curved (or at least GR-integrated) spacetime, in
@@ -308,6 +315,7 @@ public:
   void EnrollUserScatteringFunction(ScatFunc_t scatfunc);
   void Initialize(ParameterInput *pinput);
   void InitializeEmission(ParameterInput *pin);
+  void SetCoordinateSystem(ParameterInput *pin);
   void SetGeometryTag(ParameterInput *pin);
   void DistributeSamples(int etype);
   void NormalizeDomainOutputs(bool normalize);
@@ -385,9 +393,14 @@ public:
   enum AbsorptionOpacityFlag absorption_opac;
   enum ScatteringFlag scattering_meth;
 
+  //! mirrors of MonteCarlo::coord_system and friends, copied in so the hot paths do not
+  //! chase a pointer per photon
+  MCCoordSystem coord_system;
+  MCTopology topology;
+  bool curved_metric;
+
   // Associated with general pusher
   // SWD some of these should be eliminated others moved to MonteCarlo?
-  bool boyerlindquist_flag; // use Boyer-Lindquist coordinates
   bool orthotet_flag; // use orthonormal tetrad for TransferPhotons()
   bool varystep_flag; // use variable (true) or constant (false) step
 

@@ -99,7 +99,7 @@ void PhotonFrames::Fill(MCFrame f) {
       s.n[0] = pphot_->k1p[ip_];
       s.n[1] = pphot_->k2p[ip_];
       s.n[2] = pphot_->k3p[ip_];
-      if (std::strcmp(COORDINATE_SYSTEM, "spherical_polar") == 0) {
+      if (pmcb_->topology == MCTOPO_SPHERICAL) {
         // Re-express the direction in the orthonormal basis at the zone centre, which is
         // the basis the moments are accumulated in.
         Real sth = std::sin(pphot_->x2p[ip_]), cth = std::cos(pphot_->x2p[ip_]);

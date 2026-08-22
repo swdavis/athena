@@ -139,7 +139,7 @@ void PhotonPusher::MRWResonanceAcceleration(Photon *pphot, MCRandom *pran, Real 
   Real kb = 1.380649e-16;
   Real mass = 1.660538782e-24;
 
-  if (COORDINATE_SYSTEM == "spherical_polar") {
+  if (pmcb->topology == MCTOPO_SPHERICAL) {
 
     // ********* FREQUENCY REDISTRIBUTION *********
     // Sample outgoing frequency from Dijkstra et al 2006 solution
@@ -408,11 +408,11 @@ bool PhotonPusher::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Rea
     Real mu = 2.*pran->uniform()-1.0;
     Real stheta = sqrt(1.0-mu*mu);
     Real phi = 2.*PI*pran->uniform();
-    if (COORDINATE_SYSTEM == "cartesian") {
+    if (pmy_mcb->topology == MCTOPO_CARTESIAN) {
       pphot->x1p[ip] += stheta*cos(phi) * r0 + beta[0] * ct;
       pphot->x2p[ip] += stheta*sin(phi) * r0 + beta[1] * ct;
       pphot->x3p[ip] += mu * r0 + beta[2] * ct;
-    } else if (COORDINATE_SYSTEM == "spherical_polar") {
+    } else if (pmy_mcb->topology == MCTOPO_SPHERICAL) {
       // convert to carteisan
       Real cth = cos(pphot->x2p[ip]);
       Real sth = sqrt(1. - SQR(cth));

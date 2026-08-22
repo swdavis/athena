@@ -17,6 +17,63 @@
 #include "mccoord.hpp"
 
 //----------------------------------------------------------------------------------------
+//! \fn MCTopology GetMCTopology(MCCoordSystem c)
+//! \brief grid topology implied by a given metric
+//!
+//! Kept as a function of the metric rather than as an independently stored flag so the
+//! two cannot drift apart.  Note that both Kerr-Schild forms appear here: the spherical
+//! one shares a topology with spherical_polar, the Cartesian one with cartesian.
+
+MCTopology GetMCTopology(MCCoordSystem c) {
+  switch (c) {
+    case MCCOORD_CYLINDRICAL:
+      return MCTOPO_CYLINDRICAL;
+    case MCCOORD_SPHERICAL_POLAR:
+    case MCCOORD_KERR_SCHILD:
+    case MCCOORD_BOYER_LINDQUIST:
+      return MCTOPO_SPHERICAL;
+    default:
+      return MCTOPO_CARTESIAN;
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn bool IsMCMetricCurved(MCCoordSystem c)
+//! \brief true when the metric is not flat in the coordinates being integrated
+//!
+//! Spherical and cylindrical are flat: they carry non-zero connection coefficients but
+//! zero curvature, and the places that ask this question are asking about the spacetime,
+//! not about whether the connection vanishes.
+
+bool IsMCMetricCurved(MCCoordSystem c) {
+  switch (c) {
+    case MCCOORD_KERR_SCHILD:
+    case MCCOORD_BOYER_LINDQUIST:
+    case MCCOORD_KERR_SCHILD_CARTESIAN:
+      return true;
+    default:
+      return false;
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn const char *GetMCCoordSystemName(MCCoordSystem c)
+//! \brief human-readable name, used in error messages and for <montecarlo>/mc_coord
+
+const char *GetMCCoordSystemName(MCCoordSystem c) {
+  switch (c) {
+    case MCCOORD_CARTESIAN:              return "cartesian";
+    case MCCOORD_CYLINDRICAL:            return "cylindrical";
+    case MCCOORD_SPHERICAL_POLAR:        return "spherical_polar";
+    case MCCOORD_MINKOWSKI:              return "minkowski";
+    case MCCOORD_KERR_SCHILD:            return "kerr_schild";
+    case MCCOORD_BOYER_LINDQUIST:        return "boyer_lindquist";
+    case MCCOORD_KERR_SCHILD_CARTESIAN:  return "kerr_schild_cartesian";
+  }
+  return "unknown";
+}
+
+//----------------------------------------------------------------------------------------
 //! MCCoord base class constructor, builds MCCoord from Coord and MonteCarloBlock
 
 MCCoord::MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb) {
@@ -63,10 +120,13 @@ MCCoord::MCCoord(Coordinates *pcoord, MonteCarloBlock *pmcb) {
       for (int i=pmcb->is; i<=pmcb->ie; ++i) {
         // Volume in cgs units
         vol(k,j,i) = pcoord->GetCellVolume(k,j,i) * pow(pmcb->l_cgs,3);
-        if (std::isnan(vol(k,j,i)) && (COORDINATE_SYSTEM == "gr_user")) {
+        // Only a curved metric can put a coordinate singularity inside the domain; in a
+        // flat spacetime a NaN volume is a bug and should not be quietly zeroed.  This
+        // used to test for gr_user, which was a proxy for the same thing.
+        if (std::isnan(vol(k,j,i)) && pmcb->curved_metric) {
           // at the singularity set volume to zero
          vol(k,j,i) = 0.;
-        } 
+        }
       }}}
   computedmin = pmcb->computedmin;
   if (computedmin) {

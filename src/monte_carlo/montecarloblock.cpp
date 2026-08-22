@@ -58,6 +58,9 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
 
   // SWD: eliminate some or all of these?
   // set local flags based on monte_carlo
+  coord_system = pmy_mc->coord_system;
+  topology = pmy_mc->topology;
+  curved_metric = pmy_mc->curved_metric;
   boosts = pmy_mc->boosts;
   coupled = pmy_mc->coupled;
   acceleration = pmy_mc->acceleration;
@@ -129,8 +132,8 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   // SWD:  stepsize control needs to be modified
   stepsize = pin->GetOrAddReal("montecarlo","stepsize",1.0e-3);
 
-  // Flags for handling photon steps
-  boyerlindquist_flag = pin->GetOrAddBoolean("montecarlo","boyerlindquist",false);
+  // Flags for handling photon steps.  boyerlindquist is not read here any more: it is one
+  // of the inputs SetCoordinateSystem folds into coord_system.
   orthotet_flag = pin->GetOrAddBoolean("montecarlo", "orthotet", false);
   varystep_flag = pin->GetOrAddBoolean("montecarlo", "varystep", false);
 
@@ -211,94 +214,87 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     computedmin = true;
   pmy_mc->computedmin = computedmin;
   tetrads = true;
-  if (COORDINATE_SYSTEM == "cartesian") {
-    tetrads = false;
-    GetZonePosition = GetZonePositionCartesian;
-    if (pmy_mc->general_pusher_flag) {
-      ppusher = new GeneralPusher(this);
-      if (pmb != nullptr)
-        pcoord = new MCCartesian(pmb->pcoord,this);
-      else
-        pcoord = new MCCartesian(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                                 computedmin);
-    } else {
-      ppusher = new CartesianPusher(this);
-      if (pmb != nullptr)
-        pcoord = new MCCoord(pmb->pcoord,this);
-      else
-        pcoord = new MCCoord(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                             computedmin);
-    }
-  } else if (COORDINATE_SYSTEM == "spherical_polar") {
-    GetZonePosition = GetZonePositionSphericalPolar;
-    if (pmy_mc->general_pusher_flag) {
-      ppusher = new GeneralPusher(this);
-      if (pmb != nullptr)
-        pcoord = new MCSphericalPolar(pmb->pcoord,this);
-      else
-        pcoord = new MCSphericalPolar(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                                      computedmin);
-    } else {
-      tetrads = false;
-      ppusher = new SphericalPolarPusher(this);
-      if (pmb != nullptr)
-        pcoord = new MCCoord(pmb->pcoord,this);
-      else
-        pcoord = new MCCoord(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                             computedmin);
-    }
-  } else if (COORDINATE_SYSTEM == "cylindrical") {
-    GetZonePosition = GetZonePositionCylindrical;
-    ppusher = new GeneralPusher(this);
-    if (pmb != nullptr)
-      pcoord = new MCCylindrical(pmb->pcoord,this);
-    else
-      pcoord = new MCCylindrical(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                                 computedmin);
-  } else if (COORDINATE_SYSTEM == "kerr-schild") {
-    GetZonePosition = GetZonePositionSphericalPolar;//approximate
-    ppusher = new GeneralPusher(this);
-    if (boyerlindquist_flag) {
-     if (pmb != nullptr)
-       pcoord = new MCBoyerLindquist(pmb->pcoord,this);
-     else {
-       pcoord = new MCBoyerLindquist(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                                     computedmin);
-       pcoord->SetSpin(pin->GetReal("coord", "a"));
-       pcoord->SetMass(pin->GetReal("coord", "m"));
-     }
-    } else {
-      if (pmb != nullptr)
-        pcoord = new MCKerrSchild(pmb->pcoord,this);
-      else {
-        pcoord = new MCKerrSchild(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                                  computedmin);
-        pcoord->SetSpin(pin->GetReal("coord", "a"));
-        pcoord->SetMass(pin->GetReal("coord", "m"));
+  // Number of cells including ghosts, for the standalone (pmb == nullptr) constructors.
+  const int mc1 = nx1+2*(NGHOST), mc2 = nx2+2*(NGHOST), mc3 = nx3+2*(NGHOST);
+  // The MCCoord(Coordinates*, ...) constructors copy mass and spin off the Athena
+  // coordinate object, so they only have to be read from the input when there is no
+  // MeshBlock to copy from.
+  bool set_bh_params = false;
+
+  switch (coord_system) {
+    case MCCOORD_CARTESIAN:
+      GetZonePosition = GetZonePositionCartesian;
+      if (pmy_mc->general_pusher_flag) {
+        ppusher = new GeneralPusher(this);
+        pcoord = (pmb != nullptr) ? new MCCartesian(pmb->pcoord,this)
+                                  : new MCCartesian(mc1,mc2,mc3,computedmin);
+      } else {
+        tetrads = false;
+        ppusher = new CartesianPusher(this);
+        pcoord = (pmb != nullptr) ? new MCCoord(pmb->pcoord,this)
+                                  : new MCCoord(mc1,mc2,mc3,computedmin);
       }
-    }
-  } else if (COORDINATE_SYSTEM == "minkowski") {
-    GetZonePosition = GetZonePositionCartesian;
-    ppusher = new GeneralPusher(this);
-    if (pmb != nullptr)
-      pcoord = new MCMinkowski(pmb->pcoord,this);
-    else
-      pcoord = new MCMinkowski(nx1+2*(NGHOST),nx2+2*(NGHOST),nx3+2*(NGHOST),
-                               computedmin);
-  } else if (COORDINATE_SYSTEM == "gr_user") {
-    GetZonePosition = GetZonePositionCartesian;
-    ppusher = new GeneralPusher(this);
-    if (pmb != nullptr)
-        pcoord = new MCKerrSchildCartesian(pmb->pcoord,this);
+      break;
+
+    case MCCOORD_SPHERICAL_POLAR:
+      GetZonePosition = GetZonePositionSphericalPolar;
+      if (pmy_mc->general_pusher_flag) {
+        ppusher = new GeneralPusher(this);
+        pcoord = (pmb != nullptr) ? new MCSphericalPolar(pmb->pcoord,this)
+                                  : new MCSphericalPolar(mc1,mc2,mc3,computedmin);
+      } else {
+        tetrads = false;
+        ppusher = new SphericalPolarPusher(this);
+        pcoord = (pmb != nullptr) ? new MCCoord(pmb->pcoord,this)
+                                  : new MCCoord(mc1,mc2,mc3,computedmin);
+      }
+      break;
+
+    case MCCOORD_CYLINDRICAL:
+      GetZonePosition = GetZonePositionCylindrical;
+      ppusher = new GeneralPusher(this);
+      pcoord = (pmb != nullptr) ? new MCCylindrical(pmb->pcoord,this)
+                                : new MCCylindrical(mc1,mc2,mc3,computedmin);
+      break;
+
+    case MCCOORD_MINKOWSKI:
+      GetZonePosition = GetZonePositionCartesian;
+      ppusher = new GeneralPusher(this);
+      pcoord = (pmb != nullptr) ? new MCMinkowski(pmb->pcoord,this)
+                                : new MCMinkowski(mc1,mc2,mc3,computedmin);
+      break;
+
+    case MCCOORD_KERR_SCHILD:
+      GetZonePosition = GetZonePositionSphericalPolar;//approximate
+      ppusher = new GeneralPusher(this);
+      pcoord = (pmb != nullptr) ? new MCKerrSchild(pmb->pcoord,this)
+                                : new MCKerrSchild(mc1,mc2,mc3,computedmin);
+      set_bh_params = (pmb == nullptr);
+      break;
+
+    case MCCOORD_BOYER_LINDQUIST:
+      GetZonePosition = GetZonePositionSphericalPolar;//approximate
+      ppusher = new GeneralPusher(this);
+      pcoord = (pmb != nullptr) ? new MCBoyerLindquist(pmb->pcoord,this)
+                                : new MCBoyerLindquist(mc1,mc2,mc3,computedmin);
+      set_bh_params = (pmb == nullptr);
+      break;
+
+    case MCCOORD_KERR_SCHILD_CARTESIAN:
+      GetZonePosition = GetZonePositionCartesian;
+      ppusher = new GeneralPusher(this);
+      // Previously this branch built no coordinate object at all when pmb was nullptr and
+      // then dereferenced it for SetSpin, and read coord/a and coord/m unconditionally
+      // even though the MeshBlock path already supplies them.
+      pcoord = (pmb != nullptr) ? new MCKerrSchildCartesian(pmb->pcoord,this)
+                                : new MCKerrSchildCartesian(mc1,mc2,mc3,computedmin);
+      set_bh_params = (pmb == nullptr);
+      break;
+  }
+
+  if (set_bh_params) {
     pcoord->SetSpin(pin->GetReal("coord", "a"));
     pcoord->SetMass(pin->GetReal("coord", "m"));
-  } else {
-      std::stringstream msg;
-      msg << "### ERROR in MonteCarloBlock constructor" << std::endl
-          << COORDINATE_SYSTEM
-          << " coordinates not currently supported with Monte Carlo"
-          << std::endl;
-      ATHENA_ERROR(msg);
   }
   pmy_mc->tetrads = tetrads;
 
@@ -931,9 +927,11 @@ void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl,
   Real k2p = pphot->k2p[ip];
   Real k3p = pphot->k3p[ip];
 
-  // Normalize k vector if using general pusher in spherical polar coords
+  // Normalize k vector if using general pusher in spherical polar coords.
+  // See UpdateSourceTerms: keyed on the metric, not the topology, because r and
+  // r sin(theta) are the flat orthonormalization factors.
 
-  if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_pusher_flag)) {
+  if ((coord_system == MCCOORD_SPHERICAL_POLAR) && (pphot->general_pusher_flag)) {
     k2p *= pphot->x1p[ip];
     k3p *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
   }
@@ -1225,8 +1223,12 @@ void MonteCarloBlock::UpdateSourceTerms(Photon *pphot, Real energy0,
   Real k2 = pphot->k2p[ip];
   Real k3 = pphot->k3p[ip];
 
-  // Normalize k vector if using general pusher in spherical polar coords
-  if ((COORDINATE_SYSTEM == "spherical_polar") && (pphot->general_pusher_flag)) {
+  // Normalize k vector if using general pusher in spherical polar coords.
+  // Keyed on the metric rather than on the topology: r and r sin(theta) are the flat
+  // orthonormalization factors, exact only for the spherical_polar metric.  Kerr-Schild
+  // shares the topology but not the scale factors, so it is deliberately excluded here;
+  // doing it properly means going through pcoord->InverseTetrad as UpdateMoments does.
+  if ((coord_system == MCCOORD_SPHERICAL_POLAR) && (pphot->general_pusher_flag)) {
     k2 *= pphot->x1p[ip];
     k3 *= pphot->x1p[ip] * sin(pphot->x2p[ip]);
     k2p0 *= pphot->x1p[ip];
@@ -2171,7 +2173,7 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
       // comoving frame always keeps a unit propagation direction
       pphot->SetFourVector(ip, true, kf);
 
-      if ((COORDINATE_SYSTEM == "spherical_polar") && pmy_mc->polarized) {
+      if ((topology == MCTOPO_SPHERICAL) && pmy_mc->polarized) {
         // re-express the unit direction in cartesian components for the Stokes algebra
         Real k3[3];
         Real cth = cos(pphot->x2p[ip]);
@@ -2246,7 +2248,7 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
       int i3 = pphot->i3p[ip];
 
       if (!pmy_mc->general_pusher_flag &&
-          (pmy_mc->polarized) && (COORDINATE_SYSTEM == "spherical_polar")) {
+          (pmy_mc->polarized) && (topology == MCTOPO_SPHERICAL)) {
         // rotate cartesian to to spherical polar
         Real k3[3];
         Real cth = cos(pphot->x2p[ip]);
