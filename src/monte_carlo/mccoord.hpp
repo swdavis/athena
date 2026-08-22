@@ -35,7 +35,8 @@ enum MCCoordSystem {
   MCCOORD_MINKOWSKI = 3,
   MCCOORD_KERR_SCHILD = 4,
   MCCOORD_BOYER_LINDQUIST = 5,
-  MCCOORD_KERR_SCHILD_CARTESIAN = 6
+  MCCOORD_KERR_SCHILD_CARTESIAN = 6,
+  MCCOORD_SNAKE = 7
 };
 
 //----------------------------------------------------------------------------------------
@@ -58,6 +59,10 @@ MCTopology GetMCTopology(MCCoordSystem c);
 bool IsMCMetricCurved(MCCoordSystem c);
 //! \brief human-readable name, used in error messages and for <montecarlo>/mc_coord
 const char *GetMCCoordSystemName(MCCoordSystem c);
+//! \brief true when the run integrates geodesics in a relativistic spacetime
+bool IsMCRelativistic(MCCoordSystem c);
+//! \brief true when the flat scale factors orthonormalize the coordinate basis
+bool HasFlatOrthonormalBasis(MCCoordSystem c);
 
 #include "montecarlo.hpp"
 
@@ -194,6 +199,55 @@ public:
   void Metric(Real x[4], Real gcov[4][4]);
   void InverseMetric(Real x[4], Real gcov[4][4]);
   void Connect(Real x[4], Real gamma[4][4][4]);
+
+};
+
+//----------------------------------------------------------------------------------------
+//! \class MCSnake
+//! \brief derived class for sinusoidal ("snake") coordinates
+//!
+//! Flat spacetime written in the sheared coordinates of White, Stone & Gammie (2016),
+//! ApJS 225, 22: y = y_M + a sin(k x_M) with the other three unchanged.  Writing
+//! beta = a k cos(k x),
+//!
+//!   g_tt = -1, g_xx = 1 + beta^2, g_xy = g_yx = -beta, g_yy = g_zz = 1
+//!
+//! Three properties make it a good test geometry.  sqrt(-g) = 1 exactly, so cell volumes
+//! match the Cartesian ones and volume normalization drops out of any comparison.  The
+//! lapse is unity, so the normal observer is the coordinate-time observer and the lab and
+//! coordinate moment bases must agree exactly.  And exactly one Christoffel symbol is
+//! non-zero, Gamma^y_xx = a k^2 sin(k x), with geodesics that are straight lines in the
+//! underlying Minkowski coordinates -- a closed-form answer to check the integrator
+//! against, which Kerr-Schild cannot provide.
+//!
+//! It is also the only supported metric whose coordinate basis is not orthogonal
+//! (g_xy != 0), so it is the first thing to exercise the off-diagonal Tetrad path.
+
+class MCSnake : public MCCoord {
+public:
+  MCSnake(Coordinates *pcoord, MonteCarloBlock *pmcb);
+  MCSnake(int ncells1, int ncells2, int ncells3, bool acc);
+  ~MCSnake();
+
+  // functions
+  void Metric(Real x[4], Real gcov[4][4]);
+  void InverseMetric(Real x[4], Real gcon[4][4]);
+  void MetricDerivative(Real x[4], Real dgcov[4][4][4]);
+  void InverseMetricDerivative(Real x[4], Real dgcon[4][4][4]);
+  void Connect(Real x[4], Real gamma[4][4][4]);
+  void Tetrad(Real x[4], Real tetrad[4][4]);
+  void InverseTetrad(Real x[4], Real invtet[4][4]);
+
+  //! amplitude and wavenumber of the shear; <coord>/snake_a and <coord>/snake_k.
+  //! Deliberately not <coord>/a: gr_user already requires that name for the black hole
+  //! spin, which GRUser reads unconditionally.
+  void SetSnakeParams(Real a, Real k) {snake_a_ = a; snake_k_ = k;}
+  Real GetSnakeAmplitude() const {return snake_a_;}
+  Real GetSnakeWavenumber() const {return snake_k_;}
+
+protected:
+  Real snake_a_;
+  Real snake_k_;
 
 };
 

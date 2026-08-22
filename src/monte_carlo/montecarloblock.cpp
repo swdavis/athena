@@ -290,6 +290,20 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
                                 : new MCKerrSchildCartesian(mc1,mc2,mc3,computedmin);
       set_bh_params = (pmb == nullptr);
       break;
+
+    case MCCOORD_SNAKE:
+      GetZonePosition = GetZonePositionCartesian;
+      ppusher = new GeneralPusher(this);
+      pcoord = (pmb != nullptr) ? new MCSnake(pmb->pcoord,this)
+                                : new MCSnake(mc1,mc2,mc3,computedmin);
+      // Not <coord>/a: gr_user requires that name for the black hole spin and GRUser
+      // reads it unconditionally, so the shear amplitude needs its own key.  Set on both
+      // paths, since the MCCoord(Coordinates*) constructor has no snake parameters to
+      // copy the way it copies mass and spin.
+      static_cast<MCSnake*>(pcoord)->SetSnakeParams(
+          pin->GetOrAddReal("coord", "snake_a", 0.0),
+          pin->GetOrAddReal("coord", "snake_k", 0.0));
+      break;
   }
 
   if (set_bh_params) {

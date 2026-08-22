@@ -559,8 +559,8 @@ void MonteCarlo::SetCoordinateSystem(ParameterInput *pin) {
       msg << "### FATAL ERROR in MonteCarlo::SetCoordinateSystem" << std::endl
           << "Coordinate system '" << COORDINATE_SYSTEM << "' does not determine the "
           << "Monte Carlo metric." << std::endl
-          << "Set <montecarlo>/mc_coord to one of: kerr_schild_cartesian, minkowski, "
-          << "cartesian." << std::endl
+          << "Set <montecarlo>/mc_coord to one of: kerr_schild_cartesian, snake."
+          << std::endl
           << "Note that this previously defaulted to kerr_schild_cartesian; set that "
           << "explicitly to reproduce the old behaviour." << std::endl;
       ATHENA_ERROR(msg);
@@ -568,7 +568,7 @@ void MonteCarlo::SetCoordinateSystem(ParameterInput *pin) {
     coord_system = implied;
   } else {
     bool matched = false;
-    for (int c = MCCOORD_CARTESIAN; c <= MCCOORD_KERR_SCHILD_CARTESIAN; ++c) {
+    for (int c = MCCOORD_CARTESIAN; c <= MCCOORD_SNAKE; ++c) {
       if (name == GetMCCoordSystemName(static_cast<MCCoordSystem>(c))) {
         coord_system = static_cast<MCCoordSystem>(c);
         matched = true;
@@ -580,7 +580,7 @@ void MonteCarlo::SetCoordinateSystem(ParameterInput *pin) {
       msg << "### FATAL ERROR in MonteCarlo::SetCoordinateSystem" << std::endl
           << "Unrecognized <montecarlo>/mc_coord = '" << name << "'." << std::endl
           << "Valid values are:";
-      for (int c = MCCOORD_CARTESIAN; c <= MCCOORD_KERR_SCHILD_CARTESIAN; ++c)
+      for (int c = MCCOORD_CARTESIAN; c <= MCCOORD_SNAKE; ++c)
         msg << " " << GetMCCoordSystemName(static_cast<MCCoordSystem>(c));
       msg << std::endl;
       ATHENA_ERROR(msg);
@@ -642,11 +642,14 @@ void MonteCarlo::SetGeometryTag(ParameterInput *pin) {
     case MCCOORD_KERR_SCHILD_CARTESIAN:
       geometry_tag = "ks_cartesian";
       break;
+    case MCCOORD_SNAKE:
+      geometry_tag = "snake_cart";
+      break;
   }
 
-  // Minkowski is flat but is integrated as a relativistic problem, so the list carries
-  // -k_t like the curved cases do.
-  relativistic_output = curved_metric || (coord_system == MCCOORD_MINKOWSKI);
+  // Flat-but-relativistic metrics (Minkowski, snake) carry -k_t in the list just as the
+  // curved ones do, so this asks IsMCRelativistic rather than curved_metric.
+  relativistic_output = IsMCRelativistic(coord_system);
 
   return;
 }

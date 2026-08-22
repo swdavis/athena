@@ -1075,13 +1075,14 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         // MonteCarloBlock::boost_lab already holds per zone.  Until then the photon list
         // is the supported route: it stores -k_t directly, and
         // vis/python/montecarlo/make_spectrum.py bins it.
-        if (pmc->curved_metric) {
+        if (!HasFlatOrthonormalBasis(pmc->coord_system)) {
           std::stringstream msg;
           msg << "### FATAL ERROR in MCOutput constructor" << std::endl
               << "spec output is not supported for coordinate system "
               << GetMCCoordSystemName(pmc->coord_system) << "." << std::endl
-              << "Angle and energy binning assume a flat metric and are substantially "
-              << "wrong in a curved one." << std::endl
+              << "Angle and energy binning assume the flat scale factors "
+              << "orthonormalize the coordinate basis, which they do not here."
+              << std::endl
               << "Use file_type = phlist and bin it with "
               << "vis/python/montecarlo/make_spectrum.py instead." << std::endl;
           ATHENA_ERROR(msg);

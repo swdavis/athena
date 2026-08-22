@@ -69,8 +69,48 @@ const char *GetMCCoordSystemName(MCCoordSystem c) {
     case MCCOORD_KERR_SCHILD:            return "kerr_schild";
     case MCCOORD_BOYER_LINDQUIST:        return "boyer_lindquist";
     case MCCOORD_KERR_SCHILD_CARTESIAN:  return "kerr_schild_cartesian";
+    case MCCOORD_SNAKE:                  return "snake";
   }
   return "unknown";
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn bool IsMCRelativistic(MCCoordSystem c)
+//! \brief true when the run integrates geodesics in a relativistic spacetime
+//!
+//! Distinct from IsMCMetricCurved: Minkowski and snake are flat spacetimes but are still
+//! built with -g and integrated as geodesics, so their photon lists carry the conserved
+//! -k_t rather than k^t.  This is the set of metrics that require a GR build.
+
+bool IsMCRelativistic(MCCoordSystem c) {
+  switch (c) {
+    case MCCOORD_MINKOWSKI:
+    case MCCOORD_KERR_SCHILD:
+    case MCCOORD_BOYER_LINDQUIST:
+    case MCCOORD_KERR_SCHILD_CARTESIAN:
+    case MCCOORD_SNAKE:
+      return true;
+    default:
+      return false;
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn bool HasFlatOrthonormalBasis(MCCoordSystem c)
+//! \brief true when the flat scale factors orthonormalize the coordinate basis
+//
+// Returns whether or not coordinate system has non diagonal tetrad.
+
+bool HasFlatOrthonormalBasis(MCCoordSystem c) {
+  switch (c) {
+    case MCCOORD_CARTESIAN:
+    case MCCOORD_CYLINDRICAL:
+    case MCCOORD_SPHERICAL_POLAR:
+    case MCCOORD_MINKOWSKI:
+      return true;
+    default:
+      return false;
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -1233,6 +1273,194 @@ void MCBoyerLindquist::Connect(Real x[4], Real gamma[4][4][4]) {
 
   gamma[IMC3][IMC3][IMC1] = gamma[IMC3][IMC1][IMC3];
   gamma[IMC3][IMC3][IMC2] = gamma[IMC3][IMC2][IMC3];
+}
+
+//----------------------------------------------------------------------------------------
+//! MCSnake constructor, built from Coord and MonteCarloBlock
+//!
+//! snake_a_ and snake_k_ are set afterwards by the MonteCarloBlock dispatch, which is the
+//! only place with the ParameterInput in hand.  They default to zero, which degenerates
+//! to Minkowski rather than to something ill-formed.
+
+MCSnake::MCSnake(Coordinates *pcoord, MonteCarloBlock *pmcb)
+  : MCCoord(pcoord,pmcb), snake_a_(0.0), snake_k_(0.0) {
+
+}
+
+//----------------------------------------------------------------------------------------
+//! MCSnake constructor for processes without own MeshBlock
+
+MCSnake::MCSnake(int ncells1, int ncells2, int ncells3, bool acc)
+  : MCCoord(ncells1,ncells2,ncells3,acc), snake_a_(0.0), snake_k_(0.0) {
+
+}
+
+//----------------------------------------------------------------------------------------
+//! destructor
+
+MCSnake::~MCSnake() {
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCSnake::Metric(Real x[4], Real gcov[4][4])
+//! \brief covariant metric for sinusoidal ("snake") coordinates
+//!
+//! From y = y_M + a sin(k x_M), so dy_M = dy - beta dx with beta = a k cos(k x), and
+//!   ds^2 = -dt^2 + dx^2 + (dy - beta dx)^2 + dz^2.
+
+void MCSnake::Metric(Real x[4], Real gcov[4][4]) {
+
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      gcov[i][j] = 0.;
+    }
+  }
+
+  Real beta = snake_a_ * snake_k_ * cos(snake_k_ * x[IMC1]);
+
+  gcov[IMC0][IMC0] = -1.;
+  gcov[IMC1][IMC1] = 1. + SQR(beta);
+  gcov[IMC1][IMC2] = -beta;
+  gcov[IMC2][IMC1] = -beta;
+  gcov[IMC2][IMC2] = 1.;
+  gcov[IMC3][IMC3] = 1.;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCSnake::InverseMetric(Real x[4], Real gcon[4][4])
+//! \brief contravariant metric for snake coordinates
+//!
+//! The spatial block has unit determinant ((1+beta^2) - beta^2 = 1), so the inverse is
+//! obtained by swapping the diagonal and flipping the sign of the off-diagonal.
+
+void MCSnake::InverseMetric(Real x[4], Real gcon[4][4]) {
+
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      gcon[i][j] = 0.;
+    }
+  }
+
+  Real beta = snake_a_ * snake_k_ * cos(snake_k_ * x[IMC1]);
+
+  gcon[IMC0][IMC0] = -1.;
+  gcon[IMC1][IMC1] = 1.;
+  gcon[IMC1][IMC2] = beta;
+  gcon[IMC2][IMC1] = beta;
+  gcon[IMC2][IMC2] = 1. + SQR(beta);
+  gcon[IMC3][IMC3] = 1.;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCSnake::MetricDerivative(Real x[4], Real dgcov[4][4][4])
+//! \brief derivative of the covariant metric, dgcov[c][a][b] = d_c g_ab
+//!
+//! beta depends on x alone, so only the x derivatives survive.
+
+void MCSnake::MetricDerivative(Real x[4], Real dgcov[4][4][4]) {
+
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      for (int k = 0; k < 4; k++) {
+        dgcov[i][j][k] = 0.;
+      }
+    }
+  }
+
+  Real beta = snake_a_ * snake_k_ * cos(snake_k_ * x[IMC1]);
+  Real dbeta = -snake_a_ * SQR(snake_k_) * sin(snake_k_ * x[IMC1]);
+
+  dgcov[IMC1][IMC1][IMC1] = 2. * beta * dbeta;
+  dgcov[IMC1][IMC1][IMC2] = -dbeta;
+  dgcov[IMC1][IMC2][IMC1] = -dbeta;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCSnake::InverseMetricDerivative(Real x[4], Real dgcon[4][4][4])
+//! \brief derivative of the contravariant metric, dgcon[c][a][b] = d_c g^ab
+
+void MCSnake::InverseMetricDerivative(Real x[4], Real dgcon[4][4][4]) {
+
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      for (int k = 0; k < 4; k++) {
+        dgcon[i][j][k] = 0.;
+      }
+    }
+  }
+
+  Real beta = snake_a_ * snake_k_ * cos(snake_k_ * x[IMC1]);
+  Real dbeta = -snake_a_ * SQR(snake_k_) * sin(snake_k_ * x[IMC1]);
+
+  dgcon[IMC1][IMC1][IMC2] = dbeta;
+  dgcon[IMC1][IMC2][IMC1] = dbeta;
+  dgcon[IMC1][IMC2][IMC2] = 2. * beta * dbeta;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCSnake::Connect(Real x[4], Real gamma[4][4][4])
+//! \brief connection coefficients, gamma[a][b][c] = Gamma^a_bc
+//!
+//! Exactly one is non-zero.  Fastest seen from the coordinate map rather than from the
+//! metric: Gamma^mu_ab = (dx^mu/dx_M^rho)(d^2 x_M^rho / dx^a dx^b), and the only non-zero
+//! second derivative is d^2 y_M/dx^2 = a k^2 sin(k x), which feeds only the y row.
+
+void MCSnake::Connect(Real x[4], Real gamma[4][4][4]) {
+
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      for (int k = 0; k < 4; k++) {
+        gamma[i][j][k] = 0.;
+      }
+    }
+  }
+
+  gamma[IMC2][IMC1][IMC1] = snake_a_ * SQR(snake_k_) * sin(snake_k_ * x[IMC1]);
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCSnake::Tetrad(Real x[4], Real tetrad[4][4])
+//! \brief orthonormal components to coordinate components
+//!
+//! The orthonormal legs aligned with the underlying Minkowski axes are
+//!   e_(t) = d_t,  e_(x) = d_x + beta d_y,  e_(y) = d_y,  e_(z) = d_z,
+//! which is orthonormal by construction: g(e_x,e_x) = (1+beta^2) - 2beta^2 + beta^2 = 1
+//! and g(e_x,e_y) = -beta + beta = 0.
+//!
+//! Unlike every other supported system this matrix is not diagonal, because the snake
+//! coordinate basis is not orthogonal.  Callers apply it as kf[j] = tetrad[j][i] * ki[i].
+
+void MCSnake::Tetrad(Real x[4], Real tetrad[4][4]) {
+
+  for (int l = 0; l < 4; l++) {
+    for (int m = 0; m < 4; m++) {
+      tetrad[l][m] = 0.;
+    }
+    tetrad[l][l] = 1.;
+  }
+
+  Real beta = snake_a_ * snake_k_ * cos(snake_k_ * x[IMC1]);
+  tetrad[IMC2][IMC1] = beta;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MCSnake::InverseTetrad(Real x[4], Real invtet[4][4])
+//! \brief coordinate components to orthonormal components
+//!
+//! Inverse of Tetrad: k^(y) = k^y - beta k^x, the rest unchanged.
+
+void MCSnake::InverseTetrad(Real x[4], Real invtet[4][4]) {
+
+  for (int l = 0; l < 4; l++) {
+    for (int m = 0; m < 4; m++) {
+      invtet[l][m] = 0.;
+    }
+    invtet[l][l] = 1.;
+  }
+
+  Real beta = snake_a_ * snake_k_ * cos(snake_k_ * x[IMC1]);
+  invtet[IMC2][IMC1] = -beta;
 }
 
 //----------------------------------------------------------------------------------------
