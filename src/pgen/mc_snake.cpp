@@ -71,6 +71,8 @@ void JMeanOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip, int imom,
                   const PhotonFrameState &s);
 void AverageEnergy(MonteCarloBlock *pmcb, Photon *pphot, int ip, int imom,
                   const PhotonFrameState &s);
+void TrackGeodesicInvariant(MonteCarloBlock *pmcb, Photon *pphot,
+                            PhotonPusher *ppusher, int ip);
 } // namespace
 
 //========================================================================================
@@ -193,6 +195,13 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
     pphot->acp[ip] = AbsorptionOpacity(this, pphot, ip);
     pphot->scp[ip] = ScatteringOpacity(this, pphot, ip);
+
+    // Arm the geodesic invariant.  k1p is still a unit direction here -- the conversion to
+    // dimensional contravariant components happens later -- so the reference value cannot
+    // be taken yet.  user[1] < 0 marks "not yet seeded"; TrackGeodesicInvariant takes the
+    // reference on its first call, once the photon is in coordinate form.
+    if (pphot->nuser_var > 0) pphot->user[0][ip] = 0.0;
+    if (pphot->nuser_var > 1) pphot->user[1][ip] = -1.0;
   }
 
   return;
@@ -244,10 +253,13 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
     ATHENA_ERROR(msg);
   }
 
-  nuser_var = 1;
+  // user[0] holds the emitted value of the geodesic invariant, user[1] the largest
+  // relative departure from it seen along the path.  See TrackGeodesicInvariant.
+  nuser_var = 2;
   AllocateUserMoments(2);
   EnrollUserMoment(0, JMeanOpacity, "kapJ");
   EnrollUserMoment(1, AverageEnergy, "eave");
+  EnrollUserWorkInMove(TrackGeodesicInvariant);
 
   return;
 }
@@ -298,6 +310,44 @@ void SnakeMetric(Real x1, Real x2, Real x3, ParameterInput *pin,
   dg_dx1(I12) = -dbeta;
 
   return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void TrackGeodesicInvariant(...)
+//! \brief record the largest relative drift in k^x along each photon's path
+//
+// Every snake geodesic conserves the contravariant k^x exactly.  Writing the covariant
+// components, k_x = k_x^M - beta k_y^M and k_y = k_y^M, so
+//
+//     k^x = g^xx k_x + g^xy k_y = k_x + beta k_y = k_x^M = const,
+//
+// which is just the statement that x = x_M and the underlying Minkowski geodesic is a
+// straight line. 
+//
+// RK4 rescales the spatial components each step
+// to re-impose k.k = 0, so the drift measures the truncation error and must fall as the
+// step size is reduced.  frames.py checks the convergence.
+
+void TrackGeodesicInvariant(MonteCarloBlock *pmcb, Photon *pphot,
+                            PhotonPusher *ppusher, int ip) {
+
+  if (pphot->nuser_var < 2) return;
+
+  // First call: the photon is now in coordinate form, so take the reference here. 
+  if (pphot->user[1][ip] < 0.0) {
+    pphot->user[0][ip] = pphot->k1p[ip];
+    pphot->user[1][ip] = 0.0;
+    return;
+  }
+
+  // Normalised by k^t, not by k^x itself: k^t is conserved and sets the natural scale,
+  // whereas k^x passes through zero for any photon travelling perpendicular to x and
+  // would make a relative drift meaningless there.
+  Real scale = std::fabs(pphot->k0p[ip]);
+  if (scale == 0.0) return;
+
+  Real drift = std::fabs(pphot->k1p[ip] - pphot->user[0][ip]) / scale;
+  if (drift > pphot->user[1][ip]) pphot->user[1][ip] = drift;
 }
 
 void JMeanOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip, int imom,
