@@ -262,6 +262,29 @@ def read_photon_list(rundir):
     return np.vstack(rows)
 
 
+# Which (prob, coord) the binary in bin/ was last built from.  configure.py rewrites
+# src/defs.hpp, which the Makefile does not track as a dependency, so switching either one
+# demands a full "make clean" -- but repeating the same pair does not, and the suite runs
+# several consecutive cases per configuration.
+_built = [None]
+
+
+def ensure_build(src, prob, coord, extra):
+    """Rebuild only when the configuration actually changed."""
+    import subprocess
+    key = (prob, coord, tuple(extra))
+    if _built[0] == key:
+        return
+    subprocess.call(["make", "clean"], cwd=src,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.check_call(["python", "configure.py", "--prob=" + prob,
+                           "--coord=" + coord, "-mc"] + list(extra),
+                          cwd=src, stdout=subprocess.DEVNULL)
+    subprocess.check_call(["make", "-j8"], cwd=src,
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _built[0] = key
+
+
 def write_gr_athinput(src, path, nphot, iseed):
     """Reuse the repository's Kerr-Schild shell input, with tab moment outputs."""
     ref = os.path.join(src, "inputs", "mc", "athinput.mcisogr")
@@ -280,13 +303,7 @@ def write_gr_athinput(src, path, nphot, iseed):
 
 def build_and_run_gr(src, workdir, nphot, iseed):
     import subprocess
-    subprocess.call(["make", "clean"], cwd=src,
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    subprocess.check_call(["python", "configure.py", "--prob=mc_isoth_gr",
-                           "--coord=kerr-schild", "-mc", "-g"],
-                          cwd=src, stdout=subprocess.DEVNULL)
-    subprocess.check_call(["make", "-j8"], cwd=src,
-                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    ensure_build(src, "mc_isoth_gr", "kerr-schild", ["-g"])
     os.makedirs(workdir, exist_ok=True)
     inp = os.path.join(workdir, "athinput.frames_gr")
     write_gr_athinput(src, inp, nphot, iseed)
@@ -305,16 +322,7 @@ def build_and_run(src, kind, vel, workdir, nphot, iseed,
                           "sphr": ("mc_isoth", "spherical_polar", []),
                           "mink": ("mc_isoth_mink", "minkowski", ["-g"]),
                           "snake": ("mc_snake", "gr_user", ["-g"])}[kind]
-    # configure.py rewrites src/defs.hpp, which the Makefile does not track as a
-    # dependency, so a stale build would silently link objects from the previous
-    # coordinate system.
-    subprocess.call(["make", "clean"], cwd=src,
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    subprocess.check_call(["python", "configure.py", "--prob=" + prob,
-                           "--coord=" + coord, "-mc"] + extra,
-                          cwd=src, stdout=subprocess.DEVNULL)
-    subprocess.check_call(["make", "-j8"], cwd=src,
-                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    ensure_build(src, prob, coord, extra)
     os.makedirs(workdir, exist_ok=True)
     inp = os.path.join(workdir, "athinput.frames")
     write_athinput(inp, kind, vel, nphot, iseed, accumulate_comoving,

@@ -82,6 +82,29 @@ public:
   AthenaArray<Real> vol;
   AthenaArray<Real> dmin;
 
+  // Which of these a run actually calls is not obvious from the interface, and getting it
+  // wrong wastes effort implementing and verifying code that is never reached.  As of
+  // this writing, for a general-relativistic run on the general pusher:
+  //
+  //   Metric                   LIVE.  RK4Step converts k^mu -> k_mu and back and
+  //                            renormalizes to k.k = 0; also ComovingFrameMatrix and
+  //                            PhotonFrames.
+  //   InverseMetric            LIVE.  RK4Step, for dx^mu/dl = g^{mu nu} k_nu.
+  //   InverseMetricDerivative  LIVE.  RK4Step, for dk_mu/dl = -1/2 d_mu g^{ab} k_a k_b.
+  //                            This is the geodesic right-hand side.
+  //   MetricDerivative         Not called by anything, in any coordinate system.
+  //   Connect                  Only VerletStep, whose call sites in generalpusher.cpp are
+  //                            commented out in favour of RK4Step.  The Hamiltonian
+  //                            formulation uses metric derivatives, not Christoffels.
+  //   Tetrad, InverseTetrad    Only the non-GR branches of TransformToComoving and
+  //                            TransformToCoordinate, and the flat branch of
+  //                            PhotonFrames::Fill (gr_tetrad_ is false there).  A GR run
+  //                            goes through boost_lab/boost_cmv, built by ConstructTetrad
+  //                            from the metric, and never reaches these.
+  //
+  // Derived classes should still implement them correctly -- VerletStep may be revived and
+  // the non-GR paths are live for cartesian and spherical_polar -- but do not expect a
+  // GR test to exercise them.
   virtual void Metric(Real x[4],Real gcov[4][4]);
   virtual void MetricDerivative(Real x[4],Real dgcov[4][4][4]);
   virtual void InverseMetric(Real x[4],Real gcon[4][4]);
