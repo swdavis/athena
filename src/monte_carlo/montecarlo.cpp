@@ -9,6 +9,10 @@
 // C++ headers
 #include <stdexcept>  // runtime_error
 #include <random>
+// C++ headers
+#include <cstring>  // strcmp
+#include <string>
+
 // Athena++ headers
 #include "montecarlo.hpp"
 #include "../globals.hpp"
@@ -72,6 +76,9 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
     general_pusher_flag = pin->GetOrAddBoolean("montecarlo","general_pusher",false);
   scattering_meth = GetScatteringFlag(pin->GetOrAddString("montecarlo","scattering",
                                                           "none"));
+  // Which metric the module integrates on.  Must come before SetGeometryTag and before
+  // any MonteCarloBlock is constructed.
+  SetCoordinateSystem(pin);
   // Canonical tag describing the geometry and wavevector convention of the outputs.
   // Must come after general_pusher_flag is known.
   SetGeometryTag(pin);
@@ -510,55 +517,139 @@ void MonteCarlo::Initialize(ParameterInput *pin) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::SetCoordinateSystem(ParameterInput *pin)
+//! \brief resolve the metric the Monte Carlo module will integrate on
+//
+// COORDINATE_SYSTEM fixes the choice where it can, and <montecarlo>/mc_coord
+// supplies it where it cannot.  mc_coord is required for gr_user and optional elsewhere,
+// where it is checked for consistency rather than obeyed -- naming a metric that
+// contradicts the build is a mistake worth reporting, not a request.
+//
+// Must be called before SetGeometryTag and before any MonteCarloBlock is constructed.
+
+void MonteCarlo::SetCoordinateSystem(ParameterInput *pin) {
+
+  // std::strcmp, not ==: COORDINATE_SYSTEM is a bare string literal, so == compares
+  // addresses.  This is the one place in the module that has to look at it.
+  bool implied_known = true;
+  MCCoordSystem implied;
+  if (std::strcmp(COORDINATE_SYSTEM, "cartesian") == 0) {
+    implied = MCCOORD_CARTESIAN;
+  } else if (std::strcmp(COORDINATE_SYSTEM, "cylindrical") == 0) {
+    implied = MCCOORD_CYLINDRICAL;
+  } else if (std::strcmp(COORDINATE_SYSTEM, "spherical_polar") == 0) {
+    implied = MCCOORD_SPHERICAL_POLAR;
+  } else if (std::strcmp(COORDINATE_SYSTEM, "minkowski") == 0) {
+    implied = MCCOORD_MINKOWSKI;
+  } else if (std::strcmp(COORDINATE_SYSTEM, "kerr-schild") == 0) {
+    // Retained rather than folded into mc_coord so existing input files keep working.
+    implied = pin->GetOrAddBoolean("montecarlo","boyerlindquist",false)
+              ? MCCOORD_BOYER_LINDQUIST : MCCOORD_KERR_SCHILD;
+  } else {
+    // gr_user, or a coordinate system the module does not support at all
+    implied_known = false;
+    implied = MCCOORD_KERR_SCHILD_CARTESIAN;
+  }
+
+  std::string name = pin->GetOrAddString("montecarlo","mc_coord","");
+
+  if (name.empty()) {
+    if (!implied_known) {
+      std::stringstream msg;
+      msg << "### FATAL ERROR in MonteCarlo::SetCoordinateSystem" << std::endl
+          << "Coordinate system '" << COORDINATE_SYSTEM << "' does not determine the "
+          << "Monte Carlo metric." << std::endl
+          << "Set <montecarlo>/mc_coord to one of: kerr_schild_cartesian, snake."
+          << std::endl
+          << "Note that this previously defaulted to kerr_schild_cartesian; set that "
+          << "explicitly to reproduce the old behaviour." << std::endl;
+      ATHENA_ERROR(msg);
+    }
+    coord_system = implied;
+  } else {
+    bool matched = false;
+    for (int c = MCCOORD_CARTESIAN; c <= MCCOORD_SNAKE; ++c) {
+      if (name == GetMCCoordSystemName(static_cast<MCCoordSystem>(c))) {
+        coord_system = static_cast<MCCoordSystem>(c);
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      std::stringstream msg;
+      msg << "### FATAL ERROR in MonteCarlo::SetCoordinateSystem" << std::endl
+          << "Unrecognized <montecarlo>/mc_coord = '" << name << "'." << std::endl
+          << "Valid values are:";
+      for (int c = MCCOORD_CARTESIAN; c <= MCCOORD_SNAKE; ++c)
+        msg << " " << GetMCCoordSystemName(static_cast<MCCoordSystem>(c));
+      msg << std::endl;
+      ATHENA_ERROR(msg);
+    }
+    if (implied_known && coord_system != implied) {
+      std::stringstream msg;
+      msg << "### FATAL ERROR in MonteCarlo::SetCoordinateSystem" << std::endl
+          << "<montecarlo>/mc_coord = '" << name << "' contradicts the configured "
+          << "coordinate system '" << COORDINATE_SYSTEM << "', which implies '"
+          << GetMCCoordSystemName(implied) << "'." << std::endl;
+      ATHENA_ERROR(msg);
+    }
+  }
+
+  topology = GetMCTopology(coord_system);
+  curved_metric = IsMCMetricCurved(coord_system);
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void MonteCarlo::SetGeometryTag(ParameterInput *pin)
 //! \brief build the canonical geometry tag written into photon list/trajectory headers
-//!
-//! COORDINATE_SYSTEM alone does not say enough to interpret an output list.  Three
-//! distinctions are invisible in it:
-//!
-//!   - gr_user is always instantiated as MCKerrSchildCartesian, so the name says nothing
-//!     about the actual metric;
-//!   - kerr-schild with boyerlindquist = true is really Boyer-Lindquist, not Kerr-Schild;
-//!   - cartesian and spherical_polar select GeneralPusher or the legacy pusher depending
-//!     on general_pusher, and the two store the wavevector differently.  The legacy
-//!     pushers keep a unit orthonormal three-vector alongside the energy, while
-//!     GeneralPusher keeps genuine contravariant components -- in spherical coordinates
-//!     k^theta and k^phi then need factors of r and r sin(theta) to be orthonormalized.
-//!
-//! Post-processing has to know all three, so the tag encodes them.  It doubles as a
-//! format discriminator: the tags below are new strings, so a list written before this
-//! change (coord=kerr-schild, gr_user, minkowski, ...) is recognizably the old layout,
-//! in which the energy column held k^t rather than the conserved -k_t.
+//
+// coord_system fixes the metric but still does not say enough to interpret an output
+// list: cartesian and spherical_polar select GeneralPusher or the legacy pusher
+// depending on general_pusher, and the two store the wavevector differently.  The legacy
+// pushers keep a unit orthonormal three-vector alongside the energy, while GeneralPusher
+// keeps genuine contravariant components 
+//
+//! Post-processing has to know both, so the tag encodes them.  It doubles as a format
+//! discriminator: the tags below are new strings, so a list written before this change
+//! (coord=kerr-schild, gr_user, minkowski, ...) is recognizably the old layout, in which
+//! the energy column held k^t rather than the conserved -k_t.
+//
+// Must be called after SetCoordinateSystem and after general_pusher_flag is known.
 
 void MonteCarlo::SetGeometryTag(ParameterInput *pin) {
 
-  bool bl = pin->GetOrAddBoolean("montecarlo","boyerlindquist",false);
-
-  if (COORDINATE_SYSTEM == "cartesian") {
-    geometry_tag = general_pusher_flag ? "cartesian_gp" : "cartesian";
-    relativistic_output = false;
-  } else if (COORDINATE_SYSTEM == "spherical_polar") {
-    geometry_tag = general_pusher_flag ? "spherical_gp" : "spherical_polar";
-    relativistic_output = false;
-  } else if (COORDINATE_SYSTEM == "cylindrical") {
-    geometry_tag = "cylindrical_gp";
-    relativistic_output = false;
-  } else if (COORDINATE_SYSTEM == "minkowski") {
-    geometry_tag = "minkowski_cart";
-    relativistic_output = true;
-  } else if (COORDINATE_SYSTEM == "kerr-schild") {
-    geometry_tag = bl ? "bl_spherical" : "ks_spherical";
-    relativistic_output = true;
-  } else if (COORDINATE_SYSTEM == "gr_user") {
-    geometry_tag = "ks_cartesian";
-    relativistic_output = true;
-  } else {
-    std::stringstream msg;
-    msg << "### FATAL ERROR in MonteCarlo::SetGeometryTag" << std::endl
-        << "No output geometry tag defined for coordinate system "
-        << COORDINATE_SYSTEM << std::endl;
-    ATHENA_ERROR(msg);
+  switch (coord_system) {
+    case MCCOORD_CARTESIAN:
+      geometry_tag = general_pusher_flag ? "cartesian_gp" : "cartesian";
+      break;
+    case MCCOORD_SPHERICAL_POLAR:
+      geometry_tag = general_pusher_flag ? "spherical_gp" : "spherical_polar";
+      break;
+    case MCCOORD_CYLINDRICAL:
+      geometry_tag = "cylindrical_gp";
+      break;
+    case MCCOORD_MINKOWSKI:
+      geometry_tag = "minkowski_cart";
+      break;
+    case MCCOORD_KERR_SCHILD:
+      geometry_tag = "ks_spherical";
+      break;
+    case MCCOORD_BOYER_LINDQUIST:
+      geometry_tag = "bl_spherical";
+      break;
+    case MCCOORD_KERR_SCHILD_CARTESIAN:
+      geometry_tag = "ks_cartesian";
+      break;
+    case MCCOORD_SNAKE:
+      geometry_tag = "snake_cart";
+      break;
   }
+
+  // Flat-but-relativistic metrics (Minkowski, snake) carry -k_t in the list just as the
+  // curved ones do, so this asks IsMCRelativistic rather than curved_metric.
+  relativistic_output = IsMCRelativistic(coord_system);
 
   return;
 }
