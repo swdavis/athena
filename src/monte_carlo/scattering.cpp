@@ -79,9 +79,15 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int 
 
     Real mu = kz;
     Real stheta = sqrt(1. - SQR(mu));
-    Real phio = acos(kx / stheta);
-    if(ky < 0.0)
-      phio = 2.*PI - phio;
+    
+    Real phio = 0.;
+    if (stheta > TINY_NUMBER) {
+      Real carg = kx / stheta;
+      carg = (carg > 1.) ? 1. : ((carg < -1.) ? -1. : carg);
+      phio = acos(carg);
+      if(ky < 0.0)
+        phio = 2.*PI - phio;
+    }
 
     Real smu, sstheta, s1, s2, s3, i1;
     Real ci1, si1, ci2, si2, s2i1, c2i1;
@@ -174,10 +180,10 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int 
         ci2 = (mu - mup * smu)/ (sthetap * sstheta);
       }
       else {
-        if (sstheta==0.0) {
+        if (sthetap == 0.0) {
           si2 = 0.0;
           ci2 = 1.0;
-        } else if (sthetap==0.0) {
+        } else if (sstheta == 0.0) {
           si2 = si1;
           ci2 = -ci1;
         }
@@ -812,10 +818,10 @@ Real Bigy(Real x, Real xp)
 //! \fn Real SigmaHat(Real x)
 //! \brief Helper function used by Compton scattering routines
 
-Real SigmaHat(Real x)
-{
-  if (x < 0.001)
-    return 4. * (1. - x) / 3.;
+Real SigmaHat(Real x) {
+
+  if (x < 0.001) // more accurate at low x
+    return 4. * (1. - x * (1. - x * (1.3 - 1.6625 * x))) / 3.;
   else
     return ( (1. - 4. / x * (1. + 2. / x) ) * log(1. + x) +
              0.5 + 8. / x - 0.5 / SQR(1. + x) ) / x;
