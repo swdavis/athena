@@ -8,6 +8,8 @@
 //
 //========================================================================================
 
+#include <cmath>
+#include <cstring>  // strcmp
 #include <iostream> // temporary for testing
 
 // Athena++ headers
@@ -32,15 +34,52 @@ namespace {
 
   // global variables
   Real r0,th0,ph0,rfin;
+  // Start position in coordinate components.  For a spherical topology these are
+  // (r0,th0,ph0); for a cartesian one they are <problem>/x0,y0,z0.  Keeping them in a
+  // separate triple lets the zone search and the emission share one code path.
+  Real xs1,xs2,xs3;
+  bool cart_topo;
   Real spsi,cpsi,szet,czet;
   Real Kp[2], polang;
   bool outsphere;
   int i1start,i2start,i3start;
 
+  // Used when running with --coord=gr_user and mc_coord = snake.
+  Real snake_a = 0.0;
+  Real snake_k = 0.0;
+
   // user function definitions
   void ComputeDeltaGamma(Real x[4], Real k[4], Real a, Real delta[3], Real gamma[3]);
   void ComputeK(Real x[4], Real k[4], Real f[4], Real a, Real K[2]);
   void Computef(Real x[4], Real k[4], Real gcov[4][4],Real K[2], Real a, Real f[4]);
+  void SnakeMetric(Real x1, Real x2, Real x3, ParameterInput *pin,
+                   AthenaArray<Real> &g, AthenaArray<Real> &g_inv,
+                   AthenaArray<Real> &dg_dx1, AthenaArray<Real> &dg_dx2,
+                   AthenaArray<Real> &dg_dx3);
+  void PolarizationInFlatFrame(MonteCarloBlock *pmcb, Photon *pphot, int ip,
+                               std::complex<Real> nflat[4][4]);
+  // Emission-time value of the flat-frame tensor, for the transport residual.  Only
+  // meaningful for a single photon, which is what the transport test runs.
+  std::complex<Real> nflat0[4][4];
+  bool nflat0_set = false;
+}
+
+//========================================================================================
+//! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
+//! \brief enroll the snake metric when running on gr_user
+//========================================================================================
+
+void Mesh::InitUserMeshData(ParameterInput *pin) {
+
+  // Only gr_user needs a user metric; every other coordinate system Athena builds itself.
+  if (std::strcmp(COORDINATE_SYSTEM, "gr_user") != 0)
+    return;
+
+  snake_a = pin->GetOrAddReal("coord", "snake_a", 0.0);
+  snake_k = pin->GetOrAddReal("coord", "snake_k", 0.0);
+  EnrollUserMetric(SnakeMetric);
+
+  return;
 }
 
 //========================================================================================
@@ -92,21 +131,35 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
   czet = cos(zeta);
   szet = sin(zeta);
 
+  // The launch point is given in coordinate components.  A cartesian topology (minkowski,
+  // cartesian Kerr-Schild, snake) takes <problem>/x0,y0,z0; a spherical one keeps the
+  // original r0,th0,ph0.
+  cart_topo = (topology == MCTOPO_CARTESIAN);
+  if (cart_topo) {
+    xs1 = pin->GetOrAddReal("problem", "x0", 0.);
+    xs2 = pin->GetOrAddReal("problem", "y0", 0.);
+    xs3 = pin->GetOrAddReal("problem", "z0", 0.);
+  } else {
+    xs1 = r0;
+    xs2 = th0;
+    xs3 = ph0;
+  }
+
   // set the photon samples 's initial zone indices
   MCCoord *pco = pcoord;
   i1start = -1;
   for(int i=is; i<=ie; i++) {
-    if ((r0 >= pcoord->x1f(i)) && (r0 < pcoord->x1f(i+1)))
+    if ((xs1 >= pcoord->x1f(i)) && (xs1 < pcoord->x1f(i+1)))
       i1start = i;
   }
   i2start = -1;
   for(int i=js; i<=je; i++) {
-    if ((th0 >= pcoord->x2f(i)) && (th0 < pcoord->x2f(i+1)))
+    if ((xs2 >= pcoord->x2f(i)) && (xs2 < pcoord->x2f(i+1)))
       i2start = i;
   }
   i3start = -1;
   for(int i=ks; i<=ke; i++) {
-    if ((ph0 >= pcoord->x3f(i)) && (ph0 < pcoord->x3f(i+1)))
+    if ((xs3 >= pcoord->x3f(i)) && (xs3 < pcoord->x3f(i+1)))
       i3start = i;
   }
   if ((i1start < 0) || (i2start < 0) || (i3start < 0)) {
@@ -115,6 +168,11 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
         << "Initial position not found within domain." << std::endl;
     throw std::runtime_error(msg.str().c_str());
   }
+
+  // The search above requires the starting point to lie in this block and errors if it
+  // does not, so mc_poltest is inherently single-block; claiming all of nphot here is
+  // therefore unambiguous.
+  nphremain = pin->GetInteger("montecarlo", "nphot");
 
 }
 
@@ -135,9 +193,9 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
     // Initialize photon position
     Real x[NCOORD];
     x[IMC0] = pphot->x0p[ip] = 0.;
-    x[IMC1] = pphot->x1p[ip] = r0;
-    x[IMC2] = pphot->x2p[ip] = th0;
-    x[IMC3] = pphot->x3p[ip] = ph0;
+    x[IMC1] = pphot->x1p[ip] = xs1;
+    x[IMC2] = pphot->x2p[ip] = xs2;
+    x[IMC3] = pphot->x3p[ip] = xs3;
 
     // initialize cell coordinates
     pphot->i1p[ip] = i1start;
@@ -146,6 +204,9 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
     // set weight to 1
     pphot->wp[ip] = 1.;
+
+    // set dtp
+    pphot->dtp[ip] = pmy_mc->tmax;
 
     // Initialize the absorption and scattering extinction coefficients
     // to the values appropriate in the emitted zone
@@ -173,26 +234,38 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
     // The following code uses a tetrad to define k in a general coordinate
     // assuming angles psi and zeta are defined relative to tetrad.  Should reproduce
-    // spherical prediction above but will apply even in boyer lindquist
+    // spherical prediction above but will apply even in boyer lindquist coords
     // Construct orthonormal tetrad
     Real gcov[4][4];
     pcoord->Metric(x, gcov);
 
-    Real wcon[4];
-    wcon[IMC0] = 0.;
-    wcon[IMC1] = sth*sphi;
-    wcon[IMC2] = cth*sphi/r;
-    wcon[IMC3] = cphi/r/sth;
-    Real ucon[4];
+    // Trial vectors for the direction tetrad.  ConstructTetrad puts its second argument
+    // into e_(3) and its third into e_(2), so vcon fixes the axis zeta is measured from
+    // and wcon fixes the azimuth psi = 0 direction.  Both are the cartesian z and y
+    // directions
+    Real ucon[4], vcon[4], wcon[4];
     ucon[IMC0] = 1.;
     ucon[IMC1] = 0.;
     ucon[IMC2] = 0.;
     ucon[IMC3] = 0.;
-    Real vcon[4];
-    vcon[IMC0] = 0.;
-    vcon[IMC1] = cth;
-    vcon[IMC2] = -sth;
-    vcon[IMC3] = 0.;
+    if (cart_topo) {
+      // y-hat
+      wcon[IMC0] = 0.; wcon[IMC1] = 0.; wcon[IMC2] = 1.; wcon[IMC3] = 0.;
+      // z-hat
+      vcon[IMC0] = 0.; vcon[IMC1] = 0.; vcon[IMC2] = 0.; vcon[IMC3] = 1.;
+    } else {
+      // y-hat = sin(th)sin(ph) r-hat + cos(th)sin(ph) th-hat + cos(ph) ph-hat, written in
+      // the coordinate basis (th-hat and ph-hat carry the 1/r and 1/(r sin th) factors)
+      wcon[IMC0] = 0.;
+      wcon[IMC1] = sth*sphi;
+      wcon[IMC2] = cth*sphi/r;
+      wcon[IMC3] = cphi/r/sth;
+      // z-hat = cos(th) r-hat - sin(th) th-hat.
+      vcon[IMC0] = 0.;
+      vcon[IMC1] = cth;
+      vcon[IMC2] = -sth;
+      vcon[IMC3] = 0.;
+    }
     Real econ[4][4], ecov[4][4];
     ConstructTetrad(ucon, vcon, wcon, gcov, econ, ecov);
 
@@ -241,15 +314,22 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
     StokesToTensor(stokes,tcopy);
     pphot->PolarizationToCoord(tcopy,econ,ip);
 
+    // Reference value of the coherency tensor in the global flat frame.  Parallel
+    // transport must leave this unchanged; FinalizePhoton reports the residual.
+    if (!nflat0_set) {
+      PolarizationInFlatFrame(this, pphot, ip, nflat0);
+      nflat0_set = true;
+    }
+
     // Specify polarization basis vectors for comparison
     Real fp[4];
     printf("pol angle: %d %e\n",ip,polang);
-    for (int i; i< 4; ++i)  {
+    for (int i = 0; i < 4; ++i)  {
       // Use tetrad basis vectors
       fp[i] = econ[IMC1][i]*cos(polang)+econ[IMC2][i]*sin(polang);
     }
     Real fp0 = fp[IMC0];
-    for (int i; i< 4; ++i)  {
+    for (int i = 0; i < 4; ++i)  {
       // Use tetrad basis vectors
       fp[i] -= k[i]*fp0 / k[IMC0];
     }
@@ -303,6 +383,23 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 //========================================================================================
 
 void MonteCarloBlock::FinalizePhoton(Photon *pphot, int ip) {
+
+  // Transport residual: max |N_flat(final) - N_flat(initial)| over all sixteen components,
+  // normalised by the largest initial component.  Exactly zero is required in flat
+  // spacetime; what is left is the integrator's truncation error, so this should fall as
+  // the step size is reduced.
+  if (nflat0_set) {
+    std::complex<Real> nflat[4][4];
+    PolarizationInFlatFrame(this, pphot, ip, nflat);
+    Real dmax = 0., scale = 0.;
+    for (int a = 0; a < 4; ++a) {
+      for (int b = 0; b < 4; ++b) {
+        dmax = std::max(dmax, std::abs(nflat[a][b] - nflat0[a][b]));
+        scale = std::max(scale, std::abs(nflat0[a][b]));
+      }
+    }
+    if (scale > 0.) printf("POLRESID %.10e\n", dmax/scale);
+  }
 
   if (pphot->statp[ip] == DESTROYED) {
     pphot->statp[ip] = ESCAPED;
@@ -418,6 +515,75 @@ void MonteCarloBlock::FinalizePhoton(Photon *pphot, int ip) {
 }
 
 namespace {
+
+//----------------------------------------------------------------------------------------
+//! \fn void SnakeMetric(...)
+//! \brief sinusoidal ("snake") coordinates -- flat spacetime, y = y_M + a sin(k x_M)
+//!
+//! Identical to the copy in mc_snake.cpp.  With beta = a k cos(k x):
+//!   g_tt = -1, g_xx = 1 + beta^2, g_xy = -beta, g_yy = g_zz = 1, and sqrt(-g) = 1.
+//! The spatial block has unit determinant, so the inverse swaps the diagonal and flips
+//! the sign of the off-diagonal.  beta depends on x1 alone.
+
+void SnakeMetric(Real x1, Real x2, Real x3, ParameterInput *pin,
+                 AthenaArray<Real> &g, AthenaArray<Real> &g_inv,
+                 AthenaArray<Real> &dg_dx1, AthenaArray<Real> &dg_dx2,
+                 AthenaArray<Real> &dg_dx3) {
+
+  Real beta = snake_a * snake_k * std::cos(snake_k * x1);
+  Real dbeta = -snake_a * SQR(snake_k) * std::sin(snake_k * x1);
+
+  for (int n = 0; n < NMETRIC; ++n) {
+    g(n) = 0.0;
+    g_inv(n) = 0.0;
+    dg_dx1(n) = 0.0;
+    dg_dx2(n) = 0.0;
+    dg_dx3(n) = 0.0;
+  }
+
+  g(I00) = -1.0;
+  g(I11) = 1.0 + SQR(beta);
+  g(I12) = -beta;
+  g(I22) = 1.0;
+  g(I33) = 1.0;
+
+  g_inv(I00) = -1.0;
+  g_inv(I11) = 1.0;
+  g_inv(I12) = beta;
+  g_inv(I22) = 1.0 + SQR(beta);
+  g_inv(I33) = 1.0;
+
+  dg_dx1(I11) = 2.0 * beta * dbeta;
+  dg_dx1(I12) = -dbeta;
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void PolarizationInFlatFrame(...)
+//! \brief project the coherency tensor onto the global flat frame
+//!
+//! In a flat spacetime -- snake, minkowski, or Kerr-Schild with m = 0 -- there is a global
+//! frame that is covariantly constant, and MCCoord::InverseTetrad is the projector onto
+//! it: for snake its legs are e_(t) = d_t, e_(x) = d_x + beta d_y, e_(y) = d_y,
+//! e_(z) = d_z, orthonormal by construction.  Parallel transport leaves the tensor
+//! unchanged in that frame, so every component must be constant along the ray whatever the
+//! connection does to the coordinate components.  That is the analytic reference this test
+//! checks against; it needs no Stokes decomposition and so does not require e_(3) || k.
+
+void PolarizationInFlatFrame(MonteCarloBlock *pmcb, Photon *pphot, int ip,
+                             std::complex<Real> nflat[4][4]) {
+
+  Real x[4];
+  x[IMC0] = pphot->x0p[ip];
+  x[IMC1] = pphot->x1p[ip];
+  x[IMC2] = pphot->x2p[ip];
+  x[IMC3] = pphot->x3p[ip];
+
+  Real invtet[4][4];
+  pmcb->pcoord->InverseTetrad(x, invtet);
+  pphot->PolarizationToTetrad(nflat, invtet, ip);
+}
 
 void ComputeDeltaGamma(Real x[4], Real k[4], Real a, Real delta[3], Real gamma[3]) {
   //compute the r, theta, and phi parts of the delta and gamma constants for the K and

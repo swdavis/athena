@@ -430,11 +430,18 @@ void GeneralPusher::SubStep(Real xcon[4], Real kcov[4], Real dl[8]) {
 
 void GeneralPusher::PropogatePolarization(Photon *pphot, Real step, int ip) {
 
-  // SWD: Gamma does not need recomputing
-  //Real gamma[NCOORD][NCOORD][NCOORD];
-  // Store gamma in Coord to prevent recalculation
-  //pcoord->Connect(pphot->x, gamma);
 
+  // Connection evaluated here since RK4Step has already advanced the photon
+  // when this is called.  That makes the transport first order in the step; ipole (for
+  // example) uses a second-order half-step/full-step/half-step split, which is the natural
+  // next change once the polarization framework is in place.
+
+  Real xpol[4];
+  xpol[IMC0] = pphot->x0p[ip];
+  xpol[IMC1] = pphot->x1p[ip];
+  xpol[IMC2] = pphot->x2p[ip];
+  xpol[IMC3] = pphot->x3p[ip];
+  pcoord->Connect(xpol, gamma);
 
   std::complex<Real> ptcopy[4][4];
   for (int i = 0; i < 4; i++) {
