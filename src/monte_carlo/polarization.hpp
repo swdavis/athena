@@ -31,7 +31,10 @@
 // stop being constant between scatterings even in flat spacetime.
 
 // enum for checking polarization treatment
-enum MCPolarization {MCPOL_NONE = 0, MCPOL_LINEAR = 1, MCPOL_CIRCULAR = 2};
+// Byte-backed so the member occupies the same storage a bool did and the hot-path test
+// compiles to the same single compare-against-memory.
+enum MCPolarization : unsigned char {MCPOL_NONE = 0, MCPOL_LINEAR = 1,
+                                     MCPOL_CIRCULAR = 2};
 
 //! \brief true when any polarization is tracked
 inline bool IsPolarized(MCPolarization p) {return p != MCPOL_NONE;}
