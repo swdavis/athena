@@ -14,10 +14,10 @@
 //   - the wavevector in cartesian components, and
 //   - Q and U referenced to the meridian plane containing the global cartesian z axis
 //     and k-hat.  ScatterThomsonPolarized reads that reference straight off the stored
-//     components (mu = kz, phi = acos(kx/sin(theta))), so it is not a free choice.
+//     components (mu = kz, phi = acos(kx/sin(theta)))
 //
 // Both legacy pushers run only in flat spacetime (cartesian, spherical-polar).  A flat
-// spacetime has a globally covariantly-constant frame -- the cartesian one -- and the
+// spacetime has a globally covariantly-constant cartesian frame and the
 // convention above references Q and U to exactly that frame.  A photon between
 // scatterings travels a straight line, so k-hat is constant in cartesian components, the
 // meridian plane is constant, and Q and U do not change.  The stored components of k in
@@ -33,10 +33,16 @@
 class MonteCarloBlock;
 class Photon;
 
-//! \brief rotate the photon into the basis the polarized scattering routines assume
+// rotate the photon into the basis the polarized scattering routines assume
 void ToScatteringBasis(MonteCarloBlock *pmcb, Photon *pphot, int ip);
 
-//! \brief rotate the photon back out of the scattering basis
+// coherency tensor -> Stokes, in the scattering basis (general pusher)
+void CoherencyToScatteringStokes(MonteCarloBlock *pmcb, Photon *pphot, int ip);
+
+// Stokes -> coherency tensor, undoing CoherencyToScatteringStokes
+void ScatteringStokesToCoherency(MonteCarloBlock *pmcb, Photon *pphot, int ip);
+
+// rotate the photon back out of the scattering basis
 void FromScatteringBasis(MonteCarloBlock *pmcb, Photon *pphot, int ip);
 
 #endif // POLARIZATION_HPP

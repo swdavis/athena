@@ -346,7 +346,24 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   // vel holds the four-velocity of the frame the comoving tetrad is built on.  With
   // boosts enabled that is the fluid; in GR without boosts it is the normal observer,
   // which is still needed by the GR branches of the frame transformations.
-  if (boosts || GENERAL_RELATIVITY) vel.NewAthenaArray(ncells3,ncells2,ncells1,4);
+  if (boosts || GENERAL_RELATIVITY || pmy_mc->polarized) {
+    vel.NewAthenaArray(ncells3,ncells2,ncells1,4);
+    if (!boosts && !GENERAL_RELATIVITY) {
+      // Value is constant in time, unlike the fluid velocity, so it is set once rather than
+      // refreshed each cycle. g_tt = -1 in every flat metric the module supports, so
+      // u = (1,0,0,0) is already normalized; ConstructTetrad renormalizes regardless.
+      for (int k=0; k<ncells3; ++k) {
+        for (int j=0; j<ncells2; ++j) {
+          for (int i=0; i<ncells1; ++i) {
+            vel(k,j,i,0) = 1.0;
+            vel(k,j,i,1) = 0.0;
+            vel(k,j,i,2) = 0.0;
+            vel(k,j,i,3) = 0.0;
+          }
+        }
+      }
+    }
+  }
   if (NSCALARS > 0) scalars.NewAthenaArray(ncells3,ncells2,ncells1);
   // moments is 1 (Er) + 3 (Fr) + 9 (Pr) + 1 (Eave) + 1 (net cool)
   nmom = 13;
@@ -561,6 +578,12 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
       TransformToCoordinate(pphot,nold,pphot->nphot-1);
     }
 
+    // Construct the coherency tensor from the emitted Stokes parameters.
+    if (pmy_mc->polarized) {
+      for (int ip = nold; ip < pphot->nphot; ip++)
+        ScatteringStokesToCoherency(this, pphot, ip);
+    }
+
     // Update the absorption and scattering extinction coefficients
     if (call_srcterms) {
       // Update source terms to reflect newly emitted samples
@@ -614,8 +637,11 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
       if (boosts || tetrads) {
         TransformToComoving(pphot,ip,ip);
       }
+      // Convert coherency tensor to Stokes parameters for scattering (if needed)
+      if (pmy_mc->polarized) CoherencyToScatteringStokes(this, pphot, ip);
       // call scattering function and update counters
       Scatter(this,pphot,ip,ip);
+      if (pmy_mc->polarized) ScatteringStokesToCoherency(this, pphot, ip);
       nscat++;
       pphot->nscp[ip]++;
       if (pphot->nscp[ip] % pmy_mc->checkscat == 0) {
