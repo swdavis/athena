@@ -7,11 +7,11 @@
 //========================================================================================
 //! \file tetrad.hpp
 //! \brief orthonormal frames and the vector algebra that builds them.
-//!
-//! These functions act on four-vectors.  Frame transformatinos for Monte Carlo quantities
-//! like photons are found in photon_frames.cpp.
-//!
-//! Implemented in tetrad.cpp.
+//
+// These functions act on four-vectors.  Frame transformatinos for Monte Carlo quantities
+// like photons are found in photon_frames.cpp.
+//
+// Implemented in tetrad.cpp.
 
 // C++ headers
 #include <complex>
@@ -45,6 +45,18 @@ void CoordinateToTetrad(Real ucoord[4], Real utet[4], Real ecov[4][4]);
 void TetradToCoordinate(Real utet[4], Real ucoord[4], Real econ[4][4]);
 
 // polarization, carried as an invariant tensor between scatterings
+// The canonical statement of the Stokes <-> coherency-tensor convention
+// (Moscibrodzka & Gammie 2018, equations 13 and 14):
+//
+//   N11 = I + Q,  N12 = U - iV,  N21 = U + iV,  N22 = I - Q.
+//
+// Both assume the tensor occupies the (1,2) block, which holds when the tetrad's third
+// spatial leg is along k so that the polarization is transverse.  Callers working in some
+// other pair of transverse directions -- polarization.cpp uses the meridian pair (l,r) --
+// can pack that pair into the same block and use these unchanged
+//
+// Note that the two are not exact inverses: TensorToStokes divides through by I, returning
+// stokes[0] = 1, while StokesToTensor does not.
 void StokesToTensor(Real stokes[4], std::complex<Real> tensor[4][4]);
 void TensorToStokes(std::complex<Real> tensor[4][4], Real stokes[4]);
 

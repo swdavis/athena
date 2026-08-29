@@ -173,13 +173,26 @@ void CoherencyToScatteringStokes(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
     }
   }
 
-  // Same convention as TensorToStokes, with (l,r) playing the role of (e_(1),e_(2))
+  // Pass the meridian pair to TensorToStokes the(l,r) contraction is the (1,2) block it
+  // reads, with l and r standing in for e_(1) and e_(2).
   Real inten = 0.5*(nll + nrr).real();
-  if (std::fabs(inten) <= TINY_NUMBER) return;
-  pphot->sip[ip] = 1.0;
-  pphot->sqp[ip] = 0.5*(nll - nrr).real() / inten;
-  pphot->sup[ip] = 0.5*(nlr + nrl).real() / inten;
-  pphot->svp[ip] = 0.5*(nrl - nlr).imag() / inten;
+  if (std::fabs(inten) <= TINY_NUMBER) return;   // TensorToStokes divides by I
+
+  std::complex<Real> nmer[4][4];
+  for (int a = 0; a < 4; ++a)
+    for (int b = 0; b < 4; ++b) nmer[a][b] = std::complex<Real>(0., 0.);
+  nmer[IMC1][IMC1] = nll;
+  nmer[IMC1][IMC2] = nlr;
+  nmer[IMC2][IMC1] = nrl;
+  nmer[IMC2][IMC2] = nrr;
+
+  Real stokes[4];
+  TensorToStokes(nmer, stokes);  // returns I normalised to one
+
+  pphot->sip[ip] = stokes[0];
+  pphot->sqp[ip] = stokes[1];
+  pphot->sup[ip] = stokes[2];
+  pphot->svp[ip] = stokes[3];
 }
 
 //----------------------------------------------------------------------------------------
@@ -203,15 +216,19 @@ void ScatteringStokesToCoherency(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   Real u = pphot->sup[ip]/inten;
   Real v = pphot->svp[ip]/inten;
 
-  // N = (I+Q) l l + (I-Q) r r + (U-iV) l r + (U+iV) r l, with I normalised to one
-  std::complex<Real> clr(u, -v), crl(u, v);
+  // StokesToTensor retruns the four block entries, then spread them over the meridian
+  // pair: N = N11 l l + N12 l r + N21 r l + N22 r r.
+  Real stokes[4] = {1.0, q, u, v};
+  std::complex<Real> blk[4][4];
+  StokesToTensor(stokes, blk);
+
   std::complex<Real> ntet[4][4];
   for (int a = 0; a < 4; ++a)
     for (int b = 0; b < 4; ++b) ntet[a][b] = std::complex<Real>(0., 0.);
   for (int i = 0; i < 3; ++i) {
     for (int j = 0; j < 3; ++j) {
-      ntet[i+1][j+1] = (1.0 + q)*lhat[i]*lhat[j] + (1.0 - q)*rhat[i]*rhat[j]
-                       + clr*lhat[i]*rhat[j] + crl*rhat[i]*lhat[j];
+      ntet[i+1][j+1] = blk[IMC1][IMC1]*lhat[i]*lhat[j] + blk[IMC1][IMC2]*lhat[i]*rhat[j]
+                     + blk[IMC2][IMC1]*rhat[i]*lhat[j] + blk[IMC2][IMC2]*rhat[i]*rhat[j];
     }
   }
 
