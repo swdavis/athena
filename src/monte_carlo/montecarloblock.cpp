@@ -13,6 +13,7 @@
 
 // Athena++ headers
 #include "montecarlo.hpp"
+#include "polarization.hpp"
 #include "tetrad.hpp"
 #include "photon.hpp"
 #include "photonpusher.hpp"
@@ -2187,24 +2188,8 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
       // comoving frame always keeps a unit propagation direction
       pphot->SetFourVector(ip, true, kf);
 
-      if ((topology == MCTOPO_SPHERICAL) && pmy_mc->polarized) {
-        // re-express the unit direction in cartesian components for the Stokes algebra
-        Real k3[3];
-        Real cth = cos(pphot->x2p[ip]);
-        Real sth = sin(pphot->x2p[ip]);
-        Real cph = cos(pphot->x3p[ip]);
-        Real sph = sin(pphot->x3p[ip]);
-        k3[0] = pphot->k1p[ip];
-        k3[1] = pphot->k2p[ip];
-        k3[2] = pphot->k3p[ip];
-        pphot->k1p[ip] = k3[0]*sth*cph + k3[1]*cth*cph - k3[2]*sph;
-        pphot->k2p[ip] = k3[0]*sth*sph + k3[1]*cth*sph + k3[2]*cph;
-        pphot->k3p[ip] = k3[0]*cth     - k3[1]*sth;
-        Real knorm = std::sqrt(SQR(pphot->k1p[ip])+SQR(pphot->k2p[ip])+SQR(pphot->k3p[ip]));
-        pphot->k1p[ip] /= knorm;
-        pphot->k2p[ip] /= knorm;
-        pphot->k3p[ip] /= knorm;
-      }
+      // Into the basis the polarized scattering routines assume; see polarization.hpp
+      if (pmy_mc->polarized) ToScatteringBasis(this, pphot, ip);
       pphot->acp[ip] /= nufact;
       pphot->scp[ip] /= nufact;
 
@@ -2261,25 +2246,10 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
       int i2 = pphot->i2p[ip];
       int i3 = pphot->i3p[ip];
 
-      if (!pmy_mc->general_pusher_flag &&
-          (pmy_mc->polarized) && (topology == MCTOPO_SPHERICAL)) {
-        // rotate cartesian to to spherical polar
-        Real k3[3];
-        Real cth = cos(pphot->x2p[ip]);
-        Real sth = sin(pphot->x2p[ip]);
-        Real cph = cos(pphot->x3p[ip]);
-        Real sph = sin(pphot->x3p[ip]);
-        k3[0] = pphot->k1p[ip];
-        k3[1] = pphot->k2p[ip];
-        k3[2] = pphot->k3p[ip];
-        pphot->k1p[ip] = k3[0]*sth*cph + k3[1]*sth*sph + k3[2]*cth;
-        pphot->k2p[ip] = k3[0]*cth*cph + k3[1]*cth*sph - k3[2]*sth;
-        pphot->k3p[ip] = -k3[0]*sph + k3[1]*cph;
-        Real knorm = std::sqrt(SQR(pphot->k1p[ip])+SQR(pphot->k2p[ip])+SQR(pphot->k3p[ip]));
-        pphot->k1p[ip] /= knorm;
-        pphot->k2p[ip] /= knorm;
-        pphot->k3p[ip] /= knorm;
-      }
+      // Back out of the scattering basis.  Guarded on the legacy pusher exactly as
+      // before: the general pusher reaches this function through a different branch.
+      if (!pmy_mc->general_pusher_flag && pmy_mc->polarized)
+        FromScatteringBasis(this, pphot, ip);
 
       Real k0init = pphot->k0p[ip];
       // comoving frame stores a unit direction

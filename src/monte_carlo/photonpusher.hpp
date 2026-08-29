@@ -94,6 +94,9 @@ public:
   virtual void ReadTimeDistribution(void);
   virtual Real InterpPathTime(Real tau, Real prob);
 
+  // Advance the stored polarization along one step. 
+  virtual void PropogatePolarization(Photon *pphot, Real step, int ip);
+
 };
 
 //----------------------------------------------------------------------------------------
