@@ -65,7 +65,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   dynamic = pin->GetOrAddBoolean("montecarlo","dynamic",false);
   coupled = pin->GetOrAddBoolean("montecarlo","coupled",false);
   boosts = pin->GetOrAddBoolean("montecarlo","boosts",false);
-  polarized = pin->GetOrAddBoolean("montecarlo","polarized",false);
+  polarized = GetMCPolarizationFlag(pin->GetOrAddString("montecarlo","polarized","none"));
   acceleration = pin->GetOrAddBoolean("montecarlo","acceleration",false);
   time_acc = pin->GetOrAddBoolean("montecarlo","time_acc",false);
   verbose = pin->GetOrAddBoolean("montecarlo", "verbose", true);
@@ -191,6 +191,33 @@ enum AbsorptionMethodFlag GetAbsorptionMethodFlag(std::string input_string) {
     ATHENA_ERROR(msg);
   }
 
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn enum MCPolarization GetMCPolarizationFlag(std::string input_string)
+//! \brief set polarization tracking flag
+//
+// Accepts the legacy booleans as well as the named modes, so existing input files keep
+// working: false means none, true means linear, which is what "true" has always done.
+
+enum MCPolarization GetMCPolarizationFlag(std::string input_string) {
+  if (input_string == "none" || input_string == "false"
+      || input_string == "0" || input_string == "False") {
+    return MCPOL_NONE;
+  } else if (input_string == "linear" || input_string == "true"
+             || input_string == "1" || input_string == "True") {
+    return MCPOL_LINEAR;
+  } else if (input_string == "circular") {
+    return MCPOL_CIRCULAR;
+  } else {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in GetMCPolarizationFlag" << std::endl
+        << "Input string=" << input_string << " not a valid polarization mode."
+        << std::endl
+        << "Use none, linear or circular (true and false are still accepted, "
+        << "as linear and none)." << std::endl;
+    ATHENA_ERROR(msg);
+  }
 }
 
 //----------------------------------------------------------------------------------------

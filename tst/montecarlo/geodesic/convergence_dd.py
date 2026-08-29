@@ -94,7 +94,7 @@ def write_athinput(iseed, nphot, stepsize, spin, rmin, rmax, nmu, nphi,
     outfile.write("scattering     = none\n")
     outfile.write("absorption     = none\n")
     outfile.write("emission       = user\n")
-    outfile.write("polarized      = false\n")
+    outfile.write("polarized      = none\n")
     outfile.write("stepsize       = {:e}\n".format(stepsize))
     outfile.write("varystep       = true\n")
     outfile.write("checkmove      = 2000000\n")

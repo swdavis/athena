@@ -66,10 +66,11 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int 
   for (int ip=ips; ip<=ipe; ip++) {
 
     Real norm = pphot->sip[ip];
-    Real stokes[3];
+    Real stokes[4];
     stokes[0] = 1.;
     stokes[1] = pphot->sqp[ip] / norm;
     stokes[2] = pphot->sup[ip] / norm;
+    stokes[3] = pphot->svp[ip] / norm;
 
     // Polarized scattering must be computed relative to cartesian bases due to
     // definition of stokes vectors
@@ -222,6 +223,7 @@ void ScatterThomsonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips, int 
     // value of the overall intensity (stokes[0]) does not change
     pphot->sqp[ip] = norm*(r10*stokes[0]+r11*stokes[1]+r12*stokes[2])/intensi;
     pphot->sup[ip] = norm*(r20*stokes[0]+r21*stokes[1]+r22*stokes[2])/intensi;
+    pphot->svp[ip] = norm*(s3*stokes[3])/intensi;
 
     // Calculate new photon direction
     kx = sthetap * cos(phip);
@@ -369,10 +371,11 @@ void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
   for (int ip=ips; ip<=ipe; ip++) {
 
     Real norms = pphot->sip[ip];
-    Real stokes[3];
+    Real stokes[4];
     stokes[0] = 1.;
     stokes[1] = pphot->sqp[ip] / norms;
     stokes[2] = pphot->sup[ip] / norms;
+    stokes[3] = pphot->svp[ip] / norms;
 ;
     // Polarized scattering must be computed relative to cartesian basis due
     // to definition of stokes vectors
@@ -500,18 +503,14 @@ void ScatterComptonPolarized(MonteCarloBlock *pmcb, Photon *pphot, int ips,
     Real r21 = s1 * c1s2 - s3 * s1c2;
     Real r22 = s3 * c1c2 + s1 * s1s2;
 
+    Real r33 = 0.5*s3*(erat + 1.0/erat);
+
     // Calculate new stokes vectors from rotation matrix.  Note that the
     // value of the overall intensity (stokes[0]=1) does not change
     pphot->sqp[ip] = norms*(r10+r11*stokes[1]+r12*stokes[2]) / norm;
     pphot->sup[ip] = norms*(r20+r21*stokes[1]+r22*stokes[2]) / norm;
+    pphot->svp[ip] = norms*(r33*stokes[3]) / norm;
 
-    Real fnorm = sqrt(SQR(pphot->sqp[ip])+SQR(pphot->sup[ip]));
-    if (fnorm > 1.) {
-      pphot->sqp[ip] /= fnorm;
-      pphot->sup[ip] /= fnorm;
-      printf("stokes %g %g %g %g %g\n",stokes[1],stokes[2],norms,norm,fnorm); 
-      printf("%g %g %g %g %g %g\n",r10,r11,r12,r20,r21,r22);
-    }
     if (pphot->IsNanPhoton(ip)) {
       pphot->statp[ip] = DESTROYED;
       pphot->PrintPhoton("Warning: Nan encounterd in ScatterComptonPolarized(),"

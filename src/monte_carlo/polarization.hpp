@@ -30,6 +30,31 @@
 // Faraday rotation rotates Q into U continuously along the ray, so the Stokes parameters
 // stop being constant between scatterings even in flat spacetime.
 
+// enum for checking polarization treatment
+enum MCPolarization {MCPOL_NONE = 0, MCPOL_LINEAR = 1, MCPOL_CIRCULAR = 2};
+
+//! \brief true when any polarization is tracked
+inline bool IsPolarized(MCPolarization p) {return p != MCPOL_NONE;}
+//! \brief true when Stokes V is carried and stored
+inline bool TracksCircular(MCPolarization p) {return p == MCPOL_CIRCULAR;}
+
+//! \brief number of Stokes planes stored alongside I: none, then Q and U, then V
+inline int NumStokesStored(MCPolarization p) {
+  if (p == MCPOL_CIRCULAR) return 3;
+  if (p == MCPOL_LINEAR) return 2;
+  return 0;
+}
+
+// enum slots of the stored Stokes planes, in file order
+enum {MCISQ = 0, MCISU = 1, MCISV = 2};
+
+//! \brief the input-file spelling of a mode, for error messages and file headers
+inline const char *GetMCPolarizationName(MCPolarization p) {
+  if (p == MCPOL_LINEAR) return "linear";
+  if (p == MCPOL_CIRCULAR) return "circular";
+  return "none";
+}
+
 class MonteCarloBlock;
 class Photon;
 

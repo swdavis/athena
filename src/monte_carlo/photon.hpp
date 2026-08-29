@@ -15,6 +15,7 @@
 // Athena++ classes headers
 #include "../athena.hpp"
 #include "montecarlo.hpp"
+#include "polarization.hpp"  // MCPolarization; no includes of its own, so no cycle
 
 class MonteCarloBlock;
 
@@ -83,7 +84,7 @@ public:
   std::vector<std::complex<Real>> *polten; //!> polarization tensor
 
   static bool initialized;
-  static bool polarized;
+  static MCPolarization polarized;
   static bool general_pusher_flag;
 
   //#ifdef MPI_PARALLEL

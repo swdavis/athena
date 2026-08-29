@@ -95,7 +95,7 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
           //printf("step: %g %g %g %g\n", step, tauremaining, pphot->ep[ip], pphot->wp[ip]);
           //VerletStep(pphot,step,ip);
           RK4Step(pphot,step,ip);
-          if (pmy_mcb->pmy_mc->polarized)
+          if (IsPolarized(pmy_mcb->pmy_mc->polarized))
             PropogatePolarization(pphot,step,ip);
           tauremaining -= chi * l_cgs * step * pphot->ep[ip];
           //printf("large: %g %g %g %g %g\n",tauremaining,chi,step,pphot->ep[ip],chi * step * pphot->ep[ip]);
@@ -103,7 +103,7 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
           step = tauremaining / (chi * l_cgs * pphot->ep[ip]);
           //VerletStep(pphot,step,ip);
           RK4Step(pphot,step,ip);
-          if (pmy_mcb->pmy_mc->polarized)
+          if (IsPolarized(pmy_mcb->pmy_mc->polarized))
             PropogatePolarization(pphot,step,ip);
           tauremaining = 0.;
         }

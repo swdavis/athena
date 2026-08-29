@@ -149,11 +149,11 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     Scatter = NoScatter;  // should not be called
     coherent_scattering = true;
   } else if (scattering_meth == SCATISO) {
-    if (pmy_mc->polarized) {
+    if (IsPolarized(pmy_mc->polarized)) {
       std::stringstream msg;
       msg << "### ERROR in MonteCarloBlock constructor" << std::endl
           << "Istropic scattering not suppored for polarized = "
-          << pmy_mc->polarized << std::endl;
+          << GetMCPolarizationName(pmy_mc->polarized) << std::endl;
       ATHENA_ERROR(msg);
     } else {
       ScatteringOpacity = ThomsonOpacity;
@@ -162,7 +162,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     }
   } else if (scattering_meth == SCATTHOM) {
     ScatteringOpacity = ThomsonOpacity;
-    if (pmy_mc->polarized) {
+    if (IsPolarized(pmy_mc->polarized)) {
       Scatter = ScatterThomsonPolarized;
     } else
       Scatter = ScatterThomsonUnpolarized;
@@ -177,7 +177,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     }
     GenerateComptonTable(comptonio);
     ScatteringOpacity = ComptonOpacity;
-    if (pmy_mc->polarized) {
+    if (IsPolarized(pmy_mc->polarized)) {
       Scatter = ScatterComptonPolarized;
     } else {
       Scatter = ScatterComptonUnpolarized;
@@ -185,11 +185,11 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     coherent_scattering = false;
   } else if (scattering_meth == SCATRES) {
     ScatteringOpacity = ResonanceLineOpacity;
-    if (pmy_mc->polarized) {
+    if (IsPolarized(pmy_mc->polarized)) {
       std::stringstream msg;
       msg << "### ERROR in MonteCarloBlock constructor" << std::endl
           << "Lyman alpha scattering not suppored for polarized = "
-          << pmy_mc->polarized << std::endl;
+          << GetMCPolarizationName(pmy_mc->polarized) << std::endl;
       ATHENA_ERROR(msg);
     } else {
       Scatter = ScatterResonanceLine;
@@ -197,14 +197,14 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     }
   } else if (scattering_meth == SCATDUST) {
     ScatteringOpacity = DustScatteringOpacity;
-    if (pmy_mc->polarized) {
+    if (IsPolarized(pmy_mc->polarized)) {
       Scatter = ScatterDust;
       coherent_scattering = true;
     } else {
       std::stringstream msg;
       msg << "### ERROR in MonteCarloBlock constructor" << std::endl
           << "Dust scattering not suppored for polarized = "
-          << pmy_mc->polarized << std::endl;
+          << GetMCPolarizationName(pmy_mc->polarized) << std::endl;
       ATHENA_ERROR(msg);
     }
   }
@@ -346,7 +346,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   // vel holds the four-velocity of the frame the comoving tetrad is built on.  With
   // boosts enabled that is the fluid; in GR without boosts it is the normal observer,
   // which is still needed by the GR branches of the frame transformations.
-  if (boosts || GENERAL_RELATIVITY || pmy_mc->polarized) {
+  if (boosts || GENERAL_RELATIVITY || IsPolarized(pmy_mc->polarized)) {
     vel.NewAthenaArray(ncells3,ncells2,ncells1,4);
     if (!boosts && !GENERAL_RELATIVITY) {
       // Value is constant in time, unlike the fluid velocity, so it is set once rather than
@@ -579,7 +579,7 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
     }
 
     // Construct the coherency tensor from the emitted Stokes parameters.
-    if (pmy_mc->polarized) {
+    if (IsPolarized(pmy_mc->polarized)) {
       for (int ip = nold; ip < pphot->nphot; ip++)
         ScatteringStokesToCoherency(this, pphot, ip);
     }
@@ -638,10 +638,10 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
         TransformToComoving(pphot,ip,ip);
       }
       // Convert coherency tensor to Stokes parameters for scattering (if needed)
-      if (pmy_mc->polarized) CoherencyToScatteringStokes(this, pphot, ip);
+      if (IsPolarized(pmy_mc->polarized)) CoherencyToScatteringStokes(this, pphot, ip);
       // call scattering function and update counters
       Scatter(this,pphot,ip,ip);
-      if (pmy_mc->polarized) ScatteringStokesToCoherency(this, pphot, ip);
+      if (IsPolarized(pmy_mc->polarized)) ScatteringStokesToCoherency(this, pphot, ip);
       nscat++;
       pphot->nscp[ip]++;
       if (pphot->nscp[ip] % pmy_mc->checkscat == 0) {
@@ -2215,7 +2215,7 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
       pphot->SetFourVector(ip, true, kf);
 
       // Into the basis the polarized scattering routines assume; see polarization.hpp
-      if (pmy_mc->polarized) ToScatteringBasis(this, pphot, ip);
+      if (IsPolarized(pmy_mc->polarized)) ToScatteringBasis(this, pphot, ip);
       pphot->acp[ip] /= nufact;
       pphot->scp[ip] /= nufact;
 
@@ -2274,7 +2274,7 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
 
       // Back out of the scattering basis.  Guarded on the legacy pusher exactly as
       // before: the general pusher reaches this function through a different branch.
-      if (!pmy_mc->general_pusher_flag && pmy_mc->polarized)
+      if (!pmy_mc->general_pusher_flag && IsPolarized(pmy_mc->polarized))
         FromScatteringBasis(this, pphot, ip);
 
       Real k0init = pphot->k0p[ip];

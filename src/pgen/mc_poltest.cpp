@@ -41,6 +41,9 @@ namespace {
   bool cart_topo;
   Real spsi,cpsi,szet,czet;
   Real Kp[2], polang;
+  // circular fraction of the emitted polarization, and a uniform scattering
+  // opacity so the transport test can also exercise a scattering event
+  Real polcirc, scatopac;
   bool outsphere;
   int i1start,i2start,i3start;
 
@@ -121,6 +124,8 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
   outsphere = pin->GetOrAddBoolean("problem", "outsphere", false);
   //rfin = pin->GetOrAddReal("problem", "rfin", pin->GetReal("mesh","x1max"));
   polang = pin->GetOrAddReal("problem", "polang", 0.) * M_PI / 180.;
+  polcirc = pin->GetOrAddReal("problem", "polcirc", 0.);
+  scatopac = pin->GetOrAddReal("problem", "scatopac", 0.);
   r0 = pin->GetOrAddReal("problem", "r0", 10.);
   th0 = pin->GetOrAddReal("problem", "th0", 45.) * M_PI / 180.;
   ph0 = pin->GetOrAddReal("problem", "ph0", 0.) * M_PI / 180.;
@@ -211,7 +216,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
     // Initialize the absorption and scattering extinction coefficients
     // to the values appropriate in the emitted zone
     pphot->acp[ip] = 0.;
-    pphot->scp[ip] = 0.;
+    pphot->scp[ip] = scatopac;
 
     Real r = x[IMC1];
     Real cth = cos(x[IMC2]);
@@ -292,9 +297,12 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
     // Initialize  Stokes vector
     Real stokes[4];
     stokes[0] = 1.0;
-    stokes[1] = cos(2.*polang);
-    stokes[2] = sin(2.*polang);
-    stokes[3] = 0.0;
+    // Fully polarized, split between linear and circular by polcirc so that
+    // Q^2 + U^2 + V^2 = 1 whatever polcirc is set to.
+    Real plin = std::sqrt(std::max(0.0, 1.0 - SQR(polcirc)));
+    stokes[1] = plin*cos(2.*polang);
+    stokes[2] = plin*sin(2.*polang);
+    stokes[3] = polcirc;
 
     // Construct polarization specific tetrad, which differs from the one
     // above for specifying initial k direction

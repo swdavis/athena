@@ -25,6 +25,7 @@
 #include "mcoutput.hpp"
 #include "mccoord.hpp"
 #include "photon_frames.hpp"
+#include "polarization.hpp"
 #include "tetrad.hpp"
 
 // GSL library
@@ -172,6 +173,7 @@ enum BoundaryFace SetEmissionSurface(std::string input_face);
 enum AbsorptionOpacityFlag GetAbsorptionOpacityFlag(std::string input_string);
 enum AbsorptionMethodFlag GetAbsorptionMethodFlag(std::string input_string);
 enum ScatteringFlag GetScatteringFlag(std::string input_string);
+enum MCPolarization GetMCPolarizationFlag(std::string input_string);
 
 //----------------------------------------------------------------------------------------
 //! \struct MCBlockSize
@@ -259,7 +261,7 @@ public:
   bool *initialize_comoving; // Transform from comoving frame for emission
   enum AbsorptionMethodFlag *absorption_method; // absorption method for each emission type
 
-  bool polarized;// track photon polarization
+  MCPolarization polarized;// how much of the polarization state is tracked
   bool acceleration;  // use MRW acceleration
   bool computedmin;
   bool time_acc;  // use MRW acceleration with time limit

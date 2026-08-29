@@ -46,6 +46,8 @@ _COORD_TAGS = {
                            metric='kerr_schild',     layout='v2'),
     'bl_spherical':   dict(relativistic=True,  geometry='spherical',   kvec='coord',
                            metric='boyer_lindquist', layout='v2'),
+    'snake_cart':     dict(relativistic=True,  geometry='cartesian',   kvec='coord',
+                           metric='snake',           layout='v2'),
 }
 
 # Tags written before SetGeometryTag existed.  These were just COORDINATE_SYSTEM, so the
@@ -83,6 +85,55 @@ def coord_properties(coord):
     raise ValueError(f"Unrecognized coord tag '{coord}' in photon list header")
 
 
+# Polarization modes, mirroring MCPolarization in src/monte_carlo/polarization.hpp.
+# 'none' stores no Stokes parameters, 'linear' stores Q and U, 'circular' adds V.
+POLARIZATION_MODES = ('none', 'linear', 'circular')
+
+# What the two file formats used to write before the modes existed.  Lists carried an
+# integer, spectra and images the strings true/false.  Both meant "linear" when set.
+_POLARIZATION_LEGACY = {'0': 'none', '1': 'linear', '2': 'circular',
+                        'false': 'none', 'true': 'linear',
+                        'False': 'none', 'True': 'linear'}
+
+
+def parse_polarization(value):
+    """
+    Normalize a polarized header field to one of POLARIZATION_MODES.
+
+    Accepts the current mode names and the legacy spellings both writers used.
+    """
+    if isinstance(value, bool):
+        return 'linear' if value else 'none'
+    if isinstance(value, (int, np.integer)):
+        value = str(int(value))
+    tag = str(value).strip()
+    if tag in POLARIZATION_MODES:
+        return tag
+    if tag in _POLARIZATION_LEGACY:
+        return _POLARIZATION_LEGACY[tag]
+    raise ValueError(f"Unrecognized polarized tag '{value}' in file header")
+
+
+def is_polarized(mode):
+    """True when any Stokes parameters are stored"""
+    return parse_polarization(mode) != 'none'
+
+
+def tracks_circular(mode):
+    """True when Stokes V is stored"""
+    return parse_polarization(mode) == 'circular'
+
+
+def num_stokes_stored(mode):
+    """Number of Stokes planes stored alongside the intensity: 0, 2 (Q,U) or 3 (Q,U,V)"""
+    mode = parse_polarization(mode)
+    if mode == 'circular':
+        return 3
+    if mode == 'linear':
+        return 2
+    return 0
+
+
 #SWD: Maybe photons be rewritten simply as dictionary
 #SWD: Add error control
 class Photons:
@@ -91,16 +142,14 @@ class Photons:
     """
     #Initialization from dictionary
     def __init__(self, phlist):
-        self.npars = 10
         self.dt = phlist['dt']
-        self.polarized = phlist['polarized']
+        self.polarized = parse_polarization(phlist['polarized'])
+        self.npars = 10 + num_stokes_stored(self.polarized)
         self.ntot = phlist['ntot']
         self.coord = phlist['coord']
         # How to interpret this list: relativistic?, spatial basis, wavevector convention
         self.props = coord_properties(self.coord)
         self.relativistic = self.props['relativistic']
-        if self.polarized:
-            self.npars = self.npars + 2
         ncol = phlist['npars']
         self.nphot = phlist['length']
         if ncol < self.npars:
@@ -123,10 +172,11 @@ class Photons:
         self.k1 = phlist['list'][:,6].copy()
         self.k2 = phlist['list'][:,7].copy()
         self.k3 = phlist['list'][:,8].copy()
-        if self.polarized:
+        if is_polarized(self.polarized):
             self.q = phlist['list'][:,10]
             self.u = phlist['list'][:,11]
-            #self.v = phlist['list'][:,12]
+        if tracks_circular(self.polarized):
+            self.v = phlist['list'][:,12]
         if self.nuser > 0:
             for i in range(self.nuser):
                 self.user[:,i] = phlist['list'][:,i+self.npars]
@@ -314,7 +364,7 @@ def read_list(filename, data=True, header=True):
         phlist['length'] = parse_line_value("length=", int)
         phlist['npars'] = parse_line_value("npars=", int)
         phlist['ntot'] = parse_line_value("ntot=", int)
-        phlist['polarized'] = bool(parse_line_value("polarized=", int))
+        phlist['polarized'] = parse_polarization(parse_line_value("polarized=", str))
 
         # Handle coord separately as it's a string
         current_index = skip_string("coord=")
@@ -438,7 +488,7 @@ def read_list_generator(filename, chunk_size=None):
     phlist['length'] = parse_line_value("length=", int)
     phlist['npars'] = parse_line_value("npars=", int)
     phlist['ntot'] = parse_line_value("ntot=", int)
-    phlist['polarized'] = bool(parse_line_value("polarized=", int))
+    phlist['polarized'] = parse_polarization(parse_line_value("polarized=", str))
     
     skip_string("coord=")
     end_of_line_index = raw_data_ascii.find('\n', current_index)
@@ -503,7 +553,7 @@ def write_list(filename, phlist, header=True, length=None):
             outfile.write(f"length={length if length is not None else phlist['length']:d}\n")
             outfile.write(f"npars={phlist['npars']:d}\n")
             outfile.write(f"ntot={phlist['ntot']:d}\n")
-            outfile.write(f"polarized={int(phlist['polarized']):d}\n")
+            outfile.write(f"polarized={parse_polarization(phlist['polarized'])}\n")
             outfile.write(f"coord={phlist['coord']}\n")
 
     # Append binary data using numpy's tobytes() - faster than struct.pack
@@ -522,7 +572,7 @@ def print_list(infile, start = 0, stop = None):
     print(f"length={phlist['length']:d}\n")
     print(f"npars={phlist['npars']:d}\n")
     print(f"ntot={phlist['ntot']:d}\n")
-    print(f"polarized={int(phlist['polarized']):d}\n")
+    print(f"polarized={parse_polarization(phlist['polarized'])}\n")
     print(f"coord={phlist['coord']}\n")
 
     if stop is None:
@@ -559,7 +609,7 @@ def write_spectrum(filename,spectrum):
     outfile.write("ntot={:d}\n".format(spectrum['ntot']))
     outfile.write("nintens={:d}\n".format(spectrum['nintens']))
     outfile.write("units="+spectrum['xaxis']+"\n")
-    outfile.write("polarized="+spectrum['polarized']+"\n")
+    outfile.write("polarized="+parse_polarization(spectrum['polarized'])+"\n")
     outfile.write("yerror="+spectrum['yerror']+"\n")
     outfile.close()
 
@@ -656,7 +706,8 @@ def read_spectrum(filename):
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
-    spectrum['polarized'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
+    spectrum['polarized'] = parse_polarization(
+        raw_data_ascii[current_index:end_of_line_index].split(' ')[0])
     current_index = end_of_line_index + 1
     current_index = skip_string("yerror=")
     end_of_line_index = current_index + 1
@@ -919,6 +970,20 @@ def compute_u_error(intensity,errors=None):
         return frac, err
     return frac, None
 
+def compute_v_error(intensity,errors=None):
+    """
+    Compute v=V/I and error if requested.  Only present for circular spectra.
+    """
+    i = intensity[0,:]
+    v = intensity[3,:]
+    frac = v/i
+    if errors is not None:
+        ei = errors[0,:]
+        ev = errors[3,:]
+        err = np.sqrt(ev**2 + (v**2)*(ei/i)**2)/i
+        return frac, err
+    return frac, None
+
 def compute_flux_frac_error(intensity,mufaces,errors=None):
     """
     Compute I/F and error if requested
@@ -938,16 +1003,33 @@ def polarization_requested(yunit):
     """
     Determine whether code requires polarization based on requested y unit
     """
-    if yunit == 'polfrac':
+    return yunit in ('polfrac', 'polangle', 'q', 'u', 'v')
+
+
+def circular_requested(yunit):
+    """
+    Determine whether the requested y unit needs Stokes V, i.e. a circular file
+    """
+    return yunit == 'v'
+
+
+def check_polarization(header, yunit, kind='spectrum'):
+    """
+    Check that a spectrum or image carries the Stokes parameters yunit needs.
+
+    Returns True when the request can be satisfied, and prints why when it cannot.
+    """
+    if not polarization_requested(yunit):
         return True
-    elif yunit == 'polangle':
-        return True
-    elif yunit == 'q':
-        return True
-    elif yunit == 'u':
-        return True
-    else:
+    mode = parse_polarization(header['polarized'])
+    if not is_polarized(mode):
+        print("Error: polarization output "+yunit+" requested for unpolarized "+kind+".")
         return False
+    if circular_requested(yunit) and not tracks_circular(mode):
+        print("Error: output "+yunit+" requested but "+kind+" mode is '"+mode
+              +"', which carries no Stokes V.")
+        return False
+    return True
 
 def plot_frequency(spectrum, imu='sum', iphi='ave', xunit='kev', yunit='nulnu',
                    plterr=True, nu=None, rebinx=None):
@@ -979,8 +1061,7 @@ def plot_frequency(spectrum, imu='sum', iphi='ave', xunit='kev', yunit='nulnu',
             plterr = False
 
     # Check whether spectrum has required polarization data
-    if (polarization_requested(yunit) and (spectrum['polarized'] != 'true')):
-        print("Error: polarization output "+yunit+" requested for unpolarized spectrum.")
+    if not check_polarization(spectrum, yunit):
         return None
 
     # Compute intensity spectrum
@@ -1042,6 +1123,9 @@ def plot_frequency(spectrum, imu='sum', iphi='ave', xunit='kev', yunit='nulnu',
     elif yunit == 'u':
         ylabel = r"$U_\nu/I_\nu$"
         y, yerr = compute_u_error(intensity,errors)
+    elif yunit == 'v':
+        ylabel = r"$V_\nu/I_\nu$"
+        y, yerr = compute_v_error(intensity,errors)
     else:
         print("Error: yunit ("+yunit+") not specified correctly")
         return None
@@ -1081,8 +1165,7 @@ def plot_theta(spectrum,ix,iphi='ave',xunit='mu',yunit='lnu',
             plterr = False
 
     # Check whether spectrum has required polarization data
-    if (polarization_requested(yunit) and (spectrum['polarized'] != 'true')):
-        print("Error: polarization output "+yunit+" requested for unpolarized spectrum.")
+    if not check_polarization(spectrum, yunit):
         return None
 
     intensity = spectrum['intensity']
@@ -1143,6 +1226,9 @@ def plot_theta(spectrum,ix,iphi='ave',xunit='mu',yunit='lnu',
     elif yunit == 'u':
         ylabel = r"$U_\nu/I_\nu$"
         y, yerr = compute_u_error(intensity,errors)
+    elif yunit == 'v':
+        ylabel = r"$V_\nu/I_\nu$"
+        y, yerr = compute_v_error(intensity,errors)
     elif yunit == 'fluxfrac':
         ylabel = r"$I_\nu/F_\nu$"
         y, yerr = compute_flux_frac_error(intensity,xfaces,errors)
@@ -1183,8 +1269,7 @@ def plot_phi(spectrum, ix, imu='sum', xunit='phi', yunit='lnu',
             plterr = False
 
     # Check whether spectrum has required polarization data
-    if (polarization_requested(yunit) and (spectrum['polarized'] != 'true')):
-        print("Error: polarization output "+yunit+" requested for unpolarized spectrum.")
+    if not check_polarization(spectrum, yunit):
         return None
 
     intensity = spectrum['intensity']
@@ -1244,6 +1329,9 @@ def plot_phi(spectrum, ix, imu='sum', xunit='phi', yunit='lnu',
     elif yunit == 'u':
         ylabel = r"$U_\nu/I_\nu$"
         y, yerr = compute_u_error(intensity,errors)
+    elif yunit == 'v':
+        ylabel = r"$V_\nu/I_\nu$"
+        y, yerr = compute_v_error(intensity,errors)
     elif yunit == 'fluxfrac':
         ylabel = r"$I_\nu/F_\nu$"
         y, yerr = compute_flux_frac_error(intensity,xfaces,errors)
@@ -1640,13 +1728,9 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
         print("Error: anglebin == "+anglebin+". Must be cartesian, spherical, or hybrid.")
 
     # Create intensity grid and loop over photons to add contribution
-    nintens = 1
-    if phots.polarized:
-        spectrum['polarized'] = 'true'
-        nintens += 2
-    else:
-        spectrum['polarized'] = 'false'
-
+    spectrum['polarized'] = parse_polarization(phots.polarized)
+    npol = num_stokes_stored(spectrum['polarized'])
+    nintens = 1 + npol
     spectrum['nintens'] = nintens
     #count = np.zeros((nphi,nmu,nx))
     intensity = np.zeros((nintens,nphi,nmu,nx))
@@ -1671,19 +1755,19 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     #np.add.at(count, (valid_phi, valid_mu, valid_x), 1.0)
     np.add.at(intensity, (0, valid_phi, valid_mu, valid_x), valid_weights)
 
-    if phots.polarized:
-        np.add.at(intensity, (1, valid_phi, valid_mu, valid_x),
-                  valid_weights * phots.q[valid_phots])
-        np.add.at(intensity, (2, valid_phi, valid_mu, valid_x),
-                  valid_weights * phots.u[valid_phots])
+    # Stokes planes follow the intensity in the order Q, U, V
+    stokes = [phots.q, phots.u] if npol >= 2 else []
+    if npol == 3:
+        stokes.append(phots.v)
+    for m, spol in enumerate(stokes):
+        np.add.at(intensity, (m+1, valid_phi, valid_mu, valid_x),
+                  valid_weights * spol[valid_phots])
 
     if yerror:
         np.add.at(errors, (0, valid_phi, valid_mu, valid_x), valid_weights**2)
-        if phots.polarized:
-            np.add.at(errors, (1, valid_phi, valid_mu, valid_x),
-                      (valid_weights * phots.q[valid_phots])**2)
-            np.add.at(errors, (2, valid_phi, valid_mu, valid_x),
-                      (valid_weights * phots.u[valid_phots])**2)
+        for m, spol in enumerate(stokes):
+            np.add.at(errors, (m+1, valid_phi, valid_mu, valid_x),
+                      (valid_weights * spol[valid_phots])**2)
 
     # Compute frequency width and mean energy (in erg) of bins
     h = 6.62607015e-27
@@ -1854,12 +1938,9 @@ def make_image_mc(phots, rcam, ninc, imin, imax, nen, emin, emax,
     #ebins = np.zeros(len(ibins),dtype=int)
 
     # Create intensity grid and loop over photons to add contribution
-    nintens = 1
-    if phots.polarized:
-        image['polarized'] = True
-        nintens += 2
-    else:
-        image['polarized'] = False
+    image['polarized'] = parse_polarization(phots.polarized)
+    npol = num_stokes_stored(image['polarized'])
+    nintens = 1 + npol
     image['nintens'] = nintens
 
     if mask is not None:
@@ -1879,21 +1960,13 @@ def make_image_mc(phots, rcam, ninc, imin, imax, nen, emin, emax,
 
     np.add.at(intensity, (0, valid_i, valid_e, valid_y, valid_x), valid_weights)
 
-    if phots.polarized:
-        np.add.at(intensity, (1, valid_i, valid_e, valid_y, valid_x),
-                  valid_weights * phots.q[valid_phots])
-        np.add.at(intensity, (2, valid_i, valid_e, valid_y, valid_x),
-                  valid_weights * phots.u[valid_phots])
-    """
-    for i in range(phots.nphot):
-        if ((ibins[i] >= 0) and (ebins[i] >= 0) and (xbins[i] >= 0) and (ybins[i] >= 0)):
-            # Weight includes energy -- slightly different from spectra
-            wght = phots.weight[i]*phots.energy[i]
-            intensity[0,ibins[i],ebins[i],ybins[i],xbins[i]] += wght
-            if phots.polarized:
-                intensity[1,ibins[i],ebins[i],ybins[i],xbins[i]] += wght*phots.q[i]
-                intensity[2,ibins[i],ebins[i],ybins[i],xbins[i]] += wght*phots.u[i]
-    """
+    # Stokes planes follow the intensity in the order Q, U, V
+    stokes = [phots.q, phots.u] if npol >= 2 else []
+    if npol == 3:
+        stokes.append(phots.v)
+    for m, spol in enumerate(stokes):
+        np.add.at(intensity, (m+1, valid_i, valid_e, valid_y, valid_x),
+                  valid_weights * spol[valid_phots])
     # Normalize intensities
     mumid = abs(0.5*(ifaces[1:]+ifaces[:-1]))
     dmu = ifaces[1:]-ifaces[:-1]
@@ -1967,10 +2040,10 @@ def plot_image(image, iinc, ie, itype='intensity', pvec=False, average=False, st
     cmap = plt.get_cmap(kwargs['colormap'])
     plt.figure()
 
-    if polarization_requested(itype):
-        if not image['polarized']:
-            raise RuntimeError("Polarization type requested ("+itype+
-                               ") but image is unpolarized")
+    if not check_polarization(image, itype, kind='image'):
+        raise RuntimeError("Polarization type requested ("+itype+
+                           ") but image mode is '"
+                           +parse_polarization(image['polarized'])+"'")
     if itype == 'intensity':
         vals = image['intensity'][0,iinc,ie,:,:]
         clabel=r"$I$"
@@ -1982,6 +2055,9 @@ def plot_image(image, iinc, ie, itype='intensity', pvec=False, average=False, st
     elif itype == 'u':
         vals = image['intensity'][2,iinc,ie,:,:]
         clabel=r"$U/I$"
+    elif itype == 'v':
+        vals = image['intensity'][3,iinc,ie,:,:]
+        clabel=r"$V/I$"
     elif itype == 'polangle':
         q = image['intensity'][1,iinc,ie,:,:]
         u = image['intensity'][2,iinc,ie,:,:]
@@ -2031,7 +2107,7 @@ def plot_image(image, iinc, ie, itype='intensity', pvec=False, average=False, st
     plt.colorbar(im,label=clabel)
     plt.gca().set_aspect('equal')
     if pvec:
-        if image['polarized']:
+        if is_polarized(image['polarized']):
             q = image['intensity'][1,iinc,ie,:,:]
             u = image['intensity'][2,iinc,ie,:,:]
             q, u, x, y = subsample_polarization(q,u,x,y,step,average)
@@ -2069,10 +2145,7 @@ def write_image(filename,image):
     outfile.write("unit="+image['unit']+"\n")
     outfile.write("ntot={:d}\n".format(image['ntot']))
     outfile.write("nintens={:d}\n".format(image['nintens']))
-    if image['polarized']:
-        outfile.write("polarized=true\n")
-    else:
-        outfile.write("polarized=false\n")
+    outfile.write("polarized="+parse_polarization(image['polarized'])+"\n")
     outfile.close()
 
     # Write binfaces
@@ -2180,12 +2253,9 @@ def read_image(filename):
     end_of_line_index = current_index + 1
     while raw_data_ascii[end_of_line_index] != '\n':
         end_of_line_index += 1
-    image['polarized'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
+    image['polarized'] = parse_polarization(
+        raw_data_ascii[current_index:end_of_line_index].split(' ')[0])
     current_index = end_of_line_index + 1
-    if image['polarized'] == 'false':
-        image['polarized'] = False
-    if image['polarized'] == 'true':
-        image['polarized'] = True
 
     # Read in faces
     ninc = image['ninc']

@@ -51,7 +51,7 @@ namespace mcoutput {
 //----------------------------------------------------------------------------------------
 //! Spectrum constructor from input
 
-Spectrum::Spectrum(MomentumRange input_range, bool pol, bool xlog) {
+Spectrum::Spectrum(MomentumRange input_range, MCPolarization pol, bool xlog) {
 
   // SWD some of this should be used to initialization outside constructor
   next = nullptr;
@@ -69,11 +69,9 @@ Spectrum::Spectrum(MomentumRange input_range, bool pol, bool xlog) {
   // Allocate arrays for intensities
   intensity.NewAthenaArray(range.nphi,range.ncth,range.ne);
   intensity_sq.NewAthenaArray(range.nphi,range.ncth,range.ne);
-  if (polarized) {
-    stokesq.NewAthenaArray(range.nphi,range.ncth,range.ne);
-    stokesq_sq.NewAthenaArray(range.nphi,range.ncth,range.ne);
-    stokesu.NewAthenaArray(range.nphi,range.ncth,range.ne);
-    stokesu_sq.NewAthenaArray(range.nphi,range.ncth,range.ne);
+  for (int m = 0; m < NumStokesStored(polarized); ++m) {
+    stokes[m].NewAthenaArray(range.nphi,range.ncth,range.ne);
+    stokes_sq[m].NewAthenaArray(range.nphi,range.ncth,range.ne);
   }
 }
 
@@ -113,11 +111,9 @@ Spectrum::Spectrum(Spectrum *pspec) {
   // Allocate arrays for intensities
   intensity.NewAthenaArray(range.nphi,range.ncth,range.ne);
   intensity_sq.NewAthenaArray(range.nphi,range.ncth,range.ne);
-  if (polarized) {
-    stokesq.NewAthenaArray(range.nphi,range.ncth,range.ne);
-    stokesq_sq.NewAthenaArray(range.nphi,range.ncth,range.ne);
-    stokesu.NewAthenaArray(range.nphi,range.ncth,range.ne);
-    stokesu_sq.NewAthenaArray(range.nphi,range.ncth,range.ne);
+  for (int m = 0; m < NumStokesStored(polarized); ++m) {
+    stokes[m].NewAthenaArray(range.nphi,range.ncth,range.ne);
+    stokes_sq[m].NewAthenaArray(range.nphi,range.ncth,range.ne);
   }
 }
 
@@ -129,11 +125,9 @@ Spectrum::~Spectrum() {
   energies.DeleteAthenaArray();
   intensity.DeleteAthenaArray();
   intensity_sq.DeleteAthenaArray();
-  if (polarized) {
-    stokesq.DeleteAthenaArray();
-    stokesq_sq.DeleteAthenaArray();
-    stokesu.DeleteAthenaArray();
-    stokesu_sq.DeleteAthenaArray();
+  for (int m = 0; m < NumStokesStored(polarized); ++m) {
+    stokes[m].DeleteAthenaArray();
+    stokes_sq[m].DeleteAthenaArray();
   }
 }
 
@@ -547,11 +541,13 @@ void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
     intensity_sq(phibin,mubin,ebin) += weight * weight;
     //intensity(phibin,mubin,ebin) += pphot->sip[ip] * weight;
     //intensity_sq(phibin,mubin,ebin) += SQR(pphot->sip[ip] * weight);
-    if (polarized) {
-      stokesq(phibin,mubin,ebin) += pphot->sqp[ip] * weight;
-      stokesq_sq(phibin,mubin,ebin) += SQR(pphot->sqp[ip] * weight);
-      stokesu(phibin,mubin,ebin) += pphot->sup[ip] * weight;
-      stokesu_sq(phibin,mubin,ebin) += SQR(pphot->sup[ip] * weight);
+    // The Stokes arrays on the photon only exist when polarization is tracked
+    if (IsPolarized(polarized)) {
+      const Real spol[3] = {pphot->sqp[ip], pphot->sup[ip], pphot->svp[ip]};
+      for (int m = 0; m < NumStokesStored(polarized); ++m) {
+        stokes[m](phibin,mubin,ebin) += spol[m] * weight;
+        stokes_sq[m](phibin,mubin,ebin) += SQR(spol[m] * weight);
+      }
     }
   }
 }
@@ -624,11 +620,9 @@ void Spectrum::ResetSpectrum() {
       for(int k=0; k<range.ne; ++k) {
         intensity(i,j,k) = 0.;
         intensity_sq(i,j,k) = 0.;
-        if (polarized) {
-          stokesq(i,j,k) = 0.;
-          stokesq_sq(i,j,k) = 0.;
-          stokesu(i,j,k) = 0.;
-          stokesu_sq(i,j,k) = 0.;
+        for (int m = 0; m < NumStokesStored(polarized); ++m) {
+          stokes[m](i,j,k) = 0.;
+          stokes_sq[m](i,j,k) = 0.;
         }
       }
     }
@@ -655,11 +649,9 @@ void Spectrum::AddSpectrum(Spectrum *pspec) {
         for(int k=0; k<range.ne; ++k) {
           intensity(i,j,k) += pspec->intensity(i,j,k);
           intensity_sq(i,j,k) += pspec->intensity_sq(i,j,k);
-          if (pspec->polarized) {
-            stokesq(i,j,k) += pspec->stokesq(i,j,k);
-            stokesq_sq(i,j,k) += pspec->stokesq_sq(i,j,k);
-            stokesu(i,j,k) += pspec->stokesu(i,j,k);
-            stokesu_sq(i,j,k) += pspec->stokesu_sq(i,j,k);
+          for (int m = 0; m < NumStokesStored(pspec->polarized); ++m) {
+            stokes[m](i,j,k) += pspec->stokes[m](i,j,k);
+            stokes_sq[m](i,j,k) += pspec->stokes_sq[m](i,j,k);
           }
         }
       }
@@ -694,14 +686,13 @@ enum BoundaryFace Spectrum::GetPhotonFace(Photon *pphot, int ip) {
 //----------------------------------------------------------------------------------------
 //! PhotonList constructor from input
 
-PhotonList::PhotonList(int list_size_init, bool pol, int nuser) {
+PhotonList::PhotonList(int list_size_init, MCPolarization pol, int nuser) {
 
   // Allocate memory for photon list
   len_limit = list_size_init;
   nparams = 10;
   polarized = pol;
-  if (polarized)
-    nparams += 2; // print only stokes q and u
+  nparams += NumStokesStored(polarized); // stokes q and u, plus v when circular
   nparams += nuser;
   nuser_out = nuser;
   photons.NewAthenaArray(len_limit,nparams);
@@ -779,9 +770,11 @@ void PhotonList::AddPhoton(Photon *pphot, int ip) {
   photons(length,n++) = pphot->k2p[ip];
   photons(length,n++) = pphot->k3p[ip];
   photons(length,n++) = pphot->k0p[ip];
-  if (polarized) {
-    photons(length,n++) = pphot->sqp[ip];
-    photons(length,n++) = pphot->sup[ip];
+  if (IsPolarized(polarized)) {
+    const Real spol[3] = {pphot->sqp[ip], pphot->sup[ip], pphot->svp[ip]};
+    for (int m = 0; m < NumStokesStored(polarized); ++m) {
+      photons(length,n++) = spol[m];
+    }
   }
   for (int i=0; i<nuser_out; i++) {
     photons(length,n++) = pphot->user[i][ip];
@@ -812,7 +805,7 @@ void PhotonList::WriteList(std::string filename, Real tint_out) {
   fprintf(pfile,"dt=%.8e\n",tint_out);
   fprintf(pfile,"length=%d\nnpars=%d\n",length,nparams);
   fprintf(pfile,"ntot=%d\n",nsrun);
-  fprintf(pfile,"polarized=%d\n",polarized);
+  fprintf(pfile,"polarized=%s\n",GetMCPolarizationName(polarized));
   fprintf(pfile,"coord=%s\n",pmy_mc->geometry_tag.c_str());
   // write data
   int ndata = length*nparams;
@@ -1099,7 +1092,8 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         range.ncth = pin->GetOrAddInteger(pib->block_name,"ncth",8);
         range.cthmin = pin->GetOrAddReal(pib->block_name,"cthmin",0.);
         range.cthmax = pin->GetOrAddReal(pib->block_name,"cthmax",1.);
-        bool polarized = pin->GetOrAddBoolean(pib->block_name,"polarized",pmc->polarized);
+        MCPolarization polarized = GetMCPolarizationFlag(pin->GetOrAddString(
+            pib->block_name,"polarized",GetMCPolarizationName(pmc->polarized)));
         bool xlog = pin->GetOrAddBoolean(pib->block_name,"xlog",true);
 
         // Create spectrum
@@ -1309,14 +1303,10 @@ void Spectrum::WriteSpectrum(std::string fname, Real tint_out) {
   fprintf(pfile,"nmu=%d\n",nmu);
   fprintf(pfile,"nphi=%d\n",nphi);
   fprintf(pfile,"ntot=%d\n",nsrun);
-  int nintens = 1;
-  if (polarized) nintens += 2;
+  int nintens = 1 + NumStokesStored(polarized);
   fprintf(pfile,"nintens=%d\n",nintens);
   fprintf(pfile,"units=ev\n");
-  if (polarized)
-    fprintf(pfile,"polarized=true\n");
-  else
-    fprintf(pfile,"polarized=false\n");
+  fprintf(pfile,"polarized=%s\n",GetMCPolarizationName(polarized));
   fprintf(pfile,"yerror=true\n");
   // Output bin faces with fwrite
   bool bigend = mcoutput::IsBigEndian();
@@ -1369,24 +1359,16 @@ void Spectrum::WriteSpectrum(std::string fname, Real tint_out) {
       }
     }
   }
-  if (polarized) {
+  // Stokes planes follow the intensity in the order Q, U, V.  Note the normalisation
+  // here omits the tint_out that the intensity plane above divides by.
+  for (int m = 0; m < NumStokesStored(polarized); ++m) {
     for(int k=0; k<nphi; ++k) {
       for(int j=0; j<nmu; ++j) {
         Real mumid = (static_cast<Real>(j)+0.5)/static_cast<Real>(nmu);
         for(int i=0; i<ne; ++i) {
           Real fac2 = fac1*emid[i]/(mumid*dnu[i]);
-          intens(1,k,j,i) = static_cast<double>(stokesq(k,j,i)*fac2);
-          errors(1,k,j,i) = sqrt(stokesq_sq(k,j,i)*SQR(fac2));
-        }
-      }
-    }
-    for(int k=0; k<nphi; ++k) {
-      for(int j=0; j<nmu; ++j) {
-        Real mumid = (static_cast<Real>(j)+0.5)/static_cast<Real>(nmu);
-        for(int i=0; i<ne; ++i) {
-          Real fac2 = fac1*emid[i]/(mumid*dnu[i]);
-          intens(2,k,j,i) = static_cast<double>(stokesu(k,j,i)*fac2);
-          errors(2,k,j,i) = sqrt(stokesu_sq(k,j,i)*SQR(fac2));
+          intens(m+1,k,j,i) = static_cast<double>(stokes[m](k,j,i)*fac2);
+          errors(m+1,k,j,i) = sqrt(stokes_sq[m](k,j,i)*SQR(fac2));
         }
       }
     }
@@ -1501,10 +1483,7 @@ void MCOutput::SendMonteCarloSpectrum(Spectrum *pspect, int dest) {
   int ne = pspect->range.ne;
   int ncth = pspect->range.ncth;
   int nphi = pspect->range.nphi;
-  int size = 2;
-  if (pspect->polarized) {
-    size += 4;
-  }
+  int size = 2 + 2*NumStokesStored(pspect->polarized);
   size *= (ne*ncth*nphi);
 
   Real *send_buf;
@@ -1518,11 +1497,9 @@ void MCOutput::SendMonteCarloSpectrum(Spectrum *pspect, int dest) {
   MPI_Wait(&send_rq, MPI_STATUS_IGNORE);
   BufferUtility::PackData(pspect->intensity,send_buf,0,ne,0,ncth,0,nphi,p);
   BufferUtility::PackData(pspect->intensity_sq,send_buf,0,ne,0,ncth,0,nphi,p);
-  if (pspec->polarized) {
-    BufferUtility::PackData(pspect->stokesq,send_buf,0,ne,0,ncth,0,nphi,p);
-    BufferUtility::PackData(pspect->stokesq_sq,send_buf,0,ne,0,ncth,0,nphi,p);
-    BufferUtility::PackData(pspect->stokesu,send_buf,0,ne,0,ncth,0,nphi,p);
-    BufferUtility::PackData(pspect->stokesu_sq,send_buf,0,ne,0,ncth,0,nphi,p);
+  for (int m = 0; m < NumStokesStored(pspect->polarized); ++m) {
+    BufferUtility::PackData(pspect->stokes[m],send_buf,0,ne,0,ncth,0,nphi,p);
+    BufferUtility::PackData(pspect->stokes_sq[m],send_buf,0,ne,0,ncth,0,nphi,p);
   }
   MPI_Isend(send_buf,size,MPI_ATHENA_REAL,dest,tag++,MPI_COMM_WORLD,&send_rq);
   MPI_Wait(&send_rq, MPI_STATUS_IGNORE);
@@ -1542,9 +1519,7 @@ void MCOutput::ReceiveMonteCarloSpectrum(Spectrum *pspect, bool add) {
   int ne = pspect->range.ne;
   int ncth = pspect->range.ncth;
   int nphi = pspect->range.nphi;
-  int size = 2;
-  if (pspect->polarized)
-    size += 4;
+  int size = 2 + 2*NumStokesStored(pspect->polarized);
   size *= (ne*ncth*nphi);
 
   Real *recv_buf;
@@ -1571,11 +1546,9 @@ void MCOutput::ReceiveMonteCarloSpectrum(Spectrum *pspect, bool add) {
   int p=0;
   BufferUtility::UnpackData(recv_buf,ptemp->intensity,0,ne,0,ncth,0,nphi,p);
   BufferUtility::UnpackData(recv_buf,ptemp->intensity_sq,0,ne,0,ncth,0,nphi,p);
-  if (pspect->polarized) {
-    BufferUtility::UnpackData(recv_buf,ptemp->stokesq,0,ne,0,ncth,0,nphi,p);
-    BufferUtility::UnpackData(recv_buf,ptemp->stokesq_sq,0,ne,0,ncth,0,nphi,p);
-    BufferUtility::UnpackData(recv_buf,ptemp->stokesu,0,ne,0,ncth,0,nphi,p);
-    BufferUtility::UnpackData(recv_buf,ptemp->stokesu_sq,0,ne,0,ncth,0,nphi,p);
+  for (int m = 0; m < NumStokesStored(pspect->polarized); ++m) {
+    BufferUtility::UnpackData(recv_buf,ptemp->stokes[m],0,ne,0,ncth,0,nphi,p);
+    BufferUtility::UnpackData(recv_buf,ptemp->stokes_sq[m],0,ne,0,ncth,0,nphi,p);
   }
   if (add) {
     pspect->AddSpectrum(ptemp);
