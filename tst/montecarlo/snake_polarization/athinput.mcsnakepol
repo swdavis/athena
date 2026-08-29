@@ -1,0 +1,84 @@
+<comment>
+problem   =  Polarization parallel transport in snake coordinates
+reference =
+configure = --prob=mc_snake --coord=gr_user -g -mc
+
+<job>
+problem_id = mcsnakepol
+
+<output1>
+file_type  = phlist
+nuser      = 3
+dt         = 1.0e-11
+
+<time>
+cfl_number = 0.3
+nlim       = 1
+tlim       = 1.0
+
+<coord>
+m = 0.0
+a = 0.0
+snake_a = 0.0
+snake_k = 6.283185307179586e-11
+
+<mesh>
+nx1 = 8
+x1min = -50000000000.0
+x1max = 50000000000.0
+ix1_bc = periodic
+ox1_bc = periodic
+ix1_mc_bc = escape
+ox1_mc_bc = escape
+
+nx2 = 8
+x2min = -50000000000.0
+x2max = 50000000000.0
+ix2_bc = periodic
+ox2_bc = periodic
+ix2_mc_bc = escape
+ox2_mc_bc = escape
+
+nx3 = 8
+x3min = -50000000000.0
+x3max = 50000000000.0
+ix3_bc = periodic
+ox3_bc = periodic
+ix3_mc_bc = escape
+ox3_mc_bc = escape
+
+<meshblock>
+nx1 = 8
+nx2 = 8
+nx3 = 8
+
+<hydro>
+gamma = 1.666666666666667
+
+<montecarlo>
+nphot          = 256
+iseed          = 17
+general_pusher = true
+mc_coord       = snake
+scattering     = none
+absorption     = none
+emission       = freefree
+polarized      = linear
+stepsize       = 0.005
+varystep       = true
+boosts         = true
+checkmove      = 100000000
+tmax           = 1.0e36
+
+<problem>
+dens_code = 1.0
+pgas_code = 1.000000e-06
+rho_cgs = 1.000000e-10
+tgas_cgs = 1.000000e+12
+l_cgs = 1.0
+velocity = 0.0
+polang  = 0.3
+polcirc = 0.0
+tnorm = true
+emin = 0.01
+emax = 20.0
