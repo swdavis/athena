@@ -94,9 +94,6 @@ public:
   virtual void ReadTimeDistribution(void);
   virtual Real InterpPathTime(Real tau, Real prob);
 
-  // Advance the stored polarization along one step. 
-  virtual void PropogatePolarization(Photon *pphot, Real step, int ip);
-
 };
 
 //----------------------------------------------------------------------------------------
@@ -145,7 +142,9 @@ public:
   void VerletStep(Photon *pphot, Real step, int ip);
   void RK4Step(Photon *pphot, Real step, int ip);
   void SubStep(Real xcon[4], Real kcov[4], Real dl[8]);
-  void PropogatePolarization(Photon *nphot, Real step, int ip);
+  void AdvanceStep(Photon *pphot, Real step, int ip);
+  void PolarizationRate(Photon *pphot, int ip, const std::complex<Real> nin[4][4],
+                       std::complex<Real> dndl[4][4]);
   Real StepSize(Photon *pphot, int ip);
 
 };

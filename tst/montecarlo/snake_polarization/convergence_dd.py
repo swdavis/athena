@@ -12,11 +12,11 @@ that spread is transport error and nothing else.
 
 Like the geodesic test this is deterministic in the quantity being refined, so the
 convergence knob is the integration step size rather than the photon number.  The
-geodesic itself is integrated by RK4, but GeneralPusher::PropogatePolarization evaluates
-the connection after the step has been taken, which makes the transport of the tensor
-first order: the drift should fall as stepsize**1, and the reported order should sit near
-1.0.  A second-order (Strang-split) transport would move it to 2.0, which is what this
-test exists to measure.
+geodesic itself is integrated by RK4, while GeneralPusher::AdvanceStep transports the
+tensor with Heun's method -- the rate taken once at each end of the geodesic step and
+averaged -- so the drift should fall as stepsize**2 and the reported order should sit near
+2.0.  It read 1.0 before that change, when the connection was evaluated only after the
+step and applied as a single Euler update.
 """
 
 # python standard modules

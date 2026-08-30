@@ -1105,16 +1105,3 @@ Real PhotonPusher::InterpPathTime(Real tau, Real prob) {
 
 }
 
-//----------------------------------------------------------------------------------------
-//! \fn void PhotonPusher::PropogatePolarization(Photon *pphot, Real step, int ip)
-//! \brief default: polarization does not evolve between scatterings
-//!
-//! Correct for the legacy pushers, which only run in flat spacetime (cartesian and
-//! spherical-polar).  There a globally parallel-transported frame exists -- the cartesian
-//! one -- and the Stokes parameters are referenced to it, so they are constant along a
-//! straight ray even though the stored components of k change.  GeneralPusher overrides
-//! this because no such global frame exists in a curved spacetime.
-
-void PhotonPusher::PropogatePolarization(Photon *pphot, Real step, int ip) {
-  return;
-}

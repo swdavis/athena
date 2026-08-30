@@ -444,10 +444,10 @@ void PolarizationInFlatFrame(MonteCarloBlock *pmcb, Photon *pphot, int ip,
 //
 // The companion to TrackGeodesicInvariant, and the quantity the snake polarization
 // convergence test refines on.  The geodesic is integrated by RK4 and converges at fourth
-// order, while PropogatePolarization evaluates the connection after the step and so is
-// first order, which is exactly why the two are tracked separately: at any step size
-// coarse enough to matter the polarization error dominates by many orders of magnitude,
-// and the two curves cannot be confused.
+// order, while GeneralPusher::AdvanceStep transports the tensor with Heun's method and
+// converges at second, which is why the two are tracked separately: at any step size
+// coarse enough to matter the polarization error is the larger of the two, and the curves
+// cannot be confused.
 //
 // The error reported is the largest absolute departure over the sixteen components,
 // divided by the largest reference component.  A single normalisation for all of them,

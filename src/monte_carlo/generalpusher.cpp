@@ -7,6 +7,8 @@
 //! \brief implementation for moving photons via integration with metric and connection
 
 // Athena++ headers
+#include <complex>
+
 #include "montecarlo.hpp"
 #include "photon.hpp"
 #include "photonpusher.hpp"
@@ -94,17 +96,13 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
         if (tauremaining > chi * l_cgs* step * pphot->ep[ip]) { // Photon hasn't yet reached tauremaining
           //printf("step: %g %g %g %g\n", step, tauremaining, pphot->ep[ip], pphot->wp[ip]);
           //VerletStep(pphot,step,ip);
-          RK4Step(pphot,step,ip);
-          if (IsPolarized(pmy_mcb->pmy_mc->polarized))
-            PropogatePolarization(pphot,step,ip);
+          AdvanceStep(pphot,step,ip);
           tauremaining -= chi * l_cgs * step * pphot->ep[ip];
           //printf("large: %g %g %g %g %g\n",tauremaining,chi,step,pphot->ep[ip],chi * step * pphot->ep[ip]);
         } else { // Photon has reached end of tauremaining - step to make it 0
           step = tauremaining / (chi * l_cgs * pphot->ep[ip]);
           //VerletStep(pphot,step,ip);
-          RK4Step(pphot,step,ip);
-          if (IsPolarized(pmy_mcb->pmy_mc->polarized))
-            PropogatePolarization(pphot,step,ip);
+          AdvanceStep(pphot,step,ip);
           tauremaining = 0.;
         }
         pphot->dtp[ip] -= pphot->ep[ip] * step / c_code;
@@ -425,16 +423,17 @@ void GeneralPusher::SubStep(Real xcon[4], Real kcov[4], Real dl[8]) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void GeneralPusher::PropogatePolarization(Photon *pphot, Real step, int ip)
-//! \brief propogates polarization tensor a single step
+//! \fn void GeneralPusher::PolarizationRate(...)
+//! \brief dN/dlambda for the coherency tensor at the photon's current state
+//
+// eq. 16 of Moscibrodzka & Gammie in vacuum.  Both the connection and the wavevector are
+// read from wherever the photon currently sits, so the caller decides which end of a step
+// this is evaluated at; nin is passed in rather than read from the photon so the corrector
+// below can evaluate the rate of the predicted tensor at the new position.
 
-void GeneralPusher::PropogatePolarization(Photon *pphot, Real step, int ip) {
-
-
-  // Connection evaluated here since RK4Step has already advanced the photon
-  // when this is called.  That makes the transport first order in the step; ipole (for
-  // example) uses a second-order half-step/full-step/half-step split, which is the natural
-  // next change once the polarization framework is in place.
+void GeneralPusher::PolarizationRate(Photon *pphot, int ip,
+                                     const std::complex<Real> nin[4][4],
+                                     std::complex<Real> dndl[4][4]) {
 
   Real xpol[4];
   xpol[IMC0] = pphot->x0p[ip];
@@ -442,13 +441,6 @@ void GeneralPusher::PropogatePolarization(Photon *pphot, Real step, int ip) {
   xpol[IMC2] = pphot->x2p[ip];
   xpol[IMC3] = pphot->x3p[ip];
   pcoord->Connect(xpol, gamma);
-
-  std::complex<Real> ptcopy[4][4];
-  for (int i = 0; i < 4; i++) {
-    for (int j = 0; j < 4; j++) {
-      ptcopy[i][j] = pphot->polten[i*4+j][ip];
-    }
-  }
 
   Real kp[4];
   kp[IMC0] = pphot->k0p[ip];
@@ -458,16 +450,55 @@ void GeneralPusher::PropogatePolarization(Photon *pphot, Real step, int ip) {
 
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < 4; j++) {
+      std::complex<Real> sum(0., 0.);
       for (int k = 0; k < 4; k++) {
         for (int l = 0; l < 4; l++) {
-          // eq. 16 of Moscibrodzka & Gammie in vacuum
-          pphot->polten[i*4+j][ip] += -(gamma[i][k][l] * ptcopy[k][j] +
-                                        gamma[j][k][l] * ptcopy[i][k]) *
-                                       kp[l] * step;
+          sum -= (gamma[i][k][l] * nin[k][j] + gamma[j][k][l] * nin[i][k]) * kp[l];
         }
       }
+      dndl[i][j] = sum;
     }
   }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void GeneralPusher::AdvanceStep(Photon *pphot, Real step, int ip)
+//! \brief advance the geodesic and, when it is tracked, the coherency tensor
+//
+// The coherency tensor is transported with Heun's method, which straddles the geodesic
+// step: the rate is taken once at the state the step starts from and once at the state it
+// ends at, and the two are averaged.  Writing the transport as dN/dl = L(l) N, that gives
+//
+//   N_(n+1) = [1 + h(L_n + L_(n+1))/2 + h^2 L_(n+1) L_n / 2] N_n,
+
+void GeneralPusher::AdvanceStep(Photon *pphot, Real step, int ip) {
+
+  if (!IsPolarized(pmy_mcb->pmy_mc->polarized)) {
+    RK4Step(pphot, step, ip);
+    return;
+  }
+
+  std::complex<Real> n0[4][4], d1[4][4];
+  for (int i = 0; i < 4; i++)
+    for (int j = 0; j < 4; j++) n0[i][j] = pphot->polten[i*4+j][ip];
+
+  // predictor, evaluated where the step starts
+  PolarizationRate(pphot, ip, n0, d1);
+  for (int i = 0; i < 4; i++)
+    for (int j = 0; j < 4; j++)
+      pphot->polten[i*4+j][ip] = n0[i][j] + d1[i][j]*step;
+
+  RK4Step(pphot, step, ip);
+
+  // corrector, evaluated where it ends, on the predicted tensor
+  std::complex<Real> npred[4][4], d2[4][4];
+  for (int i = 0; i < 4; i++)
+    for (int j = 0; j < 4; j++) npred[i][j] = pphot->polten[i*4+j][ip];
+  PolarizationRate(pphot, ip, npred, d2);
+
+  for (int i = 0; i < 4; i++)
+    for (int j = 0; j < 4; j++)
+      pphot->polten[i*4+j][ip] = n0[i][j] + 0.5*step*(d1[i][j] + d2[i][j]);
 }
 
 //----------------------------------------------------------------------------------------
