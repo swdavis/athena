@@ -70,6 +70,9 @@ void CoherencyToScatteringStokes(MonteCarloBlock *pmcb, Photon *pphot, int ip);
 // Stokes -> coherency tensor, undoing CoherencyToScatteringStokes
 void ScatteringStokesToCoherency(MonteCarloBlock *pmcb, Photon *pphot, int ip);
 
+// coherency tensor -> Stokes in the normal observer's frame, for the outputs
+void CoherencyToObserverStokes(MonteCarloBlock *pmcb, Photon *pphot, int ip);
+
 // rotate the photon back out of the scattering basis
 void FromScatteringBasis(MonteCarloBlock *pmcb, Photon *pphot, int ip);
 

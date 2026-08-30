@@ -497,6 +497,9 @@ void MonteCarloBlock::RayTracePhotonsOnBlock(int etype) {
     if (pphot->statp[ip] != EVOLVING) {
 
       if (pphot->statp[ip] != BUFFERED) {
+        // Bring the Stokes parameters up to date with the transported coherency tensor
+        // before finalizing the photon, writing outputs
+        if (IsPolarized(pmy_mc->polarized)) CoherencyToObserverStokes(this, pphot, ip);
         // User defined completion work
         FinalizePhoton(pphot,ip);
 
@@ -677,7 +680,8 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
   for (int ip=pphot->nphot-1; ip >= 0; ip--) {
     if (pphot->statp[ip] != EVOLVING) {
       if (pphot->statp[ip] != BUFFERED) {
-        // User defined completion work
+        // Bring the Stokes parameters up to date with the transported coherency tensor
+        // before finalizing the photon, writing outputs
         FinalizePhoton(pphot,ip);
       }
 

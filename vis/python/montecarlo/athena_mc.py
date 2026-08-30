@@ -147,6 +147,8 @@ class Photons:
         self.npars = 10 + num_stokes_stored(self.polarized)
         self.ntot = phlist['ntot']
         self.coord = phlist['coord']
+        # Free parameters of the metric. Empty for a flat metric
+        self.metric_params = phlist.get('metric_params', {})
         # How to interpret this list: relativistic?, spatial basis, wavevector convention
         self.props = coord_properties(self.coord)
         self.relativistic = self.props['relativistic']
@@ -246,13 +248,54 @@ def k_to_tetrad(k, pos, M, a):
         k_tet[a_idx] = eta[a_idx] * np.dot(e_low, k)
     return k_tet
 
+def resolve_metric_params(phots, **kwargs):
+    """
+    Mass and spin of a Kerr metric, taken from the photon list unless the caller overrides.
+
+    The list header records the metric's free parameters, so these no longer have to be
+    supplied by hand and cannot silently disagree with the run that produced the file.  An
+    explicit keyword still wins, because lists written before the header carried the field
+    have no parameters at all, but a value that contradicts the file is reported rather
+    than quietly honoured.
+    """
+    params = getattr(phots, 'metric_params', None) or {}
+
+    def disagrees(given, key):
+        return key in params and not np.isclose(given, params[key], rtol=1e-12, atol=0.)
+
+    # Mass: geometric units with M = 1 are the convention throughout and the previous code
+    # hardcoded it, so fall back to that silently.
+    mass = kwargs.get('mass')
+    if mass is None:
+        mass = params.get('m', 1.0)
+    elif disagrees(mass, 'm'):
+        print(f"Warning: mass={mass!r} was supplied but the file says {params['m']!r};"
+              " using the supplied value.")
+
+    # Spin: changes the answer materially and used to be a required keyword, so refuse to
+    # guess when neither the file nor the caller supplies it rather than quietly assuming
+    # Schwarzschild.
+    spin = kwargs.get('spin')
+    if spin is None:
+        if 'a' not in params:
+            raise ValueError(
+                "spin is neither given nor recorded in the photon list header.  Lists"
+                " written before the header carried metric_params must be passed"
+                " spin=<a> explicitly.")
+        spin = params['a']
+    elif disagrees(spin, 'a'):
+        print(f"Warning: spin={spin!r} was supplied but the file says {params['a']!r};"
+              " using the supplied value.")
+
+    return mass, spin
+
+
 def transform_photons_to_tetrad_slow(phots, **kwargs):
     """
     Transform photon 4-momenta to static observer tetrad frame.
     Modifies phots.k0, k1, k2, k3 in place to be the tetrad components.
     """
-    M = 1.
-    a = kwargs['spin']
+    M, a = resolve_metric_params(phots, **kwargs)
     for i in range(phots.nphot):
         pos = [phots.x0[i], phots.x1[i], phots.x2[i], phots.x3[i]]
         k = [phots.k0[i], phots.k1[i], phots.k2[i], phots.k3[i]]
@@ -271,8 +314,7 @@ def transform_photons_to_tetrad(phots, **kwargs):
     Only valid for Cartesian Kerr-Schild: ks_cartesian_metric() below treats x1,x2,x3 as
     x,y,z.  Callers must check photons.props['metric'] and ['geometry'] first.
     """
-    M = 1.
-    a = kwargs['spin']
+    M, a = resolve_metric_params(phots, **kwargs)
     a2 = a**2
 
     x1, x2, x3 = phots.x1, phots.x2, phots.x3
@@ -371,6 +413,21 @@ def read_list(filename, data=True, header=True):
         end_of_line_index = raw_data_ascii.find('\n', current_index)
         phlist['coord'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
         current_index = end_of_line_index + 1
+
+        # Free parameters of the metric, written since the spin and mass are needed to
+        # lower an index or form -k_t.  Absent for metrics with no parameters
+        phlist['metric_params'] = {}
+        if raw_data_ascii.startswith("metric_params=", current_index):
+            current_index += len("metric_params=")
+            end_of_line_index = raw_data_ascii.find('\n', current_index)
+            for item in raw_data_ascii[current_index:end_of_line_index].split(','):
+                if '=' in item:
+                    key, _, val = item.partition('=')
+                    try:
+                        phlist['metric_params'][key.strip()] = float(val)
+                    except ValueError:
+                        phlist['metric_params'][key.strip()] = val.strip()
+            current_index = end_of_line_index + 1
 
     if data:
         npars = phlist['npars']
@@ -494,6 +551,21 @@ def read_list_generator(filename, chunk_size=None):
     end_of_line_index = raw_data_ascii.find('\n', current_index)
     phlist['coord'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
     current_index = end_of_line_index + 1
+
+    # Free parameters of the metric, written since the spin and mass are needed to lower
+    # an index or form -k_t.  Absent for metrics with no parameters
+    phlist['metric_params'] = {}
+    if raw_data_ascii.startswith("metric_params=", current_index):
+        current_index += len("metric_params=")
+        end_of_line_index = raw_data_ascii.find('\n', current_index)
+        for item in raw_data_ascii[current_index:end_of_line_index].split(','):
+            if '=' in item:
+                key, _, val = item.partition('=')
+                try:
+                    phlist['metric_params'][key.strip()] = float(val)
+                except ValueError:
+                    phlist['metric_params'][key.strip()] = val.strip()
+        current_index = end_of_line_index + 1
     
     # Yield header first
     yield {'header': phlist, 'chunk': None, 'remaining': None, 'length': None, 'done': False}
@@ -555,6 +627,12 @@ def write_list(filename, phlist, header=True, length=None):
             outfile.write(f"ntot={phlist['ntot']:d}\n")
             outfile.write(f"polarized={parse_polarization(phlist['polarized'])}\n")
             outfile.write(f"coord={phlist['coord']}\n")
+            # Carry the metric through a read-modify-write, so a filtered list is still
+            # self-describing.  Written only when present, matching the C++ writer.
+            mpars = phlist.get('metric_params') or {}
+            if mpars:
+                outfile.write("metric_params="
+                              + ",".join(f"{k}={v!r}" for k, v in mpars.items()) + "\n")
 
     # Append binary data using numpy's tobytes() - faster than struct.pack
     with open(filename, 'ab') as outfile:
@@ -574,6 +652,7 @@ def print_list(infile, start = 0, stop = None):
     print(f"ntot={phlist['ntot']:d}\n")
     print(f"polarized={parse_polarization(phlist['polarized'])}\n")
     print(f"coord={phlist['coord']}\n")
+    print(f"metric_params={phlist.get('metric_params') or {}}\n")
 
     if stop is None:
         stop = phlist['length']
@@ -767,6 +846,14 @@ def header_match(dict1, dict2, dict_type):
             match = False
         elif dict1['polarized'] != dict2['polarized']:
             match = False
+        # Geometry and metric were not compared before, so lists from different
+        # coordinate systems -- or the same one with a different spin -- could be merged
+        # silently.  Absent metric_params compares equal to absent, so files written
+        # before the header carried it still combine with each other.
+        elif dict1.get('coord') != dict2.get('coord'):
+            match = False
+        elif (dict1.get('metric_params') or {}) != (dict2.get('metric_params') or {}):
+            match = False
     elif dict_type == 'spec':
         if dict1['nx'] != dict2['nx']:
             match = False
@@ -776,12 +863,20 @@ def header_match(dict1, dict2, dict_type):
             match = False
         elif dict1['nintens'] != dict2['nintens']:
             match = False
-        elif dict1['xaxis'] != dict2['xaxis']:
+        # The x axis is called 'xaxis' on a spectrum built by make_spectrum and 'units' on
+        # one read back from file, and write_spectrum writes the former into the latter.
+        # Comparing only 'xaxis' raised KeyError on any spectrum read from disk, so
+        # add_spectra could not combine two files at all.
+        elif (dict1.get('xaxis', dict1.get('units'))
+              != dict2.get('xaxis', dict2.get('units'))):
             match = False
         elif dict1['polarized'] != dict2['polarized']:
             match = False
         elif dict1['yerror'] != dict2['yerror']:
             match = False
+        # No geometry check here: the spectrum header carries no coord or metric_params.
+        # Adding them means changing a strictly positional reader and its C++ writer, and
+        # having make_spectrum carry the fields across from the photon list.
     else:
         print("file type: "+dict_type+" not supported. Returning false.")
         match = False

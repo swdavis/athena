@@ -837,6 +837,10 @@ void PhotonList::WriteList(std::string filename, Real tint_out) {
   fprintf(pfile,"ntot=%d\n",nsrun);
   fprintf(pfile,"polarized=%s\n",GetMCPolarizationName(polarized));
   fprintf(pfile,"coord=%s\n",pmy_mc->geometry_tag.c_str());
+  // free parameters of the metric, so the file is self-describing; absent for
+  // metrics that have none
+  if (!pmy_mc->metric_params.empty())
+    fprintf(pfile,"metric_params=%s\n",pmy_mc->metric_params.c_str());
   // write data
   int ndata = length*nparams;
   double *data;
@@ -986,6 +990,10 @@ void PhotonTrajectoryList::WriteList(std::string filename) {
   fprintf(pfile,"maxstep=%d\n",maxstep);
   fprintf(pfile,"npars=%d\n",nparams);
   fprintf(pfile,"coord=%s\n",pmy_mc->geometry_tag.c_str());
+  // free parameters of the metric, so the file is self-describing; absent for
+  // metrics that have none
+  if (!pmy_mc->metric_params.empty())
+    fprintf(pfile,"metric_params=%s\n",pmy_mc->metric_params.c_str());
   int *idata = new int[length];
   for (int i=0; i<length; ++i)
     idata[i] = nsteps[i];

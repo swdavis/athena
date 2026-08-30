@@ -30,6 +30,10 @@
 // meridian, which does not move. Used by non GR coordinates.
 
 
+static bool MeridianPair(const Real n[3], Real lhat[3], Real rhat[3]);
+static void WriteMeridianStokes(Photon *pphot, int ip, Real ecov[4][4],
+                                const Real lhat[3], const Real rhat[3]);
+
 void ToScatteringBasis(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 
   if (pmcb->topology != MCTOPO_SPHERICAL) return;
@@ -133,7 +137,21 @@ static bool MeridianBasis(MonteCarloBlock *pmcb, Photon *pphot, int ip,
   if (nmag <= TINY_NUMBER) return false;
   for (int i = 0; i < 3; ++i) n[i] /= nmag;
 
-  // l = z-hat projected perpendicular to n, normalised.  z-hat is (0,0,1) in E.
+  return MeridianPair(n, lhat, rhat);
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn static bool MeridianPair(const Real n[3], Real lhat[3], Real rhat[3])
+//! \brief the meridian pair for a unit direction in some orthonormal frame
+//
+//   l = normalize(z - (z.n) n),   r = n x l,
+//
+// with z the frame's third spatial leg.  Split out so that the frame can be chosen by the
+// caller: the scattering routines want the comoving frame, the outputs want the normal
+// observer.  Returns false when n is parallel to z, where the meridian is undefined.
+
+static bool MeridianPair(const Real n[3], Real lhat[3], Real rhat[3]) {
+
   Real l[3] = {-n[2]*n[0], -n[2]*n[1], 1.0 - n[2]*n[2]};
   Real lmag = std::sqrt(SQR(l[0]) + SQR(l[1]) + SQR(l[2]));
   if (lmag <= TINY_NUMBER) return false;          // photon along the frame z axis
@@ -157,6 +175,17 @@ void CoherencyToScatteringStokes(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 
   Real econ[4][4], ecov[4][4], lhat[3], rhat[3];
   if (!MeridianBasis(pmcb, pphot, ip, econ, ecov, lhat, rhat)) return;
+
+  WriteMeridianStokes(pphot, ip, ecov, lhat, rhat);
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn static void WriteMeridianStokes(...)
+//! \brief project the coherency tensor onto a meridian pair and store the Stokes
+//!        parameters the scattering routines and the outputs both read
+
+static void WriteMeridianStokes(Photon *pphot, int ip, Real ecov[4][4],
+                                const Real lhat[3], const Real rhat[3]) {
 
   std::complex<Real> ntet[4][4];
   pphot->PolarizationToTetrad(ntet, ecov, ip);
@@ -195,6 +224,57 @@ void CoherencyToScatteringStokes(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   pphot->svp[ip] = stokes[3];
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void CoherencyToObserverStokes(MonteCarloBlock *pmcb, Photon *pphot, int ip)
+//! \brief refresh the stored Stokes parameters from the coherency tensor, in the frame
+//!        the outputs are referenced to
+//
+// Sets sqp/sup/svp to the Stokes parameters referenced to the meridian containing the
+// normal observer's z axis and the photon's direction, which is what the outputs write.
+// The frame is the normal (Eulerian) observer at the photon's position, n^mu = -alpha
+// g^{mu t}, rather than the fluid. Q is positive along the meridian containing the
+// frame's third spatial leg
+
+void CoherencyToObserverStokes(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
+
+  // The legacy pushers reference the Stokes parameters to a globally constant frame and
+  // do not evolve them between scatterings, so they are already current.
+  if (!pmcb->pmy_mc->general_pusher_flag) return;
+
+  Real x[4];
+  x[IMC0] = pphot->x0p[ip];
+  x[IMC1] = pphot->x1p[ip];
+  x[IMC2] = pphot->x2p[ip];
+  x[IMC3] = pphot->x3p[ip];
+  Real gcov[4][4], gcon[4][4];
+  pmcb->pcoord->Metric(x, gcov);
+  pmcb->pcoord->InverseMetric(x, gcon);
+
+  // normal observer: alpha = 1/sqrt(-g^tt), n^mu = -alpha g^{mu t}
+  if (gcon[IMC0][IMC0] >= 0.) return;
+  Real alpha = 1.0/std::sqrt(-gcon[IMC0][IMC0]);
+  Real ncon[4];
+  for (int m = 0; m < 4; ++m) ncon[m] = -alpha*gcon[m][IMC0];
+
+  Real econ[4][4], ecov[4][4];
+  ConstructTetrad(ncon, gcov, econ, ecov);
+
+  // The photon is in the coordinate frame here, so its direction has to be projected into
+  // the observer's frame before the meridian can be built on it.
+  Real kcoord[4], ktet[4];
+  pphot->GetFourVector(ip, false, kcoord);
+  CoordinateToTetrad(kcoord, ktet, ecov);
+  Real nmag = std::sqrt(SQR(ktet[IMC1]) + SQR(ktet[IMC2]) + SQR(ktet[IMC3]));
+  if (nmag <= TINY_NUMBER) return;
+  Real n[3] = {ktet[IMC1]/nmag, ktet[IMC2]/nmag, ktet[IMC3]/nmag};
+
+  Real lhat[3], rhat[3];
+  if (!MeridianPair(n, lhat, rhat)) return;   // photon along the frame z axis
+
+  WriteMeridianStokes(pphot, ip, ecov, lhat, rhat);
+}
+
+//----------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------
 //! \fn void ScatteringStokesToCoherency(MonteCarloBlock *pmcb, Photon *pphot, int ip)
 //! \brief Stokes -> coherency tensor, undoing CoherencyToScatteringStokes
