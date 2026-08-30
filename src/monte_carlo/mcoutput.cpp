@@ -460,9 +460,12 @@ void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
         return;
     }
 
+    // For curved spacetimes, bin the conserved -k_t, matching PhotonList::AddPhoton.
+    // use ep otherwise
     int ebin;
-    // SWD: general pusher may require adjustment here
-    ebin = EnergyBinUniform(pphot->ep[ip],logarithmic);
+    Real ebin_energy = pmy_mc->relativistic_output
+                       ? PhotonEnergyAtInfinity(pphot,ip) : pphot->ep[ip];
+    ebin = EnergyBinUniform(ebin_energy,logarithmic);
     if (ebin < 0) return;
 
     // Get angle bins
@@ -1399,24 +1402,22 @@ void Spectrum::WriteSpectrum(std::string fname, Real tint_out) {
   intens.NewAthenaArray(nintens,nphi,nmu,ne);
   errors.NewAthenaArray(nintens,nphi,nmu,ne);
   Real fac1 = norms*static_cast<Real>(nmu)*static_cast<Real>(nphi)/2./PI;
-  for(int k=0; k<nphi; ++k) {
-    for(int j=0; j<nmu; ++j) {
+  // One normalisation for every plane, intensity and Stokes alike, which is what
+  // make_spectrum in athena_mc.py does: it builds a single factor and applies it to the
+  // whole intensity array.  The Stokes planes used to be scaled in a separate loop that
+  // omitted tint_out, so Q/U/V came out larger than I by the integration time and Q/I
+  // read off a .spec was not the polarization fraction.  Invisible whenever tint_out
+  // happens to be one, which it is in every test deck here.  Sharing one fac2 makes
+  // the two impossible to get out of step again.
+  for (int k = 0; k < nphi; ++k) {
+    for (int j = 0; j < nmu; ++j) {
       Real mumid = (static_cast<Real>(j)+0.5)/static_cast<Real>(nmu);
-      for(int i=0; i<ne; ++i) {
+      for (int i = 0; i < ne; ++i) {
         Real fac2 = fac1*emid[i]/(mumid*dnu[i]*tint_out);
         intens(0,k,j,i) = static_cast<double>(intensity(k,j,i)*fac2);
         errors(0,k,j,i) = sqrt(intensity_sq(k,j,i)*SQR(fac2));
-      }
-    }
-  }
-  // Stokes planes follow the intensity in the order Q, U, V.  Note the normalisation
-  // here omits the tint_out that the intensity plane above divides by.
-  for (int m = 0; m < NumStokesStored(polarized); ++m) {
-    for(int k=0; k<nphi; ++k) {
-      for(int j=0; j<nmu; ++j) {
-        Real mumid = (static_cast<Real>(j)+0.5)/static_cast<Real>(nmu);
-        for(int i=0; i<ne; ++i) {
-          Real fac2 = fac1*emid[i]/(mumid*dnu[i]);
+        // Stokes planes follow the intensity in the order Q, U, V
+        for (int m = 0; m < NumStokesStored(polarized); ++m) {
           intens(m+1,k,j,i) = static_cast<double>(stokes[m](k,j,i)*fac2);
           errors(m+1,k,j,i) = sqrt(stokes_sq[m](k,j,i)*SQR(fac2));
         }
