@@ -687,9 +687,17 @@ def write_spectrum(filename,spectrum):
     outfile.write("nphi={:d}\n".format(nphi))
     outfile.write("ntot={:d}\n".format(spectrum['ntot']))
     outfile.write("nintens={:d}\n".format(spectrum['nintens']))
-    outfile.write("units="+spectrum['xaxis']+"\n")
+    outfile.write("units="+spectrum.get('units', spectrum.get('xaxis'))+"\n")
     outfile.write("polarized="+parse_polarization(spectrum['polarized'])+"\n")
     outfile.write("yerror="+spectrum['yerror']+"\n")
+    # Geometry and metric last, matching the order Spectrum::WriteSpectrum uses, so a
+    # spectrum written from python and one written by the code parse identically.
+    if spectrum.get('coord') is not None:
+        outfile.write("coord="+spectrum['coord']+"\n")
+    mpars = spectrum.get('metric_params') or {}
+    if mpars:
+        outfile.write("metric_params="
+                      + ",".join(f"{k}={v!r}" for k, v in mpars.items()) + "\n")
     outfile.close()
 
     # Write binfaces
@@ -794,6 +802,27 @@ def read_spectrum(filename):
         end_of_line_index += 1
     spectrum['yerror'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
     current_index = end_of_line_index + 1
+    # Geometry and metric are optional: they were added after the format was in use, and
+    # metric_params is absent for a metric with no free parameters.  Probed rather than
+    # required so one reader handles files written before and after.
+    spectrum['coord'] = None
+    spectrum['metric_params'] = {}
+    if raw_data_ascii.startswith("coord=", current_index):
+        current_index += len("coord=")
+        end_of_line_index = raw_data_ascii.find('\n', current_index)
+        spectrum['coord'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
+        current_index = end_of_line_index + 1
+    if raw_data_ascii.startswith("metric_params=", current_index):
+        current_index += len("metric_params=")
+        end_of_line_index = raw_data_ascii.find('\n', current_index)
+        for item in raw_data_ascii[current_index:end_of_line_index].split(','):
+            if '=' in item:
+                key, _, val = item.partition('=')
+                try:
+                    spectrum['metric_params'][key.strip()] = float(val)
+                except ValueError:
+                    spectrum['metric_params'][key.strip()] = val.strip()
+        current_index = end_of_line_index + 1
 
     # Read in faces
     nx = spectrum['nx']
@@ -863,20 +892,22 @@ def header_match(dict1, dict2, dict_type):
             match = False
         elif dict1['nintens'] != dict2['nintens']:
             match = False
-        # The x axis is called 'xaxis' on a spectrum built by make_spectrum and 'units' on
-        # one read back from file, and write_spectrum writes the former into the latter.
-        # Comparing only 'xaxis' raised KeyError on any spectrum read from disk, so
-        # add_spectra could not combine two files at all.
-        elif (dict1.get('xaxis', dict1.get('units'))
-              != dict2.get('xaxis', dict2.get('units'))):
+        # Compared 'xaxis' before, which only spectra built by make_spectrum carried, so
+        # this raised KeyError on anything read from disk and add_spectra could not combine
+        # two files at all.
+        elif dict1['units'] != dict2['units']:
             match = False
         elif dict1['polarized'] != dict2['polarized']:
             match = False
         elif dict1['yerror'] != dict2['yerror']:
             match = False
-        # No geometry check here: the spectrum header carries no coord or metric_params.
-        # Adding them means changing a strictly positional reader and its C++ writer, and
-        # having make_spectrum carry the fields across from the photon list.
+        # Absent compares equal to absent, so spectra written before the header carried
+        # geometry still combine with each other, while one that records a metric will not
+        # silently merge with one that records a different metric.
+        elif dict1.get('coord') != dict2.get('coord'):
+            match = False
+        elif (dict1.get('metric_params') or {}) != (dict2.get('metric_params') or {}):
+            match = False
     else:
         print("file type: "+dict_type+" not supported. Returning false.")
         match = False
@@ -1767,7 +1798,15 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     everg = 1.6021772e-12
     c = 2.99792e10
     preset = False
-    spectrum['xaxis'] = xaxis
+    # 'units' is the canonical key: it is what the file header calls this field and what
+    # every consumer reads.  make_spectrum used to set 'xaxis' instead, so a freshly made
+    # spectrum could not be passed to convert_xaxis, get_luminosity or the plotting
+    # scripts, while one read back from file could not be written out again.
+    spectrum['units'] = xaxis
+    # Carry the provenance across from the photon list, so a derived spectrum still says
+    # which metric produced it and header_match can refuse to combine incompatible ones.
+    spectrum['coord'] = getattr(phots, 'coord', None)
+    spectrum['metric_params'] = getattr(phots, 'metric_params', None) or {}
     if xaxis == 'kev':
         xphots = phots.energy/everg/1000.
         preset = True
@@ -2034,6 +2073,9 @@ def make_image_mc(phots, rcam, ninc, imin, imax, nen, emin, emax,
 
     # Create intensity grid and loop over photons to add contribution
     image['polarized'] = parse_polarization(phots.polarized)
+    # Provenance from the photon list, as make_spectrum does.
+    image['coord'] = getattr(phots, 'coord', None)
+    image['metric_params'] = getattr(phots, 'metric_params', None) or {}
     npol = num_stokes_stored(image['polarized'])
     nintens = 1 + npol
     image['nintens'] = nintens
@@ -2241,6 +2283,12 @@ def write_image(filename,image):
     outfile.write("ntot={:d}\n".format(image['ntot']))
     outfile.write("nintens={:d}\n".format(image['nintens']))
     outfile.write("polarized="+parse_polarization(image['polarized'])+"\n")
+    if image.get('coord') is not None:
+        outfile.write("coord="+image['coord']+"\n")
+    mpars = image.get('metric_params') or {}
+    if mpars:
+        outfile.write("metric_params="
+                      + ",".join(f"{k}={v!r}" for k, v in mpars.items()) + "\n")
     outfile.close()
 
     # Write binfaces
@@ -2351,6 +2399,27 @@ def read_image(filename):
     image['polarized'] = parse_polarization(
         raw_data_ascii[current_index:end_of_line_index].split(' ')[0])
     current_index = end_of_line_index + 1
+
+    # Optional, as in read_spectrum: added after the format was in use, and metric_params
+    # is absent for a metric with no free parameters.
+    image['coord'] = None
+    image['metric_params'] = {}
+    if raw_data_ascii.startswith("coord=", current_index):
+        current_index += len("coord=")
+        end_of_line_index = raw_data_ascii.find('\n', current_index)
+        image['coord'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
+        current_index = end_of_line_index + 1
+    if raw_data_ascii.startswith("metric_params=", current_index):
+        current_index += len("metric_params=")
+        end_of_line_index = raw_data_ascii.find('\n', current_index)
+        for item in raw_data_ascii[current_index:end_of_line_index].split(','):
+            if '=' in item:
+                key, _, val = item.partition('=')
+                try:
+                    image['metric_params'][key.strip()] = float(val)
+                except ValueError:
+                    image['metric_params'][key.strip()] = val.strip()
+        current_index = end_of_line_index + 1
 
     # Read in faces
     ninc = image['ninc']

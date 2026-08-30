@@ -1351,6 +1351,10 @@ void Spectrum::WriteSpectrum(std::string fname, Real tint_out) {
   fprintf(pfile,"units=ev\n");
   fprintf(pfile,"polarized=%s\n",GetMCPolarizationName(polarized));
   fprintf(pfile,"yerror=true\n");
+  // Coordinates and metric paramters
+  fprintf(pfile,"coord=%s\n",pmy_mc->geometry_tag.c_str());
+  if (!pmy_mc->metric_params.empty())
+    fprintf(pfile,"metric_params=%s\n",pmy_mc->metric_params.c_str());
   // Output bin faces with fwrite
   bool bigend = mcoutput::IsBigEndian();
   int nface = (ne+1 > nmu+1) ? ne+1 : nmu+1;
