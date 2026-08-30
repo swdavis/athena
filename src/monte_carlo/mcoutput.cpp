@@ -471,9 +471,39 @@ void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
       // Was keyed on cartesian || minkowski, which left kcart uninitialized for the
       // Cartesian Kerr-Schild case (gr_user); it shares this topology and belongs here.
       if (pmy_mc->topology == MCTOPO_CARTESIAN)  {
-        kcart[IMC1] = pphot->k1p[ip];
-        kcart[IMC2] = pphot->k2p[ip];
-        kcart[IMC3] = pphot->k3p[ip];
+        if (pphot->pmy_mcb->pmy_mc->general_pusher_flag) {
+          // Under GeneralPusher k1,k2,k3 are contravariant coordinate components, so they
+          // are neither orthonormal nor a unit vector, while AngleBinsCartesian reads
+          // ctheta straight off kz.  InverseTetrad is the projection onto the orthonormal
+          // frame -- the identity for cartesian and minkowski, and k^(y) = k^y - beta k^x
+          // for snake -- and the norm turns what comes out into a direction: for a null
+          // vector the orthonormal spatial components have norm equal to the time
+          // component, not one.  Without this every photon binned out of range and was
+          // silently dropped.
+          Real xp[4];
+          xp[IMC0] = pphot->x0p[ip];
+          xp[IMC1] = pphot->x1p[ip];
+          xp[IMC2] = pphot->x2p[ip];
+          xp[IMC3] = pphot->x3p[ip];
+          Real invtet[4][4];
+          pphot->pmy_mcb->pcoord->InverseTetrad(xp, invtet);
+          Real kc[4];
+          kc[IMC0] = pphot->k0p[ip];
+          kc[IMC1] = pphot->k1p[ip];
+          kc[IMC2] = pphot->k2p[ip];
+          kc[IMC3] = pphot->k3p[ip];
+          for (int a = IMC1; a < 4; ++a) {
+            kcart[a] = 0.;
+            for (int b = 0; b < 4; ++b) kcart[a] += invtet[a][b]*kc[b];
+          }
+          Real norm = sqrt(SQR(kcart[IMC1]) + SQR(kcart[IMC2]) + SQR(kcart[IMC3]));
+          if (norm <= TINY_NUMBER) return;
+          for (int a = IMC1; a < 4; ++a) kcart[a] /= norm;
+        } else {
+          kcart[IMC1] = pphot->k1p[ip];
+          kcart[IMC2] = pphot->k2p[ip];
+          kcart[IMC3] = pphot->k3p[ip];
+        }
       } else  if (pmy_mc->topology == MCTOPO_SPHERICAL) {
         Real cth = cos(pphot->x2p[ip]);
         Real sth = sin(pphot->x2p[ip]);
@@ -1068,13 +1098,18 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         // MonteCarloBlock::boost_lab already holds per zone.  Until then the photon list
         // is the supported route: it stores -k_t directly, and
         // vis/python/montecarlo/make_spectrum.py bins it.
-        if (!HasFlatOrthonormalBasis(pmc->coord_system)) {
+        // Keyed on curvature, not on whether the flat scale factors happen to
+        // orthonormalize the basis: a flat metric in a sheared chart, like snake, has a
+        // covariantly constant orthonormal frame that InverseTetrad projects onto exactly,
+        // and UpdateSpectrum uses it.  What breaks the binning is curvature, which is what
+        // the paragraph above is about.
+        if (IsMCMetricCurved(pmc->coord_system)) {
           std::stringstream msg;
           msg << "### FATAL ERROR in MCOutput constructor" << std::endl
               << "spec output is not supported for coordinate system "
               << GetMCCoordSystemName(pmc->coord_system) << "." << std::endl
-              << "Angle and energy binning assume the flat scale factors "
-              << "orthonormalize the coordinate basis, which they do not here."
+              << "Angle and energy binning assume a flat spacetime, so that the "
+              << "orthonormal frame the direction is measured in is globally defined."
               << std::endl
               << "Use file_type = phlist and bin it with "
               << "vis/python/montecarlo/make_spectrum.py instead." << std::endl;
