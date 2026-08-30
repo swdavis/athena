@@ -892,9 +892,6 @@ def header_match(dict1, dict2, dict_type):
             match = False
         elif dict1['nintens'] != dict2['nintens']:
             match = False
-        # Compared 'xaxis' before, which only spectra built by make_spectrum carried, so
-        # this raised KeyError on anything read from disk and add_spectra could not combine
-        # two files at all.
         elif dict1['units'] != dict2['units']:
             match = False
         elif dict1['polarized'] != dict2['polarized']:
