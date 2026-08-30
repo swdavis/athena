@@ -143,8 +143,14 @@ public:
   void RK4Step(Photon *pphot, Real step, int ip);
   void SubStep(Real xcon[4], Real kcov[4], Real dl[8]);
   void AdvanceStep(Photon *pphot, Real step, int ip);
-  void PolarizationRate(Photon *pphot, int ip, const std::complex<Real> nin[4][4],
-                       std::complex<Real> dndl[4][4]);
+  void ConnectionContraction(Photon *pphot, int ip, Real acon[4][4]);
+  void ApplyPolarizationRate(const Real acon[4][4], const std::complex<Real> nin[4][4],
+                             std::complex<Real> dndl[4][4]);
+
+  // A^i_k = Gamma^i_kl k^l carried from one step's corrector into the next step's
+  // predictor, and a flag saying whether the photon is still where it was computed.
+  Real acon[4][4];
+  bool acon_valid;
   Real StepSize(Photon *pphot, int ip);
 
 };

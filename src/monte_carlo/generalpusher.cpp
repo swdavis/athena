@@ -28,6 +28,7 @@ GeneralPusher::GeneralPusher(MonteCarloBlock *pmcb)
   : PhotonPusher(pmcb) {
 
   step_par = pmy_mcb->stepsize;
+  acon_valid = false;
 
 }
 
@@ -66,6 +67,8 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
 
     // set total extinction coefficient
     Real chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
+    // nothing cached carries over from the previous photon
+    acon_valid = false;
     while ( (pphot->statp[ip] == EVOLVING) && (tauremaining > TINY_NUMBER) &&
             (iter < checkmove) && (pphot->dtp[ip] > 0.) ) {
       iter++;
@@ -90,18 +93,18 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
         if (dl*l_cgs*chi > tauacc) {
           MRWResonanceAcceleration(pphot,pran,dl,tauacc,path_length,k1,k2,k3,ip);
           accel_success = true;
+          // the photon has been relocated, so the cached connection no longer applies
+          acon_valid = false;
         }
       }
       if (!accel_success) {// Acceleration not triggered - take standard step
-        if (tauremaining > chi * l_cgs* step * pphot->ep[ip]) { // Photon hasn't yet reached tauremaining
-          //printf("step: %g %g %g %g\n", step, tauremaining, pphot->ep[ip], pphot->wp[ip]);
-          //VerletStep(pphot,step,ip);
+        Real tau_step = chi * l_cgs * step * pphot->ep[ip];
+        if (tauremaining > tau_step) { // Photon hasn't yet reached tauremaining
+          // advance photon position, momentum, and polarization
           AdvanceStep(pphot,step,ip);
-          tauremaining -= chi * l_cgs * step * pphot->ep[ip];
-          //printf("large: %g %g %g %g %g\n",tauremaining,chi,step,pphot->ep[ip],chi * step * pphot->ep[ip]);
+          tauremaining -= tau_step; // uses ep, chi at step start
         } else { // Photon has reached end of tauremaining - step to make it 0
           step = tauremaining / (chi * l_cgs * pphot->ep[ip]);
-          //VerletStep(pphot,step,ip);
           AdvanceStep(pphot,step,ip);
           tauremaining = 0.;
         }
@@ -131,8 +134,11 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
       // Check if photon changed zones
       if (UpdateZone(pphot,ip)) {
         UpdateOpacities(pphot,pmcb,ip);
-        // set total extinction coefficient
-        Real chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
+        // Update the total extinction coefficient for the new zone
+        chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
+        // Crossing a zone can result in position remapping (e.g. periodic boundary)
+        // so drop the cached connection
+        acon_valid = false;
       }
 
       if (pphot->IsNanPhoton(ip)) {
@@ -423,17 +429,13 @@ void GeneralPusher::SubStep(Real xcon[4], Real kcov[4], Real dl[8]) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void GeneralPusher::PolarizationRate(...)
-//! \brief dN/dlambda for the coherency tensor at the photon's current state
+//! \fn void GeneralPusher::ConnectionContraction(Photon *pphot, int ip, Real acon[4][4])
+//! \brief A^i_k = Gamma^i_kl k^l at the photon's current position and wavevector
 //
-// eq. 16 of Moscibrodzka & Gammie in vacuum.  Both the connection and the wavevector are
-// read from wherever the photon currently sits, so the caller decides which end of a step
-// this is evaluated at; nin is passed in rather than read from the photon so the corrector
-// below can evaluate the rate of the predicted tensor at the new position.
+// Contract k with connection. This is the part of the polarization transport that depends
+// on where the photon is rather so AdvanceStep saves for next step
 
-void GeneralPusher::PolarizationRate(Photon *pphot, int ip,
-                                     const std::complex<Real> nin[4][4],
-                                     std::complex<Real> dndl[4][4]) {
+void GeneralPusher::ConnectionContraction(Photon *pphot, int ip, Real acon[4][4]) {
 
   Real xpol[4];
   xpol[IMC0] = pphot->x0p[ip];
@@ -449,12 +451,34 @@ void GeneralPusher::PolarizationRate(Photon *pphot, int ip,
   kp[IMC3] = pphot->k3p[ip];
 
   for (int i = 0; i < 4; i++) {
+    for (int k = 0; k < 4; k++) {
+      Real sum = 0.;
+      for (int l = 0; l < 4; l++) sum += gamma[i][k][l] * kp[l];
+      acon[i][k] = sum;
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void GeneralPusher::ApplyPolarizationRate(...)
+//! \brief dN/dlambda for a given coherency tensor, from a precomputed A^i_k
+//
+// eq. 16 of Moscibrodzka & Gammie in vacuum, written as
+//
+//     dN^ij/dl = -(A^i_k N^kj + A^j_k N^ik),
+//
+// which is the same contraction with the sum over l pulled out into A.  Done inline it
+// recomputes the same sixteen numbers once for every (i,j) pair.
+
+void GeneralPusher::ApplyPolarizationRate(const Real acon[4][4],
+                                          const std::complex<Real> nin[4][4],
+                                          std::complex<Real> dndl[4][4]) {
+
+  for (int i = 0; i < 4; i++) {
     for (int j = 0; j < 4; j++) {
       std::complex<Real> sum(0., 0.);
       for (int k = 0; k < 4; k++) {
-        for (int l = 0; l < 4; l++) {
-          sum -= (gamma[i][k][l] * nin[k][j] + gamma[j][k][l] * nin[i][k]) * kp[l];
-        }
+        sum -= acon[i][k] * nin[k][j] + acon[j][k] * nin[i][k];
       }
       dndl[i][j] = sum;
     }
@@ -482,19 +506,25 @@ void GeneralPusher::AdvanceStep(Photon *pphot, Real step, int ip) {
   for (int i = 0; i < 4; i++)
     for (int j = 0; j < 4; j++) n0[i][j] = pphot->polten[i*4+j][ip];
 
-  // predictor, evaluated where the step starts
-  PolarizationRate(pphot, ip, n0, d1);
+  // Predictor, evaluated where the step starts.  The previous step's corrector already
+  // evaluated the connection at exactly this position and wavevector -- only the tensor
+  // it was applied to differs -- so reuse it whenever nothing has moved the photon since.
+  if (!acon_valid) ConnectionContraction(pphot, ip, acon);
+  ApplyPolarizationRate(acon, n0, d1);
   for (int i = 0; i < 4; i++)
     for (int j = 0; j < 4; j++)
       pphot->polten[i*4+j][ip] = n0[i][j] + d1[i][j]*step;
 
   RK4Step(pphot, step, ip);
 
-  // corrector, evaluated where it ends, on the predicted tensor
+  // Corrector, evaluated where the step ends, on the predicted tensor.  This connection
+  // is what the next predictor reuses.
   std::complex<Real> npred[4][4], d2[4][4];
   for (int i = 0; i < 4; i++)
     for (int j = 0; j < 4; j++) npred[i][j] = pphot->polten[i*4+j][ip];
-  PolarizationRate(pphot, ip, npred, d2);
+  ConnectionContraction(pphot, ip, acon);
+  ApplyPolarizationRate(acon, npred, d2);
+  acon_valid = true;
 
   for (int i = 0; i < 4; i++)
     for (int j = 0; j < 4; j++)
