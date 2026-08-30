@@ -11,6 +11,8 @@
 #include <cmath>
 #include <cstring>  // strcmp
 #include <iostream> // temporary for testing
+#include <sstream>
+#include <stdexcept>
 
 // Athena++ headers
 #include "../athena.hpp"
@@ -279,12 +281,14 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
     kcopy[IMC1] = szet*cpsi;
     kcopy[IMC2] = szet*spsi;
     kcopy[IMC3] = czet;
+    // The physical wavevector in coordinate components.  It is deliberately not stored
+    // yet: TransferPhotonsOnBlock expects emission data in the comoving frame and does
+    // the conversion itself, so what gets stored below is this vector expressed in the
+    // block's comoving tetrad.  Everything in between -- the polarization seeding, the
+    // Walker-Penrose constants, the outsphere predictions -- keeps using the coordinate
+    // form, so zeta, psi and polang all keep the meaning they had.
     Real k[4];
     TetradToCoordinate(kcopy, k, econ);
-    pphot->k0p[ip] = k[IMC0];
-    pphot->k1p[ip] = k[IMC1];
-    pphot->k2p[ip] = k[IMC2];
-    pphot->k3p[ip] = k[IMC3];
 
     printf("k tetrad: %d %e %e %e\n",ip,k[IMC1],k[IMC2],k[IMC3]);
     // Initialize dk to zero
@@ -328,6 +332,46 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
       PolarizationInFlatFrame(this, pphot, ip, nflat0);
       nflat0_set = true;
     }
+
+    // Hand the photon to the block in the frame its emission path expects.  k goes over
+    // as a unit direction in the comoving tetrad -- the Gram-Schmidt one built from ucon
+    // alone, which is what TransformToCoordinate will invert -- and the polarization goes
+    // over as Stokes parameters referenced to the meridian basis, which is what
+    // ScatteringStokesToCoherency reads.  Both conversions are exact inverses of what the
+    // block then does, so the coordinate-frame k and coherency tensor the pusher finally
+    // sees are the ones computed above, to round-off.
+    //
+    // Going through the block rather than writing the coordinate-frame state directly is
+    // the point: it is the path every emitted photon in a production run takes, so this
+    // test now covers the emission-to-coherency seam as well as the transport.
+    Real econb[4][4], ecovb[4][4];
+    ConstructTetrad(ucon, gcov, econb, ecovb);
+    Real ktet[4];
+    CoordinateToTetrad(k, ktet, ecovb);
+    if (std::fabs(ktet[IMC0]) <= TINY_NUMBER) {
+      std::stringstream msg;
+      msg << "### FATAL ERROR in mc_poltest InitializePhoton" << std::endl
+          << "photon has no energy in the comoving frame" << std::endl;
+      ATHENA_ERROR(msg);
+    }
+    // Writing k0p also writes ep; the spatial slots hold a unit direction in this frame.
+    pphot->k0p[ip] = ktet[IMC0];
+    pphot->k1p[ip] = ktet[IMC1]/ktet[IMC0];
+    pphot->k2p[ip] = ktet[IMC2]/ktet[IMC0];
+    pphot->k3p[ip] = ktet[IMC3]/ktet[IMC0];
+
+    // MeridianBasis has no basis to build when the photon travels along the comoving
+    // frame's z axis, and would silently leave the Stokes parameters alone.  That is a
+    // legitimate direction to want to test, so say so rather than producing a photon
+    // whose polarization is quietly wrong.
+    if (std::fabs(pphot->k3p[ip]) >= 1.0 - TINY_NUMBER) {
+      std::stringstream msg;
+      msg << "### FATAL ERROR in mc_poltest InitializePhoton" << std::endl
+          << "zeta places the photon along the comoving frame z axis, where the meridian "
+          << "basis the Stokes parameters are referenced to is undefined." << std::endl;
+      ATHENA_ERROR(msg);
+    }
+    CoherencyToScatteringStokes(this, pphot, ip);
 
     // Specify polarization basis vectors for comparison
     Real fp[4];
