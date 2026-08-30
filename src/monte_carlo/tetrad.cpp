@@ -7,6 +7,7 @@
 //! \brief implementation of functions for constructing and transforming tetrad frames
 
 // C++ libraries
+#include <cmath>
 #include <complex>
 
 // Athena++ classes headers
@@ -446,6 +447,26 @@ void CovToCon(Real ucov[4], Real ucon[4], Real gcon[4][4]) {
       ucon[i] += gcon[i][j] * ucov[j];
   }
 
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn bool NormalObserver(Real gcon[4][4], Real ncon[4])
+//! \brief four-velocity of the normal (Eulerian) observer
+//
+// n^mu = -alpha g^{mu t} with lapse alpha = 1/sqrt(-g^{tt}).  This is the frame the
+// outputs reference directions and polarization to, so it lives here rather than being
+// rebuilt at each call site: the wavevector and the Stokes parameters must be projected
+// onto the same frame
+//
+// Returns false when g^{tt} is not negative, meaning the slice is not spacelike and there
+// is no such observer.
+
+bool NormalObserver(Real gcon[4][4], Real ncon[4]) {
+
+  if (gcon[IMC0][IMC0] >= 0.) return false;
+  Real alpha = 1.0/std::sqrt(-gcon[IMC0][IMC0]);
+  for (int m = 0; m < 4; ++m) ncon[m] = -alpha*gcon[m][IMC0];
+  return true;
 }
 
 //----------------------------------------------------------------------------------------

@@ -18,6 +18,7 @@
 #include "mccoord.hpp"
 #include "mcoutput.hpp"
 #include "photonpusher.hpp"
+#include "tetrad.hpp"
 #include "../globals.hpp"
 #include "../outputs/io_wrapper.hpp"
 #include "../utils/buffer_utils.hpp"
@@ -473,32 +474,31 @@ void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
       if (pmy_mc->topology == MCTOPO_CARTESIAN)  {
         if (pphot->pmy_mcb->pmy_mc->general_pusher_flag) {
           // Under GeneralPusher k1,k2,k3 are contravariant coordinate components, so they
-          // are neither orthonormal nor a unit vector, while AngleBinsCartesian reads
-          // ctheta straight off kz.  InverseTetrad is the projection onto the orthonormal
-          // frame -- the identity for cartesian and minkowski, and k^(y) = k^y - beta k^x
-          // for snake -- and the norm turns what comes out into a direction: for a null
-          // vector the orthonormal spatial components have norm equal to the time
-          // component, not one.  Without this every photon binned out of range and was
-          // silently dropped.
+          // are neither orthonormal nor a unit vector. Since projecting to infinity is
+          // challenging, we insteady project onto local the normal observer's orthonormal
+          // frame and normalize.
+          //
+          // The frame is the normal observer, and specifically not MCCoord::InverseTetrad,
+          // because CoherencyToObserverStokes references the Stokes parameters to this
+          // one.
           Real xp[4];
           xp[IMC0] = pphot->x0p[ip];
           xp[IMC1] = pphot->x1p[ip];
           xp[IMC2] = pphot->x2p[ip];
           xp[IMC3] = pphot->x3p[ip];
-          Real invtet[4][4];
-          pphot->pmy_mcb->pcoord->InverseTetrad(xp, invtet);
-          Real kc[4];
-          kc[IMC0] = pphot->k0p[ip];
-          kc[IMC1] = pphot->k1p[ip];
-          kc[IMC2] = pphot->k2p[ip];
-          kc[IMC3] = pphot->k3p[ip];
-          for (int a = IMC1; a < 4; ++a) {
-            kcart[a] = 0.;
-            for (int b = 0; b < 4; ++b) kcart[a] += invtet[a][b]*kc[b];
-          }
-          Real norm = sqrt(SQR(kcart[IMC1]) + SQR(kcart[IMC2]) + SQR(kcart[IMC3]));
+          Real gcov[4][4], gcon[4][4];
+          pphot->pmy_mcb->pcoord->Metric(xp, gcov);
+          pphot->pmy_mcb->pcoord->InverseMetric(xp, gcon);
+          Real ncon[4];
+          if (!NormalObserver(gcon, ncon)) return;
+          Real econ[4][4], ecov[4][4];
+          ConstructTetrad(ncon, gcov, econ, ecov);
+          Real kc[4], ktet[4];
+          pphot->GetFourVector(ip, false, kc);
+          CoordinateToTetrad(kc, ktet, ecov);
+          Real norm = sqrt(SQR(ktet[IMC1]) + SQR(ktet[IMC2]) + SQR(ktet[IMC3]));
           if (norm <= TINY_NUMBER) return;
-          for (int a = IMC1; a < 4; ++a) kcart[a] /= norm;
+          for (int a = IMC1; a < 4; ++a) kcart[a] = ktet[a]/norm;
         } else {
           kcart[IMC1] = pphot->k1p[ip];
           kcart[IMC2] = pphot->k2p[ip];
@@ -841,6 +841,7 @@ void PhotonList::WriteList(std::string filename, Real tint_out) {
   // metrics that have none
   if (!pmy_mc->metric_params.empty())
     fprintf(pfile,"metric_params=%s\n",pmy_mc->metric_params.c_str());
+  fprintf(pfile,"frame=%s\n",pmy_mc->frame_tag.c_str());
   // write data
   int ndata = length*nparams;
   double *data;
@@ -994,6 +995,7 @@ void PhotonTrajectoryList::WriteList(std::string filename) {
   // metrics that have none
   if (!pmy_mc->metric_params.empty())
     fprintf(pfile,"metric_params=%s\n",pmy_mc->metric_params.c_str());
+  fprintf(pfile,"frame=%s\n",pmy_mc->frame_tag.c_str());
   int *idata = new int[length];
   for (int i=0; i<length; ++i)
     idata[i] = nsteps[i];
@@ -1355,6 +1357,7 @@ void Spectrum::WriteSpectrum(std::string fname, Real tint_out) {
   fprintf(pfile,"coord=%s\n",pmy_mc->geometry_tag.c_str());
   if (!pmy_mc->metric_params.empty())
     fprintf(pfile,"metric_params=%s\n",pmy_mc->metric_params.c_str());
+  fprintf(pfile,"frame=%s\n",pmy_mc->frame_tag.c_str());
   // Output bin faces with fwrite
   bool bigend = mcoutput::IsBigEndian();
   int nface = (ne+1 > nmu+1) ? ne+1 : nmu+1;

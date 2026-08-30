@@ -250,11 +250,8 @@ void CoherencyToObserverStokes(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   pmcb->pcoord->Metric(x, gcov);
   pmcb->pcoord->InverseMetric(x, gcon);
 
-  // normal observer: alpha = 1/sqrt(-g^tt), n^mu = -alpha g^{mu t}
-  if (gcon[IMC0][IMC0] >= 0.) return;
-  Real alpha = 1.0/std::sqrt(-gcon[IMC0][IMC0]);
   Real ncon[4];
-  for (int m = 0; m < 4; ++m) ncon[m] = -alpha*gcon[m][IMC0];
+  if (!NormalObserver(gcon, ncon)) return;
 
   Real econ[4][4], ecov[4][4];
   ConstructTetrad(ncon, gcov, econ, ecov);

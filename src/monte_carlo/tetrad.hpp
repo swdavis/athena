@@ -40,6 +40,10 @@ void NormalizeVec(Real ucon[4], Real gcov[4][4]);
 void ConToCov(Real ucon[4], Real ucov[4], Real gcov[4][4]);
 void CovToCon(Real ucov[4], Real ucon[4], Real gcon[4][4]);
 
+// four-velocity of the normal (Eulerian) observer, n^mu = -alpha g^{mu t}.  Shared so
+// that everything referencing an output to "the normal frame" means the same frame.
+bool NormalObserver(Real gcon[4][4], Real ncon[4]);
+
 // move a four-vector between the coordinate basis and a tetrad
 void CoordinateToTetrad(Real ucoord[4], Real utet[4], Real ecov[4][4]);
 void TetradToCoordinate(Real utet[4], Real ucoord[4], Real econ[4][4]);

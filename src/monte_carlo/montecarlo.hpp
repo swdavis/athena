@@ -276,10 +276,12 @@ public:
   //! true when coord_system is a curved spacetime; derived from coord_system
   bool curved_metric;
 
-  //! canonical geometry/wavevector tag written to output headers; see SetGeometryTag
+  // canonical geometry/wavevector tag written to output headers; see SetGeometryTag
   std::string geometry_tag;
-  //! parameters of the metric, as "key=value,key=value"
+  // parameters of the metric, as "key=value,key=value"
   std::string metric_params;
+  // frame tag for outputs
+  std::string frame_tag;
   //! true when geometry_tag denotes a curved (or at least GR-integrated) spacetime, in
   //! which case list output reports the conserved energy -k_t rather than k^t
   bool relativistic_output;

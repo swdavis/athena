@@ -149,6 +149,8 @@ class Photons:
         self.coord = phlist['coord']
         # Free parameters of the metric. Empty for a flat metric
         self.metric_params = phlist.get('metric_params', {})
+        # The frame the wavevector and the Stokes parameters are both measured in.
+        self.frame = phlist.get('frame')
         # How to interpret this list: relativistic?, spatial basis, wavevector convention
         self.props = coord_properties(self.coord)
         self.relativistic = self.props['relativistic']
@@ -429,6 +431,16 @@ def read_list(filename, data=True, header=True):
                         phlist['metric_params'][key.strip()] = val.strip()
             current_index = end_of_line_index + 1
 
+        # One tag for every direction-like quantity in the file: the wavevector, the
+        # angle bins and the plane the Stokes parameters are referenced to.  Optional,
+        # as it postdates the format.
+        phlist['frame'] = None
+        if raw_data_ascii.startswith("frame=", current_index):
+            current_index += len("frame=")
+            end_of_line_index = raw_data_ascii.find('\n', current_index)
+            phlist['frame'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
+            current_index = end_of_line_index + 1
+
     if data:
         npars = phlist['npars']
         length = phlist['length']
@@ -566,6 +578,16 @@ def read_list_generator(filename, chunk_size=None):
                 except ValueError:
                     phlist['metric_params'][key.strip()] = val.strip()
         current_index = end_of_line_index + 1
+
+    # One tag for every direction-like quantity in the file: the wavevector, the
+    # angle bins and the plane the Stokes parameters are referenced to.  Optional,
+    # as it postdates the format.
+    phlist['frame'] = None
+    if raw_data_ascii.startswith("frame=", current_index):
+        current_index += len("frame=")
+        end_of_line_index = raw_data_ascii.find('\n', current_index)
+        phlist['frame'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
+        current_index = end_of_line_index + 1
     
     # Yield header first
     yield {'header': phlist, 'chunk': None, 'remaining': None, 'length': None, 'done': False}
@@ -633,6 +655,8 @@ def write_list(filename, phlist, header=True, length=None):
             if mpars:
                 outfile.write("metric_params="
                               + ",".join(f"{k}={v!r}" for k, v in mpars.items()) + "\n")
+            if phlist.get('frame') is not None:
+                outfile.write("frame="+phlist['frame']+"\n")
 
     # Append binary data using numpy's tobytes() - faster than struct.pack
     with open(filename, 'ab') as outfile:
@@ -653,6 +677,7 @@ def print_list(infile, start = 0, stop = None):
     print(f"polarized={parse_polarization(phlist['polarized'])}\n")
     print(f"coord={phlist['coord']}\n")
     print(f"metric_params={phlist.get('metric_params') or {}}\n")
+    print(f"frame={phlist.get('frame')}\n")
 
     if stop is None:
         stop = phlist['length']
@@ -698,6 +723,8 @@ def write_spectrum(filename,spectrum):
     if mpars:
         outfile.write("metric_params="
                       + ",".join(f"{k}={v!r}" for k, v in mpars.items()) + "\n")
+    if spectrum.get('frame') is not None:
+        outfile.write("frame="+spectrum['frame']+"\n")
     outfile.close()
 
     # Write binfaces
@@ -824,6 +851,16 @@ def read_spectrum(filename):
                     spectrum['metric_params'][key.strip()] = val.strip()
         current_index = end_of_line_index + 1
 
+    # One tag for every direction-like quantity in the file: the wavevector, the
+    # angle bins and the plane the Stokes parameters are referenced to.  Optional,
+    # as it postdates the format.
+    spectrum['frame'] = None
+    if raw_data_ascii.startswith("frame=", current_index):
+        current_index += len("frame=")
+        end_of_line_index = raw_data_ascii.find('\n', current_index)
+        spectrum['frame'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
+        current_index = end_of_line_index + 1
+
     # Read in faces
     nx = spectrum['nx']
     format_string = '>' + 'd'*(nx+1)
@@ -883,6 +920,8 @@ def header_match(dict1, dict2, dict_type):
             match = False
         elif (dict1.get('metric_params') or {}) != (dict2.get('metric_params') or {}):
             match = False
+        elif dict1.get('frame') != dict2.get('frame'):
+            match = False
     elif dict_type == 'spec':
         if dict1['nx'] != dict2['nx']:
             match = False
@@ -904,6 +943,8 @@ def header_match(dict1, dict2, dict_type):
         elif dict1.get('coord') != dict2.get('coord'):
             match = False
         elif (dict1.get('metric_params') or {}) != (dict2.get('metric_params') or {}):
+            match = False
+        elif dict1.get('frame') != dict2.get('frame'):
             match = False
     else:
         print("file type: "+dict_type+" not supported. Returning false.")
@@ -1804,6 +1845,7 @@ def make_spectrum(phots,nx,xmin,xmax,xaxis='kev',logx=True,nmu=1,mumin=0,mumax=1
     # which metric produced it and header_match can refuse to combine incompatible ones.
     spectrum['coord'] = getattr(phots, 'coord', None)
     spectrum['metric_params'] = getattr(phots, 'metric_params', None) or {}
+    spectrum['frame'] = getattr(phots, 'frame', None)
     if xaxis == 'kev':
         xphots = phots.energy/everg/1000.
         preset = True
@@ -2073,6 +2115,7 @@ def make_image_mc(phots, rcam, ninc, imin, imax, nen, emin, emax,
     # Provenance from the photon list, as make_spectrum does.
     image['coord'] = getattr(phots, 'coord', None)
     image['metric_params'] = getattr(phots, 'metric_params', None) or {}
+    image['frame'] = getattr(phots, 'frame', None)
     npol = num_stokes_stored(image['polarized'])
     nintens = 1 + npol
     image['nintens'] = nintens
@@ -2286,6 +2329,8 @@ def write_image(filename,image):
     if mpars:
         outfile.write("metric_params="
                       + ",".join(f"{k}={v!r}" for k, v in mpars.items()) + "\n")
+    if image.get('frame') is not None:
+        outfile.write("frame="+image['frame']+"\n")
     outfile.close()
 
     # Write binfaces
@@ -2416,6 +2461,16 @@ def read_image(filename):
                     image['metric_params'][key.strip()] = float(val)
                 except ValueError:
                     image['metric_params'][key.strip()] = val.strip()
+        current_index = end_of_line_index + 1
+
+    # One tag for every direction-like quantity in the file: the wavevector, the
+    # angle bins and the plane the Stokes parameters are referenced to.  Optional,
+    # as it postdates the format.
+    image['frame'] = None
+    if raw_data_ascii.startswith("frame=", current_index):
+        current_index += len("frame=")
+        end_of_line_index = raw_data_ascii.find('\n', current_index)
+        image['frame'] = raw_data_ascii[current_index:end_of_line_index].split(' ')[0]
         current_index = end_of_line_index + 1
 
     # Read in faces

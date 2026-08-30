@@ -85,6 +85,8 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   SetGeometryTag(pin);
   // free parameters of that metric, for the output headers
   SetMetricParams(pin);
+  // The frame the outputs measure directions and polarization in
+  frame_tag = general_pusher_flag ? "normal" : "lab";
   nuser_var = 0; // photon user variables to zero
   nuser_mom = 0; // user moments
 

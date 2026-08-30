@@ -311,7 +311,6 @@ void GeneralPusher::RK4Step(Photon *pphot, Real step, int ip) {
   kcon[IMC1] = pphot->k1p[ip];
   kcon[IMC2] = pphot->k2p[ip];
   kcon[IMC3] = pphot->k3p[ip];
-  Real k0init = kcon[IMC0];
 
   Real k0[4], gcov[4][4];
   pcoord->Metric(x0, gcov);
@@ -384,9 +383,7 @@ void GeneralPusher::RK4Step(Photon *pphot, Real step, int ip) {
   pphot->x1p[ip] = x[IMC1];
   pphot->x2p[ip] = x[IMC2];
   pphot->x3p[ip] = x[IMC3];
-  // k0p is the photon energy, so the assignment below already carries the energy update
-  // that used to be applied separately as ep *= kcon[IMC0]/k0init.  Doing both would
-  // square the ratio now that ep and k0p are the same storage.
+  // k0p is the photon energy
   pphot->k0p[ip] = kcon[IMC0];
   pphot->k1p[ip] = kcon[IMC1] * factor;
   pphot->k2p[ip] = kcon[IMC2] * factor;
