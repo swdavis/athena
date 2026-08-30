@@ -571,17 +571,13 @@ void MonteCarloBlock::TransferPhotonsOnBlock(int etype) {
     // user definied photon initialization
     InitializePhoton(pphot,nold,pphot->nphot-1,etype);
 
-    // Construct the coherency tensor from the emitted Stokes parameters.  This must come
-    // before TransformToCoordinate, not after: ScatteringStokesToCoherency reads k as a
-    // unit direction in the comoving frame
-    if (IsPolarized(pmy_mc->polarized)) {
-      for (int ip = nold; ip < pphot->nphot; ip++)
-        ScatteringStokesToCoherency(this, pphot, ip);
-    }
-
-    // Lorentz transform E, k to Eulerian frame and update opacities
-    // only for newly emitted samples
+    // Convert the emitted state from the comoving frame to the coordinate frame, and
+    // update opacities.  Only for newly emitted samples.
     if ((boosts || tetrads) && pmy_mc->initialize_comoving[etype]) {
+      if (IsPolarized(pmy_mc->polarized)) {
+        for (int ip = nold; ip < pphot->nphot; ip++)
+          ScatteringStokesToCoherency(this, pphot, ip);
+      }
       TransformToCoordinate(pphot,nold,pphot->nphot-1);
     }
 
