@@ -1833,11 +1833,10 @@ void MonteCarloBlock::GetNumberDensity() {
   if (pmy_mc->scattering_meth == SCATRES) {
     // Default for resonant scattering assumes pure hydrogen
     // with 100% neutral fraction.
-    Real mp = 1.67262192369e-24;
     for (int k=ks; k<=ke; ++k) {
       for (int j=js; j<=je; ++j) {
         for (int i=is; i<=ie; ++i) {
-          species(0,k,j,i) = rho(k,j,i) / mp;
+          species(0,k,j,i) = rho(k,j,i) / MCConstants::mH_cgs;
         }
       }
     }

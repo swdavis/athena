@@ -35,6 +35,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   pmy_mesh = pmesh;
 
   UserWorkInMove=nullptr;
+  UserEscapeDistance=nullptr;
   GetEmission=nullptr;
   UserGetDensity=nullptr;
   UserGetTemperature=nullptr;
@@ -370,6 +371,15 @@ void MonteCarlo::EnrollUserGetNumberDensity(NumbFunc_t numbfunc) {
 void MonteCarlo::EnrollUserWorkInMove(UserMoveFunc_t userfunc) {
 
   UserWorkInMove = userfunc;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::EnrollUserEscapeDistance(UserEscapeDistanceFunc_t userfunc)
+//! \brief Enroll a user-defined distance to an escape surface for CartesianPusher moves
+
+void MonteCarlo::EnrollUserEscapeDistance(UserEscapeDistanceFunc_t userfunc) {
+
+  UserEscapeDistance = userfunc;
 }
 
 //----------------------------------------------------------------------------------------

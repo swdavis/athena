@@ -698,7 +698,7 @@ PhotonList::PhotonList(int list_size_init, bool pol, int nuser) {
 
   // Allocate memory for photon list
   len_limit = list_size_init;
-  nparams = 10;
+  nparams = 11;
   polarized = pol;
   if (polarized)
     nparams += 2; // print only stokes q and u
@@ -779,6 +779,7 @@ void PhotonList::AddPhoton(Photon *pphot, int ip) {
   photons(length,n++) = pphot->k2p[ip];
   photons(length,n++) = pphot->k3p[ip];
   photons(length,n++) = pphot->k0p[ip];
+  photons(length,n++) = static_cast<Real>(pphot->nscp[ip]);
   if (polarized) {
     photons(length,n++) = pphot->sqp[ip];
     photons(length,n++) = pphot->sup[ip];
@@ -813,6 +814,7 @@ void PhotonList::WriteList(std::string filename, Real tint_out) {
   fprintf(pfile,"length=%d\nnpars=%d\n",length,nparams);
   fprintf(pfile,"ntot=%d\n",nsrun);
   fprintf(pfile,"polarized=%d\n",polarized);
+  fprintf(pfile,"nscp=1\n");
   fprintf(pfile,"coord=%s\n",pmy_mc->geometry_tag.c_str());
   // write data
   int ndata = length*nparams;
