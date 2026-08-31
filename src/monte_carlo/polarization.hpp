@@ -30,6 +30,11 @@
 // Faraday rotation rotates Q into U continuously along the ray, so the Stokes parameters
 // stop being constant between scatterings even in flat spacetime.
 
+// Real, and nothing else.  This header is included from both montecarlo.hpp and
+// photon.hpp, which include each other, so it must not pull in anything from the
+// module itself; athena.hpp is a leaf and safe.
+#include "../athena.hpp"
+
 // enum for checking polarization treatment
 // Byte-backed so the member occupies the same storage a bool did and the hot-path test
 // compiles to the same single compare-against-memory.
@@ -69,6 +74,11 @@ void CoherencyToScatteringStokes(MonteCarloBlock *pmcb, Photon *pphot, int ip);
 
 // Stokes -> coherency tensor, undoing CoherencyToScatteringStokes
 void ScatteringStokesToCoherency(MonteCarloBlock *pmcb, Photon *pphot, int ip);
+
+// the normal observer's tetrad at the photon and the wavevector in it; the one place
+// the output frame is built, so every output measures against the same axes
+bool NormalFrameWavevector(MonteCarloBlock *pmcb, Photon *pphot, int ip,
+                           Real econ[4][4], Real ecov[4][4], Real ktet[4]);
 
 // coherency tensor -> Stokes in the normal observer's frame, for the outputs
 void CoherencyToObserverStokes(MonteCarloBlock *pmcb, Photon *pphot, int ip);

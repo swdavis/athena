@@ -484,21 +484,8 @@ void Spectrum::UpdateSpectrum(Photon *pphot, int ip) {
           // The frame is the normal observer, and specifically not MCCoord::InverseTetrad,
           // because CoherencyToObserverStokes references the Stokes parameters to this
           // one.
-          Real xp[4];
-          xp[IMC0] = pphot->x0p[ip];
-          xp[IMC1] = pphot->x1p[ip];
-          xp[IMC2] = pphot->x2p[ip];
-          xp[IMC3] = pphot->x3p[ip];
-          Real gcov[4][4], gcon[4][4];
-          pphot->pmy_mcb->pcoord->Metric(xp, gcov);
-          pphot->pmy_mcb->pcoord->InverseMetric(xp, gcon);
-          Real ncon[4];
-          if (!NormalObserver(gcon, ncon)) return;
-          Real econ[4][4], ecov[4][4];
-          ConstructTetrad(ncon, gcov, econ, ecov);
-          Real kc[4], ktet[4];
-          pphot->GetFourVector(ip, false, kc);
-          CoordinateToTetrad(kc, ktet, ecov);
+          Real econ[4][4], ecov[4][4], ktet[4];
+          if (!NormalFrameWavevector(pphot->pmy_mcb, pphot, ip, econ, ecov, ktet)) return;
           Real norm = sqrt(SQR(ktet[IMC1]) + SQR(ktet[IMC2]) + SQR(ktet[IMC3]));
           if (norm <= TINY_NUMBER) return;
           for (int a = IMC1; a < 4; ++a) kcart[a] = ktet[a]/norm;
@@ -799,10 +786,29 @@ void PhotonList::AddPhoton(Photon *pphot, int ip) {
   photons(length,n++) = pphot->x2p[ip];
   photons(length,n++) = pphot->x3p[ip];
   photons(length,n++) = pphot->x0p[ip];
-  photons(length,n++) = pphot->k1p[ip];
-  photons(length,n++) = pphot->k2p[ip];
-  photons(length,n++) = pphot->k3p[ip];
-  photons(length,n++) = pphot->k0p[ip];
+  // The wavevector goes out in the same normal frame the Stokes parameters are
+  // referenced to
+  if (pmy_mc->general_pusher_flag) {
+    Real econ[4][4], ecov[4][4], ktet[4];
+    if (NormalFrameWavevector(pphot->pmy_mcb, pphot, ip, econ, ecov, ktet)) {
+      photons(length,n++) = ktet[IMC1];
+      photons(length,n++) = ktet[IMC2];
+      photons(length,n++) = ktet[IMC3];
+      photons(length,n++) = ktet[IMC0];
+    } else {
+      // no normal observer here; fall back to the stored components rather than drop the
+      // photon, and leave it detectable as a zero time component
+      photons(length,n++) = pphot->k1p[ip];
+      photons(length,n++) = pphot->k2p[ip];
+      photons(length,n++) = pphot->k3p[ip];
+      photons(length,n++) = pphot->k0p[ip];
+    }
+  } else {
+    photons(length,n++) = pphot->k1p[ip];
+    photons(length,n++) = pphot->k2p[ip];
+    photons(length,n++) = pphot->k3p[ip];
+    photons(length,n++) = pphot->k0p[ip];
+  }
   if (IsPolarized(polarized)) {
     const Real spol[3] = {pphot->sqp[ip], pphot->sup[ip], pphot->svp[ip]};
     for (int m = 0; m < NumStokesStored(polarized); ++m) {

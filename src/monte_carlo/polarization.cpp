@@ -225,6 +225,49 @@ static void WriteMeridianStokes(Photon *pphot, int ip, Real ecov[4][4],
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn bool NormalFrameWavevector(MonteCarloBlock *pmcb, Photon *pphot, int ip,
+//!                                Real econ[4][4], Real ecov[4][4], Real ktet[4])
+//! \brief the normal observer's orthonormal frame at the photon, and the photon's
+//!        wavevector expressed in it
+//
+// The wavevector written to a photon list, the direction a spectrum bins its angles on,
+// and the plane the Stokes parameters are referenced to are here Anything that
+// needs the output frame should call this rather than reconstruct it
+//
+// The photon is in the coordinate frame whenever this is called, so the wavevector is
+// projected here rather than being read off the photon.  Because the frame is orthonormal
+// and the photon is null, the components that come back satisfy |k_spatial| = k^(0); a
+// reader can rely on that, and on the frame's third spatial leg being (0,0,1), to rebuild
+// the meridian basis from the stored components alone.
+//
+// Returns false when there is no normal observer, which NormalObserver reports when
+// g^{tt} is not negative.  econ, ecov and ktet are left untouched in that case.
+
+bool NormalFrameWavevector(MonteCarloBlock *pmcb, Photon *pphot, int ip,
+                           Real econ[4][4], Real ecov[4][4], Real ktet[4]) {
+
+  Real x[4];
+  x[IMC0] = pphot->x0p[ip];
+  x[IMC1] = pphot->x1p[ip];
+  x[IMC2] = pphot->x2p[ip];
+  x[IMC3] = pphot->x3p[ip];
+  Real gcov[4][4], gcon[4][4];
+  pmcb->pcoord->Metric(x, gcov);
+  pmcb->pcoord->InverseMetric(x, gcon);
+
+  Real ncon[4];
+  if (!NormalObserver(gcon, ncon)) return false;
+  ConstructTetrad(ncon, gcov, econ, ecov);
+
+  // The photon is in the coordinate frame at this point, so the wavevector has to be
+  // projected before anything can be measured against the observer's axes.
+  Real kcoord[4];
+  pphot->GetFourVector(ip, false, kcoord);
+  CoordinateToTetrad(kcoord, ktet, ecov);
+  return true;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void CoherencyToObserverStokes(MonteCarloBlock *pmcb, Photon *pphot, int ip)
 //! \brief refresh the stored Stokes parameters from the coherency tensor, in the frame
 //!        the outputs are referenced to
@@ -241,26 +284,9 @@ void CoherencyToObserverStokes(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
   // do not evolve them between scatterings, so they are already current.
   if (!pmcb->pmy_mc->general_pusher_flag) return;
 
-  Real x[4];
-  x[IMC0] = pphot->x0p[ip];
-  x[IMC1] = pphot->x1p[ip];
-  x[IMC2] = pphot->x2p[ip];
-  x[IMC3] = pphot->x3p[ip];
-  Real gcov[4][4], gcon[4][4];
-  pmcb->pcoord->Metric(x, gcov);
-  pmcb->pcoord->InverseMetric(x, gcon);
+  Real econ[4][4], ecov[4][4], ktet[4];
+  if (!NormalFrameWavevector(pmcb, pphot, ip, econ, ecov, ktet)) return;
 
-  Real ncon[4];
-  if (!NormalObserver(gcon, ncon)) return;
-
-  Real econ[4][4], ecov[4][4];
-  ConstructTetrad(ncon, gcov, econ, ecov);
-
-  // The photon is in the coordinate frame here, so its direction has to be projected into
-  // the observer's frame before the meridian can be built on it.
-  Real kcoord[4], ktet[4];
-  pphot->GetFourVector(ip, false, kcoord);
-  CoordinateToTetrad(kcoord, ktet, ecov);
   Real nmag = std::sqrt(SQR(ktet[IMC1]) + SQR(ktet[IMC2]) + SQR(ktet[IMC3]));
   if (nmag <= TINY_NUMBER) return;
   Real n[3] = {ktet[IMC1]/nmag, ktet[IMC2]/nmag, ktet[IMC3]/nmag};
