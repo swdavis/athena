@@ -861,6 +861,17 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip)
 //! \brief add contribution to radiation moments in current zone
+//
+// In general relativity the frame transformations -- FrequencyShiftComoving,
+// TransformToComoving, TransformToCoordinate -- rebuild the fluid four-velocity at the
+// photon's own position, so that u.u = -1 exactly where it is contracted with k.  The
+// moments do not: boost_lab and boost_cmv are built once per zone at the zone centre by
+// ComputeTransformations, and PhotonFrames applies those same matrices to every photon
+// crossing the zone.
+//
+// Two related approximations: the cell-center tetrad is applied to a wavevector carried
+// at the photon without parallel transport, and the opacity is refreshed only at cell
+// face crossings.
 
 void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
 

@@ -3,12 +3,19 @@
 """
 Frame-consistency test for the fluid four-velocity in Kerr-Schild spacetime.
 
-MonteCarloBlock::vel is a four-velocity built at the zone centre and normalized there with
-the metric at that centre, but every consumer -- FrequencyShiftComoving,
-TransformToComoving, TransformToCoordinate -- contracts it with the metric at the photon.
-So u.u is -1 where the vector was built and -1 + O(dx dg) where it is used.  mc_gr_simple
-records the running maximum of |u.u + 1| along each path, skipping ghost zones where vel
-is not filled, and this script reports it.
+The Monte Carlo used to store a four-velocity built and normalized at the zone centre and
+then contract it with the metric at the photon, so u.u was -1 where the vector was built
+and -1 + O(dx dg) where it was used.  MonteCarloBlock::FluidFourVelocity now rebuilds it
+from the stored primitives at whatever point is asked for, and this test measures how far
+u.u departs from -1 at the two points that matter:
+
+  IUUDEV -- at the photon, the frame the transport uses;
+  IUUCEN -- at the photon's zone centre, the frame the per-zone moment matrices use.
+
+Both should sit at roundoff.  They are separate numbers because they are separate frames:
+the transport follows the photon while the moments are zone averages, and that split is
+deliberate (see UpdateMoments).  Before the reconstruction IUUDEV read ~7e-2 and fell only
+as fast as the zone width.
 
 No other test in the tree can see this.  Snake has g_tt = -1 with no time cross terms and
 a static fluid, so u.u is -1 identically; Minkowski is flat.  Every polarized test runs in
@@ -36,9 +43,14 @@ from os import system
 # Athena++ modules
 import athena_mc as mcspec
 
-# Photon list slots written by mc_gr_simple's InsideHorizon hook.
+# Photon list slots written by mc_gr_simple's InsideHorizon hook.  IUUDEV is measured at
+# the photon, the frame the transport uses; IUUCEN at the photon's zone centre, the frame
+# ComputeTransformations and ComovingFrameMatrix build the per-zone moment matrices on.
+# The two are deliberately different points -- see UpdateMoments -- so they are reported
+# separately, but both must sit at roundoff.
 IUUDEV = 0
 IUURAD = 1
+IUUCEN = 2
 
 RMIN = 2.0
 RMAX = 20.0
@@ -58,7 +70,7 @@ def write_athinput(nx1, nphot, iseed, file='athinput.kerrframes'):
          "configure = --prob=mc_gr_simple --coord=kerr-schild -g -mc",
          "",
          "<job>", "problem_id = kerrframes", "",
-         "<output1>", "file_type = phlist", "nuser     = 2", "",
+         "<output1>", "file_type = phlist", "nuser     = 3", "",
          "<time>", "cfl_number = 0.3", "nlim       = 1", "tlim       = 1.0", "",
          "<coord>", "m = 1.0", "a = {0!r}".format(SPIN), "",
          "<mesh>",
@@ -117,10 +129,10 @@ def read_deviation(pattern="kerrframes.out1.proc*.00000.list"):
     user = []
     for fname in files:
         photons = mcspec.Photons(mcspec.read_list(fname))
-        if photons.nuser <= IUURAD:
+        if photons.nuser <= IUUCEN:
             raise RuntimeError("photon list carries {:d} user variables, need {:d} --"
-                               " is nuser = 2 set on the output block?"
-                               .format(photons.nuser, IUURAD + 1))
+                               " is nuser = 3 set on the output block?"
+                               .format(photons.nuser, IUUCEN + 1))
         user.append(photons.user)
 
     user = np.concatenate(user, axis=0)
@@ -129,7 +141,7 @@ def read_deviation(pattern="kerrframes.out1.proc*.00000.list"):
                            " than escaping.  The usual cause is the iteration cap: with"
                            " varystep the step is a fraction of a zone, so a finer grid"
                            " needs a larger <montecarlo>/checkmove.")
-    return user[:, IUUDEV], user[:, IUURAD]
+    return user[:, IUUDEV], user[:, IUURAD], user[:, IUUCEN]
 
 
 def main(**kwargs):
@@ -147,14 +159,14 @@ def main(**kwargs):
         print(com)
         system(com)
 
-        dev, rad = read_deviation()
+        dev, rad, cen = read_deviation()
         dr = (RMAX - RMIN) / float(nx1)
-        results[i] = (dr, np.median(dev), dev.max())
-        print("  nx1 {:4d}  dr {:.4f}  median |u.u+1| {:.4e}  max {:.4e}"
-              "  peak at r {:.3f}".format(nx1, dr, results[i, 1], results[i, 2],
-                                          np.median(rad)))
+        results[i] = (dr, dev.max(), cen.max())
+        print("  nx1 {:4d}  dr {:.4f}  photon-frame |u.u+1| {:.4e}"
+              "  zone-centre {:.4e}  peak at r {:.3f}"
+              .format(nx1, dr, results[i, 1], results[i, 2], np.median(rad)))
 
-    print("\n   dr      median |u.u+1|   order        max      order")
+    print("\n   dr       photon frame   order     zone centre   order")
     for i in range(len(resolutions)):
         if i == 0:
             print("{:.4e}   {:.4e}      -     {:.4e}      -"
@@ -176,12 +188,17 @@ def main(**kwargs):
 
     np.savetxt(kwargs['outfile'], results)
 
-    worst = results[:, 2].max()
-    print("\nlargest |u.u + 1| over all resolutions: {:.4e}".format(worst))
-    if worst < 1.0e-13:
-        print("velocity is normalized where it is used")
+    worst_phot = results[:, 1].max()
+    worst_cen = results[:, 2].max()
+    print("\nlargest |u.u + 1|:  photon frame {:.4e}   zone centre {:.4e}"
+          .format(worst_phot, worst_cen))
+    tol = 1.0e-13
+    if worst_phot < tol and worst_cen < tol:
+        print("PASS: both frames are unit timelike where they are used")
+    elif worst_phot >= tol:
+        print("FAIL: the transport frame is not normalized at the photon")
     else:
-        print("velocity is normalized at the zone centre, not where it is used")
+        print("FAIL: the moment frame is not normalized at the zone centre")
 
 
 if __name__ == '__main__':

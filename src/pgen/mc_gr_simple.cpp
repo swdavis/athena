@@ -37,7 +37,13 @@ namespace {
   // g_tt = -1 and a static fluid, so u.u is -1 identically -- hence a Kerr-Schild case.
   const int IUUDEV = 0;
   const int IUURAD = 1;
-  const int NUSER_FRAMES = 2;
+  // Same quantity evaluated at the photon's zone centre rather than at the photon.  That
+  // is the frame ComputeTransformations and ComovingFrameMatrix build the per-zone moment
+  // matrices on, so this slot guards the moments while IUUDEV guards the transport.  Both
+  // should sit at roundoff; they are separate slots because they are separate frames, and
+  // the split between them is deliberate (see UpdateMoments).
+  const int IUUCEN = 2;
+  const int NUSER_FRAMES = 3;
 
   // Global variables
   bool tnorm;
@@ -249,6 +255,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
     // here, not a sentinel.
     if (pphot->nuser_var > IUUDEV) pphot->user[IUUDEV][ip] = 0.0;
     if (pphot->nuser_var > IUURAD) pphot->user[IUURAD][ip] = pphot->x1p[ip];
+    if (pphot->nuser_var > IUUCEN) pphot->user[IUUCEN][ip] = 0.0;
 
     if (emission_type == "freefree") {
       // Obtain intitial energy, polarization, direction and weight
@@ -719,7 +726,7 @@ void InsideHorizon(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher, 
   // radial refinement below cannot resolve and that swamps the O(1e-2) being measured.
   // Sampling them reports a flat 5.2e-1 at every nx1.  Measuring that properly needs a
   // scan in nx2 and nx3, which this test does not do.
-  if (pphot->nuser_var > IUURAD && active) {
+  if (pphot->nuser_var > IUUCEN && active) {
     Real x[4] = {pphot->x0p[ip], pphot->x1p[ip], pphot->x2p[ip], pphot->x3p[ip]};
     Real gcov[4][4];
     pmcb->pcoord->Metric(x, gcov);
@@ -735,6 +742,18 @@ void InsideHorizon(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher, 
       pphot->user[IUUDEV][ip] = dev;
       pphot->user[IUURAD][ip] = x1;
     }
+
+    // The moment frames are built at the zone centre, not here, so check that point too.
+    Real xc[4];
+    xc[IMC0] = x[IMC0];
+    xc[IMC1] = pmcb->pmy_block->pcoord->x1v(i1);
+    xc[IMC2] = pmcb->pmy_block->pcoord->x2v(i2);
+    xc[IMC3] = pmcb->pmy_block->pcoord->x3v(i3);
+    Real gcen[4][4], ucen[4];
+    pmcb->pcoord->Metric(xc, gcen);
+    pmcb->FluidFourVelocity(xc, i3, i2, i1, ucen);
+    Real devc = std::fabs(DotVec(ucen, ucen, gcen) + 1.0);
+    if (devc > pphot->user[IUUCEN][ip]) pphot->user[IUUCEN][ip] = devc;
   }
   /*Real keverg = 1.602176634e-9;
   if (pphot->ep[ip] > 2.e3*keverg)
