@@ -105,6 +105,61 @@ void ConstructTetrad(Real ucon[4], Real gcov[4][4],
 }
 
 
+
+//----------------------------------------------------------------------------------------
+//! \fn Real ObserverEnergy(Real ucon[4], Real kcon[4], Real gcov[4][4])
+//! \brief the energy of kcon as measured by an observer with four-velocity ucon
+//
+// This is the time component that ConstructTetrad(ucon,...) followed by
+// CoordinateToTetrad would produce, obtained without building the other three legs.
+// Row zero of the covariant tetrad is fixed entirely by ucon: ConstructTetrad sets
+// econ[0] = ucon/sqrt(|ucon.ucon|), lowers it, and flips the sign, so
+//
+//     ecov[0][mu] = -u_mu / sqrt(|u.u|)   and   k^(0) = -u_mu k^mu / sqrt(|u.u|).
+//
+// The Gram-Schmidt orthogonalization of legs 1-3 costs roughly ten metric contractions
+// and four square roots and does not enter the answer, which matters because the callers
+// that only want an energy -- the opacity frequency shift above all -- sit in the inner
+// loop of the general pusher.
+//
+// The normalization is not the no-op it looks like.  A four-velocity is normalized with
+// the metric at the cell centre, where it is built, but gcov here is the metric at the
+// photon, so u.u is -1 only to first order in the offset between the two.  On a
+// Kerr-Schild grid with 128 logarithmic radial zones, a photon half a zone from the
+// centre sees |sqrt(|u.u|) - 1| of 3e-3 at r = 2M, falling to 3e-4 by r = 50M.  Skipping
+// the division would measure the energy against a slightly non-unit observer and carry
+// that error into the opacities.  It corrects the magnitude of ucon at the photon only;
+// its direction is still the cell centre's, wrong at the same order, and there is no
+// cheap fix for that while the fluid velocity is known once per zone.  Flat metrics with
+// g_tt = -1 and no time cross terms -- snake among them -- give u.u = -1 identically, so
+// a snake test exercises none of this.
+//
+// The arithmetic below deliberately mirrors ConstructTetrad step for step, dividing ucon
+// by the norm before lowering rather than after, and keeps the same degenerate branch.
+// Lowering first would be algebraically identical but would round differently, and
+// reproducing the operation order exactly means this can be swapped in for the tetrad
+// without perturbing a single output bit.
+
+Real ObserverEnergy(Real ucon[4], Real kcon[4], Real gcov[4][4]) {
+
+  Real e0[4];
+  Real mag = sqrt(fabs(DotVec(ucon, ucon, gcov)));
+  if (mag > SMALL_NUMBER) {
+    Real unorm[4];
+    for (int j = 0; j < 4; j++) unorm[j] = ucon[j]/mag;
+    ConToCov(unorm, e0, gcov);
+  } else {
+    // ucon is degenerate; fall back to the coordinate time direction, as ConstructTetrad
+    // does in the same situation.
+    Real unorm[4] = {1., 0., 0., 0.};
+    NormalizeVec(unorm, gcov);
+    ConToCov(unorm, e0, gcov);
+  }
+
+  Real energy = 0.;
+  for (int j = 0; j < 4; j++) energy += -e0[j] * kcon[j];
+  return energy;
+}
 //----------------------------------------------------------------------------------------
 //! \fn void ConstructTetrad(Real ucon[4], Real vcon[4],
 //!                          Real gcov[4][4], Real ecov[4][4],

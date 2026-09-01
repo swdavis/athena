@@ -433,6 +433,13 @@ public:
   AthenaArray<Real> species;
   AthenaArray<Real> tgas;
   AthenaArray<Real> vel;
+  // Primitive (relative) three-velocity uu^i of the frame vel is built on, kept per zone
+  // in general relativity.  Unlike a four-velocity this carries no normalization
+  // constraint, so it can be evaluated against the metric at any point and still yield
+  // u.u = -1 exactly there -- which is what FluidFourVelocity does and what vel, built
+  // and normalized at the zone centre, cannot.  Zero when boosts are off, where the
+  // formula then returns the normal observer.
+  AthenaArray<Real> uprim;
   AthenaArray<Real> bcc;
   AthenaArray<Real> boost_cmv;
   AthenaArray<Real> boost_lab;
@@ -470,6 +477,19 @@ public:
   //void ComputeEmissionSampleArray(BoundaryFace face);
   void SetEmissionCellWeight(Photon *pphot, int ips, int ipe);
   void SetEmissionCellWeightArea(Photon *pphot, BoundaryFace face, int ips, int ipe);
+  // Index range the fluid-derived arrays are filled over: active zones plus ghosts.
+  // Photons legitimately occupy a ghost zone while they wait to be handed to the
+  // neighbouring block, and the pusher reads rho, tgas, vel and the boost matrices at
+  // whatever zone the photon is in, so filling active zones alone leaves those reads
+  // returning zero.
+  void FillBounds(int &il, int &iu, int &jl, int &ju, int &kl, int &ku) const;
+
+  // Four-velocity of zone (i3,i2,i1)'s frame, rebuilt at the position x rather than read
+  // from the zone centre, so that u.u = -1 holds where the vector is actually used.
+  // General relativity only.
+  // x is not const because MCCoord::Metric and InverseMetric take a mutable Real[4].
+  void FluidFourVelocity(Real x[4], int i3, int i2, int i1, Real ucon[4]) const;
+
   void GetDensity();
   void GetNumberDensity();
   void GetScalars();

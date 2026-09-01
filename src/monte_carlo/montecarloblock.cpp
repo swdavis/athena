@@ -348,6 +348,9 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   // which is still needed by the GR branches of the frame transformations.
   if (boosts || GENERAL_RELATIVITY || IsPolarized(pmy_mc->polarized)) {
     vel.NewAthenaArray(ncells3,ncells2,ncells1,4);
+    // Primitives kept alongside vel in GR; see FluidFourVelocity.  Left at zero when
+    // boosts are off, which is the normal observer in that formula.
+    if (GENERAL_RELATIVITY) uprim.NewAthenaArray(ncells3,ncells2,ncells1,3);
     if (!boosts && !GENERAL_RELATIVITY) {
       // Value is constant in time, unlike the fluid velocity, so it is set once rather than
       // refreshed each cycle. g_tt = -1 in every flat metric the module supports, so
@@ -444,6 +447,7 @@ MonteCarloBlock::~MonteCarloBlock() {
     boost_lab.DeleteAthenaArray();
   }
   if (boosts || GENERAL_RELATIVITY) vel.DeleteAthenaArray();
+  if (GENERAL_RELATIVITY) uprim.DeleteAthenaArray();
   if (NSCALARS > 0) scalars.DeleteAthenaArray();
   if (mom_flag_lab) moments.DeleteAthenaArray();
   if (mom_flag_com) moments_com.DeleteAthenaArray();
@@ -857,7 +861,8 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   const Real c_cgs = MCConstants::c_cgs;
   const Real wp = pphot->wp[ip];
 
-  // Projects this photon into whichever frames are asked for below, at most once each.
+  // Projects this photon into whichever frames are asked for below, at most once each
+  // to avoid repated transformations to same basis.
   PhotonFrames frames(this, pphot, ip, dl);
 
   if (mom_flag_lab) {
@@ -1832,15 +1837,101 @@ void MonteCarloBlock::SetEmissionCellWeightArea(Photon *pphot, BoundaryFace face
 //! \brief Make hard copy of density from MeshBlock to MonteCarloBlock.
 //  Uses hard copy so that rho is always in cgs units
 
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::FillBounds(int &il, int &iu, int &jl, int &ju,
+//!                                      int &kl, int &ku) const
+//! \brief index range the fluid-derived arrays are filled over
+//
+// Active zones plus ghosts, widened only in the dimensions the block actually has, which
+// is the same rule MeshBlock::ProblemGenerator and Mesh::Initialize use.
+//
+// The ghosts matter because a photon can sit in one: it keeps its old zone indices while
+// it waits to be handed to the neighbouring block, and the pusher goes on reading rho,
+// tgas, vel and the boost matrices at those indices.  Filling active zones only left each
+// of those reads returning zero, which for vel meant a null four-velocity reaching
+// FrequencyShiftComoving and the two transform routines.
+//
+// This assumes the source primitives are themselves valid in the ghosts.  They are for a
+// problem generator that fills its full range, which is the Athena++ convention, and for
+// non-GR runs Mesh::Initialize refreshes them via ConservedToPrimitive.  Note that
+// ConservedToPrimitive is deliberately skipped when MONTE_CARLO_ENABLED and
+// GENERAL_RELATIVITY are both on, so in that case the ghosts are exactly what the problem
+// generator wrote and nothing else.
+
+void MonteCarloBlock::FillBounds(int &il, int &iu, int &jl, int &ju,
+                                 int &kl, int &ku) const {
+  il = is - NGHOST;
+  iu = ie + NGHOST;
+  jl = js;
+  ju = je;
+  if (nx2 > 1) {
+    jl -= NGHOST;
+    ju += NGHOST;
+  }
+  kl = ks;
+  ku = ke;
+  if (nx3 > 1) {
+    kl -= NGHOST;
+    ku += NGHOST;
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarloBlock::FluidFourVelocity(Real x[4], int i3, int i2, int i1,
+//!                                             Real ucon[4]) const
+//! \brief four-velocity of zone (i3,i2,i1)'s frame, evaluated at the position x
+//
+// vel is built and normalized at the zone centre, so contracting it with the metric at a
+// photon gives u.u = -1 + O(dx dg) rather than -1.  ConstructTetrad and ObserverEnergy
+// paper over the size of that with a sqrt(|u.u|) division, but not over its direction.
+//
+// The way out is the one blacklight and ipole take: never move a four-velocity, move the
+// primitive.  uu^i carries no normalization constraint, so the same arithmetic GetVelocity
+// does at the zone centre can be redone here against the metric at x, and the result
+// satisfies u.u = -1 exactly at x by construction.  The fluid state is still the zone's --
+// piecewise constant, blacklight's simulation_interp = false -- so what remains is an
+// error in what the fluid is doing, not an inconsistency about the geometry.
+//
+// With boosts off uprim is zero and this returns the normal observer at x, which is both
+// the right answer and an exact one, since no zone-centre quantity enters at all.
+
+void MonteCarloBlock::FluidFourVelocity(Real x[4], int i3, int i2, int i1,
+                                        Real ucon[4]) const {
+
+  Real gcov[4][4], gcon[4][4];
+  pcoord->Metric(x, gcov);
+  pcoord->InverseMetric(x, gcon);
+
+  const Real uu1 = uprim(i3,i2,i1,0);
+  const Real uu2 = uprim(i3,i2,i1,1);
+  const Real uu3 = uprim(i3,i2,i1,2);
+
+  const Real gamma2 = 1. + gcov[IMC1][IMC1]*uu1*uu1 + gcov[IMC2][IMC2]*uu2*uu2
+                    + gcov[IMC3][IMC3]*uu3*uu3
+                    + 2.*gcov[IMC1][IMC2]*uu1*uu2 + 2.*gcov[IMC1][IMC3]*uu1*uu3
+                    + 2.*gcov[IMC2][IMC3]*uu2*uu3;
+  const Real gamma = std::sqrt(gamma2);
+  const Real alpha = 1.0/std::sqrt(-gcon[IMC0][IMC0]);
+
+  ucon[IMC0] = -gamma*alpha*gcon[IMC0][IMC0];
+  ucon[IMC1] = uu1 - gamma*alpha*gcon[IMC0][IMC1];
+  ucon[IMC2] = uu2 - gamma*alpha*gcon[IMC0][IMC2];
+  ucon[IMC3] = uu3 - gamma*alpha*gcon[IMC0][IMC3];
+}
+
+//----------------------------------------------------------------------------------------
+
 void MonteCarloBlock::GetDensity() {
 
   if (pmy_mc->UserGetDensity != nullptr) {
     pmy_mc->UserGetDensity(this);
     return;
   }
-  for (int k=ks; k<=ke; ++k) {
-    for (int j=js; j<=je; ++j) {
-      for (int i=is; i<=ie; ++i) {
+  int il, iu, jl, ju, kl, ku;
+  FillBounds(il, iu, jl, ju, kl, ku);
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=il; i<=iu; ++i) {
         rho(k,j,i) = rho_cgs * pmy_block->phydro->w(IDN,k,j,i);
       }
     }
@@ -1862,9 +1953,11 @@ void MonteCarloBlock::GetNumberDensity() {
     // Default for resonant scattering assumes pure hydrogen
     // with 100% neutral fraction.
     Real mp = 1.67262192369e-24;
-    for (int k=ks; k<=ke; ++k) {
-      for (int j=js; j<=je; ++j) {
-        for (int i=is; i<=ie; ++i) {
+    int il, iu, jl, ju, kl, ku;
+    FillBounds(il, iu, jl, ju, kl, ku);
+    for (int k=kl; k<=ku; ++k) {
+      for (int j=jl; j<=ju; ++j) {
+        for (int i=il; i<=iu; ++i) {
           species(0,k,j,i) = rho(k,j,i) / mp;
         }
       }
@@ -1880,9 +1973,11 @@ void MonteCarloBlock::GetNumberDensity() {
   Real heabund = 0.09; //hardcode for now (should be parameter)
   Real mp = 1.67262192369e-24;
 
-  for (int k=ks; k<=ke; ++k) {
-    for (int j=js; j<=je; ++j) {
-      for (int i=is; i<=ie; ++i) {
+  int il, iu, jl, ju, kl, ku;
+  FillBounds(il, iu, jl, ju, kl, ku);
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=il; i<=iu; ++i) {
         Real nh = rho(k,j,i) / (mp*(1.+4.*heabund));
         Real nhe = nh*heabund;
         species(1,k,j,i) = nh + 4. * nhe; // nion
@@ -1899,9 +1994,11 @@ void MonteCarloBlock::GetNumberDensity() {
 
 void MonteCarloBlock::GetScalars() {
 
-  for (int k=ks; k<=ke; ++k) {
-    for (int j=js; j<=je; ++j) {
-      for (int i=is; i<=ie; ++i) {
+  int il, iu, jl, ju, kl, ku;
+  FillBounds(il, iu, jl, ju, kl, ku);
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=il; i<=iu; ++i) {
         scalars(k,j,i) = pmy_block->pscalars->s(0,k,j,i);
       }
     }
@@ -1915,14 +2012,17 @@ void MonteCarloBlock::GetScalars() {
 
 void MonteCarloBlock::GetVelocity() {
 
+  int il, iu, jl, ju, kl, ku;
+  FillBounds(il, iu, jl, ju, kl, ku);
+
   if (GENERAL_RELATIVITY) {
     AthenaArray<Real> g, gi;
-    g.NewAthenaArray(NMETRIC,ie+1);
-    gi.NewAthenaArray(NMETRIC,ie+1);
-    for (int k=ks; k<=ke; ++k) {
-      for (int j=js; j<=je; ++j) {
-        pmy_block->pcoord->CellMetric(k,j,is,ie,g,gi);
-        for (int i=is; i<=ie; ++i) {
+    g.NewAthenaArray(NMETRIC,iu+1);
+    gi.NewAthenaArray(NMETRIC,iu+1);
+    for (int k=kl; k<=ku; ++k) {
+      for (int j=jl; j<=ju; ++j) {
+        pmy_block->pcoord->CellMetric(k,j,il,iu,g,gi);
+        for (int i=il; i<=iu; ++i) {
           Real alpha = 1.0/std::sqrt(-gi(I00,i));
           Real uu1 = pmy_block->phydro->w(IVX,k,j,i);
           Real uu2 = pmy_block->phydro->w(IVY,k,j,i);
@@ -1936,15 +2036,31 @@ void MonteCarloBlock::GetVelocity() {
           vel(k,j,i,1) = uu1 - gamma*alpha*gi(I01,i);
           vel(k,j,i,2) = uu2 - gamma*alpha*gi(I02,i);
           vel(k,j,i,3) = uu3 - gamma*alpha*gi(I03,i);
+
+          // Keep the primitives too.  They carry no normalization constraint, so
+          // FluidFourVelocity can redo this arithmetic against the metric at a photon
+          // rather than here at the zone centre.
+          uprim(k,j,i,0) = uu1;
+          uprim(k,j,i,1) = uu2;
+          uprim(k,j,i,2) = uu3;
         }
       }
     }
   } else {
     Real c_cgs = 2.99792458e10;
-    for (int k=ks; k<=ke; ++k) {
-      for (int j=js; j<=je; ++j) {
-        for (int i=is; i<=ie; ++i) {
+    for (int k=kl; k<=ku; ++k) {
+      for (int j=jl; j<=ju; ++j) {
+        for (int i=il; i<=iu; ++i) {
           Real rho = pmy_block->phydro->u(IDN,k,j,i);
+          if (!(rho > 0.)) {
+            // Empty ghost zone: leave the fluid at rest rather than dividing by zero.
+            // vel must still be a valid four-velocity, since consumers contract it.
+            vel(k,j,i,0) = 1.0;
+            vel(k,j,i,1) = 0.0;
+            vel(k,j,i,2) = 0.0;
+            vel(k,j,i,3) = 0.0;
+            continue;
+          }
           vel(k,j,i,1) = vel_cgs * pmy_block->phydro->u(IM1,k,j,i) / (rho * c_cgs);
           vel(k,j,i,2) = vel_cgs * pmy_block->phydro->u(IM2,k,j,i) / (rho * c_cgs);
           vel(k,j,i,3) = vel_cgs * pmy_block->phydro->u(IM3,k,j,i) / (rho * c_cgs);
@@ -1977,14 +2093,21 @@ void MonteCarloBlock::GetVelocity() {
 
 void MonteCarloBlock::SetNormalObserver() {
 
+  int il, iu, jl, ju, kl, ku;
+  FillBounds(il, iu, jl, ju, kl, ku);
   AthenaArray<Real> g, gi;
-  g.NewAthenaArray(NMETRIC,ie+1);
-  gi.NewAthenaArray(NMETRIC,ie+1);
-  for (int k=ks; k<=ke; ++k) {
-    for (int j=js; j<=je; ++j) {
-      pmy_block->pcoord->CellMetric(k,j,is,ie,g,gi);
-      for (int i=is; i<=ie; ++i) {
+  g.NewAthenaArray(NMETRIC,iu+1);
+  gi.NewAthenaArray(NMETRIC,iu+1);
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      pmy_block->pcoord->CellMetric(k,j,il,iu,g,gi);
+      for (int i=il; i<=iu; ++i) {
         Real alpha = 1.0/std::sqrt(-gi(I00,i));
+        // No fluid here, so the primitives stay zero -- FluidFourVelocity's formula then
+        // returns the normal observer, which is exactly what this fills vel with.
+        uprim(k,j,i,0) = 0.0;
+        uprim(k,j,i,1) = 0.0;
+        uprim(k,j,i,2) = 0.0;
         vel(k,j,i,0) = -alpha*gi(I00,i);
         vel(k,j,i,1) = -alpha*gi(I01,i);
         vel(k,j,i,2) = -alpha*gi(I02,i);
@@ -2026,13 +2149,20 @@ void MonteCarloBlock::GetTemperature() {
     tconv = tgas_cgs;
 
   // compute temperature from pressure and density
-  for (int k=ks; k<=ke; ++k) {
-    for (int j=js; j<=je; ++j) {
-      for (int i=is; i<=ie; ++i) {
+  int il, iu, jl, ju, kl, ku;
+  FillBounds(il, iu, jl, ju, kl, ku);
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=il; i<=iu; ++i) {
 	//if (pmy_block->gid == 61) {
 	//  printf("%d %d %d %g %g\n",k,j,i,phydro->w(IEN,k,j,i),phydro->w(IDN,k,j,i));
 	//}
-        Real temp = tconv * phydro->w(IEN,k,j,i) / phydro->w(IDN,k,j,i);
+        // A ghost zone a problem generator never wrote leaves both of these at zero, and
+        // 0/0 is a NaN that the floor and ceiling below cannot clamp -- every comparison
+        // against a NaN is false, so it would propagate into the opacities.  Fall back to
+        // the floor instead, which is what an empty zone should read as anyway.
+        Real dens = phydro->w(IDN,k,j,i);
+        Real temp = (dens > 0.) ? tconv * phydro->w(IEN,k,j,i) / dens : tfloor_cgs;
         // apply temperature floor
         temp = (temp > tfloor_cgs) ? temp : tfloor_cgs;
         temp = (temp < tceiling_cgs) ? temp : tceiling_cgs;
@@ -2047,6 +2177,9 @@ void MonteCarloBlock::GetTemperature() {
 //! \brief compute transformation matrices between comoving frame and lab frame
 
 void MonteCarloBlock::ComputeTransformations() {
+
+  int il, iu, jl, ju, kl, ku;
+  FillBounds(il, iu, jl, ju, kl, ku);
 
   if (GENERAL_RELATIVITY) {
     // In GR the map to an orthonormal frame is not a flat Lorentz boost.  vel holds a
@@ -2064,12 +2197,12 @@ void MonteCarloBlock::ComputeTransformations() {
     // Both are evaluated at the zone centre, which is where the fluid velocity already
     // lives, so the moments are built in a single well defined per-zone frame.
     AthenaArray<Real> g, gi;
-    g.NewAthenaArray(NMETRIC,ie+1);
-    gi.NewAthenaArray(NMETRIC,ie+1);
-    for (int k=ks; k<=ke; k++) {
-      for (int j=js; j<=je; j++) {
-        pmy_block->pcoord->CellMetric(k,j,is,ie,g,gi);
-        for (int i=is; i<=ie; i++) {
+    g.NewAthenaArray(NMETRIC,iu+1);
+    gi.NewAthenaArray(NMETRIC,iu+1);
+    for (int k=kl; k<=ku; k++) {
+      for (int j=jl; j<=ju; j++) {
+        pmy_block->pcoord->CellMetric(k,j,il,iu,g,gi);
+        for (int i=il; i<=iu; i++) {
           Real x[4];
           x[IMC0] = 0.;
           x[IMC1] = pmy_block->pcoord->x1v(i);
@@ -2107,9 +2240,9 @@ void MonteCarloBlock::ComputeTransformations() {
   }
 
   // loop over all cells on block
-  for (int k=ks; k<=ke; k++) {
-    for (int j=js; j<=je; j++) {
-      for (int i=is; i<=ie; i++) {
+  for (int k=kl; k<=ku; k++) {
+    for (int j=jl; j<=ju; j++) {
+      for (int i=il; i<=iu; i++) {
         boost_cmv(k,j,i,0,0) = vel(k,j,i,0);
         boost_lab(k,j,i,0,0) = vel(k,j,i,0);
         for (int m=1; m<4; m++) {
@@ -2148,12 +2281,12 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
       x[IMC3] = pphot->x3p[ip];
       pcoord->Metric(x, gcov);
 
-      // Create tetrad basis
+      // Create tetrad basis on a four-velocity rebuilt here, so it is a unit timelike
+      // vector at the photon rather than at the zone centre.  This is the inverse of
+      // TransformToCoordinate and the two are called around Scatter, which does not move
+      // the photon, so both see the same x and the round trip stays exact.
       Real ucon[4];
-      ucon[IMC0] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],0);
-      ucon[IMC1] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],1);
-      ucon[IMC2] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],2);
-      ucon[IMC3] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],3);
+      FluidFourVelocity(x, pphot->i3p[ip], pphot->i2p[ip], pphot->i1p[ip], ucon);
       Real econ[4][4], ecov[4][4];
       ConstructTetrad(ucon, gcov, econ, ecov);
 
@@ -2242,12 +2375,10 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
       x[IMC3] = pphot->x3p[ip];
       pcoord->Metric(x, gcov);
 
-      // Create tetrad basis
+      // Create tetrad basis on a four-velocity rebuilt here, so it is a unit timelike
+      // vector at the photon rather than at the zone centre.
       Real ucon[4];
-      ucon[IMC0] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],0);
-      ucon[IMC1] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],1);
-      ucon[IMC2] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],2);
-      ucon[IMC3] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],3);
+      FluidFourVelocity(x, pphot->i3p[ip], pphot->i2p[ip], pphot->i1p[ip], ucon);
 
       Real econ[4][4], ecov[4][4];
       ConstructTetrad(ucon, gcov, econ, ecov);
@@ -2339,22 +2470,23 @@ Real  MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip) {
     x[IMC3] = pphot->x3p[ip];
     pcoord->Metric(x, gcov);
 
-    // Create tetrad basis
+    // Rebuilt at the photon rather than read from the zone centre, so u.u = -1 holds
+    // here, where it is about to be contracted with k.
     Real ucon[4];
-    ucon[IMC0] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],0);
-    ucon[IMC1] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],1);
-    ucon[IMC2] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],2);
-    ucon[IMC3] = vel(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip],3);
-    Real econ[4][4], ecov[4][4];
-    ConstructTetrad(ucon, gcov, econ, ecov);
+    FluidFourVelocity(x, pphot->i3p[ip], pphot->i2p[ip], pphot->i1p[ip], ucon);
 
     Real k0init = pphot->k0p[ip];
     // Called from the coordinate frame, where GR keeps dimensional components.
-    Real kcopy[4], k[4];
+    Real kcopy[4];
     pphot->GetFourVector(ip, false, kcopy);
-    CoordinateToTetrad(kcopy, k, ecov);
 
-    return k[IMC0]/k0init;
+    // Only the observer's energy is wanted, so build only the tetrad leg that carries it.
+    // ObserverEnergy reproduces ConstructTetrad + CoordinateToTetrad on this component
+    // bit for bit while skipping the Gram-Schmidt for the three spatial legs, which is
+    // roughly ten metric contractions and four square roots that never reach the answer.
+    // This sits in the general pusher's inner loop through UpdateOpacities, so the saving
+    // is what makes refreshing opacities more often than once per zone affordable.
+    return ObserverEnergy(ucon, kcopy, gcov)/k0init;
   } else {
     int i1 = pphot->i1p[ip];
     int i2 = pphot->i2p[ip];

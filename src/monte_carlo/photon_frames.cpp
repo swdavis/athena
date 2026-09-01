@@ -68,8 +68,8 @@ void PhotonFrames::Fill(MCFrame f) {
       for (int b=0; b<4; ++b) p[a] += m(i3,i2,i1,a,b) * kco_[b];
     }
     // k is null at the photon to machine precision, but the tetrad is orthonormal with
-    // respect to the metric at the zone centre, so the projection is not exactly null.
-    // Normalising by the spatial magnitude keeps n a genuine direction and the moment
+    // respect to the metric at the cell center, so the projection is not exactly null.
+    // Normalzing by the spatial magnitude keeps n a genuine direction and the moment
     // tensor exactly traceless; the energy comes from the time component.
     Real mag = std::sqrt(SQR(p[IMC1]) + SQR(p[IMC2]) + SQR(p[IMC3]));
     s.e = p[IMC0];
@@ -100,7 +100,7 @@ void PhotonFrames::Fill(MCFrame f) {
       s.n[1] = pphot_->k2p[ip_];
       s.n[2] = pphot_->k3p[ip_];
       if (pmcb_->topology == MCTOPO_SPHERICAL) {
-        // Re-express the direction in the orthonormal basis at the zone centre, which is
+        // Re-express the direction in the orthonormal basis at the cell center, which is
         // the basis the moments are accumulated in.
         Real sth = std::sin(pphot_->x2p[ip_]), cth = std::cos(pphot_->x2p[ip_]);
         Real sph = std::sin(pphot_->x3p[ip_]), cph = std::cos(pphot_->x3p[ip_]);

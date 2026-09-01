@@ -124,8 +124,17 @@ static bool MeridianBasis(MonteCarloBlock *pmcb, Photon *pphot, int ip,
   // guarantees vel is allocated whenever polarized is set, holding the fluid velocity,
   // the normal observer or the coordinate observer as appropriate, so no test is needed
   // here.
+  //
+  // In general relativity the frame is rebuilt at the photon instead, so that it is a
+  // unit timelike vector where gcov above is evaluated.  uprim only exists in GR, which
+  // is why the flat path still reads vel; there the metric is constant across a zone and
+  // the two agree anyway.
   Real ucon[4];
-  for (int m = 0; m < 4; ++m) ucon[m] = pmcb->vel(i3, i2, i1, m);
+  if (GENERAL_RELATIVITY) {
+    pmcb->FluidFourVelocity(x, i3, i2, i1, ucon);
+  } else {
+    for (int m = 0; m < 4; ++m) ucon[m] = pmcb->vel(i3, i2, i1, m);
+  }
   ConstructTetrad(ucon, gcov, econ, ecov);
 
   // k as stored is already in this frame and is a unit direction there

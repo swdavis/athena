@@ -38,10 +38,16 @@ PhotonPusher::PhotonPusher(MonteCarloBlock *pmcb) {
     InitializeMRWDist();
     if (compton)
       ReadComptonGreensFunction();
-    if (time_acc) {
+    // The time tables back InterpPathTime, which MRWAcceleration calls unconditionally,
+    // so they are needed whenever acceleration is on and not only under time_acc.  Under
+    // the old guard an acceleration run with time_acc left at its default read mrwta,
+    // mrwtp and mrwtt before they were ever allocated, and hung rather than failing.  The
+    // destructor already frees these three under acceleration alone, which is what the
+    // intent was.
+    ReadTimeDistribution();
+    // mrwrt, mrwrp and mrwrr are read here but not used anywhere yet.
+    if (time_acc)
       ReadRadiusDistribution();
-      ReadTimeDistribution();
-    }
   }
 }
 
@@ -286,10 +292,17 @@ bool PhotonPusher::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Rea
   Real ct,r0;
   Real beta[3], beta2, gamma, gonembdk;
   if (boosts) {
-    // tranform relevant quanitites to comoving frame
-    beta[0] = pmcb->vel(1,pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]);
-    beta[1] = pmcb->vel(2,pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]);
-    beta[2] = pmcb->vel(3,pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]);
+    // tranform relevant quanitites to comoving frame.
+    // vel is allocated (ncells3, ncells2, ncells1, 4) and holds a four-velocity, so the
+    // three-velocity is vel(i3,i2,i1,m)/vel(i3,i2,i1,0) -- the same idiom
+    // GetDopplerFactor() and LorentzTransformFrequencyShift() use.  This used to read
+    // vel(m,i3,i2,i1), which indexes another zone's memory entirely and runs off the end
+    // of the array once i1 reaches 4, and it omitted the u^0 division as well.
+    const int i1 = pphot->i1p[ip], i2 = pphot->i2p[ip], i3 = pphot->i3p[ip];
+    const Real u0 = pmcb->vel(i3,i2,i1,0);
+    beta[0] = pmcb->vel(i3,i2,i1,1)/u0;
+    beta[1] = pmcb->vel(i3,i2,i1,2)/u0;
+    beta[2] = pmcb->vel(i3,i2,i1,3)/u0;
     beta2 = SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
     gamma = 1./sqrt(1.-beta2);
     Real bdk = (pphot->k1p[ip]*beta[0]+pphot->k2p[ip]*beta[1]+pphot->k3p[ip]*beta[2]);

@@ -33,6 +33,12 @@ void InitializeLeviCivita(Real levi[4][4][4][4]);
 void ImposeRightHanded(Real econ[4][4], Real gcov[4][4]);
 Real KroneckerDelta(int i, int j);
 
+// Energy of kcon measured by an observer with four-velocity ucon.  Equal to the time
+// component ConstructTetrad + CoordinateToTetrad would give, but skips the Gram-Schmidt
+// for legs 1-3, which do not enter it.  For callers in the pusher's inner loop that want
+// a frequency shift and nothing else.
+Real ObserverEnergy(Real ucon[4], Real kcon[4], Real gcov[4][4]);
+
 // vector algebra in a metric
 void ProjectVecSub(Real ucon[4], Real vcon[4], Real gcov[4][4]);
 Real DotVec(Real ucon[4], Real vcon[4], Real gcov[4][4]);
