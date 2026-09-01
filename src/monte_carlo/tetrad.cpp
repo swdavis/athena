@@ -122,17 +122,14 @@ void ConstructTetrad(Real ucon[4], Real gcov[4][4],
 // that only want an energy -- the opacity frequency shift above all -- sit in the inner
 // loop of the general pusher.
 //
-// The normalization is not the no-op it looks like.  A four-velocity is normalized with
-// the metric at the cell centre, where it is built, but gcov here is the metric at the
-// photon, so u.u is -1 only to first order in the offset between the two.  On a
-// Kerr-Schild grid with 128 logarithmic radial zones, a photon half a zone from the
-// centre sees |sqrt(|u.u|) - 1| of 3e-3 at r = 2M, falling to 3e-4 by r = 50M.  Skipping
-// the division would measure the energy against a slightly non-unit observer and carry
-// that error into the opacities.  It corrects the magnitude of ucon at the photon only;
-// its direction is still the cell centre's, wrong at the same order, and there is no
-// cheap fix for that while the fluid velocity is known once per zone.  Flat metrics with
-// g_tt = -1 and no time cross terms -- snake among them -- give u.u = -1 identically, so
-// a snake test exercises none of this.
+// The normalization is now a no-op for the Monte Carlo's own callers and is kept for
+// generality only.  It used to do real work: a four-velocity was assembled and normalized
+// at the zone centre and then contracted with the metric at a photon, where u.u was -1
+// only to first order in the offset -- 3e-3 at r = 2M on a Kerr-Schild grid.  Callers now
+// obtain ucon from MonteCarloBlock::FluidFourVelocity, which rebuilds it from the stored
+// primitives against the metric at the very point gcov is evaluated, so u.u = -1 there to
+// roundoff.  Anything passing a vector normalized somewhere else still gets the division,
+// which is why it stays; note it only ever corrected the magnitude, never the direction.
 //
 // The arithmetic below deliberately mirrors ConstructTetrad step for step, dividing ucon
 // by the norm before lowering rather than after, and keeps the same degenerate branch.

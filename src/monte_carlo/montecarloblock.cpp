@@ -343,15 +343,23 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
     boost_cmv.NewAthenaArray(ncells3,ncells2,ncells1,4,4);
     boost_lab.NewAthenaArray(ncells3,ncells2,ncells1,4,4);
   }
-  // vel holds the four-velocity of the frame the comoving tetrad is built on.  With
-  // boosts enabled that is the fluid; in GR without boosts it is the normal observer,
-  // which is still needed by the GR branches of the frame transformations.
-  if (boosts || GENERAL_RELATIVITY || IsPolarized(pmy_mc->polarized)) {
+  // The two storage conventions, which are deliberately not the same thing and used to
+  // share one array name:
+  //
+  //   flat spacetime -- vel holds (gamma, gamma*beta^i) in the orthonormal frame.  The
+  //     metric is constant across a zone, so a vector normalized at the zone centre is
+  //     still normalized anywhere in it and there is nothing to reconstruct.  Consumers
+  //     divide by vel(...,0) to recover beta^i.
+  //
+  //   general relativity -- uprim holds the primitive uu^i and there is no stored
+  //     four-velocity at all.  FluidFourVelocity assembles one on demand at whatever
+  //     point it is asked about, which is the only way to get u.u = -1 where the vector
+  //     is used rather than only where it was built.
+  if (GENERAL_RELATIVITY) {
+    uprim.NewAthenaArray(ncells3,ncells2,ncells1,3);
+  } else if (boosts || IsPolarized(pmy_mc->polarized)) {
     vel.NewAthenaArray(ncells3,ncells2,ncells1,4);
-    // Primitives kept alongside vel in GR; see FluidFourVelocity.  Left at zero when
-    // boosts are off, which is the normal observer in that formula.
-    if (GENERAL_RELATIVITY) uprim.NewAthenaArray(ncells3,ncells2,ncells1,3);
-    if (!boosts && !GENERAL_RELATIVITY) {
+    if (!boosts) {
       // Value is constant in time, unlike the fluid velocity, so it is set once rather than
       // refreshed each cycle. g_tt = -1 in every flat metric the module supports, so
       // u = (1,0,0,0) is already normalized; ConstructTetrad renormalizes regardless.
@@ -446,8 +454,11 @@ MonteCarloBlock::~MonteCarloBlock() {
     boost_cmv.DeleteAthenaArray();
     boost_lab.DeleteAthenaArray();
   }
-  if (boosts || GENERAL_RELATIVITY) vel.DeleteAthenaArray();
-  if (GENERAL_RELATIVITY) uprim.DeleteAthenaArray();
+  // Unconditional: DeleteAthenaArray handles the never-allocated case, and matching the
+  // allocation conditions by hand is how vel came to be leaked on flat polarized runs,
+  // where it was allocated but not freed.
+  vel.DeleteAthenaArray();
+  uprim.DeleteAthenaArray();
   if (NSCALARS > 0) scalars.DeleteAthenaArray();
   if (mom_flag_lab) moments.DeleteAthenaArray();
   if (mom_flag_com) moments_com.DeleteAthenaArray();
@@ -1881,19 +1892,12 @@ void MonteCarloBlock::FillBounds(int &il, int &iu, int &jl, int &ju,
 //!                                             Real ucon[4]) const
 //! \brief four-velocity of zone (i3,i2,i1)'s frame, evaluated at the position x
 //
-// vel is built and normalized at the zone centre, so contracting it with the metric at a
-// photon gives u.u = -1 + O(dx dg) rather than -1.  ConstructTetrad and ObserverEnergy
-// paper over the size of that with a sqrt(|u.u|) division, but not over its direction.
-//
-// The way out is the one blacklight and ipole take: never move a four-velocity, move the
-// primitive.  uu^i carries no normalization constraint, so the same arithmetic GetVelocity
-// does at the zone centre can be redone here against the metric at x, and the result
-// satisfies u.u = -1 exactly at x by construction.  The fluid state is still the zone's --
-// piecewise constant, blacklight's simulation_interp = false -- so what remains is an
-// error in what the fluid is doing, not an inconsistency about the geometry.
+// The normal uu^i carries no normalization constraint, so covariant velocities can
+// be obtained via the metric at specific x. The fluid state is assumed to be 
+// piecewise constant.
 //
 // With boosts off uprim is zero and this returns the normal observer at x, which is both
-// the right answer and an exact one, since no zone-centre quantity enters at all.
+// the right answer and an exact one, since no zone-center quantity enters at all.
 
 void MonteCarloBlock::FluidFourVelocity(Real x[4], int i3, int i2, int i1,
                                         Real ucon[4]) const {
@@ -2016,33 +2020,14 @@ void MonteCarloBlock::GetVelocity() {
   FillBounds(il, iu, jl, ju, kl, ku);
 
   if (GENERAL_RELATIVITY) {
-    AthenaArray<Real> g, gi;
-    g.NewAthenaArray(NMETRIC,iu+1);
-    gi.NewAthenaArray(NMETRIC,iu+1);
+    // Only the primitives are stored. They carry no normalization constraint, so
+    // FluidFourVelocity can assemble the four-velocity at any x.
     for (int k=kl; k<=ku; ++k) {
       for (int j=jl; j<=ju; ++j) {
-        pmy_block->pcoord->CellMetric(k,j,il,iu,g,gi);
         for (int i=il; i<=iu; ++i) {
-          Real alpha = 1.0/std::sqrt(-gi(I00,i));
-          Real uu1 = pmy_block->phydro->w(IVX,k,j,i);
-          Real uu2 = pmy_block->phydro->w(IVY,k,j,i);
-          Real uu3 = pmy_block->phydro->w(IVZ,k,j,i);
-
-          Real gamma2 = 1. + g(I11,i)*uu1*uu1 + g(I22,i)*uu2*uu2 + g(I33,i)*uu3*uu3 +
-                        2.0*g(I12,i)*uu1*uu2 + 2.*g(I13,i)*uu1*uu3 + 2.*g(I23,i)*uu2*uu3;
-          Real gamma = std::sqrt(gamma2);
-
-          vel(k,j,i,0) = -gamma*alpha*gi(I00,i);
-          vel(k,j,i,1) = uu1 - gamma*alpha*gi(I01,i);
-          vel(k,j,i,2) = uu2 - gamma*alpha*gi(I02,i);
-          vel(k,j,i,3) = uu3 - gamma*alpha*gi(I03,i);
-
-          // Keep the primitives too.  They carry no normalization constraint, so
-          // FluidFourVelocity can redo this arithmetic against the metric at a photon
-          // rather than here at the zone centre.
-          uprim(k,j,i,0) = uu1;
-          uprim(k,j,i,1) = uu2;
-          uprim(k,j,i,2) = uu3;
+          uprim(k,j,i,0) = pmy_block->phydro->w(IVX,k,j,i);
+          uprim(k,j,i,1) = pmy_block->phydro->w(IVY,k,j,i);
+          uprim(k,j,i,2) = pmy_block->phydro->w(IVZ,k,j,i);
         }
       }
     }
@@ -2082,36 +2067,28 @@ void MonteCarloBlock::GetVelocity() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::SetNormalObserver()
-//! \brief fill vel with the four-velocity of the normal (Eulerian) observer.
-//!
-//! Used for general relativistic problems run without boosts.  There is no fluid
-//! velocity to define a comoving frame, but the GR frame transformations still need a
-//! four-velocity to build the tetrad on, and the natural choice is the observer normal
-//! to the spatial slices: n^mu = -alpha g^{mu t} with lapse alpha = 1/sqrt(-g^{tt}).
-//! This is the zero-three-velocity limit of GetVelocity(), and unlike the static
-//! observer it stays well defined inside the ergosphere.
+//! \brief declare the frame to be that of the normal (Eulerian) observer.
+//
+// Used for general relativistic problems run without boosts.  There is no fluid
+// velocity to define a comoving frame, but the GR frame transformations still need a
+// four-velocity to build the tetrad on, and the natural choice is the observer normal
+// to the spatial slices: n^mu = -alpha g^{mu t} with lapse alpha = 1/sqrt(-g^{tt}).
+// This is the zero-three-velocity limit of GetVelocity(), and unlike the static
+// observer it stays well defined inside the ergosphere.
 
 void MonteCarloBlock::SetNormalObserver() {
 
+  // Zero primitives are the normal observer: with uu^i = 0 the Lorentz factor in
+  // FluidFourVelocity is 1 and it returns u^mu = -alpha g^{mu t}, evaluated wherever it
+  // is asked for.
   int il, iu, jl, ju, kl, ku;
   FillBounds(il, iu, jl, ju, kl, ku);
-  AthenaArray<Real> g, gi;
-  g.NewAthenaArray(NMETRIC,iu+1);
-  gi.NewAthenaArray(NMETRIC,iu+1);
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
-      pmy_block->pcoord->CellMetric(k,j,il,iu,g,gi);
       for (int i=il; i<=iu; ++i) {
-        Real alpha = 1.0/std::sqrt(-gi(I00,i));
-        // No fluid here, so the primitives stay zero -- FluidFourVelocity's formula then
-        // returns the normal observer, which is exactly what this fills vel with.
         uprim(k,j,i,0) = 0.0;
         uprim(k,j,i,1) = 0.0;
         uprim(k,j,i,2) = 0.0;
-        vel(k,j,i,0) = -alpha*gi(I00,i);
-        vel(k,j,i,1) = -alpha*gi(I01,i);
-        vel(k,j,i,2) = -alpha*gi(I02,i);
-        vel(k,j,i,3) = -alpha*gi(I03,i);
       }
     }
   }
@@ -2154,9 +2131,7 @@ void MonteCarloBlock::GetTemperature() {
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
       for (int i=il; i<=iu; ++i) {
-	//if (pmy_block->gid == 61) {
-	//  printf("%d %d %d %g %g\n",k,j,i,phydro->w(IEN,k,j,i),phydro->w(IDN,k,j,i));
-	//}
+
         // A ghost zone a problem generator never wrote leaves both of these at zero, and
         // 0/0 is a NaN that the floor and ceiling below cannot clamp -- every comparison
         // against a NaN is false, so it would propagate into the opacities.  Fall back to
@@ -2194,8 +2169,8 @@ void MonteCarloBlock::ComputeTransformations() {
     //   boost_cmv -> the frame vel is built on: the fluid with boosts enabled, and the
     //                normal observer without, in which case the two agree by construction.
     //
-    // Both are evaluated at the zone centre, which is where the fluid velocity already
-    // lives, so the moments are built in a single well defined per-zone frame.
+    // Both are evaluated at the cell center, which is where the fluid velocity already
+    // lives, so the moments are built in a single well defined per-cellframe.
     AthenaArray<Real> g, gi;
     g.NewAthenaArray(NMETRIC,iu+1);
     gi.NewAthenaArray(NMETRIC,iu+1);
@@ -2224,9 +2199,11 @@ void MonteCarloBlock::ComputeTransformations() {
             for (int m=0; m<4; m++)
               boost_lab(k,j,i,a,m) = ecov[a][m];
 
-          // frame vel is built on
+          // The frame the fluid is at rest in, rebuilt at the zone centre.  Deliberately
+          // the zone centre and not the photon: these matrices are per zone and back the
+          // moments, which are zone averages.  See DeriveComovingMoments.
           Real ucon[4];
-          for (int m=0; m<4; m++) ucon[m] = vel(k,j,i,m);
+          FluidFourVelocity(x, k, j, i, ucon);
           ConstructTetrad(ucon, gcov, econ, ecov);
           for (int a=0; a<4; a++)
             for (int m=0; m<4; m++)

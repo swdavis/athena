@@ -282,8 +282,8 @@ public:
   std::string metric_params;
   // frame tag for outputs
   std::string frame_tag;
-  //! true when geometry_tag denotes a curved (or at least GR-integrated) spacetime, in
-  //! which case list output reports the conserved energy -k_t rather than k^t
+  // true when geometry_tag denotes a curved (or at least GR-integrated) spacetime,
+  // in which case list output reports the conserved energy -k_t rather than k^t
   bool relativistic_output;
 
   // function pointers
@@ -432,13 +432,11 @@ public:
   AthenaArray<Real> rho;
   AthenaArray<Real> species;
   AthenaArray<Real> tgas;
+  // Flat spacetime only: (gamma, gamma*beta^i) in the orthonormal frame, so consumers
+  // divide by vel(...,0) to get beta^i. Unallocated in GR.
   AthenaArray<Real> vel;
-  // Primitive (relative) three-velocity uu^i of the frame vel is built on, kept per zone
-  // in general relativity.  Unlike a four-velocity this carries no normalization
-  // constraint, so it can be evaluated against the metric at any point and still yield
-  // u.u = -1 exactly there -- which is what FluidFourVelocity does and what vel, built
-  // and normalized at the zone centre, cannot.  Zero when boosts are off, where the
-  // formula then returns the normal observer.
+  // General relativity only: the primitive (relative) three-velocity uu^i of the frame
+  // the comoving tetrad is built on.
   AthenaArray<Real> uprim;
   AthenaArray<Real> bcc;
   AthenaArray<Real> boost_cmv;

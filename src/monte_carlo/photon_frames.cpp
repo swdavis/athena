@@ -171,8 +171,10 @@ void MonteCarloBlock::ComovingFrameMatrix(int k, int j, int i, const AthenaArray
   Real econL[4][4], ecovL[4][4];
   ConstructTetrad(ncon, gcov, econL, ecovL);
 
+  // Rebuilt at the zone centre, which is the right point here: this matrix is per zone
+  // and transforms the accumulated moments, which are zone averages.
   Real ucon[4];
-  for (int m=0; m<4; ++m) ucon[m] = vel(k,j,i,m);
+  FluidFourVelocity(x, k, j, i, ucon);
   Real econF[4][4], ecovF[4][4];
   ConstructTetrad(ucon, gcov, econF, ecovF);
 
