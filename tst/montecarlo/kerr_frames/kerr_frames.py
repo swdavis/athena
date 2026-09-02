@@ -3,26 +3,26 @@
 """
 Frame-consistency test for the fluid four-velocity in Kerr-Schild spacetime.
 
-The Monte Carlo used to store a four-velocity built and normalized at the zone centre and
+The Monte Carlo used to store a four-velocity built and normalized at the cell center and
 then contract it with the metric at the photon, so u.u was -1 where the vector was built
 and -1 + O(dx dg) where it was used.  MonteCarloBlock::FluidFourVelocity now rebuilds it
 from the stored primitives at whatever point is asked for, and this test measures how far
 u.u departs from -1 at the two points that matter:
 
   IUUDEV -- at the photon, the frame the transport uses;
-  IUUCEN -- at the photon's zone centre, the frame the per-zone moment matrices use.
+  IUUCEN -- at the photon's cell center, the frame the per-cell moment matrices use.
 
 Both should sit at roundoff.  They are separate numbers because they are separate frames:
-the transport follows the photon while the moments are zone averages, and that split is
+the transport follows the photon while the moments are cell averages, and that split is
 deliberate (see UpdateMoments).  Before the reconstruction IUUDEV read ~7e-2 and fell only
-as fast as the zone width.
+as fast as the cell width.
 
 No other test in the tree can see this.  Snake has g_tt = -1 with no time cross terms and
 a static fluid, so u.u is -1 identically; Minkowski is flat.  Every polarized test runs in
 snake.  Hence Kerr-Schild.
 
-The deviation is first order in the photon's offset from the zone centre, so refining the
-radial grid should shrink it in proportion to the zone width -- that is the check that the
+The deviation is first order in the photon's offset from the cell center, so refining the
+radial grid should shrink it in proportion to the cell width -- that is the check that the
 number being measured is the offset error and not something else.  Once the four-velocity
 is rebuilt at the photon from the primitives (see
 doc/monte_carlo/velocity_reconstruction_plan.md) the deviation should collapse to roundoff
@@ -44,8 +44,8 @@ from os import system
 import athena_mc as mcspec
 
 # Photon list slots written by mc_gr_simple's InsideHorizon hook.  IUUDEV is measured at
-# the photon, the frame the transport uses; IUUCEN at the photon's zone centre, the frame
-# ComputeTransformations and ComovingFrameMatrix build the per-zone moment matrices on.
+# the photon, the frame the transport uses; IUUCEN at the photon's cell center, the frame
+# ComputeTransformations and ComovingFrameMatrix build the per-cell moment matrices on.
 # The two are deliberately different points -- see UpdateMoments -- so they are reported
 # separately, but both must sit at roundoff.
 IUUDEV = 0
@@ -61,7 +61,7 @@ def write_athinput(nx1, nphot, iseed, file='athinput.kerrframes'):
     """
     Write the athinput for one radial resolution.
     """
-    # Keep the block count fixed as nx1 grows so the ghost-zone population, and hence what
+    # Keep the block count fixed as nx1 grows so the ghost-cell population, and hence what
     # the diagnostic skips, does not change with resolution.
     nx1_block = nx1 // 2
 
@@ -100,7 +100,7 @@ def write_athinput(nx1, nphot, iseed, file='athinput.kerrframes'):
          "boosts         = true",
          "stepsize       = 1.0e-2",
          "varystep       = true",
-         # varystep makes the step a fixed fraction of a zone, so refining the grid
+         # varystep makes the step a fixed fraction of a cell, so refining the grid
          # multiplies the number of steps needed to cross the domain.  Left at the
          # default, the finer runs trip the iteration cap and every photon is destroyed.
          "checkmove      = 100000000", "",
@@ -139,7 +139,7 @@ def read_deviation(pattern="kerrframes.out1.proc*.00000.list"):
     if user.shape[0] == 0:
         raise RuntimeError("photon lists are empty -- every photon was destroyed rather"
                            " than escaping.  The usual cause is the iteration cap: with"
-                           " varystep the step is a fraction of a zone, so a finer grid"
+                           " varystep the step is a fraction of a cell, so a finer grid"
                            " needs a larger <montecarlo>/checkmove.")
     return user[:, IUUDEV], user[:, IUURAD], user[:, IUUCEN]
 
@@ -163,10 +163,10 @@ def main(**kwargs):
         dr = (RMAX - RMIN) / float(nx1)
         results[i] = (dr, dev.max(), cen.max())
         print("  nx1 {:4d}  dr {:.4f}  photon-frame |u.u+1| {:.4e}"
-              "  zone-centre {:.4e}  peak at r {:.3f}"
+              "  cell-center {:.4e}  peak at r {:.3f}"
               .format(nx1, dr, results[i, 1], results[i, 2], np.median(rad)))
 
-    print("\n   dr       photon frame   order     zone centre   order")
+    print("\n   dr       photon frame   order     cell center   order")
     for i in range(len(resolutions)):
         if i == 0:
             print("{:.4e}   {:.4e}      -     {:.4e}      -"
@@ -190,7 +190,7 @@ def main(**kwargs):
 
     worst_phot = results[:, 1].max()
     worst_cen = results[:, 2].max()
-    print("\nlargest |u.u + 1|:  photon frame {:.4e}   zone centre {:.4e}"
+    print("\nlargest |u.u + 1|:  photon frame {:.4e}   cell center {:.4e}"
           .format(worst_phot, worst_cen))
     tol = 1.0e-13
     if worst_phot < tol and worst_cen < tol:
@@ -198,7 +198,7 @@ def main(**kwargs):
     elif worst_phot >= tol:
         print("FAIL: the transport frame is not normalized at the photon")
     else:
-        print("FAIL: the moment frame is not normalized at the zone centre")
+        print("FAIL: the moment frame is not normalized at the cell center")
 
 
 if __name__ == '__main__':

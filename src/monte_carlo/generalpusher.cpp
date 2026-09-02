@@ -73,6 +73,9 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
             (iter < checkmove) && (pphot->dtp[ip] > 0.) ) {
       iter++;
 
+      // Update opacities at the beginning of each step
+      UpdateOpacities(pphot,pmcb,ip);
+      chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
       bool accel_success = false;
       if ((acceleration) && (resonance)) {
         // Get distance from photon to closest cell face
@@ -131,13 +134,11 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
         }
       }
 
-      // Check if photon changed zones
+      // Check if photon changed cells.  The opacities are no longer refreshed here --
+      // the top of the loop does it every step, which subsumes this case -- but the
+      // cached connection still has to be dropped, because crossing a cell can remap the
+      // position (e.g. a periodic boundary).
       if (UpdateZone(pphot,ip)) {
-        UpdateOpacities(pphot,pmcb,ip);
-        // Update the total extinction coefficient for the new zone
-        chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
-        // Crossing a zone can result in position remapping (e.g. periodic boundary)
-        // so drop the cached connection
         acon_valid = false;
       }
 
@@ -172,7 +173,7 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void GeneralPusher::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip)
-//! \brief update opacities after a photon has changed zones
+//! \brief update opacities after a photon has changed cells
 
 void GeneralPusher::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip) {
 
@@ -187,7 +188,6 @@ void GeneralPusher::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip
     int i3 = pphot->i3p[ip];
     if (pmcb->boosts || pmcb->tetrads) {
       // Shift photon energy to comoving frame
-      //shift = pmy_mcb->LorentzTransformFrequencyShift(pphot,ip);
       shift = pmy_mcb->FrequencyShiftComoving(pphot,ip);
       pphot->ep[ip] *= shift;
       // compute opacities in comoving frame
@@ -530,10 +530,10 @@ void GeneralPusher::AdvanceStep(Photon *pphot, Real step, int ip) {
 
 //----------------------------------------------------------------------------------------
 //! \fn Real GeneralPusher::StepSize(Photon *pphot, int ip)
-//! \brief computes stepsize based on size of current zone
+//! \brief computes stepsize based on size of current cell
 
 // SWD: Requires updates
-// return the stepsize based on the current zone and k-vector
+// return the stepsize based on the current cell and k-vector
 // this should be updated with every iteration since k continuously changes
 Real GeneralPusher::StepSize(Photon *pphot, int ip) {
 

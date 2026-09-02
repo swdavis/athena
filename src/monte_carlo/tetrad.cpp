@@ -124,7 +124,7 @@ void ConstructTetrad(Real ucon[4], Real gcov[4][4],
 //
 // The normalization is now a no-op for the Monte Carlo's own callers and is kept for
 // generality only.  It used to do real work: a four-velocity was assembled and normalized
-// at the zone centre and then contracted with the metric at a photon, where u.u was -1
+// at the cell center and then contracted with the metric at a photon, where u.u was -1
 // only to first order in the offset -- 3e-3 at r = 2M on a Kerr-Schild grid.  Callers now
 // obtain ucon from MonteCarloBlock::FluidFourVelocity, which rebuilds it from the stored
 // primitives against the metric at the very point gcov is evaluated, so u.u = -1 there to

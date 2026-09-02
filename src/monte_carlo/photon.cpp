@@ -706,7 +706,7 @@ void Photon::GetPositionIndices(int ibegin, int iend) {
     }
     // MeshCoordsToIndicies can fail for refined grids so we make some checks
 
-    // First check to make zone index is correct
+    // First check to make cell index is correct
     MCCoord *pco = pmy_mcb->pcoord;
     while (x1p[k] > pco->x1f(i1p[k]+1)) {
       i1p[k]++;
@@ -745,7 +745,7 @@ void Photon::GetPositionIndices(int ibegin, int iend) {
       }
     }
     bool on_block = true;
-    // Next check to see if sample landed in active zone or adjacent
+    // Next check to see if sample landed in active cell or adjacent
     if ( (i1p[k] < is-1) || (i1p[k] > ie+1) || (i2p[k] < js-1) || (i2p[k] > je+1)
          || (i3p[k] < ks-1) || (i3p[k] > ke+1) ) {
       on_block = false;

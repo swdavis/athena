@@ -296,7 +296,7 @@ bool PhotonPusher::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Rea
     // vel is allocated (ncells3, ncells2, ncells1, 4) and holds a four-velocity, so the
     // three-velocity is vel(i3,i2,i1,m)/vel(i3,i2,i1,0) -- the same idiom
     // GetDopplerFactor() and LorentzTransformFrequencyShift() use.  This used to read
-    // vel(m,i3,i2,i1), which indexes another zone's memory entirely and runs off the end
+    // vel(m,i3,i2,i1), which indexes another cell's memory entirely and runs off the end
     // of the array once i1 reaches 4, and it omitted the u^0 division as well.
     const int i1 = pphot->i1p[ip], i2 = pphot->i2p[ip], i3 = pphot->i3p[ip];
     const Real u0 = pmcb->vel(i3,i2,i1,0);
@@ -331,7 +331,7 @@ bool PhotonPusher::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Rea
         accel_success = false;
       }
     } else {
-      // zone has zero velocity so use method for static MRW
+      // cell has zero velocity so use method for static MRW
       for(int i=0; i<3; ++i)
         beta[i] = 0.;
       ct = delta*SQR(dist)*chi;
@@ -448,7 +448,7 @@ bool PhotonPusher::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Rea
         pphot->x3p[ip] += 2.*PI;
     }
 
-    // Check if photon has left original zone and update
+    // Check if photon has left original cell and update
     bool newzone = UpdateZone(pphot,0); //SWDFIX
     if (newzone) {
       // Check if photon is absorbed or escape due to boundary condition
@@ -456,7 +456,7 @@ bool PhotonPusher::MRWAcceleration(Photon *pphot, MCRandom *pran, Real dist, Rea
         return false;
     }
     if (newzone || compton) {
-      // update opacity if zone or energy has changed
+      // update opacity if cell or energy has changed
       pphot->acp[ip] = pmcb->AbsorptionOpacity(pmcb,pphot,ip);
       pphot->scp[ip] = pmcb->ScatteringOpacity(pmcb,pphot,ip);
     }
@@ -618,7 +618,7 @@ void PhotonPusher::NextFace(Real dx1, Real dx2, Real dx3, int &face, Real &dx) {
 //----------------------------------------------------------------------------------------
 //! \fn void PhotonPusher::MovePhotonToNextZone(Photon *pphot, MCCoord *pco,
 //!                           MonteCarloBlock *pmcb, int face, bool ascend[3], int ip))
-//! \brief updates photon zone when face is known
+//! \brief updates photon cell when face is known
 
 void PhotonPusher::MovePhotonToNextZone(Photon *pphot, MCCoord *pco, MonteCarloBlock *pmcb,
                                        int face, bool ascend[3], int ip) {
@@ -697,7 +697,7 @@ void PhotonPusher::MovePhotonToNextZone(Photon *pphot, MCCoord *pco, MonteCarloB
 
 //----------------------------------------------------------------------------------------
 //! \fn bool PhotonPusher::UpdateZone(photon *pphot, int ip)
-//! \brief check/updates photon zone after displacement
+//! \brief check/updates photon cell after displacement
 
 bool PhotonPusher::UpdateZone(Photon *pphot, int ip) {
 
@@ -772,7 +772,7 @@ bool PhotonPusher::UpdateZone(Photon *pphot, int ip) {
       }
     }
   }
-  // Returns true if zone changes, false otherwise
+  // Returns true if cell changes, false otherwise
   return update;
 
 }

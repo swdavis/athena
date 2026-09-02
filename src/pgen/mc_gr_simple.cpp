@@ -30,15 +30,15 @@
 
 namespace {
   // Photon list slots for the frame diagnostic.  vel is a four-velocity normalized with
-  // the metric at the zone centre, but every consumer contracts it with the metric at the
+  // the metric at the cell center, but every consumer contracts it with the metric at the
   // photon, where u.u is only -1 to first order in the offset.  IUUDEV carries the
   // running maximum of |u.u + 1| along each path and IUURAD the radius where it peaked,
   // which is what tst/montecarlo/kerr_frames reports.  Snake cannot show this -- it has
   // g_tt = -1 and a static fluid, so u.u is -1 identically -- hence a Kerr-Schild case.
   const int IUUDEV = 0;
   const int IUURAD = 1;
-  // Same quantity evaluated at the photon's zone centre rather than at the photon.  That
-  // is the frame ComputeTransformations and ComovingFrameMatrix build the per-zone moment
+  // Same quantity evaluated at the photon's cell center rather than at the photon.  That
+  // is the frame ComputeTransformations and ComovingFrameMatrix build the per-cell moment
   // matrices on, so this slot guards the moments while IUUDEV guards the transport.  Both
   // should sit at roundoff; they are separate slots because they are separate frames, and
   // the split between them is deliberate (see UpdateMoments).
@@ -244,7 +244,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
 
   for (int ip=ips; ip<=ipe; ip++) {
 
-    // Obtain initial position within zone
+    // Obtain initial position within cell
     //temp GetZonePosition(pphot,pran,pcoord,ip);
 
     // Set maximum integration time
@@ -321,7 +321,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
     pphot->nscp[ip] = 0;
 
     // Initialize the absorption and scattering extinction coefficients
-    // to the values appropriate in the emitted zone
+    // to the values appropriate in the emitted cell
     pphot->acp[ip] = AbsorptionOpacity(this,pphot,ip);
     pphot->scp[ip] = ScatteringOpacity(this,pphot,ip);
   }
@@ -709,8 +709,8 @@ void InsideHorizon(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher, 
     printf("Photon absorbed inside horizon at r=%g\n",x1);
   }
 
-  // Record how far the zone-centred four-velocity misses being a unit vector where it is
-  // actually used.  vel was normalized against the metric at the zone centre; contracting
+  // Record how far the cell-centred four-velocity misses being a unit vector where it is
+  // actually used.  vel was normalized against the metric at the cell center; contracting
   // it with the metric here is exactly what FrequencyShiftComoving and the two transform
   // routines do, so this is the error they inherit, not a synthetic one.
   const int i1 = pphot->i1p[ip], i2 = pphot->i2p[ip], i3 = pphot->i3p[ip];
@@ -719,9 +719,9 @@ void InsideHorizon(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher, 
                        i2 >= pmcb->js && i2 <= pmcb->je &&
                        i3 >= pmcb->ks && i3 <= pmcb->ke);
 
-  // Ghost zones are skipped, but no longer because vel is zero there -- GetVelocity and
+  // Ghost cells are skipped, but no longer because vel is zero there -- GetVelocity and
   // the other fillers now cover ghosts.  They are skipped because a photon holding ghost
-  // indices sits a long way from that zone's centre, at a distance set by the angular
+  // indices sits a long way from that cell's center, at a distance set by the angular
   // grid rather than the radial one, so including them contributes an offset error the
   // radial refinement below cannot resolve and that swamps the O(1e-2) being measured.
   // Sampling them reports a flat 5.2e-1 at every nx1.  Measuring that properly needs a
@@ -732,7 +732,7 @@ void InsideHorizon(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher, 
     pmcb->pcoord->Metric(x, gcov);
 
     // Whatever the frame transformations use.  Before the reconstruction this read vel
-    // straight from the zone centre and reported O(1e-2); FluidFourVelocity rebuilds it
+    // straight from the cell center and reported O(1e-2); FluidFourVelocity rebuilds it
     // here, and u.u = -1 should then hold to roundoff at every resolution.
     Real ucon[4];
     pmcb->FluidFourVelocity(x, i3, i2, i1, ucon);
@@ -743,7 +743,7 @@ void InsideHorizon(MonteCarloBlock *pmcb, Photon *pphot, PhotonPusher *ppusher, 
       pphot->user[IUURAD][ip] = x1;
     }
 
-    // The moment frames are built at the zone centre, not here, so check that point too.
+    // The moment frames are built at the cell center, not here, so check that point too.
     Real xc[4];
     xc[IMC0] = x[IMC0];
     xc[IMC1] = pmcb->pmy_block->pcoord->x1v(i1);

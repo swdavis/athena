@@ -347,7 +347,7 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   // share one array name:
   //
   //   flat spacetime -- vel holds (gamma, gamma*beta^i) in the orthonormal frame.  The
-  //     metric is constant across a zone, so a vector normalized at the zone centre is
+  //     metric is constant across a cell, so a vector normalized at the cell center is
   //     still normalized anywhere in it and there is nothing to reconstruct.  Consumers
   //     divide by vel(...,0) to recover beta^i.
   //
@@ -791,7 +791,7 @@ void MonteCarloBlock::LorentzTransform(Photon *pphot, const Real sign, int ips,
     Real beta2= SQR(beta[0]) + SQR(beta[1]) + SQR(beta[2]);
 
     if(beta2 > 0.) {
-      // SWD: pretabulate gamma for each zone?
+      // SWD: pretabulate gamma for each cell?
       Real gamma = 1. / sqrt(1. - beta2); // assumes v^2 < c^2 checked elsewhere
       Real bdk = k1 * beta[0] + k2 * beta[1] + k3 * beta[2];
       Real gonembdk = gamma * (1. - bdk);
@@ -860,14 +860,14 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, Real etau, int ip) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip)
-//! \brief add contribution to radiation moments in current zone
+//! \brief add contribution to radiation moments in current cell
 //
 // In general relativity the frame transformations -- FrequencyShiftComoving,
 // TransformToComoving, TransformToCoordinate -- rebuild the fluid four-velocity at the
 // photon's own position, so that u.u = -1 exactly where it is contracted with k.  The
-// moments do not: boost_lab and boost_cmv are built once per zone at the zone centre by
+// moments do not: boost_lab and boost_cmv are built once per cell at the cell center by
 // ComputeTransformations, and PhotonFrames applies those same matrices to every photon
-// crossing the zone.
+// crossing the cell.
 //
 // Two related approximations: the cell-center tetrad is applied to a wavevector carried
 // at the photon without parallel transport, and the opacity is refreshed only at cell
@@ -985,7 +985,7 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl,
 //        Real k1, Real k2, Real k3,Real etau, int ip)
-//! \brief add contribution to radiation moments in current zone for acceleration
+//! \brief add contribution to radiation moments in current cell for acceleration
 
 void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl, Real k1,
                                                 Real k2, Real k3, Real etau, int ip) {
@@ -1110,7 +1110,7 @@ void MonteCarloBlock::UpdateMomentsAcceleration(Photon *pphot, Real dl, Real pl,
 void MonteCarloBlock::NormalizeMoments(bool normalize) {
 
   // Derive the comoving moments from the lab accumulation unless they were accumulated
-  // directly.  Done before the normalisation factor is applied; it is a scalar so the two
+  // directly.  Done before the normalization factor is applied; it is a scalar so the two
   // commute, but doing it here keeps the derived array in step with what is written out.
   if (mom_flag_com && !accumulate_com && normalize) DeriveComovingMoments();
 
@@ -1652,7 +1652,7 @@ void MonteCarloBlock::ComputeEmissionSampleArray() {
 void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe) {
 
   if (pmy_mc->emission_eqwt[0]) {
-    // Set intial zone based on probability within zone
+    // Set intial cell based on probability within cell
 
     for (int ip=ips; ip<=ipe; ip++) {
       bool this_zone = false;
@@ -1667,7 +1667,7 @@ void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe) {
           this_zone = true;
           emit_count_(k,j,i) -= 1;
         } else {
-          // Update zone
+          // Update cell
           this_zone = false;
           i3_++;
           if (i3_ >= nx3) {
@@ -1688,7 +1688,7 @@ void MonteCarloBlock::SetEmissionCellWeight(Photon *pphot, int ips, int ipe) {
     } // end loop over ip
   } else {
     for (int ip=ips; ip<=ipe; ip++) {
-      // Randomly assign emission zone
+      // Randomly assign emission cell
       pphot->i1p[ip] = static_cast<int>(pran->uniform()*nx1)+is;
       pphot->i2p[ip] = static_cast<int>(pran->uniform()*nx2)+js;
       pphot->i3p[ip] = static_cast<int>(pran->uniform()*nx3)+ks;
@@ -1710,7 +1710,7 @@ void MonteCarloBlock::SetEmissionCellWeightArea(Photon *pphot, BoundaryFace face
                                                 int ipe) {
 
   if (pmy_mc->emission_eqwt[0]) {
-    // Set intial zone based on probability within zone
+    // Set intial cell based on probability within cell
     for (int ip=ips; ip<=ipe; ip++) {
       bool i1flag = true;
       bool i2flag = true;
@@ -1760,7 +1760,7 @@ void MonteCarloBlock::SetEmissionCellWeightArea(Photon *pphot, BoundaryFace face
           this_zone = true;
           emit_count_(k,j,i) -= 1;
         } else {
-          // Update zone
+          // Update cell
           this_zone = false;
           if (!i3flag) {
             i2_++;
@@ -1797,7 +1797,7 @@ void MonteCarloBlock::SetEmissionCellWeightArea(Photon *pphot, BoundaryFace face
   } else {
 
     for (int ip=ips; ip<=ipe; ip++) {
-      // Randomly assign emission zone
+      // Randomly assign emission cell
       Real weight_reduce;
       switch(face) {
         case BoundaryFace::inner_x1:
@@ -1864,12 +1864,12 @@ void MonteCarloBlock::SetEmissionCellWeightArea(Photon *pphot, BoundaryFace face
 //!                                      int &kl, int &ku) const
 //! \brief index range the fluid-derived arrays are filled over
 //
-// Active zones plus ghosts, widened only in the dimensions the block actually has, which
+// Active cells plus ghosts, widened only in the dimensions the block actually has, which
 // is the same rule MeshBlock::ProblemGenerator and Mesh::Initialize use.
 //
-// The ghosts matter because a photon can sit in one: it keeps its old zone indices while
-// it waits to be handed to the neighbouring block, and the pusher goes on reading rho,
-// tgas, vel and the boost matrices at those indices.  Filling active zones only left each
+// The ghosts matter because a photon can sit in one: it keeps its old cell indices while
+// it waits to be handed to the neighboring block, and the pusher goes on reading rho,
+// tgas, vel and the boost matrices at those indices.  Filling active cells only left each
 // of those reads returning zero, which for vel meant a null four-velocity reaching
 // FrequencyShiftComoving and the two transform routines.
 //
@@ -1901,14 +1901,14 @@ void MonteCarloBlock::FillBounds(int &il, int &iu, int &jl, int &ju,
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::FluidFourVelocity(Real x[4], int i3, int i2, int i1,
 //!                                             Real ucon[4]) const
-//! \brief four-velocity of zone (i3,i2,i1)'s frame, evaluated at the position x
+//! \brief four-velocity of cell (i3,i2,i1)'s frame, evaluated at the position x
 //
 // The normal uu^i carries no normalization constraint, so covariant velocities can
 // be obtained via the metric at specific x. The fluid state is assumed to be 
 // piecewise constant.
 //
 // With boosts off uprim is zero and this returns the normal observer at x, which is both
-// the right answer and an exact one, since no zone-center quantity enters at all.
+// the right answer and an exact one, since no cell-center quantity enters at all.
 
 void MonteCarloBlock::FluidFourVelocity(Real x[4], int i3, int i2, int i1,
                                         Real ucon[4]) const {
@@ -2049,7 +2049,7 @@ void MonteCarloBlock::GetVelocity() {
         for (int i=il; i<=iu; ++i) {
           Real rho = pmy_block->phydro->u(IDN,k,j,i);
           if (!(rho > 0.)) {
-            // Empty ghost zone: leave the fluid at rest rather than dividing by zero.
+            // Empty ghost cell: leave the fluid at rest rather than dividing by zero.
             // vel must still be a valid four-velocity, since consumers contract it.
             vel(k,j,i,0) = 1.0;
             vel(k,j,i,1) = 0.0;
@@ -2143,10 +2143,10 @@ void MonteCarloBlock::GetTemperature() {
     for (int j=jl; j<=ju; ++j) {
       for (int i=il; i<=iu; ++i) {
 
-        // A ghost zone a problem generator never wrote leaves both of these at zero, and
+        // A ghost cell a problem generator never wrote leaves both of these at zero, and
         // 0/0 is a NaN that the floor and ceiling below cannot clamp -- every comparison
         // against a NaN is false, so it would propagate into the opacities.  Fall back to
-        // the floor instead, which is what an empty zone should read as anyway.
+        // the floor instead, which is what an empty cell should read as anyway.
         Real dens = phydro->w(IDN,k,j,i);
         Real temp = (dens > 0.) ? tconv * phydro->w(IEN,k,j,i) / dens : tfloor_cgs;
         // apply temperature floor
@@ -2210,9 +2210,9 @@ void MonteCarloBlock::ComputeTransformations() {
             for (int m=0; m<4; m++)
               boost_lab(k,j,i,a,m) = ecov[a][m];
 
-          // The frame the fluid is at rest in, rebuilt at the zone centre.  Deliberately
-          // the zone centre and not the photon: these matrices are per zone and back the
-          // moments, which are zone averages.  See DeriveComovingMoments.
+          // The frame the fluid is at rest in, rebuilt at the cell center.  Deliberately
+          // the cell center and not the photon: these matrices are per cell and back the
+          // moments, which are cell averages.  See DeriveComovingMoments.
           Real ucon[4];
           FluidFourVelocity(x, k, j, i, ucon);
           ConstructTetrad(ucon, gcov, econ, ecov);
@@ -2270,7 +2270,7 @@ void MonteCarloBlock::TransformToComoving(Photon *pphot, int ips, int ipe) {
       pcoord->Metric(x, gcov);
 
       // Create tetrad basis on a four-velocity rebuilt here, so it is a unit timelike
-      // vector at the photon rather than at the zone centre.  This is the inverse of
+      // vector at the photon rather than at the cell center.  This is the inverse of
       // TransformToCoordinate and the two are called around Scatter, which does not move
       // the photon, so both see the same x and the round trip stays exact.
       Real ucon[4];
@@ -2364,7 +2364,7 @@ void MonteCarloBlock::TransformToCoordinate(Photon *pphot, int ips, int ipe) {
       pcoord->Metric(x, gcov);
 
       // Create tetrad basis on a four-velocity rebuilt here, so it is a unit timelike
-      // vector at the photon rather than at the zone centre.
+      // vector at the photon rather than at the cell center.
       Real ucon[4];
       FluidFourVelocity(x, pphot->i3p[ip], pphot->i2p[ip], pphot->i1p[ip], ucon);
 
@@ -2458,7 +2458,7 @@ Real  MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip) {
     x[IMC3] = pphot->x3p[ip];
     pcoord->Metric(x, gcov);
 
-    // Rebuilt at the photon rather than read from the zone centre, so u.u = -1 holds
+    // Rebuilt at the photon rather than read from the cell center, so u.u = -1 holds
     // here, where it is about to be contracted with k.
     Real ucon[4];
     FluidFourVelocity(x, pphot->i3p[ip], pphot->i2p[ip], pphot->i1p[ip], ucon);
@@ -2473,7 +2473,7 @@ Real  MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip) {
     // bit for bit while skipping the Gram-Schmidt for the three spatial legs, which is
     // roughly ten metric contractions and four square roots that never reach the answer.
     // This sits in the general pusher's inner loop through UpdateOpacities, so the saving
-    // is what makes refreshing opacities more often than once per zone affordable.
+    // is what makes refreshing opacities more often than once per cell affordable.
     return ObserverEnergy(ucon, kcopy, gcov)/k0init;
   } else {
     int i1 = pphot->i1p[ip];
@@ -2514,8 +2514,8 @@ Real  MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip) {
     } else {
       k0f = kf[0];
     }
-    Real nufact =k0f/k0init;
-    /*if (std::isinf(nufact) || std::isnan(nufact)) {
+    /*Real nufact =k0f/k0init;
+     (std::isinf(nufact) || std::isnan(nufact)) {
       printf("%g %g %g %g\n",boost_cmv(i3,i2,i1,0,0),boost_cmv(i3,i2,i1,0,1),
             boost_cmv(i3,i2,i1,0,2),boost_cmv(i3,i2,i1,0,3));
       printf("%g %g %g %g %g %g\n",k0init,k0f,kf[0],kf[1],kf[2],kf[3]);

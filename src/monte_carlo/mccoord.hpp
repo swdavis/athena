@@ -22,7 +22,7 @@
 //!
 //! COORDINATE_SYSTEM is not enough on its own.  It is a bare string literal, so the
 //! comparisons `COORDINATE_SYSTEM == "cartesian"` scattered through the module are
-//! pointer comparisons with unspecified behaviour, and more importantly "gr_user" says
+//! pointer comparisons with unspecified behavior, and more importantly "gr_user" says
 //! nothing at all about the metric -- it was silently taken to mean Cartesian
 //! Kerr-Schild.  MCCoordSystem names the metric outright; see
 //! MonteCarlo::SetCoordinateSystem for how it is resolved from the configure-time
@@ -44,7 +44,7 @@ enum MCCoordSystem {
 //!
 //! The metric and the grid topology are separate facts and the module needs both.
 //! Kerr-Schild in Cartesian form is a curved metric on an (x,y,z) grid, so code that
-//! orthonormalises directions, converts wavevectors for output or bins escape angles has
+//! orthonormalizes directions, converts wavevectors for output or bins escape angles has
 //! to branch on this rather than on MCCoordSystem.
 
 enum MCTopology {
@@ -94,7 +94,7 @@ public:
   //                            This is the geodesic right-hand side.
   //   MetricDerivative         Not called by anything, in any coordinate system.
   //   Connect                  Only VerletStep, whose call sites in generalpusher.cpp are
-  //                            commented out in favour of RK4Step.  The Hamiltonian
+  //                            commented out in favor of RK4Step.  The Hamiltonian
   //                            formulation uses metric derivatives, not Christoffels.
   //   Tetrad, InverseTetrad    Only the non-GR branches of TransformToComoving and
   //                            TransformToCoordinate, and the flat branch of

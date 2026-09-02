@@ -42,7 +42,7 @@ enum MCFrame {MCFRAME_LAB = 0, MCFRAME_COMOVING = 1, MCFRAME_COORD = 2, MCFRAME_
 //!
 //! Photon pushers pass UpdateMoments a coordinate path length, and the length in any other
 //! frame differs by that frame's energy over ep. n is a unit vector in the orthonormal frames;
-//  in MCFRAME_COORD it holds k^i/k^0 and is not normalised.
+//  in MCFRAME_COORD it holds k^i/k^0 and is not normalized.
 
 struct PhotonFrameState {
   Real e;     // photon energy in this frame

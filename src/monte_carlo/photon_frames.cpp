@@ -12,7 +12,7 @@
 //!
 //! Two operations live here and are easy to conflate.  PhotonFrames projects a single
 //! photon, per crossing; ComovingFrameMatrix and DeriveComovingMoments transform an
-//! accumulated tensor, once per zone at output.
+//! accumulated tensor, once per cell at output.
 
 // C headers
 
@@ -52,7 +52,7 @@ void PhotonFrames::Fill(MCFrame f) {
   const int i1 = pphot_->i1p[ip_], i2 = pphot_->i2p[ip_], i3 = pphot_->i3p[ip_];
 
   if (f == MCFRAME_COORD) {
-    // Not orthonormal: n holds k^i/k^0 and is deliberately not normalised.
+    // Not orthonormal: n holds k^i/k^0 and is deliberately not normalized.
     s.e = kco_[IMC0];
     for (int i=0; i<3; ++i) s.n[i] = kco_[IMC1+i]/ep;
     s.dl = dl_;
@@ -90,7 +90,7 @@ void PhotonFrames::Fill(MCFrame f) {
       }
       // The tetrad time leg is unity for every flat coordinate system, so kf[0] == ep and
       // dividing the spatial parts by ep is the same unit direction the legacy pushers
-      // store.  Kept in this form rather than normalised by the spatial magnitude so the
+      // store.  Kept in this form rather than normalized by the spatial magnitude so the
       // arithmetic is unchanged from before this was factored out.
       s.e = kf[IMC0];
       for (int i=0; i<3; ++i) s.n[i] = kf[IMC1+i]/ep;
@@ -136,7 +136,7 @@ void PhotonFrames::Fill(MCFrame f) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void MonteCarloBlock::ComovingFrameMatrix(...)
-//! \brief the lab to comoving transformation for one zone
+//! \brief the lab to comoving transformation for one cell
 //!
 //! Both frames are orthonormal at the same event, so this is a Lorentz transformation.
 //! In general relativity it must be composed from the two tetrads rather than rebuilt as
@@ -171,8 +171,8 @@ void MonteCarloBlock::ComovingFrameMatrix(int k, int j, int i, const AthenaArray
   Real econL[4][4], ecovL[4][4];
   ConstructTetrad(ncon, gcov, econL, ecovL);
 
-  // Rebuilt at the zone centre, which is the right point here: this matrix is per zone
-  // and transforms the accumulated moments, which are zone averages.
+  // Rebuilt at the cell center, which is the right point here: this matrix is per cell
+  // and transforms the accumulated moments, which are cell averages.
   Real ucon[4];
   FluidFourVelocity(x, k, j, i, ucon);
   Real econF[4][4], ecovF[4][4];
@@ -191,7 +191,7 @@ void MonteCarloBlock::ComovingFrameMatrix(int k, int j, int i, const AthenaArray
 //! \brief fill moments_com by transforming the accumulated lab moments
 //!
 //! The moments are a rank two tensor and the transformation is the same matrix for every
-//! photon in the zone, so sum Lp Lp == L (sum p p) L exactly.  Deriving is therefore not
+//! photon in the cell, so sum Lp Lp == L (sum p p) L exactly.  Deriving is therefore not
 //! an approximation of accumulating, and it removes the second per-photon projection --
 //! measured at 5% of runtime on the general pusher and 12% on the legacy pusher.
 

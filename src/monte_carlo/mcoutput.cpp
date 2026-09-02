@@ -1114,7 +1114,7 @@ MCOutput::MCOutput(MonteCarlo *pmc, ParameterInput *pin) {
         // same way: it bins ep = k^t rather than the conserved -k_t.
         //
         // Doing this properly means projecting through the normal-observer tetrad, which
-        // MonteCarloBlock::boost_lab already holds per zone.  Until then the photon list
+        // MonteCarloBlock::boost_lab already holds per cell.  Until then the photon list
         // is the supported route: it stores -k_t directly, and
         // vis/python/montecarlo/make_spectrum.py bins it.
         // Keyed on curvature, not on whether the flat scale factors happen to
@@ -1408,7 +1408,7 @@ void Spectrum::WriteSpectrum(std::string fname, Real tint_out) {
   intens.NewAthenaArray(nintens,nphi,nmu,ne);
   errors.NewAthenaArray(nintens,nphi,nmu,ne);
   Real fac1 = norms*static_cast<Real>(nmu)*static_cast<Real>(nphi)/2./PI;
-  // One normalisation for every plane, intensity and Stokes alike, which is what
+  // One normalization for every plane, intensity and Stokes alike, which is what
   // make_spectrum in athena_mc.py does: it builds a single factor and applies it to the
   // whole intensity array.  The Stokes planes used to be scaled in a separate loop that
   // omitted tint_out, so Q/U/V came out larger than I by the integration time and Q/I

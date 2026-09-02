@@ -127,7 +127,7 @@ static bool MeridianBasis(MonteCarloBlock *pmcb, Photon *pphot, int ip,
   //
   // In general relativity the frame is rebuilt at the photon instead, so that it is a
   // unit timelike vector where gcov above is evaluated.  uprim only exists in GR, which
-  // is why the flat path still reads vel; there the metric is constant across a zone and
+  // is why the flat path still reads vel; there the metric is constant across a cell and
   // the two agree anyway.
   Real ucon[4];
   if (GENERAL_RELATIVITY) {
@@ -225,7 +225,7 @@ static void WriteMeridianStokes(Photon *pphot, int ip, Real ecov[4][4],
   nmer[IMC2][IMC2] = nrr;
 
   Real stokes[4];
-  TensorToStokes(nmer, stokes);  // returns I normalised to one
+  TensorToStokes(nmer, stokes);  // returns I normalized to one
 
   pphot->sip[ip] = stokes[0];
   pphot->sqp[ip] = stokes[1];

@@ -165,6 +165,6 @@ the uniform one passes.
   it looked: before unification the spectrum used `MCCoord::InverseTetrad` while the
   polarization used the normal observer, two different orthonormal frames that agreed only
   because both happened to share a third leg.
-- **Opacity within a zone.** Currently refreshed only at zone crossings; measured cost of
+- **Opacity within a cell.** Currently refreshed only at cell crossings; measured cost of
   refreshing every step is about 25%. Faraday coefficients are frequency dependent and
   would inherit the same staleness.

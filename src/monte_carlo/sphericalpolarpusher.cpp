@@ -304,7 +304,7 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
       Real chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
 
       bool test = false;
-      if ((chi > 0.) && (dl * l_cgs > tauremaining / chi)) { // Photon remains in zone
+      if ((chi > 0.) && (dl * l_cgs > tauremaining / chi)) { // Photon remains in cell
         bool accel_success = false;
         if (acceleration) {
           Real dist = pco->dmin(pphot->i3p[ip],pphot->i2p[ip],pphot->i1p[ip]);
@@ -324,7 +324,7 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
         if (!accel_success) {
           if (pphot->statp[ip] != EVOLVING)
             break; // break out of while loop
-          // compute distance remaining in zone
+          // compute distance remaining in cell
           dl = tauremaining / chi / l_cgs;
           pphot->dtp[ip] -= dl / c_code;;
           // Update moments
@@ -359,7 +359,7 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
         }
         //if (ptraj != NULL) ptraj->AddToTrajectory(pphot,ip);
         break;
-      } else { // Photon moves to next zone and reduce tauremaining
+      } else { // Photon moves to next cell and reduce tauremaining
         // Update moments
         pphot->dtp[ip] -= dl / c_code;
 
@@ -384,7 +384,7 @@ void SphericalPolarPusher::Move(Photon *pphot, int ips, int ipe) {
           pphot->x0p[ip] += dl;
 
         tauremaining -= chi * l_cgs * dl;
-        // move photon to next zone and update angular positions
+        // move photon to next cell and update angular positions
         MovePhotonToNextZone(pphot,pco,pmcb,face,ascend,ip);
         if ((face == 1) || (face == 3) || (face == 4) || (face == 6))
           thface = true;
