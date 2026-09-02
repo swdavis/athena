@@ -406,6 +406,14 @@ public:
   MCTopology topology;
   bool curved_metric;
 
+  //! true when the comoving frequency shift is identically one everywhere, so that an
+  //! opacity depends on the cell alone and cannot change while a photon crosses it.
+  //! Requires a flat metric (so the lapse is one) and a fluid at rest (so there is no
+  //! Doppler term).  Set by ComputeTransformations, which is where the velocity is known.
+  //! GeneralPusher uses it to skip the per-step opacity refresh, which is then provably a
+  //! no-op; see the comment there.
+  bool shift_unity;
+
   // Associated with general pusher
   // SWD some of these should be eliminated others moved to MonteCarlo?
   bool orthotet_flag; // use orthonormal tetrad for TransferPhotons()

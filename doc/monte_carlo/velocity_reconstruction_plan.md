@@ -40,9 +40,24 @@ photon crosses a cell face. It sits above the step because `tau_step` multiplies
 length of the step about to be taken, and it subsumes the refresh that used to hang off
 `UpdateZone`.
 
-Cost on `mc_snake_atm`: **12% of wall clock** (15.2 s -> 17.1 s), 8.6% by instruction count -- the
-gap is cache effects callgrind does not see. It was 28% before `FrequencyShiftComoving` stopped
-building a full tetrad to extract one component.
+It is skipped inside a cell when `MonteCarloBlock::shift_unity` holds -- a flat metric (so the
+lapse is one) and a fluid at rest (so there is no Doppler term). The comoving shift is then
+identically one, the opacity depends on the cell alone, and refreshing within a cell is provably a
+no-op. The first step of every `Move` still refreshes regardless, which is the part that actually
+corrects results.
+
+The right axis for that test is **not** GR versus non-GR. The shift varies within a cell exactly
+when the fluid has a velocity component along a direction the metric depends on, because `u^nu` is
+constant per cell while `k_nu` is conserved only for the coordinates the metric ignores. So
+spherical polar with any radial flow varies, and so does any curved metric even with a static
+fluid; snake does not, and cannot be made to with `mc_snake`, whose metric depends on x1 alone
+while its `velocity` drives flow along x3.
+
+Cost on `mc_snake_atm`: unconditional refresh is **12% of wall clock** (15.2 s -> 17.1 s), 8.6% by
+instruction count -- the gap is cache effects callgrind does not see. It was 28% before
+`FrequencyShiftComoving` stopped building a full tetrad to extract one component. With the
+`shift_unity` skip that deck returns to **14.8 s** while producing `.spec` and `.list` **byte
+identical** to the unconditional version.
 
 What the measurement actually showed, which is not what was expected:
 

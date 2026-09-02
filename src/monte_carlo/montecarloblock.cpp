@@ -2167,6 +2167,37 @@ void MonteCarloBlock::ComputeTransformations() {
   int il, iu, jl, ju, kl, ku;
   FillBounds(il, iu, jl, ju, kl, ku);
 
+  // Decide whether the comoving frequency shift is identically one, which lets the
+  // general pusher skip its per-step opacity refresh.  Two conditions, both needed:
+  //
+  //   flat metric   -- the shift for an observer at rest is the lapse, and alpha = 1 for
+  //                    every flat metric the module supports (g_tt = -1, no time cross
+  //                    terms).  In a curved metric alpha varies from point to point.
+  //   fluid at rest -- otherwise there is a Doppler term, and it varies within a cell
+  //                    whenever the flow has a component along a direction the metric
+  //                    depends on.  Snake is a poor test of that because its metric
+  //                    depends on x1 alone while mc_snake only drives flow along x3, so
+  //                    k_3 is conserved and the shift comes out constant; spherical polar
+  //                    with any radial flow is the case that does vary.
+  //
+  // The test is for exact zeros.  A pgen that sets a tiny but nonzero velocity gets the
+  // refresh, which costs time but cannot be wrong.
+  bool fluid_at_rest = true;
+  for (int k=kl; k<=ku && fluid_at_rest; ++k) {
+    for (int j=jl; j<=ju && fluid_at_rest; ++j) {
+      for (int i=il; i<=iu && fluid_at_rest; ++i) {
+        if (GENERAL_RELATIVITY) {
+          if (uprim(k,j,i,0) != 0. || uprim(k,j,i,1) != 0. || uprim(k,j,i,2) != 0.)
+            fluid_at_rest = false;
+        } else {
+          if (vel(k,j,i,1) != 0. || vel(k,j,i,2) != 0. || vel(k,j,i,3) != 0.)
+            fluid_at_rest = false;
+        }
+      }
+    }
+  }
+  shift_unity = fluid_at_rest && !curved_metric;
+
   if (GENERAL_RELATIVITY) {
     // In GR the map to an orthonormal frame is not a flat Lorentz boost.  vel holds a
     // coordinate-frame four-velocity, so treating its components as gamma and
@@ -2514,7 +2545,7 @@ Real  MonteCarloBlock::FrequencyShiftComoving(Photon *pphot, int ip) {
     } else {
       k0f = kf[0];
     }
-    /*Real nufact =k0f/k0init;
+    /* Real nufact =k0f/k0init;
      (std::isinf(nufact) || std::isnan(nufact)) {
       printf("%g %g %g %g\n",boost_cmv(i3,i2,i1,0,0),boost_cmv(i3,i2,i1,0,1),
             boost_cmv(i3,i2,i1,0,2),boost_cmv(i3,i2,i1,0,3));

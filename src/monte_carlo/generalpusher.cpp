@@ -69,13 +69,35 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
     Real chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
     // nothing cached carries over from the previous photon
     acon_valid = false;
+    // Cell the opacities were last computed for.  Starts invalid so that the first step
+    // always refreshes; see the shift_unity comment below.
+    int oi1 = -1, oi2 = -1, oi3 = -1;
     while ( (pphot->statp[ip] == EVOLVING) && (tauremaining > TINY_NUMBER) &&
             (iter < checkmove) && (pphot->dtp[ip] > 0.) ) {
       iter++;
 
-      // Update opacities at the beginning of each step
-      UpdateOpacities(pphot,pmcb,ip);
-      chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
+      // Update opacities at the beginning of each step.  Two regimes:
+      //
+      //   shift_unity false -- the comoving shift moves as the photon does, through the
+      //     lapse and through the Doppler term, so the opacity has to be recomputed every
+      //     step.  Any curved metric, or any moving fluid, lands here.
+      //   shift_unity true  -- flat metric and fluid at rest, so the shift is identically
+      //     one and the opacity depends on the cell alone.  Refreshing inside a cell is
+      //     then provably a no-op; it measured exactly 0 over 1.2e7 same-cell steps in
+      //     mc_snake_atm before this shortcut existed.  Only a cell change needs one.
+      //
+      // The first step of a Move always refreshes either way, because oi1 starts invalid.
+      // Whatever left the opacities behind -- emission, or a coherent scatter that turned
+      // the photon without recomputing them -- they cannot be assumed current on entry.
+      if (!pmcb->shift_unity) {
+        UpdateOpacities(pphot,pmcb,ip);
+        chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
+      } else if (pphot->i1p[ip] != oi1 || pphot->i2p[ip] != oi2
+                 || pphot->i3p[ip] != oi3) {
+        UpdateOpacities(pphot,pmcb,ip);
+        chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
+        oi1 = pphot->i1p[ip]; oi2 = pphot->i2p[ip]; oi3 = pphot->i3p[ip];
+      }
       bool accel_success = false;
       if ((acceleration) && (resonance)) {
         // Get distance from photon to closest cell face
