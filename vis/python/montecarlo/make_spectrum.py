@@ -143,13 +143,6 @@ if __name__ == '__main__':
     parser.add_argument('-yerror',
         action = 'store_true',
         help = 'compute intensity errors')
-    parser.add_argument('-tetrad',
-        action = 'store_true',
-        help = 'transform photons to tetrad frame')
-    parser.add_argument('--spin',
-        type = float,
-        default = 0.0,
-        help = 'black hole spin parameter')
 
     args = parser.parse_args()
     main(**vars(args))

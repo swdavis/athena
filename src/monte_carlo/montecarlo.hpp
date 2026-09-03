@@ -25,6 +25,7 @@
 #include "mcoutput.hpp"
 #include "mccoord.hpp"
 #include "photon_frames.hpp"
+#include "polarization.hpp"
 #include "tetrad.hpp"
 
 // GSL library
@@ -172,6 +173,7 @@ enum BoundaryFace SetEmissionSurface(std::string input_face);
 enum AbsorptionOpacityFlag GetAbsorptionOpacityFlag(std::string input_string);
 enum AbsorptionMethodFlag GetAbsorptionMethodFlag(std::string input_string);
 enum ScatteringFlag GetScatteringFlag(std::string input_string);
+enum MCPolarization GetMCPolarizationFlag(std::string input_string);
 
 //----------------------------------------------------------------------------------------
 //! \struct MCBlockSize
@@ -254,12 +256,12 @@ public:
   bool boosts;  // Compute lorentz transformations
   bool using_bfield; // set magnetic fields
   bool tetrads; // convert from coordinate frame
-  bool emission_array;  // Compute and save zone emissivities
+  bool emission_array;  // Compute and save cell emissivities
   bool *emission_eqwt; // Set initial weights equal
   bool *initialize_comoving; // Transform from comoving frame for emission
   enum AbsorptionMethodFlag *absorption_method; // absorption method for each emission type
 
-  bool polarized;// track photon polarization
+  MCPolarization polarized;// how much of the polarization state is tracked
   bool acceleration;  // use MRW acceleration
   bool computedmin;
   bool time_acc;  // use MRW acceleration with time limit
@@ -274,10 +276,14 @@ public:
   //! true when coord_system is a curved spacetime; derived from coord_system
   bool curved_metric;
 
-  //! canonical geometry/wavevector tag written to output headers; see SetGeometryTag
+  // canonical geometry/wavevector tag written to output headers; see SetGeometryTag
   std::string geometry_tag;
-  //! true when geometry_tag denotes a curved (or at least GR-integrated) spacetime, in
-  //! which case list output reports the conserved energy -k_t rather than k^t
+  // parameters of the metric, as "key=value,key=value"
+  std::string metric_params;
+  // frame tag for outputs
+  std::string frame_tag;
+  // true when geometry_tag denotes a curved (or at least GR-integrated) spacetime,
+  // in which case list output reports the conserved energy -k_t rather than k^t
   bool relativistic_output;
 
   // function pointers
@@ -317,6 +323,7 @@ public:
   void InitializeEmission(ParameterInput *pin);
   void SetCoordinateSystem(ParameterInput *pin);
   void SetGeometryTag(ParameterInput *pin);
+  void SetMetricParams(ParameterInput *pin);
   void DistributeSamples(int etype);
   void NormalizeDomainOutputs(bool normalize);
 private:
@@ -399,6 +406,14 @@ public:
   MCTopology topology;
   bool curved_metric;
 
+  //! true when the comoving frequency shift is identically one everywhere, so that an
+  //! opacity depends on the cell alone and cannot change while a photon crosses it.
+  //! Requires a flat metric (so the lapse is one) and a fluid at rest (so there is no
+  //! Doppler term).  Set by ComputeTransformations, which is where the velocity is known.
+  //! GeneralPusher uses it to skip the per-step opacity refresh, which is then provably a
+  //! no-op; see the comment there.
+  bool shift_unity;
+
   // Associated with general pusher
   // SWD some of these should be eliminated others moved to MonteCarlo?
   bool orthotet_flag; // use orthonormal tetrad for TransferPhotons()
@@ -425,7 +440,12 @@ public:
   AthenaArray<Real> rho;
   AthenaArray<Real> species;
   AthenaArray<Real> tgas;
+  // Flat spacetime only: (gamma, gamma*beta^i) in the orthonormal frame, so consumers
+  // divide by vel(...,0) to get beta^i. Unallocated in GR.
   AthenaArray<Real> vel;
+  // General relativity only: the primitive (relative) three-velocity uu^i of the frame
+  // the comoving tetrad is built on.
+  AthenaArray<Real> uprim;
   AthenaArray<Real> bcc;
   AthenaArray<Real> boost_cmv;
   AthenaArray<Real> boost_lab;
@@ -463,6 +483,19 @@ public:
   //void ComputeEmissionSampleArray(BoundaryFace face);
   void SetEmissionCellWeight(Photon *pphot, int ips, int ipe);
   void SetEmissionCellWeightArea(Photon *pphot, BoundaryFace face, int ips, int ipe);
+  // Index range the fluid-derived arrays are filled over: active cells plus ghosts.
+  // Photons legitimately occupy a ghost cell while they wait to be handed to the
+  // neighboring block, and the pusher reads rho, tgas, vel and the boost matrices at
+  // whatever cell the photon is in, so filling active cells alone leaves those reads
+  // returning zero.
+  void FillBounds(int &il, int &iu, int &jl, int &ju, int &kl, int &ku) const;
+
+  // Four-velocity of cell (i3,i2,i1)'s frame, rebuilt at the position x rather than read
+  // from the cell center, so that u.u = -1 holds where the vector is actually used.
+  // General relativity only.
+  // x is not const because MCCoord::Metric and InverseMetric take a mutable Real[4].
+  void FluidFourVelocity(Real x[4], int i3, int i2, int i1, Real ucon[4]) const;
+
   void GetDensity();
   void GetNumberDensity();
   void GetScalars();
@@ -491,7 +524,7 @@ private:
 //! three cannot drift apart the way the lab and comoving paths once did, and it shares the
 //! MomentSlot table with DeriveComovingMoments, which is its inverse.
 //!
-//! Defined here rather than in photon_frames.cpp because it runs once per zone crossing -- a few
+//! Defined here rather than in photon_frames.cpp because it runs once per cell crossing -- a few
 //! hundred thousand times in even a small run -- and measurably loses about a percent when
 //! it cannot inline into UpdateMoments across a translation unit boundary.
 

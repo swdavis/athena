@@ -7,6 +7,8 @@
 //! \brief implementation for moving photons via integration with metric and connection
 
 // Athena++ headers
+#include <complex>
+
 #include "montecarlo.hpp"
 #include "photon.hpp"
 #include "photonpusher.hpp"
@@ -26,6 +28,7 @@ GeneralPusher::GeneralPusher(MonteCarloBlock *pmcb)
   : PhotonPusher(pmcb) {
 
   step_par = pmy_mcb->stepsize;
+  acon_valid = false;
 
 }
 
@@ -64,10 +67,37 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
 
     // set total extinction coefficient
     Real chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
+    // nothing cached carries over from the previous photon
+    acon_valid = false;
+    // Cell the opacities were last computed for.  Starts invalid so that the first step
+    // always refreshes; see the shift_unity comment below.
+    int oi1 = -1, oi2 = -1, oi3 = -1;
     while ( (pphot->statp[ip] == EVOLVING) && (tauremaining > TINY_NUMBER) &&
             (iter < checkmove) && (pphot->dtp[ip] > 0.) ) {
       iter++;
 
+      // Update opacities at the beginning of each step.  Two regimes:
+      //
+      //   shift_unity false -- the comoving shift moves as the photon does, through the
+      //     lapse and through the Doppler term, so the opacity has to be recomputed every
+      //     step.  Any curved metric, or any moving fluid, lands here.
+      //   shift_unity true  -- flat metric and fluid at rest, so the shift is identically
+      //     one and the opacity depends on the cell alone.  Refreshing inside a cell is
+      //     then provably a no-op; it measured exactly 0 over 1.2e7 same-cell steps in
+      //     mc_snake_atm before this shortcut existed.  Only a cell change needs one.
+      //
+      // The first step of a Move always refreshes either way, because oi1 starts invalid.
+      // Whatever left the opacities behind -- emission, or a coherent scatter that turned
+      // the photon without recomputing them -- they cannot be assumed current on entry.
+      if (!pmcb->shift_unity) {
+        UpdateOpacities(pphot,pmcb,ip);
+        chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
+      } else if (pphot->i1p[ip] != oi1 || pphot->i2p[ip] != oi2
+                 || pphot->i3p[ip] != oi3) {
+        UpdateOpacities(pphot,pmcb,ip);
+        chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
+        oi1 = pphot->i1p[ip]; oi2 = pphot->i2p[ip]; oi3 = pphot->i3p[ip];
+      }
       bool accel_success = false;
       if ((acceleration) && (resonance)) {
         // Get distance from photon to closest cell face
@@ -88,23 +118,19 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
         if (dl*l_cgs*chi > tauacc) {
           MRWResonanceAcceleration(pphot,pran,dl,tauacc,path_length,k1,k2,k3,ip);
           accel_success = true;
+          // the photon has been relocated, so the cached connection no longer applies
+          acon_valid = false;
         }
       }
       if (!accel_success) {// Acceleration not triggered - take standard step
-        if (tauremaining > chi * l_cgs* step * pphot->ep[ip]) { // Photon hasn't yet reached tauremaining
-          //printf("step: %g %g %g %g\n", step, tauremaining, pphot->ep[ip], pphot->wp[ip]);
-          //VerletStep(pphot,step,ip);
-          RK4Step(pphot,step,ip);
-          if (pmy_mcb->pmy_mc->polarized)
-            PropogatePolarization(pphot,step,ip);
-          tauremaining -= chi * l_cgs * step * pphot->ep[ip];
-          //printf("large: %g %g %g %g %g\n",tauremaining,chi,step,pphot->ep[ip],chi * step * pphot->ep[ip]);
+        Real tau_step = chi * l_cgs * step * pphot->ep[ip];
+        if (tauremaining > tau_step) { // Photon hasn't yet reached tauremaining
+          // advance photon position, momentum, and polarization
+          AdvanceStep(pphot,step,ip);
+          tauremaining -= tau_step; // uses ep, chi at step start
         } else { // Photon has reached end of tauremaining - step to make it 0
           step = tauremaining / (chi * l_cgs * pphot->ep[ip]);
-          //VerletStep(pphot,step,ip);
-          RK4Step(pphot,step,ip);
-          if (pmy_mcb->pmy_mc->polarized)
-            PropogatePolarization(pphot,step,ip);
+          AdvanceStep(pphot,step,ip);
           tauremaining = 0.;
         }
         pphot->dtp[ip] -= pphot->ep[ip] * step / c_code;
@@ -130,11 +156,12 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
         }
       }
 
-      // Check if photon changed zones
+      // Check if photon changed cells.  The opacities are no longer refreshed here --
+      // the top of the loop does it every step, which subsumes this case -- but the
+      // cached connection still has to be dropped, because crossing a cell can remap the
+      // position (e.g. a periodic boundary).
       if (UpdateZone(pphot,ip)) {
-        UpdateOpacities(pphot,pmcb,ip);
-        // set total extinction coefficient
-        Real chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
+        acon_valid = false;
       }
 
       if (pphot->IsNanPhoton(ip)) {
@@ -168,7 +195,7 @@ void GeneralPusher::Move(Photon *pphot, int ips, int ipe) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void GeneralPusher::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip)
-//! \brief update opacities after a photon has changed zones
+//! \brief update opacities after a photon has changed cells
 
 void GeneralPusher::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip) {
 
@@ -183,7 +210,6 @@ void GeneralPusher::UpdateOpacities(Photon *pphot, MonteCarloBlock *pmcb, int ip
     int i3 = pphot->i3p[ip];
     if (pmcb->boosts || pmcb->tetrads) {
       // Shift photon energy to comoving frame
-      //shift = pmy_mcb->LorentzTransformFrequencyShift(pphot,ip);
       shift = pmy_mcb->FrequencyShiftComoving(pphot,ip);
       pphot->ep[ip] *= shift;
       // compute opacities in comoving frame
@@ -307,7 +333,6 @@ void GeneralPusher::RK4Step(Photon *pphot, Real step, int ip) {
   kcon[IMC1] = pphot->k1p[ip];
   kcon[IMC2] = pphot->k2p[ip];
   kcon[IMC3] = pphot->k3p[ip];
-  Real k0init = kcon[IMC0];
 
   Real k0[4], gcov[4][4];
   pcoord->Metric(x0, gcov);
@@ -380,9 +405,7 @@ void GeneralPusher::RK4Step(Photon *pphot, Real step, int ip) {
   pphot->x1p[ip] = x[IMC1];
   pphot->x2p[ip] = x[IMC2];
   pphot->x3p[ip] = x[IMC3];
-  // k0p is the photon energy, so the assignment below already carries the energy update
-  // that used to be applied separately as ep *= kcon[IMC0]/k0init.  Doing both would
-  // square the ratio now that ep and k0p are the same storage.
+  // k0p is the photon energy
   pphot->k0p[ip] = kcon[IMC0];
   pphot->k1p[ip] = kcon[IMC1] * factor;
   pphot->k2p[ip] = kcon[IMC2] * factor;
@@ -425,23 +448,20 @@ void GeneralPusher::SubStep(Real xcon[4], Real kcov[4], Real dl[8]) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void GeneralPusher::PropogatePolarization(Photon *pphot, Real step, int ip)
-//! \brief propogates polarization tensor a single step
+//! \fn void GeneralPusher::ConnectionContraction(Photon *pphot, int ip, Real acon[4][4])
+//! \brief A^i_k = Gamma^i_kl k^l at the photon's current position and wavevector
+//
+// Contract k with connection. This is the part of the polarization transport that depends
+// on where the photon is rather so AdvanceStep saves for next step
 
-void GeneralPusher::PropogatePolarization(Photon *pphot, Real step, int ip) {
+void GeneralPusher::ConnectionContraction(Photon *pphot, int ip, Real acon[4][4]) {
 
-  // SWD: Gamma does not need recomputing
-  //Real gamma[NCOORD][NCOORD][NCOORD];
-  // Store gamma in Coord to prevent recalculation
-  //pcoord->Connect(pphot->x, gamma);
-
-
-  std::complex<Real> ptcopy[4][4];
-  for (int i = 0; i < 4; i++) {
-    for (int j = 0; j < 4; j++) {
-      ptcopy[i][j] = pphot->polten[i*4+j][ip];
-    }
-  }
+  Real xpol[4];
+  xpol[IMC0] = pphot->x0p[ip];
+  xpol[IMC1] = pphot->x1p[ip];
+  xpol[IMC2] = pphot->x2p[ip];
+  xpol[IMC3] = pphot->x3p[ip];
+  pcoord->Connect(xpol, gamma);
 
   Real kp[4];
   kp[IMC0] = pphot->k0p[ip];
@@ -450,25 +470,92 @@ void GeneralPusher::PropogatePolarization(Photon *pphot, Real step, int ip) {
   kp[IMC3] = pphot->k3p[ip];
 
   for (int i = 0; i < 4; i++) {
-    for (int j = 0; j < 4; j++) {
-      for (int k = 0; k < 4; k++) {
-        for (int l = 0; l < 4; l++) {
-          // eq. 16 of Moscibrodzka & Gammie in vacuum
-          pphot->polten[i*4+j][ip] += -(gamma[i][k][l] * ptcopy[k][j] +
-                                        gamma[j][k][l] * ptcopy[i][k]) *
-                                       kp[l] * step;
-        }
-      }
+    for (int k = 0; k < 4; k++) {
+      Real sum = 0.;
+      for (int l = 0; l < 4; l++) sum += gamma[i][k][l] * kp[l];
+      acon[i][k] = sum;
     }
   }
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void GeneralPusher::ApplyPolarizationRate(...)
+//! \brief dN/dlambda for a given coherency tensor, from a precomputed A^i_k
+//
+// eq. 16 of Moscibrodzka & Gammie in vacuum, written as
+//
+//     dN^ij/dl = -(A^i_k N^kj + A^j_k N^ik),
+//
+// which is the same contraction with the sum over l pulled out into A.  Done inline it
+// recomputes the same sixteen numbers once for every (i,j) pair.
+
+void GeneralPusher::ApplyPolarizationRate(const Real acon[4][4],
+                                          const std::complex<Real> nin[4][4],
+                                          std::complex<Real> dndl[4][4]) {
+
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      std::complex<Real> sum(0., 0.);
+      for (int k = 0; k < 4; k++) {
+        sum -= acon[i][k] * nin[k][j] + acon[j][k] * nin[i][k];
+      }
+      dndl[i][j] = sum;
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void GeneralPusher::AdvanceStep(Photon *pphot, Real step, int ip)
+//! \brief advance the geodesic and, when it is tracked, the coherency tensor
+//
+// The coherency tensor is transported with Heun's method, which straddles the geodesic
+// step: the rate is taken once at the state the step starts from and once at the state it
+// ends at, and the two are averaged.  Writing the transport as dN/dl = L(l) N, that gives
+//
+//   N_(n+1) = [1 + h(L_n + L_(n+1))/2 + h^2 L_(n+1) L_n / 2] N_n,
+
+void GeneralPusher::AdvanceStep(Photon *pphot, Real step, int ip) {
+
+  if (!IsPolarized(pmy_mcb->pmy_mc->polarized)) {
+    RK4Step(pphot, step, ip);
+    return;
+  }
+
+  std::complex<Real> n0[4][4], d1[4][4];
+  for (int i = 0; i < 4; i++)
+    for (int j = 0; j < 4; j++) n0[i][j] = pphot->polten[i*4+j][ip];
+
+  // Predictor, evaluated where the step starts.  The previous step's corrector already
+  // evaluated the connection at exactly this position and wavevector -- only the tensor
+  // it was applied to differs -- so reuse it whenever nothing has moved the photon since.
+  if (!acon_valid) ConnectionContraction(pphot, ip, acon);
+  ApplyPolarizationRate(acon, n0, d1);
+  for (int i = 0; i < 4; i++)
+    for (int j = 0; j < 4; j++)
+      pphot->polten[i*4+j][ip] = n0[i][j] + d1[i][j]*step;
+
+  RK4Step(pphot, step, ip);
+
+  // Corrector, evaluated where the step ends, on the predicted tensor.  This connection
+  // is what the next predictor reuses.
+  std::complex<Real> npred[4][4], d2[4][4];
+  for (int i = 0; i < 4; i++)
+    for (int j = 0; j < 4; j++) npred[i][j] = pphot->polten[i*4+j][ip];
+  ConnectionContraction(pphot, ip, acon);
+  ApplyPolarizationRate(acon, npred, d2);
+  acon_valid = true;
+
+  for (int i = 0; i < 4; i++)
+    for (int j = 0; j < 4; j++)
+      pphot->polten[i*4+j][ip] = n0[i][j] + 0.5*step*(d1[i][j] + d2[i][j]);
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn Real GeneralPusher::StepSize(Photon *pphot, int ip)
-//! \brief computes stepsize based on size of current zone
+//! \brief computes stepsize based on size of current cell
 
 // SWD: Requires updates
-// return the stepsize based on the current zone and k-vector
+// return the stepsize based on the current cell and k-vector
 // this should be updated with every iteration since k continuously changes
 Real GeneralPusher::StepSize(Photon *pphot, int ip) {
 

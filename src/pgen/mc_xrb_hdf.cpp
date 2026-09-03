@@ -670,7 +670,7 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
       pphot->k3p[ip] = cth;
     }
 
-    if (pmy_mc->polarized) {
+    if (IsPolarized(pmy_mc->polarized)) {
       // Initialize Stokes vector
       pphot->sip[ip] = 1.0;
       pphot->sup[ip] = 0.0;

@@ -27,9 +27,13 @@
 //   <coord>/snake_a   shear amplitude          (default 0 -> degenerates to Minkowski)
 //   <coord>/snake_k   shear wavenumber         (default 0)
 //   <coord>/m, a      required by GRUser and ignored here; set both to 0
+//   <problem>/polang  emitted linear polarization angle, radians (default 0)
+//   <problem>/polcirc emitted Stokes V, |V| <= 1                 (default 0)
 
 // C++ headers
+#include <algorithm>  // max
 #include <cmath>
+#include <complex>
 #include <cstring>  // strcmp
 #include <sstream>
 #include <stdexcept>
@@ -71,8 +75,27 @@ void JMeanOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip, int imom,
                   const PhotonFrameState &s);
 void AverageEnergy(MonteCarloBlock *pmcb, Photon *pphot, int ip, int imom,
                   const PhotonFrameState &s);
-void TrackGeodesicInvariant(MonteCarloBlock *pmcb, Photon *pphot,
-                            PhotonPusher *ppusher, int ip);
+void TrackGeodesicInvariant(MonteCarloBlock *pmcb, Photon *pphot, int ip);
+
+// Emitted polarization, shared by every photon.  Set in MonteCarloProblemGenerator,
+// which runs before the first InitializePhoton.
+Real polang = 0.0;
+Real polcirc = 0.0;
+
+// Photon user-variable layout.  The first two slots are the geodesic invariant and are
+// what frames.py reads, so they keep their meaning whether or not polarization is on;
+// the polarization slots are only allocated when it is.  IPOLREF starts a flat copy of
+// the 4x4 complex reference tensor, real part then imaginary part.
+constexpr int IPOLDRIFT = 2;
+constexpr int IPOLREF = 3;
+constexpr int NPOLCOMP = 32;
+constexpr int NUSER_POL = IPOLREF + NPOLCOMP;
+
+void PolarizationInFlatFrame(MonteCarloBlock *pmcb, Photon *pphot, int ip,
+                             std::complex<Real> nflat[4][4]);
+void TrackPolarizationInvariant(MonteCarloBlock *pmcb, Photon *pphot, int ip);
+void TrackInvariants(MonteCarloBlock *pmcb, Photon *pphot,
+                     PhotonPusher *ppusher, int ip);
 } // namespace
 
 //========================================================================================
@@ -196,12 +219,27 @@ void MonteCarloBlock::InitializePhoton(Photon *pphot, int ips, int ipe, int etyp
     pphot->acp[ip] = AbsorptionOpacity(this, pphot, ip);
     pphot->scp[ip] = ScatteringOpacity(this, pphot, ip);
 
-    // Arm the geodesic invariant.  k1p is still a unit direction here -- the conversion to
-    // dimensional contravariant components happens later -- so the reference value cannot
-    // be taken yet.  user[1] < 0 marks "not yet seeded"; TrackGeodesicInvariant takes the
-    // reference on its first call, once the photon is in coordinate form.
+    // Emitted polarization.  PhotonEmitFreeFree leaves the photon unpolarized, which
+    // makes a transport test vacuous for Q and U, so overwrite the Stokes parameters with
+    // a definite state.  The direction is still whatever free-free sampled, so the run
+    // exercises the connection over the whole sphere rather than one ray.  The block
+    // turns these into the coherency tensor once the photon is in coordinate form.
+    if (IsPolarized(pmy_mc->polarized)) {
+      Real plin = std::sqrt(std::max(0.0, 1.0 - SQR(polcirc)));
+      pphot->sip[ip] = 1.0;
+      pphot->sqp[ip] = plin*std::cos(2.0*polang);
+      pphot->sup[ip] = plin*std::sin(2.0*polang);
+      pphot->svp[ip] = polcirc;
+    }
+
+    // Arm the invariants.  k1p is still a unit direction here -- the conversion to
+    // dimensional contravariant components happens later, and the coherency tensor is not
+    // built until after that -- so neither reference can be taken yet.  A negative drift
+    // slot marks "not yet seeded"; the trackers take their references on the first call,
+    // once the photon is in coordinate form.
     if (pphot->nuser_var > 0) pphot->user[0][ip] = 0.0;
     if (pphot->nuser_var > 1) pphot->user[1][ip] = -1.0;
+    if (pphot->nuser_var > IPOLDRIFT) pphot->user[IPOLDRIFT][ip] = -1.0;
   }
 
   return;
@@ -225,6 +263,16 @@ void MonteCarloBlock::MonteCarloProblemGenerator(ParameterInput *pin) {
     const Real everg = 1.6021772e-12;
     logemin = log(everg * pin->GetReal("problem", "emin"));
     logemax = log(everg * pin->GetReal("problem", "emax"));
+  }
+
+  polang = pin->GetOrAddReal("problem", "polang", 0.0);
+  polcirc = pin->GetOrAddReal("problem", "polcirc", 0.0);
+  if (std::fabs(polcirc) > 1.0) {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in mc_snake MonteCarloProblemGenerator" << std::endl
+        << "polcirc is a Stokes V for a fully polarized photon and must satisfy "
+        << "|polcirc| <= 1, got " << polcirc << std::endl;
+    ATHENA_ERROR(msg);
   }
 
   return;
@@ -254,12 +302,15 @@ void MonteCarlo::InitUserMonteCarloData(ParameterInput *pin) {
   }
 
   // user[0] holds the emitted value of the geodesic invariant, user[1] the largest
-  // relative departure from it seen along the path.  See TrackGeodesicInvariant.
-  nuser_var = 2;
+  // relative departure from it seen along the path.  See TrackGeodesicInvariant.  With
+  // polarization on, user[2] carries the same quantity for the coherency tensor and the
+  // slots above it hold its reference value; they are never written to the photon list,
+  // which caps its columns at the output block's own nuser.
+  nuser_var = IsPolarized(polarized) ? NUSER_POL : 2;
   AllocateUserMoments(2);
   EnrollUserMoment(0, JMeanOpacity, "kapJ");
   EnrollUserMoment(1, AverageEnergy, "eave");
-  EnrollUserWorkInMove(TrackGeodesicInvariant);
+  EnrollUserWorkInMove(TrackInvariants);
 
   return;
 }
@@ -313,6 +364,17 @@ void SnakeMetric(Real x1, Real x2, Real x3, ParameterInput *pin,
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void TrackInvariants(...)
+//! \brief the enrolled per-step hook: geodesic first, then polarization
+
+void TrackInvariants(MonteCarloBlock *pmcb, Photon *pphot,
+                     PhotonPusher *ppusher, int ip) {
+
+  TrackGeodesicInvariant(pmcb, pphot, ip);
+  TrackPolarizationInvariant(pmcb, pphot, ip);
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void TrackGeodesicInvariant(...)
 //! \brief record the largest relative drift in k^x along each photon's path
 //
@@ -322,14 +384,13 @@ void SnakeMetric(Real x1, Real x2, Real x3, ParameterInput *pin,
 //     k^x = g^xx k_x + g^xy k_y = k_x + beta k_y = k_x^M = const,
 //
 // which is just the statement that x = x_M and the underlying Minkowski geodesic is a
-// straight line. 
+// straight line.
 //
 // RK4 rescales the spatial components each step
 // to re-impose k.k = 0, so the drift measures the truncation error and must fall as the
 // step size is reduced.  frames.py checks the convergence.
 
-void TrackGeodesicInvariant(MonteCarloBlock *pmcb, Photon *pphot,
-                            PhotonPusher *ppusher, int ip) {
+void TrackGeodesicInvariant(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
 
   if (pphot->nuser_var < 2) return;
 
@@ -348,6 +409,96 @@ void TrackGeodesicInvariant(MonteCarloBlock *pmcb, Photon *pphot,
 
   Real drift = std::fabs(pphot->k1p[ip] - pphot->user[0][ip]) / scale;
   if (drift > pphot->user[1][ip]) pphot->user[1][ip] = drift;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void PolarizationInFlatFrame(...)
+//! \brief project the coherency tensor onto the global flat frame
+//
+// Snake is flat spacetime in curved coordinates, so it has a global frame that is
+// covariantly constant, and MCCoord::InverseTetrad is the projector onto it: its legs are
+// e_(t) = d_t, e_(x) = d_x + beta d_y, e_(y) = d_y, e_(z) = d_z, orthonormal by
+// construction.  Parallel transport leaves the tensor unchanged in that frame, so every
+// component must be constant along the ray whatever the connection does to the coordinate
+// components.  Needing no Stokes decomposition, and so no basis tied to k, is what makes
+// this the reference: an error in the transport cannot hide in a co-rotating basis.
+
+void PolarizationInFlatFrame(MonteCarloBlock *pmcb, Photon *pphot, int ip,
+                             std::complex<Real> nflat[4][4]) {
+
+  Real x[4];
+  x[IMC0] = pphot->x0p[ip];
+  x[IMC1] = pphot->x1p[ip];
+  x[IMC2] = pphot->x2p[ip];
+  x[IMC3] = pphot->x3p[ip];
+
+  Real invtet[4][4];
+  pmcb->pcoord->InverseTetrad(x, invtet);
+  pphot->PolarizationToTetrad(nflat, invtet, ip);
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void TrackPolarizationInvariant(...)
+//! \brief record the largest departure of the flat-frame coherency tensor from its
+//!        emitted value
+//
+// The companion to TrackGeodesicInvariant, and the quantity the snake polarization
+// convergence test refines on.  The geodesic is integrated by RK4 and converges at fourth
+// order, while GeneralPusher::AdvanceStep transports the tensor with Heun's method and
+// converges at second, which is why the two are tracked separately: at any step size
+// coarse enough to matter the polarization error is the larger of the two, and the curves
+// cannot be confused.
+//
+// The error reported is the largest absolute departure over the sixteen components,
+// divided by the largest reference component.  A single normalisation for all of them,
+// rather than a per-component relative error, keeps components that are legitimately
+// near zero from dominating the result.
+
+void TrackPolarizationInvariant(MonteCarloBlock *pmcb, Photon *pphot, int ip) {
+
+  if (pphot->nuser_var < NUSER_POL) return;
+
+  std::complex<Real> nflat[4][4];
+  PolarizationInFlatFrame(pmcb, pphot, ip, nflat);
+
+  // First call: the coherency tensor has been built and the photon is in coordinate
+  // form, so the reference can be taken now.
+  if (pphot->user[IPOLDRIFT][ip] < 0.0) {
+    Real scale = 0.0;
+    for (int a = 0; a < 4; ++a)
+      for (int b = 0; b < 4; ++b) scale = std::max(scale, std::abs(nflat[a][b]));
+
+    // Some photons never get a coherency tensor: MeridianBasis declines to build one for a
+    // photon travelling along the frame z axis, where the meridian is undefined, and also
+    // for one whose wavevector falls below TINY_NUMBER in whatever units the run uses.
+    // Leaving the sentinel in place for those keeps them out of the statistics, and keeps
+    // them distinguishable from a photon whose drift is legitimately zero -- which is
+    // exactly what an unsheared snake produces, since the connection then contributes
+    // identically zero and the arithmetic is bit-exact.
+    if (scale <= TINY_NUMBER) return;
+
+    for (int a = 0; a < 4; ++a) {
+      for (int b = 0; b < 4; ++b) {
+        pphot->user[IPOLREF + 2*(4*a + b)][ip] = nflat[a][b].real();
+        pphot->user[IPOLREF + 2*(4*a + b) + 1][ip] = nflat[a][b].imag();
+      }
+    }
+    pphot->user[IPOLDRIFT][ip] = 0.0;
+    return;
+  }
+
+  Real dmax = 0.0, scale = 0.0;
+  for (int a = 0; a < 4; ++a) {
+    for (int b = 0; b < 4; ++b) {
+      std::complex<Real> ref(pphot->user[IPOLREF + 2*(4*a + b)][ip],
+                             pphot->user[IPOLREF + 2*(4*a + b) + 1][ip]);
+      dmax = std::max(dmax, std::abs(nflat[a][b] - ref));
+      scale = std::max(scale, std::abs(ref));
+    }
+  }
+
+  Real drift = dmax/scale;
+  if (drift > pphot->user[IPOLDRIFT][ip]) pphot->user[IPOLDRIFT][ip] = drift;
 }
 
 void JMeanOpacity(MonteCarloBlock *pmcb, Photon *pphot, int ip, int imom,

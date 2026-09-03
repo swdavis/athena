@@ -57,15 +57,15 @@ def plot_one(spectrum, ax, xunit, yunit, imu, iphi, plterr, **kwargs):
     rebinx = kwargs.pop('rebinx')
     mulegend = kwargs.pop('mulegend')
 
-    writetxt = kwargs.pop('writetxt')
+    # Popped unconditionally: whatever is left in kwargs is forwarded to ax.plot via
+    # make_plot, which rejects any keyword it does not recognise.  Naming the file is what
+    # asks for it to be written, so there is no separate flag to get out of step with it.
+    txtfile = kwargs.pop('txtfile', None)
 
     # plot spectrum as function mu and phi
     mulist = imu_handler(imu)
     philist = imu_handler(iphi)
-    if writetxt:
-        txtfile = kwargs.pop('txtfile')
-        if txtfile is None:
-            txtfile = 'out.txt'
+    if txtfile is not None:
         nmu = len(mulist)
         nphi =len(philist)
         nout = 2*nphi*nmu+1
@@ -80,7 +80,7 @@ def plot_one(spectrum, ax, xunit, yunit, imu, iphi, plterr, **kwargs):
                                          plterr=plterr, xunit=xunit, yunit=yunit, rebinx=rebinx)
             athenamc.make_plot(x, y, yerr=yerr, xlabel=xlabel, ylabel=ylabel, ax=ax, **kwargs)
 
-            if writetxt:
+            if txtfile is not None:
                 if counter == 0:
                     out_arr[:,0] = x
                 out_arr[:,2*counter+1] = y
@@ -92,7 +92,7 @@ def plot_one(spectrum, ax, xunit, yunit, imu, iphi, plterr, **kwargs):
 
         ax.legend([f"μ={(mu+0.5)/nmu:.2f}" for mu in mulist])
 
-    if writetxt:
+    if txtfile is not None:
         np.savetxt(txtfile, out_arr)
 
 def plot_blackbody(spectrum, ax, xunit, yunit, bbtemp, bbnorm, imu = None, iphi = None):
@@ -233,12 +233,12 @@ if __name__ == '__main__':
     parser.add_argument('-mulegend',
         action = 'store_true',
         help = 'add a legend for mu values')
-    parser.add_argument('-writetxt',
-        action = 'store_true',
-        help = 'write plotted spectra curves to textfile')
     parser.add_argument('--txtfile',
+        nargs = '?',
+        const = 'out.txt',
         default = None,
-        help = 'output .txt file name')
+        help = 'write the plotted curves to this text file; give the flag with no name '
+               'to use out.txt, omit it entirely to write nothing')
 
     args = parser.parse_args()
     main(**vars(args))

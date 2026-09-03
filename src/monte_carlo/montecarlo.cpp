@@ -7,8 +7,9 @@
 //! \brief implementation of functions in class MonteCarlo, MCRandom
 
 // C++ headers
-#include <stdexcept>  // runtime_error
+#include <cstdio>
 #include <random>
+#include <stdexcept>  // runtime_error
 // C++ headers
 #include <cstring>  // strcmp
 #include <string>
@@ -65,7 +66,7 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   dynamic = pin->GetOrAddBoolean("montecarlo","dynamic",false);
   coupled = pin->GetOrAddBoolean("montecarlo","coupled",false);
   boosts = pin->GetOrAddBoolean("montecarlo","boosts",false);
-  polarized = pin->GetOrAddBoolean("montecarlo","polarized",false);
+  polarized = GetMCPolarizationFlag(pin->GetOrAddString("montecarlo","polarized","none"));
   acceleration = pin->GetOrAddBoolean("montecarlo","acceleration",false);
   time_acc = pin->GetOrAddBoolean("montecarlo","time_acc",false);
   verbose = pin->GetOrAddBoolean("montecarlo", "verbose", true);
@@ -82,6 +83,10 @@ MonteCarlo::MonteCarlo(ParameterInput *pin, Mesh *pmesh) {
   // Canonical tag describing the geometry and wavevector convention of the outputs.
   // Must come after general_pusher_flag is known.
   SetGeometryTag(pin);
+  // free parameters of that metric, for the output headers
+  SetMetricParams(pin);
+  // The frame the outputs measure directions and polarization in
+  frame_tag = general_pusher_flag ? "normal" : "lab";
   nuser_var = 0; // photon user variables to zero
   nuser_mom = 0; // user moments
 
@@ -191,6 +196,33 @@ enum AbsorptionMethodFlag GetAbsorptionMethodFlag(std::string input_string) {
     ATHENA_ERROR(msg);
   }
 
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn enum MCPolarization GetMCPolarizationFlag(std::string input_string)
+//! \brief set polarization tracking flag
+//
+// Accepts the legacy booleans as well as the named modes, so existing input files keep
+// working: false means none, true means linear, which is what "true" has always done.
+
+enum MCPolarization GetMCPolarizationFlag(std::string input_string) {
+  if (input_string == "none" || input_string == "false"
+      || input_string == "0" || input_string == "False") {
+    return MCPOL_NONE;
+  } else if (input_string == "linear" || input_string == "true"
+             || input_string == "1" || input_string == "True") {
+    return MCPOL_LINEAR;
+  } else if (input_string == "circular") {
+    return MCPOL_CIRCULAR;
+  } else {
+    std::stringstream msg;
+    msg << "### FATAL ERROR in GetMCPolarizationFlag" << std::endl
+        << "Input string=" << input_string << " not a valid polarization mode."
+        << std::endl
+        << "Use none, linear or circular (true and false are still accepted, "
+        << "as linear and none)." << std::endl;
+    ATHENA_ERROR(msg);
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -597,6 +629,41 @@ void MonteCarlo::SetCoordinateSystem(ParameterInput *pin) {
 
   topology = GetMCTopology(coord_system);
   curved_metric = IsMCMetricCurved(coord_system);
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MonteCarlo::SetMetricParams(ParameterInput *pin)
+//! \brief record the metric's free parameters for the output headers
+//
+// Parameters of special metrics, such as spin and mass in Kerr.  Written as
+// "key=value" pairs so readers can parse it generically and so a metric added
+// later needs no reader change.
+
+void MonteCarlo::SetMetricParams(ParameterInput *pin) {
+
+  char buf[256];
+  switch (coord_system) {
+    case MCCOORD_KERR_SCHILD:
+    case MCCOORD_BOYER_LINDQUIST:
+    case MCCOORD_KERR_SCHILD_CARTESIAN:
+      std::snprintf(buf, sizeof(buf), "m=%.17g,a=%.17g",
+                    pin->GetOrAddReal("coord", "m", 1.0),
+                    pin->GetOrAddReal("coord", "a", 0.0));
+      metric_params = buf;
+      break;
+    case MCCOORD_SNAKE:
+      std::snprintf(buf, sizeof(buf), "snake_a=%.17g,snake_k=%.17g",
+                    pin->GetOrAddReal("coord", "snake_a", 0.0),
+                    pin->GetOrAddReal("coord", "snake_k", 0.0));
+      metric_params = buf;
+      break;
+    default:
+      // flat metrics in their own coordinates have no free parameters
+      metric_params = "";
+      break;
+  }
 
   return;
 }

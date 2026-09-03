@@ -11,6 +11,7 @@
 // Athena++ classes headers
 #include "../athena.hpp"
 #include "montecarlo.hpp"
+#include "polarization.hpp"  // MCPolarization; no includes of its own, so no cycle
 
 class Photon;
 
@@ -32,7 +33,7 @@ typedef struct MomentumRange {
 
 class Spectrum {
 public:
-  Spectrum(MomentumRange input_range, bool polarized, bool logarithmic);
+  Spectrum(MomentumRange input_range, MCPolarization polarized, bool logarithmic);
   Spectrum(Spectrum *pspec);
   ~Spectrum();
 
@@ -40,7 +41,7 @@ public:
   int nsrun;  // total number of photons samples run for this spectrum
   std::string base_name;
   MomentumRange range;
-  bool polarized;
+  MCPolarization polarized;
   bool polar_axis;
   bool coordinates;
   bool logarithmic;
@@ -56,10 +57,10 @@ public:
   AthenaArray<Real> energies;
   AthenaArray<Real> intensity;
   AthenaArray<Real> intensity_sq;
-  AthenaArray<Real> stokesq;
-  AthenaArray<Real> stokesq_sq;
-  AthenaArray<Real> stokesu;
-  AthenaArray<Real> stokesu_sq;
+  //! Stokes planes stored alongside the intensity, indexed by MCISQ/MCISU/MCISV.  Only
+  //! the first NumStokesStored(polarized) of them are allocated.
+  AthenaArray<Real> stokes[3];
+  AthenaArray<Real> stokes_sq[3];
 
   //functions
   void BuildEnergyGrid(Real emin, Real emax, int nen, bool xlog);
@@ -90,7 +91,7 @@ Real PhotonEnergyAtInfinity(Photon *pphot, int ip);
 
 class PhotonList {
 public:
-  PhotonList(int list_size_init, bool pol, int nuser);
+  PhotonList(int list_size_init, MCPolarization pol, int nuser);
   ~PhotonList();
 
   MonteCarlo *pmy_mc;
@@ -101,7 +102,7 @@ public:
   int nparams; // number of properties for each photon in list
   int output_number;// current output number
   int nuser_out;
-  bool polarized;
+  MCPolarization polarized;
   Real dt; // targe integration time for this spectrum
   Real last_time;
   AthenaArray<Real> photons;  // array of photon properies
@@ -158,7 +159,7 @@ private:
 
 class Image {
 public:
-  Image(int list_mem_size, bool pol, bool rel, int nuser);
+  Image(int list_mem_size, MCPolarization pol, bool rel, int nuser);
   ~Image();
 
   std::string base_name;
@@ -172,7 +173,7 @@ public:
   int nparams; // number of properties stored for each pixel
   int output_number;// current output number
   int nuser_out;
-  bool polarized;
+  MCPolarization polarized;
   bool relativistic;
   AthenaArray<Real> image;  // pixel array
 

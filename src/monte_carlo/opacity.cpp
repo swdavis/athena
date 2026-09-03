@@ -358,7 +358,7 @@ void InitializeAccelerationOpacity(MonteCarloBlock *pmcb) {
     dx[i] = 0.5 * (x[i+1]-x[i-1]);
   }
 
-  // Loop over grid zones
+  // Loop over grid cells
   int il = pmcb->is; int iu = pmcb->ie;
   int jl = pmcb->js; int ju = pmcb->je;
   int kl = pmcb->ks; int ku = pmcb->ke;

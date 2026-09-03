@@ -17,7 +17,7 @@
 
 // class variable initialization
 bool Photon::initialized = false;
-bool Photon::polarized = false;
+MCPolarization Photon::polarized = MCPOL_NONE;
 bool Photon::general_pusher_flag = false;
 
 int Photon::inscp = -1, Photon::istatp = -1, Photon::ityp = -1;
@@ -103,8 +103,9 @@ void Photon::PrintPhoton(int ip) const {
     std::cout << "dk: " << dk0p[ip] << " " << dk1p[ip] << " " << dk2p[ip] << " "
               << dk3p[ip] << std::endl;
   }
-  if (polarized) {
-    std:: cout << "stokes: " << sip[ip] << " " << sqp[ip] << " " << sup[ip] << std::endl;
+  if (IsPolarized(polarized)) {
+    std:: cout << "stokes: " << sip[ip] << " " << sqp[ip] << " " << sup[ip]
+              << " " << svp[ip] << std::endl;
     if (general_pusher_flag) {
       std:: cout << "pol tensor: ";
         for (int k = 0; k < 4; k++) {
@@ -156,7 +157,7 @@ bool Photon::IsNanPhoton(int ip) {
   if (std::isnan(k1p[ip])) return true;
   if (std::isnan(k2p[ip])) return true;
   if (std::isnan(k3p[ip])) return true;
-  if (polarized) {
+  if (IsPolarized(polarized)) {
     if (std::isnan(sip[ip])) return true;
     if (std::isnan(sqp[ip])) return true;
     if (std::isnan(sup[ip])) return true;
@@ -275,8 +276,8 @@ void Photon::Initialize(MonteCarlo *pmc, ParameterInput *pin) {
   // Add time remaining parameter
   idtp = AddRealProperty("dtp");
 
-  if (pmc->polarized) {
-    polarized = true;
+  if (IsPolarized(pmc->polarized)) {
+    polarized = pmc->polarized;
     // Add stokes vectors
     isip = AddRealProperty("sip");
     isqp = AddRealProperty("sqp");
@@ -408,7 +409,7 @@ void Photon::SendToNeighbors() {
     for (int j = 0; j < naux; ++j)
       *pr++ = aux[j][k];
     // copy complex properties
-    if (general_pusher_flag && polarized) {
+    if (general_pusher_flag && IsPolarized(polarized)) {
       std::complex<Real> *pc(ppb->cbuf + ParticleBuffer::ncplx * ppb->npar);
       for (int j = 0; j < ncplx; ++j) {
         *pc++ = cplxprop[j][k];
@@ -453,7 +454,7 @@ void Photon::SendToNeighbors() {
                   dst, send.tag + 2, my_comm, &req);
         MPI_Request_free(&req);
         // Send complex properties
-        if (general_pusher_flag && polarized) {
+        if (general_pusher_flag && IsPolarized(polarized)) {
           MPI_Isend(send.cbuf, npsend * ParticleBuffer::ncplx, MPI_ATHENA_COMPLEX,
                     dst, send.tag + 3, my_comm, &req);
           MPI_Request_free(&req);
@@ -592,7 +593,7 @@ bool Photon::ReceiveFromNeighbors() {
 	    //MPI_Status stat;
 	    //MPI_Request_get_status(recv.reqr,&test,&stat);
 	    //printf("t2: %d %d %d %d %d %d %d %d %d %d\n",Globals::my_rank,nb_rank,nb.snb.lid,nb.bufid,recv.tag+1,pmy_block->lid,test,stat.MPI_SOURCE,stat.MPI_TAG,stat.MPI_ERROR);
-            if (general_pusher_flag && polarized) {
+            if (general_pusher_flag && IsPolarized(polarized)) {
               MPI_Irecv(recv.cbuf, recv.npar * ParticleBuffer::ncplx, MPI_ATHENA_COMPLEX,
                         nb_rank, recv.tag + 3, my_comm, &recv.reqc);
             }
@@ -609,7 +610,7 @@ bool Photon::ReceiveFromNeighbors() {
         if (!recv.flagr) {
           MPI_Test(&recv.reqr, &recv.flagr, MPI_STATUS_IGNORE);
 	}
-        if (general_pusher_flag && polarized) {
+        if (general_pusher_flag && IsPolarized(polarized)) {
           if (!recv.flagc)
             MPI_Test(&recv.reqc, &recv.flagc, MPI_STATUS_IGNORE);
           if (recv.flagi && recv.flagr && recv.flagc) {
@@ -705,7 +706,7 @@ void Photon::GetPositionIndices(int ibegin, int iend) {
     }
     // MeshCoordsToIndicies can fail for refined grids so we make some checks
 
-    // First check to make zone index is correct
+    // First check to make cell index is correct
     MCCoord *pco = pmy_mcb->pcoord;
     while (x1p[k] > pco->x1f(i1p[k]+1)) {
       i1p[k]++;
@@ -744,7 +745,7 @@ void Photon::GetPositionIndices(int ibegin, int iend) {
       }
     }
     bool on_block = true;
-    // Next check to see if sample landed in active zone or adjacent
+    // Next check to see if sample landed in active cell or adjacent
     if ( (i1p[k] < is-1) || (i1p[k] > ie+1) || (i2p[k] < js-1) || (i2p[k] > je+1)
          || (i3p[k] < ks-1) || (i3p[k] > ke+1) ) {
       on_block = false;

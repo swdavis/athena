@@ -105,7 +105,7 @@ void CartesianPusher::Move(Photon *pphot, int ips, int ipe) {
       // set total extinction coefficient
       Real chi = abs_tau ? pphot->scp[ip] : (pphot->scp[ip] + pphot->acp[ip]);
 
-      if ((chi > 0.) && (dl*l_cgs > tauremaining / chi)) { // Photon remains in zone
+      if ((chi > 0.) && (dl*l_cgs > tauremaining / chi)) { // Photon remains in cell
         bool accel_success = false;
         if (acceleration) {
           Real dist;
@@ -128,7 +128,7 @@ void CartesianPusher::Move(Photon *pphot, int ips, int ipe) {
         if (!accel_success) {
           if (pphot->statp[ip] != EVOLVING)
             break;
-          // compute distance remaining in zone
+          // compute distance remaining in cell
           dl = tauremaining / chi / l_cgs;
           pphot->dtp[ip] -= dl / c_code; // SWD: set with k0p instead
 
@@ -156,7 +156,7 @@ void CartesianPusher::Move(Photon *pphot, int ips, int ipe) {
         if (UserWorkInMove != NULL) UserWorkInMove(pmcb,pphot,this,ip);
         break;
 
-      } else { // Photon moves to next zone and reduce tauremaining
+      } else { // Photon moves to next cell and reduce tauremaining
         // Account for absorption (if needed) and update moments
         if (pmcb->call_moments) {
           Real dl_cgs = dl * l_cgs;
