@@ -85,6 +85,12 @@ class PhotonFrames {
  private:
   void Fill(MCFrame f);
 
+  // Re-express a unit direction, given in the local orthonormal basis at the photon, in
+  // the orthonormal basis at the photon's cell center, the basis where the moments are
+  // accumulated. A no-op for a Cartesian topology, where the basis does not depend on
+  // position.
+  void ToCellCenterBasis(Real n[3]) const;
+
   MonteCarloBlock *pmcb_;
   Photon *pphot_;
   int ip_;

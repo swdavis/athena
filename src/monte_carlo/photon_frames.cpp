@@ -94,27 +94,17 @@ void PhotonFrames::Fill(MCFrame f) {
       // arithmetic is unchanged from before this was factored out.
       s.e = kf[IMC0];
       for (int i=0; i<3; ++i) s.n[i] = kf[IMC1+i]/ep;
+      // InverseTetrad is evaluated at the photon, so what comes back is the direction in
+      // the orthonormal basis there.  The same rotation the legacy pushers apply carries
+      // it to the cell center, which is the basis the moments are summed in; without it
+      // this branch and the legacy one disagree about the same photon.
+      ToCellCenterBasis(s.n);
     } else {
       s.e = ep;
       s.n[0] = pphot_->k1p[ip_];
       s.n[1] = pphot_->k2p[ip_];
       s.n[2] = pphot_->k3p[ip_];
-      if (pmcb_->topology == MCTOPO_SPHERICAL) {
-        // Re-express the direction in the orthonormal basis at the cell center, which is
-        // the basis the moments are accumulated in.
-        Real sth = std::sin(pphot_->x2p[ip_]), cth = std::cos(pphot_->x2p[ip_]);
-        Real sph = std::sin(pphot_->x3p[ip_]), cph = std::cos(pphot_->x3p[ip_]);
-        Real nx = sth*cph*s.n[0] + cth*cph*s.n[1] - sph*s.n[2];
-        Real ny = sth*sph*s.n[0] + cth*sph*s.n[1] + cph*s.n[2];
-        Real nz = cth*s.n[0] - sth*s.n[1];
-        sth = std::sin(pmcb_->pmy_block->pcoord->x2v(i2));
-        cth = std::cos(pmcb_->pmy_block->pcoord->x2v(i2));
-        sph = std::sin(pmcb_->pmy_block->pcoord->x3v(i3));
-        cph = std::cos(pmcb_->pmy_block->pcoord->x3v(i3));
-        s.n[0] = sth*cph*nx + sth*sph*ny + cth*nz;
-        s.n[1] = cth*cph*nx + cth*sph*ny - sth*nz;
-        s.n[2] = -sph*nx + cph*ny;
-      }
+      ToCellCenterBasis(s.n);
     }
     s.dl = dl_;
     return;
@@ -132,6 +122,46 @@ void PhotonFrames::Fill(MCFrame f) {
   s.e = ep * shift;
   for (int i=0; i<3; ++i) s.n[i] = kc[IMC1+i]/kc[IMC0];
   s.dl = dl_ * shift;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void PhotonFrames::ToCellCenterBasis(Real n[3]) const
+//! \brief carry a unit direction from the orthonormal basis at the photon to the one at
+//!        its cell center
+//
+// The moments are summed over the photons crossing a cell, so they need every
+// contribution referred to one basis.  On a curvilinear grid the orthonormal legs turn
+// with position, by the full angular width of a cell between one face and the other, so
+// the choice of basis may not be small. In flat spacetime this is an exact rotation.
+
+void PhotonFrames::ToCellCenterBasis(Real n[3]) const {
+  Coordinates *pco = pmcb_->pmy_block->pcoord;
+
+  if (pmcb_->topology == MCTOPO_SPHERICAL) {
+    const int i2 = pphot_->i2p[ip_], i3 = pphot_->i3p[ip_];
+    Real sth = std::sin(pphot_->x2p[ip_]), cth = std::cos(pphot_->x2p[ip_]);
+    Real sph = std::sin(pphot_->x3p[ip_]), cph = std::cos(pphot_->x3p[ip_]);
+    Real nx = sth*cph*n[0] + cth*cph*n[1] - sph*n[2];
+    Real ny = sth*sph*n[0] + cth*sph*n[1] + cph*n[2];
+    Real nz = cth*n[0] - sth*n[1];
+    sth = std::sin(pco->x2v(i2));
+    cth = std::cos(pco->x2v(i2));
+    sph = std::sin(pco->x3v(i3));
+    cph = std::cos(pco->x3v(i3));
+    n[0] = sth*cph*nx + sth*sph*ny + cth*nz;
+    n[1] = cth*cph*nx + cth*sph*ny - sth*nz;
+    n[2] = -sph*nx + cph*ny;
+  } else if (pmcb_->topology == MCTOPO_CYLINDRICAL) {
+    // (R, phi, z) with the azimuth in x2.  Only R-hat and phi-hat turn, by the azimuthal
+    // offset, so this is a rotation in the first two components and z is untouched.
+    Real d = pphot_->x2p[ip_] - pco->x2v(pphot_->i2p[ip_]);
+    Real cd = std::cos(d), sd = std::sin(d);
+    Real nr = n[0]*cd - n[1]*sd;
+    Real np = n[0]*sd + n[1]*cd;
+    n[0] = nr;
+    n[1] = np;
+  }
+  // Cartesian topology: the basis does not depend on position, so there is nothing to do.
 }
 
 //----------------------------------------------------------------------------------------

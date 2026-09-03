@@ -83,8 +83,9 @@ MonteCarloBlock::MonteCarloBlock(MeshBlock *pmb,  MCBlockSize *pblsize, MonteCar
   mom_flag_scat = pmy_mc->pmcout->mom_flag_scat;
 
   call_srcterms = coupled || mom_flag_src;
+  // Call UpdateMoments if any of these moments flags are set or source terms requested
   call_moments = mom_flag_lab || mom_flag_com || mom_flag_coord || call_srcterms
-                 || mom_flag_usr;
+                 || mom_flag_usr || mom_flag_scat;
   // Set boundary values for this block
   SetBoundaryValues(pmy_mc->mc_bcs);
 
@@ -912,9 +913,10 @@ void MonteCarloBlock::UpdateMoments(Photon *pphot, Real dl, int ip) {
   if (mom_flag_scat) {
     Real weight_scat, e_scat;
     if (frames.GRTetrad() && boosts) {
-      // The comoving energy is the time component of the fluid-frame projection.
-      const PhotonFrameState &sc = frames.Get(MCFRAME_COMOVING);
-      e_scat = sc.e;
+      // Only the comoving energy is needed so FrequencyShiftComoving
+      // rebuilds the fluid four-velocity at the photon and contracts it with k locally,
+      // in contrast to the cell-center projection used for other moments.
+      e_scat = pphot->ep[ip] * FrequencyShiftComoving(pphot, ip);
       weight_scat = wp * e_scat * frames.Coordinate4Vector()[IMC0] * dl / c_cgs;
     } else {
       const PhotonFrameState &sl = frames.Get(MCFRAME_LAB);
